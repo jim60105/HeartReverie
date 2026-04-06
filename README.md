@@ -1,10 +1,21 @@
-# MD Story Reader
+# MD Story Tools
 
-以瀏覽器閱讀多章節 Markdown 故事檔案，支援 [SillyTavern](https://github.com/SillyTavern/SillyTavern) AI 對話中產生的自訂 XML 區塊（`<status>`、`<options>`、`<UpdateVariable>`）。
+搭配 [SillyTavern](https://github.com/SillyTavern/SillyTavern) AI 角色扮演的故事工具集——包含網頁閱讀器與狀態補丁處理器。
+
+| 工具 | 說明 | 技術 |
+|------|------|------|
+| **[reader/](reader/)** | 瀏覽器多章節 Markdown 故事閱讀器 | 純前端（HTML / JS） |
+| **[apply-patches/](apply-patches/)** | 從章節檔案擷取 `<JSONPatch>` 並套用至角色狀態 | Rust CLI |
+
+---
+
+## Reader — 網頁閱讀器
+
+以瀏覽器閱讀多章節 Markdown 故事檔案，支援 SillyTavern AI 對話中產生的自訂 XML 區塊（`<status>`、`<options>`、`<UpdateVariable>`）。
 
 純前端應用——不需要建置步驟、不使用框架、不需要後端伺服器。
 
-## 功能特色
+### 功能特色
 
 - 📂 透過 File System Access API 開啟本機故事資料夾
 - 📖 逐章閱讀，支援鍵盤快捷鍵（← →）切換章節
@@ -14,7 +25,7 @@
 - 💾 工作階段記憶——重新整理頁面後自動恢復上次開啟的資料夾
 - 🌙 暗色主題搭配 CJK 最佳化字型排版
 
-## 快速開始
+### 快速開始
 
 ```bash
 cd reader
@@ -27,19 +38,7 @@ cd reader
 
 開啟瀏覽器造訪上述網址，點擊「**選擇資料夾**」，選取包含編號 `.md` 檔案的資料夾（例如 `001.md`、`002.md`）即可開始閱讀。
 
-## 專案結構
-
-```
-reader/              網頁閱讀器應用程式
-  index.html           入口頁面（所有 CSS 內嵌）
-  js/                  ES 模組（6 個檔案）
-  serve.zsh            HTTPS 開發伺服器（zsh + Node.js）
-openspec/            規格說明與變更歷史
-regex.json           SillyTavern 正則表達式腳本
-short-template/      故事範本章節
-```
-
-## 瀏覽器支援
+### 瀏覽器支援
 
 本應用依賴 [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API)，僅支援 Chromium 系列瀏覽器：
 
@@ -50,3 +49,47 @@ short-template/      故事範本章節
 | Opera | ✅ 支援 | 72+ |
 | Firefox | ❌ 不支援 | — |
 | Safari | ❌ 不支援 | — |
+
+---
+
+## Apply-Patches — 狀態補丁處理器
+
+Rust CLI 工具，掃描目錄中的 `init-status.yml` 與編號 `.md` 檔案，從章節內容擷取 `<JSONPatch>` 區塊並依序套用，產出最新的 `current-status.yml`。
+
+### 支援的操作
+
+| 操作 | 說明 |
+|------|------|
+| `replace` | 替換指定路徑的值 |
+| `delta` | 對數值做加減運算 |
+| `insert` | 在陣列或物件中插入新項目 |
+| `remove` | 移除指定路徑的值 |
+
+### 快速開始
+
+需要 Rust 工具鏈（`cargo`）。
+
+```bash
+cd apply-patches
+cargo build --release
+./target/release/apply-patches [root_dir]
+```
+
+工具會遞迴掃描 `root_dir` 下每個含有 `init-status.yml` 的子目錄，依檔名順序讀取 `.md` 檔案中的補丁，最終在該子目錄輸出 `current-status.yml`。
+
+---
+
+## 專案結構
+
+```
+reader/              網頁閱讀器應用程式
+  index.html           入口頁面（所有 CSS 內嵌）
+  js/                  ES 模組（6 個檔案）
+  serve.zsh            HTTPS 開發伺服器（zsh + Node.js）
+apply-patches/       狀態補丁處理器（Rust CLI）
+  src/main.rs          主程式
+  Cargo.toml           套件設定
+openspec/            規格說明與變更歷史
+regex.json           SillyTavern 正則表達式腳本
+short-template/      故事範本章節
+```
