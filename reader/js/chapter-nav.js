@@ -5,7 +5,8 @@ import {
     listChapterFiles,
     readFileContent,
     saveDirectoryHandle,
-    restoreDirectoryHandle
+    restoreDirectoryHandle,
+    clearDirectoryHandle
 } from './file-reader.js';
 import { getAuthHeaders } from './passphrase-gate.js';
 
@@ -250,7 +251,11 @@ export async function handleReload() {
 export async function tryRestoreSession() {
     const restored = await restoreDirectoryHandle();
     if (restored) {
-        await handleDirectorySelected(restored);
+        try {
+            await handleDirectorySelected(restored);
+        } catch {
+            await clearDirectoryHandle();
+        }
     }
 }
 

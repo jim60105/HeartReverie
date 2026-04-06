@@ -91,6 +91,23 @@ export async function saveDirectoryHandle(handle) {
 }
 
 /**
+ * Clear the saved directory handle from IndexedDB.
+ */
+export async function clearDirectoryHandle() {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).delete(HANDLE_KEY);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch {
+        // IndexedDB unavailable — silently ignore
+    }
+}
+
+/**
  * Restore a previously saved directory handle from IndexedDB.
  * Re-requests read permission; returns null if denied or not found.
  * @returns {Promise<FileSystemDirectoryHandle|null>}

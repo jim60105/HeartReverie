@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdn.tailwindcss.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:;">
+          content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdn.tailwindcss.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:;">
     <title>MD Story Reader</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -467,17 +467,19 @@
         <div style="background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 16px;
             padding: 2rem; max-width: 400px; width: 90%; text-align: center;">
             <h2 style="color: var(--text-title); margin-bottom: 1rem; font-family: var(--font-system-ui);">🔒 通行密語</h2>
+            <form id="passphrase-form">
             <input id="passphrase-input" type="password" placeholder="輸入通行密語…"
                 style="width: 100%; padding: 10px; background: var(--item-bg); border: 1px solid var(--item-border);
                        border-radius: 8px; color: var(--text-main); font-size: var(--font-base);
                        font-family: var(--font-system-ui); box-sizing: border-box; margin-bottom: 12px;">
             <div style="display: flex; justify-content: center; gap: 8px; align-items: center;">
                 <span id="passphrase-error" class="text-sm" style="color: #ff6b6b;"></span>
-                <button id="passphrase-submit" class="themed-btn px-4 py-2 rounded text-sm font-medium transition-colors"
+                <button id="passphrase-submit" type="submit" class="themed-btn px-4 py-2 rounded text-sm font-medium transition-colors"
                     style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);">
                     進入
                 </button>
             </div>
+            </form>
         </div>
     </div>
 

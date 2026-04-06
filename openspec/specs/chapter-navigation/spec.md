@@ -111,6 +111,17 @@ The rendering pipeline SHALL strip `<user_message>…</user_message>` blocks and
 - **WHEN** a chapter's raw content contains a `<user_message>…</user_message>` block
 - **THEN** the rendering pipeline SHALL remove the block and its content so that only the AI-generated story content is displayed to the reader
 
+### Requirement: Session restoration error handling
+The `tryRestoreSession` function SHALL wrap `handleDirectorySelected` in a try/catch block. If a `NotFoundError` or any other error occurs (stale/deleted directory), the function SHALL silently clear the stored handle from IndexedDB and return without crashing.
+
+#### Scenario: Stale directory handle
+- **WHEN** a previously saved directory handle points to a directory that no longer exists
+- **THEN** `tryRestoreSession` SHALL catch the `NotFoundError`, clear the stale handle from IndexedDB, and return gracefully without console errors
+
+#### Scenario: Valid directory handle
+- **WHEN** a previously saved directory handle is still valid
+- **THEN** `tryRestoreSession` SHALL restore the session normally as before
+
 ### Requirement: Single chapter display
 The application SHALL display only one chapter at a time. When navigating to a new chapter, the previously displayed chapter content SHALL be fully replaced.
 

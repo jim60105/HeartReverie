@@ -7,7 +7,7 @@ Provides browser-enforced security policies and server-side security response he
 ## Requirements
 
 ### Requirement: Content Security Policy
-The system SHALL include a Content-Security-Policy meta tag that restricts script sources to `'self'` and pinned CDN origins, disallows unsafe-inline scripts (except `'unsafe-inline'` for styles), and restricts `connect-src` to `'self'`.
+The system SHALL include a Content-Security-Policy meta tag that restricts script sources to `'self'` and pinned CDN origins, disallows unsafe-inline scripts (except `'unsafe-inline'` for styles), and restricts `connect-src` to `'self'` and `https://cdn.jsdelivr.net` to allow source map and resource fetches from the same CDN origin trusted for scripts.
 
 #### Scenario: CSP blocks inline script injection
 - **WHEN** an attacker injects `<script>alert(1)</script>` into rendered content
@@ -20,6 +20,10 @@ The system SHALL include a Content-Security-Policy meta tag that restricts scrip
 #### Scenario: CSP blocks unpinned external scripts
 - **WHEN** an attacker injects a `<script src="https://evil.com/malware.js">` tag
 - **THEN** the browser SHALL refuse to load the script because the origin is not in the CSP `script-src` allowlist
+
+#### Scenario: DOMPurify source map fetch
+- **WHEN** the browser attempts to fetch a `.map` file from `cdn.jsdelivr.net`
+- **THEN** the request SHALL be allowed by the CSP `connect-src` directive without console violations
 
 ### Requirement: Subresource Integrity on CDN scripts
 The system SHALL include `integrity` and `crossorigin="anonymous"` attributes on all external `<script>` and `<link>` tags loaded from CDN origins.

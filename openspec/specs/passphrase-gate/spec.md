@@ -70,6 +70,18 @@ The frontend SHALL display a fullscreen passphrase overlay that blocks all inter
 - **WHEN** the user presses Enter while the passphrase input is focused
 - **THEN** the passphrase SHALL be submitted (same behavior as clicking the submit button)
 
+### Requirement: Passphrase input form
+
+The passphrase `<input>` and submit button SHALL be wrapped in a `<form>` element. The form SHALL use `event.preventDefault()` on submit to prevent page navigation. The existing submit logic SHALL be triggered by the form's `submit` event.
+
+#### Scenario: Password field in form
+- **WHEN** the passphrase overlay is rendered
+- **THEN** the password input SHALL be contained within a `<form>` element, eliminating the browser DOM warning
+
+#### Scenario: Form submission
+- **WHEN** the user presses Enter in the password field or clicks the submit button
+- **THEN** the form's submit event SHALL fire, `preventDefault()` SHALL be called, and the passphrase verification logic SHALL execute
+
 ### Requirement: Passphrase header injection
 
 All frontend modules that make API requests SHALL include the stored passphrase in the `X-Passphrase` request header. The passphrase SHALL be retrieved from a shared `getAuthHeaders()` function exported by the `passphrase-gate.js` module. If no passphrase is stored, the function SHALL return an empty object so that requests proceed without the header (for the case where `PASSPHRASE` is not configured on the server).

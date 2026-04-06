@@ -60,8 +60,8 @@ export async function initPassphraseGate(overlayEl, onUnlocked) {
     // Show overlay
     overlayEl.classList.remove('hidden');
 
+    const form = overlayEl.querySelector('#passphrase-form');
     const input = overlayEl.querySelector('#passphrase-input');
-    const btn = overlayEl.querySelector('#passphrase-submit');
     const error = overlayEl.querySelector('#passphrase-error');
 
     async function handleSubmit() {
@@ -71,6 +71,7 @@ export async function initPassphraseGate(overlayEl, onUnlocked) {
             return;
         }
 
+        const btn = form.querySelector('#passphrase-submit');
         btn.disabled = true;
         btn.textContent = '驗證中…';
         error.textContent = '';
@@ -87,12 +88,9 @@ export async function initPassphraseGate(overlayEl, onUnlocked) {
         }
     }
 
-    btn.addEventListener('click', handleSubmit);
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleSubmit();
-        }
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        handleSubmit();
     });
 
     input.focus();
