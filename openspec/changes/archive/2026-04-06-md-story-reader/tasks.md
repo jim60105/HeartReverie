@@ -48,7 +48,7 @@
 
 - [x] 6.1 Create `js/variable-display.js` exporting `extractVariableBlocks(text)` that detects both complete (`<UpdateVariable>…</UpdateVariable>`) and incomplete (`<UpdateVariable>` with no closing tag) blocks
 - [x] 6.2 Ensure incomplete form is matched first (greedy from tag to end-of-string), then complete form, per design spec ordering
-- [x] 6.3 Implement `renderVariableBlock(content, isComplete)` returning a `<details>` element: summary `变量更新情况` for complete blocks, summary `变量更新中...` for incomplete blocks
+- [x] 6.3 Implement `renderVariableBlock(content, isComplete)` returning a `<details>` element: summary `變數更新詳情` for complete blocks, summary `變數更新中...` for incomplete blocks
 - [x] 6.4 Display inner content (`<Analysis>` text and `<JSONPatch>` data) as readable preformatted text inside the details element
 - [x] 6.5 Ensure all variable `<details>` elements default to collapsed (no `open` attribute)
 - [x] 6.6 Handle multiple `<UpdateVariable>` blocks in a single chapter, rendering each independently in document order

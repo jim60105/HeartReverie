@@ -44,8 +44,8 @@ export function extractVariableBlocks(text) {
 
 /**
  * Render a variable block as a collapsible <details> element.
- * - Complete blocks get summary "变量更新情况"
- * - Incomplete blocks get summary "变量更新中..."
+ * - Complete blocks get summary "變數更新詳情"
+ * - Incomplete blocks get summary "變數更新中..."
  * All default to collapsed (no `open` attribute).
  *
  * @param {string} content  Inner text (may contain <Analysis>, <JSONPatch>, etc.)
@@ -53,7 +53,7 @@ export function extractVariableBlocks(text) {
  * @returns {string} HTML string
  */
 export function renderVariableBlock(content, isComplete) {
-  const summary = isComplete ? '变量更新情况' : '变量更新中...';
+  const summary = isComplete ? '變數更新詳情' : '變數更新中...';
   const escaped = escapeHtml(content.trim());
 
   let html = `<details class="variable-block fold-section">`;

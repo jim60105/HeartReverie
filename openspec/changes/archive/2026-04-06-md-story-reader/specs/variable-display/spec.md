@@ -1,18 +1,18 @@
 ## ADDED Requirements
 
 ### Requirement: Complete UpdateVariable block rendering
-The renderer SHALL detect complete `<UpdateVariable>...</UpdateVariable>` blocks (containing both opening and closing tags) in the chapter content. Complete blocks SHALL be rendered as a collapsible `<details>` element with the summary text `变量更新情况`.
+The renderer SHALL detect complete `<UpdateVariable>...</UpdateVariable>` blocks (containing both opening and closing tags) in the chapter content. Complete blocks SHALL be rendered as a collapsible `<details>` element with the summary text `變數更新詳情`.
 
 #### Scenario: Complete UpdateVariable block is rendered as collapsible
 - **WHEN** the chapter content contains `<UpdateVariable><Analysis>...</Analysis><JSONPatch>[...]</JSONPatch></UpdateVariable>`
-- **THEN** the renderer SHALL output a `<details>` element with `<summary>变量更新情况</summary>` and the block's inner content displayed inside, defaulting to collapsed
+- **THEN** the renderer SHALL output a `<details>` element with `<summary>變數更新詳情</summary>` and the block's inner content displayed inside, defaulting to collapsed
 
 ### Requirement: Incomplete UpdateVariable block rendering
-The renderer SHALL detect incomplete `<UpdateVariable>` blocks that have an opening tag but no corresponding closing `</UpdateVariable>` tag (e.g., at the end of a chapter still being generated). Incomplete blocks SHALL be rendered as a collapsible `<details>` element with the summary text `变量更新中...`.
+The renderer SHALL detect incomplete `<UpdateVariable>` blocks that have an opening tag but no corresponding closing `</UpdateVariable>` tag (e.g., at the end of a chapter still being generated). Incomplete blocks SHALL be rendered as a collapsible `<details>` element with the summary text `變數更新中...`.
 
 #### Scenario: Incomplete UpdateVariable block at end of chapter
 - **WHEN** the chapter content contains `<UpdateVariable>` followed by partial content but no `</UpdateVariable>` closing tag
-- **THEN** the renderer SHALL output a `<details>` element with `<summary>变量更新中...</summary>` and the available partial content inside, defaulting to collapsed
+- **THEN** the renderer SHALL output a `<details>` element with `<summary>變數更新中...</summary>` and the available partial content inside, defaulting to collapsed
 
 ### Requirement: UpdateVariable content display
 Inside the collapsible section, the renderer SHALL display the inner content of the `<UpdateVariable>` block. The `<Analysis>` text and `<JSONPatch>` data SHALL both be visible when the section is expanded.
@@ -26,7 +26,7 @@ The renderer SHALL handle chapters that contain more than one `<UpdateVariable>`
 
 #### Scenario: Two UpdateVariable blocks in one chapter
 - **WHEN** the chapter contains two separate `<UpdateVariable>...</UpdateVariable>` blocks
-- **THEN** the renderer SHALL produce two independent collapsible `<details>` sections, each with summary `变量更新情况`, in the order they appear in the source
+- **THEN** the renderer SHALL produce two independent collapsible `<details>` sections, each with summary `變數更新詳情`, in the order they appear in the source
 
 ### Requirement: Default collapsed state
 All `<UpdateVariable>` collapsible sections (both complete and incomplete) SHALL default to collapsed so they do not dominate the reading view.

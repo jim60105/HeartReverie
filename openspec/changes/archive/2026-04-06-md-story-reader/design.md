@@ -102,8 +102,8 @@ The options panel parses `<options>` blocks containing 4 numbered items and rend
 
 Two patterns are handled, matching the existing regex.json rules:
 
-1. **Incomplete** (`<UpdateVariable>` with no closing tag): Wrapped in `<details>` with summary "变量更新中" — indicates the AI was still generating
-2. **Complete** (`<UpdateVariable>…</UpdateVariable>`): Wrapped in `<details>` with summary "变量更新情况" — shows the full variable patch
+1. **Incomplete** (`<UpdateVariable>` with no closing tag): Wrapped in `<details>` with summary "變數更新中" — indicates the AI was still generating
+2. **Complete** (`<UpdateVariable>…</UpdateVariable>`): Wrapped in `<details>` with summary "變數更新詳情" — shows the full variable patch
 
 Both render the inner content as preformatted text inside a collapsed `<details>` element. The incomplete form is matched first (greedy from tag to end-of-string), then the complete form.
 

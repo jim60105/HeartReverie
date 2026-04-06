@@ -105,9 +105,9 @@
     },
     {
         "id": "7f0c23d2-ee7e-4d2e-b7eb-a904190ed8c4",
-        "scriptName": "[折叠]变量更新中",
+        "scriptName": "[折叠]變數更新中",
         "findRegex": "/<(update(?:variable)?)>(?!.*<\\/\\1>)\\s*((?:(?!<\\1>).)*)\\s*$/gsi",
-        "replaceString": "\n<details>\n<summary>变量更新中{{random::.::..::...}}</summary>\n$2\n</details>",
+        "replaceString": "\n<details>\n<summary>變數更新中{{random::.::..::...}}</summary>\n$2\n</details>",
         "trimStrings": [],
         "placement": [
             1,
@@ -125,7 +125,7 @@
         "id": "ca28ed3b-5a46-4b26-8665-add9b17936a4",
         "scriptName": "[折叠]完整变量更新",
         "findRegex": "/<(update(?:variable)?)>\\s*((?:(?!<\\1>).)*)\\s*<\\/\\1>/gsi",
-        "replaceString": "\n<details>\n<summary>变量更新情况</summary>\n$2\n</details>",
+        "replaceString": "\n<details>\n<summary>變數更新詳情</summary>\n$2\n</details>",
         "trimStrings": [],
         "placement": [
             1,
