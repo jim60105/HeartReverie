@@ -1,4 +1,6 @@
 tmp/
 .certs/
+.env
 apply-patches/target/
 **/current-status.yml
+writer/node_modules/

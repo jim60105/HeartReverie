@@ -79,6 +79,11 @@
             display: none;
         }
 
+        /* Story selector panel — hide default arrow */
+        #story-selector-details > summary::before {
+            display: none;
+        }
+
         /* Summary arrow indicator */
         details summary::before {
             content: '▶';
@@ -443,7 +448,7 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <!-- Header: Folder Picker -->
+    <!-- Header: Folder Picker + Story Selector -->
     <header class="sticky top-0 z-10 px-3 py-1 border-b flex items-center gap-2 flex-wrap"
             style="background: var(--header-bg); border-color: var(--header-border);">
         <button id="btn-pick-folder"
@@ -453,6 +458,55 @@
                 onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
             📂 選擇資料夾
         </button>
+
+        <!-- Story Selector -->
+        <details id="story-selector-details" style="position: relative;">
+            <summary class="px-3 py-1 rounded text-sm font-medium transition-colors"
+                     style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); cursor: pointer; list-style: none;"
+                     onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                     onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                📖 故事選擇
+            </summary>
+            <div style="position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 20;
+                        background: #1a0810; border: 1px solid var(--border-color); border-radius: 10px;
+                        padding: 10px; min-width: 280px; box-shadow: 0 8px 24px rgba(0,0,0,0.6);">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label class="text-xs" style="color: var(--text-label);">系列</label>
+                    <select id="select-series"
+                            style="background: var(--item-bg); border: 1px solid var(--item-border); border-radius: 6px;
+                                   padding: 4px 8px; color: var(--text-main); font-size: var(--font-base); font-family: var(--font-system-ui);">
+                        <option value="">-- 選擇系列 --</option>
+                    </select>
+                    <label class="text-xs" style="color: var(--text-label);">故事</label>
+                    <select id="select-story"
+                            style="background: var(--item-bg); border: 1px solid var(--item-border); border-radius: 6px;
+                                   padding: 4px 8px; color: var(--text-main); font-size: var(--font-base); font-family: var(--font-system-ui);">
+                        <option value="">-- 選擇故事 --</option>
+                    </select>
+                    <label class="text-xs" style="color: var(--text-label);">新故事名稱</label>
+                    <input id="input-new-story" type="text" placeholder="輸入新故事名稱…"
+                           style="background: var(--item-bg); border: 1px solid var(--item-border); border-radius: 6px;
+                                  padding: 4px 8px; color: var(--text-main); font-size: var(--font-base); font-family: var(--font-system-ui);">
+                    <div style="display: flex; gap: 6px; margin-top: 2px;">
+                        <button id="btn-create-story"
+                                class="px-3 py-1 rounded text-sm font-medium transition-colors"
+                                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); flex: 1;"
+                                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                            ✨ 建立
+                        </button>
+                        <button id="btn-load-story"
+                                class="px-3 py-1 rounded text-sm font-medium transition-colors"
+                                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); flex: 1;"
+                                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                            📥 載入
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </details>
+
         <span id="folder-name" class="text-sm truncate" style="color: var(--text-label);">尚未選擇資料夾</span>
         <button id="btn-reload"
                 class="hidden px-2 py-1 rounded text-sm transition-colors"
@@ -497,10 +551,31 @@
             </div>
             <aside id="sidebar"></aside>
         </div>
+
+        <!-- Chat Input (backend mode only) -->
+        <div id="chat-input-area" class="hidden" style="max-width: 48rem; margin: 1rem auto; padding: 0 1rem;">
+            <div style="background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px;">
+                <textarea id="chat-message" rows="3" placeholder="輸入故事指令…"
+                    style="width: 100%; resize: vertical; background: var(--item-bg); border: 1px solid var(--item-border);
+                           border-radius: 8px; padding: 8px; color: var(--text-main); font-family: var(--font-system-ui);
+                           font-size: var(--font-base); box-sizing: border-box;"></textarea>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+                    <span id="chat-error" class="text-sm" style="color: #ff6b6b; flex: 1; align-self: center;"></span>
+                    <button id="btn-chat-send" class="px-4 py-1 rounded text-sm font-medium transition-colors"
+                        style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                        onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                        onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                        ✨ 發送
+                    </button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script type="module">
-        import { initChapterNav, handleFolderSelect, handleNext, handlePrev, handleReload, tryRestoreSession } from './js/chapter-nav.js';
+        import { initChapterNav, handleFolderSelect, handleNext, handlePrev, handleReload, tryRestoreSession, loadFromBackend, reloadFromBackendToLast, getBackendContext } from './js/chapter-nav.js';
+        import { initStorySelector } from './js/story-selector.js';
+        import { initChatInput, showChatInput, hideChatInput } from './js/chat-input.js';
 
         // DOM references
         const btnPickFolder = document.getElementById('btn-pick-folder');
@@ -525,10 +600,42 @@
         });
 
         // Wire event listeners
-        btnPickFolder.addEventListener('click', handleFolderSelect);
+        btnPickFolder.addEventListener('click', async () => {
+            hideChatInput();
+            await handleFolderSelect();
+        });
         document.getElementById('btn-prev').addEventListener('click', handlePrev);
         document.getElementById('btn-next').addEventListener('click', handleNext);
         document.getElementById('btn-reload').addEventListener('click', handleReload);
+
+        // Story selector
+        initStorySelector({
+            selectSeries: document.getElementById('select-series'),
+            selectStory: document.getElementById('select-story'),
+            inputNewStory: document.getElementById('input-new-story'),
+            btnCreate: document.getElementById('btn-create-story'),
+            btnLoad: document.getElementById('btn-load-story')
+        }, {
+            onLoad: async (series, story) => {
+                await loadFromBackend(series, story);
+                showChatInput();
+                // Close the selector panel
+                document.getElementById('story-selector-details').removeAttribute('open');
+            }
+        });
+
+        // Chat input
+        initChatInput({
+            textarea: document.getElementById('chat-message'),
+            sendBtn: document.getElementById('btn-chat-send'),
+            errorSpan: document.getElementById('chat-error'),
+            chatArea: document.getElementById('chat-input-area')
+        }, {
+            getContext: () => getBackendContext(),
+            onSent: async () => {
+                await reloadFromBackendToLast();
+            }
+        });
 
         // Attempt to restore saved directory on load
         if ('showDirectoryPicker' in window) {

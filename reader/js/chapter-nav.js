@@ -13,7 +13,11 @@ const state = {
     directoryHandle: null,
     files: [],
     currentIndex: 0,
-    currentContent: ''
+    currentContent: '',
+    // Backend mode state
+    backendChapters: null,   // [{ number, content }] or null
+    currentSeries: null,
+    currentStory: null
 };
 
 // DOM element references (set by initChapterNav)
@@ -50,37 +54,48 @@ function moveStatusToSidebar() {
 }
 
 async function loadChapter(index) {
-    if (index < 0 || index >= state.files.length) return;
+    let totalChapters;
+    if (state.backendChapters && state.backendChapters.length > 0) {
+        // Backend mode
+        totalChapters = state.backendChapters.length;
+        if (index < 0 || index >= totalChapters) return;
+        state.currentIndex = index;
+        state.currentContent = state.backendChapters[index].content;
+    } else {
+        // FSA mode (existing)
+        totalChapters = state.files.length;
+        if (index < 0 || index >= totalChapters) return;
+        state.currentIndex = index;
+        state.currentContent = await readFileContent(state.files[index]);
+    }
 
-    state.currentIndex = index;
-    state.currentContent = await readFileContent(state.files[index]);
+    // Determine if this is the last chapter
+    const isLastChapter = index === totalChapters - 1;
 
-    // Task 4.1: Determine if this is the last chapter
-    const isLastChapter = index === state.files.length - 1;
-
-    // Task 7.3/7.4: Re-run pipeline, replace content in DOM
+    // Re-run pipeline, replace content in DOM
     els.content.innerHTML = render(state.currentContent, { isLastChapter });
 
     // Move status panel to sidebar (right column)
     moveStatusToSidebar();
 
-    // Task 7.5: Update button disabled states
+    // Update button disabled states
     updateNavState();
 
-    // Task 7.7: Sync URL hash (1-based)
+    // Sync URL hash (1-based)
     history.replaceState(null, '', `#chapter=${index + 1}`);
 
-    // Task 5.2: Scroll to top of content area, offset by sticky header
+    // Scroll to top of content area, offset by sticky header
     window.scrollTo({ top: els.content.offsetTop - headerOffset, behavior: 'smooth' });
 }
 
 // Task 7.5/7.6: Update button disabled states and progress indicator
 function updateNavState() {
+    const totalChapters = state.backendChapters?.length || state.files.length;
     els.btnPrev.disabled = state.currentIndex <= 0;
-    els.btnNext.disabled = state.currentIndex >= state.files.length - 1;
+    els.btnNext.disabled = state.currentIndex >= totalChapters - 1;
 
     els.chapterProgress.textContent =
-        `${state.currentIndex + 1} / ${state.files.length}`;
+        `${state.currentIndex + 1} / ${totalChapters}`;
 
     // Re-bind hover styles for enabled/disabled buttons
     [els.btnPrev, els.btnNext].forEach(btn => {
@@ -178,18 +193,20 @@ export function initChapterNav(elements) {
 
     // Task 7.7: hashchange listener
     window.addEventListener('hashchange', () => {
-        if (state.files.length === 0) return;
+        const totalChapters = state.backendChapters?.length || state.files.length;
+        if (totalChapters === 0) return;
         const match = window.location.hash.match(/chapter=(\d+)/);
         if (!match) return;
         const idx = parseInt(match[1], 10) - 1;
-        if (idx >= 0 && idx < state.files.length && idx !== state.currentIndex) {
+        if (idx >= 0 && idx < totalChapters && idx !== state.currentIndex) {
             loadChapter(idx);
         }
     });
 
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
-        if (state.files.length === 0) return;
+        const totalChapters = state.backendChapters?.length || state.files.length;
+        if (totalChapters === 0) return;
         if (e.key === 'ArrowLeft') loadChapter(state.currentIndex - 1);
         if (e.key === 'ArrowRight') loadChapter(state.currentIndex + 1);
     });
@@ -197,8 +214,14 @@ export function initChapterNav(elements) {
 
 /**
  * Called when the folder picker button is clicked.
+ * Clears any backend state and proceeds with FSA flow.
  */
 export async function handleFolderSelect() {
+    // Clear backend state
+    state.backendChapters = null;
+    state.currentSeries = null;
+    state.currentStory = null;
+
     const handle = await pickDirectory();
     if (!handle) return;
     await handleDirectorySelected(handle);
@@ -226,5 +249,120 @@ export async function tryRestoreSession() {
     const restored = await restoreDirectoryHandle();
     if (restored) {
         await handleDirectorySelected(restored);
+    }
+}
+
+/**
+ * Load chapters from the backend API instead of the filesystem.
+ */
+export async function loadFromBackend(series, storyName) {
+    // Clear FSA state
+    if (pollIntervalId !== null) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+    }
+    state.directoryHandle = null;
+    state.files = [];
+    state.currentSeries = series;
+    state.currentStory = storyName;
+
+    // Fetch chapters from backend
+    const res = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters`);
+    if (!res.ok) throw new Error('Failed to load chapters');
+    const chapterNums = await res.json();
+
+    state.backendChapters = [];
+    for (const num of chapterNums) {
+        const chRes = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters/${num}`);
+        if (!chRes.ok) continue;
+        const { content } = await chRes.json();
+        state.backendChapters.push({ number: num, content });
+    }
+
+    if (state.backendChapters.length === 0) {
+        els.content.innerHTML = `
+            <section class="flex flex-col items-center justify-center py-20 text-center gap-4">
+                <p class="text-lg" style="color: var(--text-title);">📭 尚無章節</p>
+                <p style="color: var(--text-main);">此故事尚未有任何章節內容。</p>
+                <p class="text-sm" style="color: var(--text-label);">請使用下方的聊天輸入框發送指令以開始創作。</p>
+            </section>`;
+        els.folderName.textContent = `${series} / ${storyName}`;
+        els.btnPrev.classList.add('hidden');
+        els.chapterProgress.classList.add('hidden');
+        els.btnNext.classList.add('hidden');
+        els.btnReload.classList.add('hidden');
+        return;
+    }
+
+    // Show nav buttons, load first chapter
+    els.folderName.textContent = `${series} / ${storyName}`;
+    els.btnPrev.classList.remove('hidden');
+    els.chapterProgress.classList.remove('hidden');
+    els.btnNext.classList.remove('hidden');
+    els.btnReload.classList.remove('hidden');
+
+    await loadChapter(0);
+
+    // Start polling for new chapters
+    pollIntervalId = setInterval(pollBackend, 1000);
+}
+
+/**
+ * Load from backend and navigate to the last chapter.
+ */
+export async function reloadFromBackendToLast() {
+    if (!state.currentSeries || !state.currentStory) return;
+    const series = state.currentSeries;
+    const storyName = state.currentStory;
+
+    if (pollIntervalId !== null) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+    }
+
+    const res = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters`);
+    if (!res.ok) return;
+    const chapterNums = await res.json();
+
+    state.backendChapters = [];
+    for (const num of chapterNums) {
+        const chRes = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters/${num}`);
+        if (!chRes.ok) continue;
+        const { content } = await chRes.json();
+        state.backendChapters.push({ number: num, content });
+    }
+
+    if (state.backendChapters.length === 0) return;
+
+    els.btnPrev.classList.remove('hidden');
+    els.chapterProgress.classList.remove('hidden');
+    els.btnNext.classList.remove('hidden');
+    els.btnReload.classList.remove('hidden');
+
+    await loadChapter(state.backendChapters.length - 1);
+    pollIntervalId = setInterval(pollBackend, 1000);
+}
+
+/**
+ * Get current backend story context.
+ */
+export function getBackendContext() {
+    return {
+        series: state.currentSeries,
+        story: state.currentStory,
+        isBackendMode: state.backendChapters !== null
+    };
+}
+
+async function pollBackend() {
+    if (!state.currentSeries || !state.currentStory) return;
+    try {
+        const res = await fetch(`/api/stories/${encodeURIComponent(state.currentSeries)}/${encodeURIComponent(state.currentStory)}/chapters`);
+        const nums = await res.json();
+        if (nums.length !== (state.backendChapters?.length || 0)) {
+            await loadFromBackend(state.currentSeries, state.currentStory);
+        }
+    } catch {
+        // Ignore polling errors silently
     }
 }

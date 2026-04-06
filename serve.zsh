@@ -15,8 +15,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # ==================================================================
 #
-# Start a local HTTPS server with a self-signed certificate.
-# Serves files from the current working directory using Node.js.
+# Start the story writer HTTPS backend server.
+# Generates a self-signed certificate if one does not exist,
+# then launches the Node.js Express server.
 #
 # Usage:
 #   serve.zsh [port]
@@ -26,7 +27,7 @@
 #
 # Requirements:
 #   - openssl  (for certificate generation)
-#   - node     (for HTTPS server)
+#   - node     (for the backend server)
 #
 # Examples:
 #   ./serve.zsh          # Serve on https://localhost:8443
@@ -61,11 +62,11 @@ check_dependency node
 
 # ── Configuration ─────────────────────────────────────────────────
 
+readonly PROJECT_ROOT="${0:a:h}"
 readonly PORT="${1:-8443}"
-readonly CERT_DIR="${0:a:h}/.certs"
+readonly CERT_DIR="${PROJECT_ROOT}/.certs"
 readonly CERT_FILE="${CERT_DIR}/cert.pem"
 readonly KEY_FILE="${CERT_DIR}/key.pem"
-readonly SERVE_ROOT="${0:a:h}"
 
 # Validate port number
 if [[ ! "${PORT}" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
@@ -91,74 +92,13 @@ fi
 
 # ── Start server ──────────────────────────────────────────────────
 
-echo "🚀 HTTPS server starting on ${GREEN}https://localhost:${PORT}${RESET}"
-echo "   ${GRAY}Serving: ${SERVE_ROOT}${RESET}"
+echo "🚀 Story writer starting on ${GREEN}https://localhost:${PORT}${RESET}"
+echo "   ${GRAY}Project: ${PROJECT_ROOT}${RESET}"
 echo "   ${GRAY}Press Ctrl+C to stop${RESET}"
 
-exec node -e "
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
-const url = require('url');
+export CERT_FILE KEY_FILE
+export PORT
+export PLAYGROUND_DIR="${PROJECT_ROOT}/playground"
+export READER_DIR="${PROJECT_ROOT}/reader"
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.md': 'text/markdown; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-  '.yml': 'text/yaml; charset=utf-8',
-  '.yaml': 'text/yaml; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.webp': 'image/webp',
-  '.woff2': 'font/woff2',
-  '.woff': 'font/woff',
-  '.ttf': 'font/ttf',
-};
-
-const ROOT = process.argv[1];
-const PORT = parseInt(process.argv[2], 10);
-const CERT = process.argv[3];
-const KEY  = process.argv[4];
-
-const server = https.createServer({
-  cert: fs.readFileSync(CERT),
-  key:  fs.readFileSync(KEY),
-}, (req, res) => {
-  const pathname = decodeURIComponent(url.parse(req.url).pathname);
-  let filePath = path.join(ROOT, pathname);
-
-  // Prevent directory traversal
-  if (!filePath.startsWith(ROOT)) {
-    res.writeHead(403);
-    res.end('Forbidden');
-    return;
-  }
-
-  // Serve index.html for directory requests
-  if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
-    filePath = path.join(filePath, 'index.html');
-  }
-
-  if (!fs.existsSync(filePath)) {
-    res.writeHead(404);
-    res.end('Not found');
-    return;
-  }
-
-  const ext = path.extname(filePath).toLowerCase();
-  const contentType = MIME[ext] || 'application/octet-stream';
-  res.writeHead(200, { 'Content-Type': contentType });
-  fs.createReadStream(filePath).pipe(res);
-});
-
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('✅ Listening on https://localhost:' + PORT);
-});
-" "${SERVE_ROOT}" "${PORT}" "${CERT_FILE}" "${KEY_FILE}"
+exec node "${PROJECT_ROOT}/writer/server.js"
