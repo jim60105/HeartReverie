@@ -31,6 +31,11 @@ let headerOffset = 0;
 // Auto-reload polling interval ID
 let pollIntervalId = null;
 
+// Backend poll interval with rate-limit backoff
+const POLL_INTERVAL_BASE = 3000;
+const POLL_INTERVAL_MAX = 30000;
+let currentPollInterval = POLL_INTERVAL_BASE;
+
 // Try to load renderChapter; fall back to marked.parse
 let renderChapter = null;
 try {
@@ -311,7 +316,7 @@ export async function loadFromBackend(series, storyName) {
     await loadChapter(0);
 
     // Start polling for new chapters
-    pollIntervalId = setInterval(pollBackend, 1000);
+    pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
 }
 
 /**
@@ -347,7 +352,7 @@ export async function reloadFromBackendToLast() {
     els.btnReload.classList.remove('hidden');
 
     await loadChapter(state.backendChapters.length - 1);
-    pollIntervalId = setInterval(pollBackend, 1000);
+    pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
 }
 
 /**
@@ -361,10 +366,30 @@ export function getBackendContext() {
     };
 }
 
+function restartPollInterval(interval) {
+    if (pollIntervalId !== null) {
+        clearInterval(pollIntervalId);
+    }
+    currentPollInterval = interval;
+    pollIntervalId = setInterval(pollBackend, currentPollInterval);
+}
+
 async function pollBackend() {
     if (!state.currentSeries || !state.currentStory) return;
     try {
         const res = await fetch(`/api/stories/${encodeURIComponent(state.currentSeries)}/${encodeURIComponent(state.currentStory)}/chapters`, { headers: { ...getAuthHeaders() } });
+
+        if (res.status === 429) {
+            const backoff = Math.min(currentPollInterval * 2, POLL_INTERVAL_MAX);
+            restartPollInterval(backoff);
+            return;
+        }
+
+        // Reset to base interval after successful response
+        if (currentPollInterval !== POLL_INTERVAL_BASE) {
+            restartPollInterval(POLL_INTERVAL_BASE);
+        }
+
         const nums = await res.json();
         const cachedLen = state.backendChapters?.length || 0;
 

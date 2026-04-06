@@ -7,15 +7,15 @@ Provides automatic detection of new chapter files through directory polling and 
 ## Requirements
 
 ### Requirement: Automatic directory polling
-The application SHALL poll the selected directory every 1 second to detect new chapter files. When new `.md` files matching the chapter naming pattern are found, the internal file list SHALL be updated and the navigation UI SHALL reflect the new chapter count without disrupting the current chapter being displayed.
+The application SHALL poll the selected directory every 3 seconds to detect new chapter files. When new `.md` files matching the chapter naming pattern are found, the internal file list SHALL be updated and the navigation UI SHALL reflect the new chapter count without disrupting the current chapter being displayed.
 
 #### Scenario: New chapter file appears during reading
 - **WHEN** the user is reading chapter 3 of 5 and a new file `006.md` is written to the directory by an external application
-- **THEN** within 1 second, the chapter progress indicator SHALL update to show "3 / 6" and the "Next" button SHALL remain enabled, without changing the displayed chapter content or scroll position
+- **THEN** within 3 seconds, the chapter progress indicator SHALL update to show "3 / 6" and the "Next" button SHALL remain enabled, without changing the displayed chapter content or scroll position
 
 #### Scenario: Polling starts after directory selection
 - **WHEN** a directory is successfully selected (either via picker or session restore)
-- **THEN** the polling interval SHALL begin automatically at 1-second intervals
+- **THEN** the polling interval SHALL begin automatically at 3-second intervals
 
 #### Scenario: Previous polling stops on new directory selection
 - **WHEN** the user selects a new directory while polling is active for a previous directory
@@ -31,3 +31,14 @@ The application SHALL provide a reload button (🔄) in the `<header>` element t
 #### Scenario: Reload button hidden before story is loaded
 - **WHEN** no story folder has been selected
 - **THEN** the reload button SHALL not be visible in the header
+
+### Requirement: Rate-limit backoff
+When the backend returns a 429 (Too Many Requests) response, the polling interval SHALL increase using exponential backoff, capped at 30 seconds. On the next successful response, the interval SHALL reset to the base 3-second interval.
+
+#### Scenario: 429 response triggers backoff
+- **WHEN** `pollBackend` receives a 429 response
+- **THEN** the polling interval SHALL double (up to a maximum of 30 seconds)
+
+#### Scenario: Successful response resets interval
+- **WHEN** `pollBackend` receives a successful response after backoff
+- **THEN** the polling interval SHALL reset to 3 seconds
