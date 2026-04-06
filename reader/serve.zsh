@@ -65,7 +65,7 @@ readonly PORT="${1:-8443}"
 readonly CERT_DIR="${0:a:h}/.certs"
 readonly CERT_FILE="${CERT_DIR}/cert.pem"
 readonly KEY_FILE="${CERT_DIR}/key.pem"
-readonly SERVE_ROOT="${PWD}"
+readonly SERVE_ROOT="${0:a:h}"
 
 # Validate port number
 if [[ ! "${PORT}" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
