@@ -1,53 +1,52 @@
 # MD Story Reader
 
-A browser-based reader for multi-chapter markdown stories with custom XML blocks (`<status>`, `<options>`, `<UpdateVariable>`) from [SillyTavern](https://github.com/SillyTavern/SillyTavern) AI chat sessions.
+以瀏覽器閱讀多章節 Markdown 故事檔案，支援 [SillyTavern](https://github.com/SillyTavern/SillyTavern) AI 對話中產生的自訂 XML 區塊（`<status>`、`<options>`、`<UpdateVariable>`）。
 
-Pure vanilla HTML + ES modules — no build step, no framework.
+純前端應用——不需要建置步驟、不使用框架、不需要後端伺服器。
 
-## Features
+## 功能特色
 
-- 📂 Open local story folders via File System Access API
-- 📖 Chapter-by-chapter navigation with keyboard shortcuts (← →)
-- 🎭 Status panel sidebar — character stats, outfit, close-ups
-- 🎲 Options panel — clickable choice buttons with clipboard copy
-- 📝 Variable update blocks — collapsible raw data view
-- 💾 Session persistence — reopens last folder on refresh
-- 🌙 Dark love-themed UI with CJK-optimised typography
+- 📂 透過 File System Access API 開啟本機故事資料夾
+- 📖 逐章閱讀，支援鍵盤快捷鍵（← →）切換章節
+- 🎭 角色狀態面板——顯示角色數值、服裝、特寫，於桌面版以側邊欄呈現
+- 🎲 選項面板——可點擊的選擇按鈕，點擊後自動複製至剪貼簿
+- 📝 變數更新區塊——可收合的原始資料檢視
+- 💾 工作階段記憶——重新整理頁面後自動恢復上次開啟的資料夾
+- 🌙 暗色主題搭配 CJK 最佳化字型排版
 
-## Quick Start
+## 快速開始
 
 ```bash
 cd reader
 ./serve.zsh          # https://localhost:8443
-./serve.zsh 8080     # custom port
+./serve.zsh 8080     # 自訂連接埠
 ```
 
-> HTTPS is required — the File System Access API only works in secure contexts.
-> The dev server auto-generates a self-signed TLS certificate on first run.
+> HTTPS 為必要條件——File System Access API 僅在安全環境（Secure Context）下運作。
+> 開發伺服器會在首次執行時自動產生自簽 TLS 憑證。
 
-Open the URL in Chrome/Edge, click **選擇資料夾**, and pick a folder containing numbered `.md` files (e.g. `001.md`, `002.md`).
+開啟瀏覽器造訪上述網址，點擊「**選擇資料夾**」，選取包含編號 `.md` 檔案的資料夾（例如 `001.md`、`002.md`）即可開始閱讀。
 
-## Project Structure
+## 專案結構
 
 ```
-reader/              Web reader app
-  index.html           Entry point (all CSS inline)
-  js/                  ES modules (6 files)
-  serve.zsh            HTTPS dev server (zsh + Node.js)
-openspec/            Specifications & change history
-regex.json           SillyTavern regex scripts
-short-template/      Example story chapters
+reader/              網頁閱讀器應用程式
+  index.html           入口頁面（所有 CSS 內嵌）
+  js/                  ES 模組（6 個檔案）
+  serve.zsh            HTTPS 開發伺服器（zsh + Node.js）
+openspec/            規格說明與變更歷史
+regex.json           SillyTavern 正則表達式腳本
+short-template/      故事範本章節
 ```
 
-## Browser Support
+## 瀏覽器支援
 
-Requires a browser with [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API) support:
-- ✅ Chrome 86+
-- ✅ Edge 86+
-- ❌ Firefox (not supported)
-- ❌ Safari (not supported)
+本應用依賴 [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API)，僅支援 Chromium 系列瀏覽器：
 
-## License
-
-GPL-3.0-or-later
-
+| 瀏覽器 | 支援狀態 | 最低版本 |
+|--------|---------|---------|
+| Chrome | ✅ 支援 | 86+ |
+| Edge | ✅ 支援 | 86+ |
+| Opera | ✅ 支援 | 72+ |
+| Firefox | ❌ 不支援 | — |
+| Safari | ❌ 不支援 | — |
