@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MD Story Reader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --panel-bg:          linear-gradient(145deg, #1a0810, #220c16);
+            --border-color:      #6d1a2a;
+            --border-inner:      rgba(255, 80, 120, 0.15);
+            --header-bg:         linear-gradient(180deg, #2a0d18 0%, #1a0810 100%);
+            --header-border:     #6d1a2a;
+            --section-head-bg:   #3a1020;
+            --section-head-hover: #5a1830;
+            --text-main:         #f0c0cc;
+            --text-name:         #ff8aaa;
+            --text-title:        #e05070;
+            --text-label:        #ff7a96;
+            --item-bg:           rgba(255, 255, 255, 0.04);
+            --item-scene-bg:     rgba(180, 30, 60, 0.18);
+            --item-border:       rgba(110, 26, 42, 0.6);
+            --divider:           rgba(110, 26, 42, 0.7);
+            --btn-bg:            rgba(255, 255, 255, 0.04);
+            --btn-border:        rgba(110, 26, 42, 0.8);
+            --btn-hover-bg:      rgba(180, 30, 60, 0.22);
+            --btn-hover-border:  #a0243c;
+            --btn-active-bg:     rgba(180, 30, 60, 0.12);
+            --font-base:         clamp(0.8rem, 2.5vw, 0.95rem);
+            --font-stack:        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-stack);
+            font-size: var(--font-base);
+            background-color: #0f0a0c;
+            color: var(--text-main);
+        }
+
+        /* Collapsible transition styles */
+        details summary {
+            cursor: pointer;
+            user-select: none;
+            list-style: none;
+        }
+        details summary::-webkit-details-marker {
+            display: none;
+        }
+
+        /* Summary arrow indicator */
+        details summary::before {
+            content: '▶';
+            display: inline-block;
+            margin-right: 0.4em;
+            font-size: 0.7em;
+            transition: transform 0.25s ease;
+        }
+        details[open] summary::before {
+            transform: rotate(90deg);
+        }
+
+        /* ── Animation ── */
+        @keyframes slideUpFade {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Status Panel ── */
+        .main-card {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            outline: 1px solid rgba(255, 80, 120, 0.08);
+            border-radius: 16px;
+            padding: clamp(10px, 3vw, 16px);
+            margin: 1rem 0;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5),
+                        inset 0 1px 0 rgba(255, 100, 120, 0.1);
+            animation: slideUpFade 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+        }
+        .char-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--header-bg);
+            border: 1px solid var(--header-border);
+            border-radius: 12px;
+            padding: clamp(8px, 2.5vw, 12px);
+            margin-bottom: 10px;
+            text-align: center;
+            box-shadow: inset 0 0 12px rgba(255, 50, 80, 0.08);
+        }
+        .char-name {
+            color: var(--text-name);
+            font-weight: 900;
+            font-size: clamp(1.2rem, 5vw, 1.8rem);
+            line-height: 1.2;
+            text-shadow: 0 0 16px rgba(255, 100, 140, 0.5),
+                         0 2px 4px rgba(0, 0, 0, 0.6);
+            margin-bottom: 4px;
+        }
+        .char-title {
+            color: var(--text-title);
+            font-weight: 600;
+            font-size: clamp(0.8rem, 2.5vw, 0.95rem);
+            font-style: italic;
+            position: relative;
+            padding: 0 18px;
+        }
+        .char-title::before,
+        .char-title::after {
+            content: '';
+            display: block;
+            width: 12px;
+            height: 1px;
+            background: var(--text-title);
+            opacity: 0.6;
+            position: absolute;
+            top: 50%;
+        }
+        .char-title::before { left: 0; }
+        .char-title::after  { right: 0; }
+
+        .stats-container {
+            background: var(--item-bg);
+            border-radius: 8px;
+            padding: 2px 10px;
+            margin-bottom: 10px;
+            border: 1px solid var(--item-border);
+        }
+        .grid-info {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+        }
+        @media (min-width: 350px) {
+            .grid-info.two-col { grid-template-columns: 1fr 1fr; }
+        }
+        .info-item {
+            background: var(--item-bg);
+            border: 1px solid var(--item-border);
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            display: flex;
+            align-items: flex-start;
+            line-height: 1.4;
+        }
+        .item-label {
+            color: var(--text-label);
+            font-weight: bold;
+            margin-right: 4px;
+            white-space: nowrap;
+        }
+        .scene-box {
+            grid-column: 1 / -1;
+            background: var(--item-scene-bg);
+            border-color: rgba(180, 30, 60, 0.5);
+        }
+        .plain-box { grid-column: 1 / -1; }
+        .emoji-icon {
+            margin-right: 5px;
+            filter: hue-rotate(330deg) saturate(1.2);
+        }
+        .stat-val {
+            color: var(--text-main);
+            font-weight: 500;
+            font-size: 0.9em;
+            word-break: break-word;
+        }
+        .stat-row {
+            display: flex;
+            align-items: baseline;
+            padding: 6px 0;
+            border-bottom: 1px dashed var(--divider);
+        }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-label {
+            color: var(--text-label);
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        /* ── Fold / Collapsible Sections ── */
+        .fold-section {
+            margin-top: 8px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .fold-header {
+            background: var(--section-head-bg);
+            padding: 7px 10px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.9em;
+            color: var(--text-name);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.25s, color 0.25s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .fold-header:hover {
+            background: var(--section-head-hover);
+            color: #ffd0dc;
+        }
+        .fold-icon {
+            font-size: 0.8em;
+            transition: transform 0.3s ease;
+        }
+        details[open] > .fold-header .fold-icon {
+            transform: rotate(0deg);
+        }
+        details:not([open]) > .fold-header .fold-icon {
+            transform: rotate(-90deg);
+        }
+        .fold-content {
+            background: rgba(255, 255, 255, 0.02);
+            padding: 8px;
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.5s ease-in-out, padding 0.5s ease, opacity 0.3s ease;
+        }
+        details[open] > .fold-content {
+            max-height: 2000px;
+            opacity: 1;
+        }
+        details:not([open]) > .fold-content {
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        /* Override generic details summary arrow for fold sections */
+        .fold-section > summary::before {
+            display: none;
+        }
+
+        /* ── Options Panel ── */
+        @keyframes pulse-glow {
+            0%   { box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 100, 120, 0.1); }
+            50%  { box-shadow: 0 15px 30px rgba(180, 30, 60, 0.4), inset 0 1px 0 rgba(255, 100, 120, 0.15); }
+            100% { box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 100, 120, 0.1); }
+        }
+        .era-actions-container {
+            width: 100%;
+            box-sizing: border-box;
+            margin: 1rem 0;
+            padding: clamp(12px, 3.5vw, 20px) clamp(12px, 4vw, 22px);
+            background: var(--panel-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            animation: slideUpFade 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both,
+                       pulse-glow 3s infinite ease-in-out;
+        }
+        .era-actions-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .header-line {
+            height: 2px;
+            background: linear-gradient(to right, transparent, #c23456, transparent);
+            width: 100%;
+            position: absolute;
+            bottom: -8px;
+            opacity: 0.5;
+        }
+        .era-actions-title {
+            text-align: center;
+            font-weight: bold;
+            color: var(--text-name);
+            margin: 0;
+            font-size: clamp(0.95rem, 4vw, 1.1rem);
+            text-shadow: 0 0 12px rgba(255, 100, 140, 0.5);
+            letter-spacing: 2px;
+        }
+        .era-action-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: clamp(8px, 3vw, 14px);
+        }
+        .era-action-btn {
+            position: relative;
+            padding: clamp(10px, 3.5vw, 14px) 8px;
+            font-size: clamp(0.72rem, 3vw, 0.85rem);
+            font-weight: 600;
+            color: var(--text-label);
+            background: var(--btn-bg);
+            border: 1px solid var(--btn-border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            text-align: center;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            min-height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: var(--font-stack);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        .era-action-btn:hover {
+            background: var(--btn-hover-bg);
+            border-color: var(--btn-hover-border);
+            color: #ffd0dc;
+            transform: translateY(-3px) scale(1.03);
+            box-shadow: 0 6px 16px rgba(180, 30, 60, 0.3);
+        }
+        .era-action-btn:active {
+            transform: translateY(-1px) scale(0.98);
+            background: var(--btn-active-bg);
+            box-shadow: 0 2px 8px rgba(180, 30, 60, 0.15);
+        }
+        .era-action-btn--empty {
+            cursor: default;
+            visibility: hidden;
+        }
+        .era-action-num {
+            opacity: 0.6;
+            margin-right: 0.3em;
+            font-size: 0.9em;
+        }
+
+        /* ── Variable Display ── */
+        .variable-content {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.82em;
+            color: var(--text-main);
+            white-space: pre-wrap;
+            word-break: break-word;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        /* ── Prose content styling ── */
+        #content p {
+            margin-bottom: 0.8em;
+            line-height: 1.8;
+        }
+        #content code {
+            background: var(--item-bg);
+            padding: 0.1em 0.3em;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header: Folder Picker -->
+    <header class="sticky top-0 z-10 px-4 py-3 border-b flex items-center gap-3 flex-wrap"
+            style="background: var(--header-bg); border-color: var(--header-border);">
+        <button id="btn-pick-folder"
+                class="px-4 py-2 rounded text-sm font-medium transition-colors"
+                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+            📂 選擇資料夾
+        </button>
+        <span id="folder-name" class="text-sm truncate" style="color: var(--text-label);">尚未選擇資料夾</span>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 px-4 py-6 mx-auto w-full max-w-3xl">
+        <div id="content">
+            <section class="flex flex-col items-center justify-center py-20 text-center gap-4">
+                <h1 class="text-2xl font-bold" style="color: var(--text-title);">MD Story Reader</h1>
+                <p style="color: var(--text-main);">點擊上方「選擇資料夾」按鈕，選取包含章節 <code class="px-1 rounded" style="background: var(--item-bg);">.md</code> 檔案的資料夾以開始閱讀。</p>
+                <p id="browser-warning" class="hidden text-sm mt-4 px-4 py-3 rounded border"
+                   style="color: #ff6b6b; border-color: #6d1a2a; background: rgba(180,30,60,0.15);">
+                    ⚠️ 您的瀏覽器不支援 File System Access API。請使用最新版的 Chrome、Edge 或 Opera 瀏覽器。
+                </p>
+            </section>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav id="chapter-nav" class="sticky bottom-0 z-10 px-4 py-3 border-t flex items-center justify-between hidden"
+         style="background: var(--header-bg); border-color: var(--header-border);">
+        <button id="btn-prev"
+                class="px-4 py-2 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                disabled>
+            ← 上一章
+        </button>
+        <span id="chapter-progress" class="text-sm" style="color: var(--text-label);">0 / 0</span>
+        <button id="btn-next"
+                class="px-4 py-2 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                disabled>
+            下一章 →
+        </button>
+    </nav>
+
+    <script type="module">
+        import { initChapterNav, handleFolderSelect, handleNext, handlePrev, tryRestoreSession } from './js/chapter-nav.js';
+
+        // DOM references
+        const btnPickFolder = document.getElementById('btn-pick-folder');
+        const browserWarning = document.getElementById('browser-warning');
+
+        // Unsupported browser detection
+        if (!('showDirectoryPicker' in window)) {
+            browserWarning.classList.remove('hidden');
+            btnPickFolder.disabled = true;
+            btnPickFolder.style.opacity = '0.3';
+            btnPickFolder.style.cursor = 'not-allowed';
+        }
+
+        // Initialise chapter navigation with DOM element references
+        initChapterNav({
+            content: document.getElementById('content'),
+            folderName: document.getElementById('folder-name'),
+            chapterNav: document.getElementById('chapter-nav'),
+            btnPrev: document.getElementById('btn-prev'),
+            btnNext: document.getElementById('btn-next'),
+            chapterProgress: document.getElementById('chapter-progress')
+        });
+
+        // Wire event listeners
+        btnPickFolder.addEventListener('click', handleFolderSelect);
+        document.getElementById('btn-prev').addEventListener('click', handlePrev);
+        document.getElementById('btn-next').addEventListener('click', handleNext);
+
+        // Attempt to restore saved directory on load
+        if ('showDirectoryPicker' in window) {
+            tryRestoreSession();
+        }
+    </script>
+</body>
+</html>
