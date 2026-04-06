@@ -1,3 +1,4 @@
 tmp/
 .certs/
 apply-patches/target/
+**/current-status.yml
