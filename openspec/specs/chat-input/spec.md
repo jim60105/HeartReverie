@@ -80,3 +80,23 @@ The chat input module SHALL export an `appendToInput(text)` function that append
 
 - **WHEN** `appendToInput(text)` is called before `initChatInput` has been called (textarea is not available)
 - **THEN** the function SHALL do nothing and SHALL NOT throw an error
+
+### Requirement: Enter key submits message
+
+When the user presses Enter (without Shift) in the chat textarea, the frontend SHALL prevent the default newline insertion and trigger the same submit action as clicking the send button.
+
+#### Scenario: Enter submits message
+- **WHEN** the user presses Enter without holding Shift in the chat textarea
+- **THEN** the frontend SHALL prevent the default behavior and invoke the send action, identical to clicking the submit button
+
+#### Scenario: Enter on empty textarea
+- **WHEN** the user presses Enter without holding Shift and the textarea is empty or whitespace-only
+- **THEN** the send action SHALL execute its existing empty-message validation (displaying an error), and no newline SHALL be inserted
+
+### Requirement: Shift+Enter inserts newline
+
+When the user presses Shift+Enter in the chat textarea, the frontend SHALL allow the default browser behavior, inserting a newline character into the textarea without triggering a submit.
+
+#### Scenario: Shift+Enter inserts newline
+- **WHEN** the user presses Shift+Enter in the chat textarea
+- **THEN** the browser's default behavior SHALL occur, inserting a newline into the textarea content

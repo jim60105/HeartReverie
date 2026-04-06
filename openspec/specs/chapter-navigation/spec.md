@@ -135,5 +135,5 @@ The chapter navigation module SHALL support an `onChapterChange` callback that i
 - **THEN** the chat input area SHALL remain visible so the user can send the first message
 
 #### Scenario: Chat input visibility updates on navigation
-- **WHEN** the user navigates from a previous chapter to the last chapter using the Next button or keyboard
+- **WHEN** the user navigates from a previous chapter to the last chapter using the Next button
 - **THEN** the chat input area SHALL become visible again

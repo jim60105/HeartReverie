@@ -54,6 +54,9 @@ export function renderChapter(rawMarkdown, options = {}) {
   // 5a. Strip <user_message>…</user_message>
   text = text.replace(/<user_message>[\s\S]*?<\/user_message>/gi, '');
 
+  // 5c. Strip <T-task...>…</T-task...> but keep plain <T-task>…</T-task>
+  text = text.replace(/<T-task[^>]+>[\s\S]*?<\/T-task[^>]+>/g, '');
+
   // 5b. Strip <script>…</script> to prevent XSS from markdown content
   text = text.replace(/<script[\s>][\s\S]*?<\/script>/gi, '');
 

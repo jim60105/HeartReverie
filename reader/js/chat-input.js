@@ -12,9 +12,9 @@ export function initChatInput(elements, { getContext, onSent }) {
     els.sendBtn.addEventListener('click', handleSend);
     els.resendBtn.addEventListener('click', handleResend);
 
-    // Allow Ctrl+Enter to send
+    // Enter submits; Shift+Enter inserts newline
     els.textarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
         }

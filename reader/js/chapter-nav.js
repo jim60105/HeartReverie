@@ -211,14 +211,6 @@ export function initChapterNav(elements, options = {}) {
             loadChapter(idx);
         }
     });
-
-    // Keyboard navigation
-    document.addEventListener('keydown', (e) => {
-        const totalChapters = state.backendChapters?.length || state.files.length;
-        if (totalChapters === 0) return;
-        if (e.key === 'ArrowLeft') loadChapter(state.currentIndex - 1);
-        if (e.key === 'ArrowRight') loadChapter(state.currentIndex + 1);
-    });
 }
 
 /**
