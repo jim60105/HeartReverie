@@ -71,6 +71,7 @@ export function renderOptionsPanel(items) {
         + `var orig=btn.innerHTML;btn.textContent='已複製!';`
         + `setTimeout(function(){btn.innerHTML=orig;},1000);`
         + `});`
+        + `if(typeof window.__appendToInput==='function')window.__appendToInput(btn.dataset.optionText);`
         + `})(this)"><span class="era-action-num">${item.number}.</span> ${escaped}</button>`;
     } else {
       // Empty cell placeholder

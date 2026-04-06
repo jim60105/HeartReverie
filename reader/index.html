@@ -581,7 +581,10 @@
     <script type="module">
         import { initChapterNav, handleFolderSelect, handleNext, handlePrev, handleReload, tryRestoreSession, loadFromBackend, reloadFromBackendToLast, getBackendContext } from './js/chapter-nav.js';
         import { initStorySelector } from './js/story-selector.js';
-        import { initChatInput, showChatInput, hideChatInput } from './js/chat-input.js';
+        import { initChatInput, showChatInput, hideChatInput, appendToInput } from './js/chat-input.js';
+
+        // Register global bridge for inline onclick handlers (options panel)
+        window.__appendToInput = appendToInput;
 
         // DOM references
         const btnPickFolder = document.getElementById('btn-pick-folder');

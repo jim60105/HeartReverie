@@ -29,6 +29,12 @@ export function hideChatInput() {
     els.chatArea.classList.add('hidden');
 }
 
+export function appendToInput(text) {
+    if (!els.textarea) return;
+    const current = els.textarea.value;
+    els.textarea.value = current ? `${current}\n${text}` : text;
+}
+
 function setControlsDisabled(disabled) {
     els.textarea.disabled = disabled;
     els.sendBtn.disabled = disabled;
