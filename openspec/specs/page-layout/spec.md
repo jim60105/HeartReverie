@@ -62,6 +62,28 @@ The CSS custom properties SHALL be updated to merge the following colour values 
 - **WHEN** a blockquote is rendered in the prose content
 - **THEN** the blockquote text SHALL be styled using the `--text-quote` variable with value `rgba(198, 193, 151, 1)`
 
+### Requirement: Custom font stacks
+The page SHALL define two CSS custom properties for font families:
+- `--font-system-ui` SHALL be a CJK-optimised sans-serif stack: `Noto Sans TC, Noto Sans JP, Noto Sans SC, Noto Sans, Noto Color Emoji, Microsoft JhengHei, Heiti TC, system-ui, sans-serif`
+- `--font-antique` SHALL be an antique/serif stack featuring the Iansui web font: `Iansui, Superclarendon, "Bookman Old Style", "URW Bookman", "URW Bookman L", "Georgia Pro", Georgia, serif`
+
+The Iansui font and Noto Sans families SHALL be loaded via Google Fonts `<link rel="stylesheet">` in `<head>`, preceded by `<link rel="preconnect">` hints for `fonts.googleapis.com` and `fonts.gstatic.com` (best practice).
+
+#### Scenario: Body text uses system-ui font stack
+- **WHEN** the page is rendered
+- **THEN** the `body` element's `font-family` SHALL resolve to the `--font-system-ui` custom property value
+
+#### Scenario: Headings and decorative labels use antique font stack
+- **WHEN** heading elements (h1–h6) or decorative label elements (`.char-name`, `.item-label`, `.fold-header`, `#folder-name`) are rendered
+- **THEN** they SHALL use `font-family: var(--font-antique), var(--font-system-ui)` with `font-weight: normal` and `line-height: normal`
+
+### Requirement: Content area padding
+The `#content` element SHALL have horizontal padding so that prose text has breathing room within the grid column and does not sit flush against the container edges.
+
+#### Scenario: Content has horizontal padding
+- **WHEN** the story content is rendered inside `#content`
+- **THEN** the content area SHALL have horizontal padding applied (e.g., `padding: 0 1rem`)
+
 ### Requirement: Body background colour preserved
 The `body` element's `background-color` SHALL remain `#0f0a0c` (original love theme). The colour merge only affects text and tint variables, not the page background.
 

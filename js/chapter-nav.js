@@ -141,8 +141,9 @@ async function handleDirectorySelected(handle) {
 export function initChapterNav(elements) {
     els = elements;
 
-    // Task 5.1: Cache header height for scroll-to-top offset
-    headerOffset = document.querySelector('header').offsetHeight;
+    // Task 5.1: Cache header height + main padding for scroll-to-top offset
+    const mainPaddingTop = parseFloat(getComputedStyle(document.querySelector('main')).paddingTop);
+    headerOffset = document.querySelector('header').offsetHeight + mainPaddingTop;
 
     // Task 7.7: hashchange listener
     window.addEventListener('hashchange', () => {
