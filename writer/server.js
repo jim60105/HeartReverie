@@ -104,8 +104,9 @@ function validateParams(req, res, next) {
 
 // Verify resolved path stays within playground directory
 function safePath(...segments) {
-  const resolved = path.resolve(PLAYGROUND_DIR, ...segments);
-  if (!resolved.startsWith(path.resolve(PLAYGROUND_DIR))) {
+  const base = path.resolve(PLAYGROUND_DIR);
+  const resolved = path.resolve(base, ...segments);
+  if (resolved !== base && !resolved.startsWith(base + path.sep)) {
     return null;
   }
   return resolved;
