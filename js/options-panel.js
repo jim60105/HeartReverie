@@ -8,14 +8,14 @@
  * @param {string} text
  * @returns {{ text: string, blocks: Array<{placeholder: string, html: string}> }}
  */
-export function extractOptionsBlocks(text) {
+export function extractOptionsBlocks(text, { render = true } = {}) {
   const blocks = [];
   let index = 0;
 
   const processed = text.replace(/<options>([\s\S]*?)<\/options>/gi, (_match, inner) => {
     const placeholder = `<!--OPTIONS_BLOCK_${index}-->`;
     const items = parseOptions(inner);
-    const html = renderOptionsPanel(items);
+    const html = render ? renderOptionsPanel(items) : '';
     blocks.push({ placeholder, html });
     index++;
     return placeholder;

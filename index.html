@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
+            --header-height:     34px;
             --panel-bg:          linear-gradient(145deg, #1a0810, #220c16);
             --border-color:      #6d1a2a;
             --border-inner:      rgba(255, 80, 120, 0.15);
@@ -15,7 +16,7 @@
             --header-border:     #6d1a2a;
             --section-head-bg:   #3a1020;
             --section-head-hover: #5a1830;
-            --text-main:         #f0c0cc;
+            --text-main:         rgba(207, 207, 197, 1);
             --text-name:         #ff8aaa;
             --text-title:        #e05070;
             --text-label:        #ff7a96;
@@ -28,6 +29,13 @@
             --btn-hover-bg:      rgba(180, 30, 60, 0.22);
             --btn-hover-border:  #a0243c;
             --btn-active-bg:     rgba(180, 30, 60, 0.12);
+            --text-italic:       rgba(145, 145, 145, 1);
+            --text-underline:    rgba(145, 145, 145, 1);
+            --text-quote:        rgba(198, 193, 151, 1);
+            --shadow-color:      rgba(0, 0, 0, 0.9);
+            --shadow-width:      2px;
+            --border-outer:      rgba(0, 0, 0, 1);
+            --reading-tint:      rgba(29, 33, 40, 0.9);
             --font-base:         clamp(0.8rem, 2.5vw, 0.95rem);
             --font-stack:        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         }
@@ -67,7 +75,38 @@
             to   { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── Status Panel ── */
+        /* ── Status Panel Layout: Two-Column ── */
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: minmax(0, 48rem) 1fr;
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 80rem;
+            margin: 0 auto;
+            align-items: start;
+        }
+        #sidebar {
+            position: sticky;
+            top: calc(var(--header-height) + 8px);
+            max-height: calc(100vh - var(--header-height) - 16px);
+            overflow-y: auto;
+        }
+        #sidebar:empty {
+            display: none;
+        }
+        @media (max-width: 767px) {
+            .content-wrapper {
+                grid-template-columns: 1fr;
+            }
+            #sidebar {
+                position: static;
+                max-height: none;
+                overflow-y: visible;
+            }
+        }
+        .status-float {
+            /* No float — lives in sidebar column */
+        }
         .main-card {
             width: 100%;
             box-sizing: border-box;
@@ -352,6 +391,18 @@
         #content p {
             margin-bottom: 0.8em;
             line-height: 1.8;
+            text-shadow: var(--shadow-width) var(--shadow-width) 4px var(--shadow-color);
+        }
+        #content em {
+            color: var(--text-italic);
+        }
+        #content u {
+            color: var(--text-underline);
+        }
+        #content blockquote {
+            color: var(--text-quote);
+            border-left: 3px solid var(--text-quote);
+            padding-left: 1em;
         }
         #content code {
             background: var(--item-bg);
@@ -364,10 +415,10 @@
 <body class="min-h-screen flex flex-col">
 
     <!-- Header: Folder Picker -->
-    <header class="sticky top-0 z-10 px-4 py-3 border-b flex items-center gap-3 flex-wrap"
+    <header class="sticky top-0 z-10 px-3 py-1 border-b flex items-center gap-2 flex-wrap"
             style="background: var(--header-bg); border-color: var(--header-border);">
         <button id="btn-pick-folder"
-                class="px-4 py-2 rounded text-sm font-medium transition-colors"
+                class="px-3 py-1 rounded text-sm font-medium transition-colors"
                 style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
                 onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
                 onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
@@ -377,31 +428,34 @@
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 px-4 py-6 mx-auto w-full max-w-3xl">
-        <div id="content">
-            <section class="flex flex-col items-center justify-center py-20 text-center gap-4">
-                <h1 class="text-2xl font-bold" style="color: var(--text-title);">MD Story Reader</h1>
-                <p style="color: var(--text-main);">點擊上方「選擇資料夾」按鈕，選取包含章節 <code class="px-1 rounded" style="background: var(--item-bg);">.md</code> 檔案的資料夾以開始閱讀。</p>
-                <p id="browser-warning" class="hidden text-sm mt-4 px-4 py-3 rounded border"
-                   style="color: #ff6b6b; border-color: #6d1a2a; background: rgba(180,30,60,0.15);">
-                    ⚠️ 您的瀏覽器不支援 File System Access API。請使用最新版的 Chrome、Edge 或 Opera 瀏覽器。
-                </p>
-            </section>
+    <main class="flex-1 px-4 py-6">
+        <div class="content-wrapper">
+            <div id="content">
+                <section class="flex flex-col items-center justify-center py-20 text-center gap-4">
+                    <h1 class="text-2xl font-bold" style="color: var(--text-title);">MD Story Reader</h1>
+                    <p style="color: var(--text-main);">點擊上方「選擇資料夾」按鈕，選取包含章節 <code class="px-1 rounded" style="background: var(--item-bg);">.md</code> 檔案的資料夾以開始閱讀。</p>
+                    <p id="browser-warning" class="hidden text-sm mt-4 px-4 py-3 rounded border"
+                       style="color: #ff6b6b; border-color: #6d1a2a; background: rgba(180,30,60,0.15);">
+                        ⚠️ 您的瀏覽器不支援 File System Access API。請使用最新版的 Chrome、Edge 或 Opera 瀏覽器。
+                    </p>
+                </section>
+            </div>
+            <aside id="sidebar"></aside>
         </div>
     </main>
 
     <!-- Bottom Navigation Bar -->
-    <nav id="chapter-nav" class="sticky bottom-0 z-10 px-4 py-3 border-t flex items-center justify-between hidden"
+    <nav id="chapter-nav" class="sticky bottom-0 z-10 px-3 py-1 border-t flex items-center justify-between hidden"
          style="background: var(--header-bg); border-color: var(--header-border);">
         <button id="btn-prev"
-                class="px-4 py-2 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                class="px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
                 disabled>
             ← 上一章
         </button>
         <span id="chapter-progress" class="text-sm" style="color: var(--text-label);">0 / 0</span>
         <button id="btn-next"
-                class="px-4 py-2 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                class="px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
                 disabled>
             下一章 →

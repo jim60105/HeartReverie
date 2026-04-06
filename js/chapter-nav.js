@@ -19,6 +19,9 @@ const state = {
 // DOM element references (set by initChapterNav)
 let els = {};
 
+// Task 5.1: Cached header height for scroll offset
+let headerOffset = 0;
+
 // Try to load renderChapter; fall back to marked.parse
 let renderChapter = null;
 try {
@@ -28,12 +31,20 @@ try {
     // md-renderer.js not yet available — use marked.js fallback
 }
 
-function render(raw) {
-    if (renderChapter) return renderChapter(raw);
+function render(raw, options = {}) {
+    if (renderChapter) return renderChapter(raw, options);
     return typeof marked !== 'undefined' ? marked.parse(raw) : raw;
 }
 
 // ── Internal helpers ──
+
+function moveStatusToSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    sidebar.innerHTML = '';
+    const panels = els.content.querySelectorAll('.status-float');
+    panels.forEach(panel => sidebar.appendChild(panel));
+}
 
 async function loadChapter(index) {
     if (index < 0 || index >= state.files.length) return;
@@ -41,8 +52,14 @@ async function loadChapter(index) {
     state.currentIndex = index;
     state.currentContent = await readFileContent(state.files[index]);
 
+    // Task 4.1: Determine if this is the last chapter
+    const isLastChapter = index === state.files.length - 1;
+
     // Task 7.3/7.4: Re-run pipeline, replace content in DOM
-    els.content.innerHTML = render(state.currentContent);
+    els.content.innerHTML = render(state.currentContent, { isLastChapter });
+
+    // Move status panel to sidebar (right column)
+    moveStatusToSidebar();
 
     // Task 7.5: Update button disabled states
     updateNavState();
@@ -50,8 +67,8 @@ async function loadChapter(index) {
     // Task 7.7: Sync URL hash (1-based)
     history.replaceState(null, '', `#chapter=${index + 1}`);
 
-    // Task 7.8: Scroll to top of content area
-    els.content.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Task 5.2: Scroll to top of content area, offset by sticky header
+    window.scrollTo({ top: els.content.offsetTop - headerOffset, behavior: 'smooth' });
 }
 
 // Task 7.5/7.6: Update button disabled states and progress indicator
@@ -119,6 +136,9 @@ async function handleDirectorySelected(handle) {
  */
 export function initChapterNav(elements) {
     els = elements;
+
+    // Task 5.1: Cache header height for scroll-to-top offset
+    headerOffset = document.querySelector('header').offsetHeight;
 
     // Task 7.7: hashchange listener
     window.addEventListener('hashchange', () => {

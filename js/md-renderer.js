@@ -20,7 +20,7 @@ import { extractVariableBlocks } from './variable-display.js';
  * @param {string} rawMarkdown
  * @returns {string} Final HTML string
  */
-export function renderChapter(rawMarkdown) {
+export function renderChapter(rawMarkdown, options = {}) {
   let text = rawMarkdown;
   const placeholderMap = new Map();
 
@@ -32,7 +32,7 @@ export function renderChapter(rawMarkdown) {
   }
 
   // 2. Extract <options> blocks
-  const optionsResult = extractOptionsBlocks(text);
+  const optionsResult = extractOptionsBlocks(text, { render: options.isLastChapter !== false });
   text = optionsResult.text;
   for (const block of optionsResult.blocks) {
     placeholderMap.set(block.placeholder, block.html);

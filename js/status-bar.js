@@ -92,7 +92,7 @@ export function renderStatusPanel(data) {
   const esc = escapeHtml;
 
   // ── Character header ──
-  let html = `<div class="status-panel main-card">`;
+  let html = `<div class="status-panel main-card status-float">`;
 
   if (data.name || data.title) {
     html += `<div class="char-header">`;
