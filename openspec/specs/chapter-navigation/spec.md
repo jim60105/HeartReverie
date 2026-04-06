@@ -87,6 +87,24 @@ When navigating to a different chapter, the application SHALL scroll the viewpor
 - **WHEN** the sticky header has a computed height of H pixels and the `<main>` element has a computed padding-top of P pixels, and the user navigates to a new chapter
 - **THEN** the scroll position SHALL be set such that the top of the content area is at least (H + P) pixels below the top of the viewport
 
+### Requirement: Auto-reload polling with content awareness
+
+In backend mode, the polling mechanism SHALL check for new chapters by comparing the chapter count. Additionally, the polling mechanism SHALL fetch the last chapter's content and compare it with the cached content in `state.backendChapters`. If the content has changed, the cached content SHALL be updated in place. If the user is currently viewing that last chapter, the display SHALL be re-rendered to reflect the updated content, enabling real-time display of streaming content.
+
+Only the last chapter's content SHALL be fetched on each poll tick (not all chapters) to keep polling efficient.
+
+#### Scenario: New chapter detected during polling
+- **WHEN** the polling mechanism detects that the chapter count has changed
+- **THEN** the application SHALL perform a full reload of all chapters from the backend
+
+#### Scenario: Last chapter content changes during polling
+- **WHEN** the polling mechanism detects that the last chapter's content has changed compared to the cached version
+- **THEN** the cached content SHALL be updated and, if the user is currently viewing that chapter, the display SHALL be re-rendered in real time
+
+#### Scenario: Content unchanged during polling
+- **WHEN** the polling mechanism fetches the last chapter's content and it matches the cached version
+- **THEN** no re-render SHALL occur and the cached state SHALL remain unchanged
+
 ### Requirement: Single chapter display
 The application SHALL display only one chapter at a time. When navigating to a new chapter, the previously displayed chapter content SHALL be fully replaced.
 

@@ -448,7 +448,7 @@ app.post(
         { role: "system", content: systemPrompt },
         ...chapters.map((ch) => ({
           role: "assistant",
-          content: `<previous_context>${ch.content}</previous_context>`,
+          content: `<previous_context>${stripPromptTags(ch.content)}</previous_context>`,
         })),
         { role: "user", content: userContent },
         {
@@ -594,6 +594,14 @@ app.post(
 );
 
 // ── Helper functions ────────────────────────────────────────────
+
+/** Strip `<options>...</options>` and `<disclaimer>...</disclaimer>` from chapter content */
+function stripPromptTags(content) {
+  return content
+    .replace(/<options>[\s\S]*?<\/options>/g, "")
+    .replace(/<disclaimer>[\s\S]*?<\/disclaimer>/g, "")
+    .trim();
+}
 
 async function renderSystemPrompt(series) {
   const systemTemplatePath = path.join(

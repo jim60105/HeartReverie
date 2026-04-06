@@ -359,8 +359,33 @@ async function pollBackend() {
     try {
         const res = await fetch(`/api/stories/${encodeURIComponent(state.currentSeries)}/${encodeURIComponent(state.currentStory)}/chapters`);
         const nums = await res.json();
-        if (nums.length !== (state.backendChapters?.length || 0)) {
+        const cachedLen = state.backendChapters?.length || 0;
+
+        if (nums.length !== cachedLen) {
+            // New chapters detected — reload all and navigate to last
             await loadFromBackend(state.currentSeries, state.currentStory);
+            if (state.backendChapters && state.backendChapters.length > 0) {
+                await loadChapter(state.backendChapters.length - 1);
+            }
+            return;
+        }
+
+        // Poll the last chapter's content for streaming updates
+        if (nums.length > 0 && state.backendChapters && state.backendChapters.length > 0) {
+            const lastNum = nums[nums.length - 1];
+            const chRes = await fetch(`/api/stories/${encodeURIComponent(state.currentSeries)}/${encodeURIComponent(state.currentStory)}/chapters/${lastNum}`);
+            if (!chRes.ok) return;
+            const { content } = await chRes.json();
+            const lastIdx = state.backendChapters.length - 1;
+            if (content !== state.backendChapters[lastIdx].content) {
+                state.backendChapters[lastIdx].content = content;
+                // Re-render if currently viewing the last chapter
+                if (state.currentIndex === lastIdx) {
+                    const isLastChapter = lastIdx === state.backendChapters.length - 1;
+                    els.content.innerHTML = render(content, { isLastChapter });
+                    moveStatusToSidebar();
+                }
+            }
         }
     } catch {
         // Ignore polling errors silently
