@@ -312,6 +312,59 @@ app.get(
   }
 );
 
+// DELETE /api/stories/:series/:name/chapters/last — delete last chapter
+app.delete(
+  "/api/stories/:series/:name/chapters/last",
+  validateParams,
+  async (req, res) => {
+    const dirPath = safePath(req.params.series, req.params.name);
+    if (!dirPath) {
+      return res.status(400).json({
+        type: "about:blank",
+        title: "Bad Request",
+        status: 400,
+        detail: "Invalid path",
+      });
+    }
+
+    try {
+      const entries = await fs.readdir(dirPath);
+      const chapterFiles = entries
+        .filter((f) => /^\d+\.md$/.test(f))
+        .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+      if (chapterFiles.length === 0) {
+        return res.status(404).json({
+          type: "about:blank",
+          title: "Not Found",
+          status: 404,
+          detail: "No chapters to delete",
+        });
+      }
+
+      const lastFile = chapterFiles[chapterFiles.length - 1];
+      const lastNum = parseInt(lastFile, 10);
+      await fs.unlink(path.join(dirPath, lastFile));
+      res.json({ deleted: lastNum });
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        return res.status(404).json({
+          type: "about:blank",
+          title: "Not Found",
+          status: 404,
+          detail: "Story not found",
+        });
+      }
+      res.status(500).json({
+        type: "about:blank",
+        title: "Internal Server Error",
+        status: 500,
+        detail: "Failed to delete chapter",
+      });
+    }
+  }
+);
+
 // POST /api/stories/:series/:name/init — initialize story
 app.post(
   "/api/stories/:series/:name/init",

@@ -86,6 +86,11 @@ async function loadChapter(index) {
 
     // Scroll to top of content area, offset by sticky header
     window.scrollTo({ top: els.content.offsetTop - headerOffset, behavior: 'smooth' });
+
+    // Notify listeners about chapter change
+    if (onChapterChangeCallback) {
+        onChapterChangeCallback({ isLastChapter });
+    }
 }
 
 // Task 7.5/7.6: Update button disabled states and progress indicator
@@ -180,12 +185,16 @@ async function handleDirectorySelected(handle) {
 
 // ── Exported API ──
 
+// Callback for chapter change events
+let onChapterChangeCallback = null;
+
 /**
  * Initialise chapter navigation with DOM element references.
  * Sets up hashchange listener and keyboard navigation.
  */
-export function initChapterNav(elements) {
+export function initChapterNav(elements, options = {}) {
     els = elements;
+    onChapterChangeCallback = options.onChapterChange || null;
 
     // Task 5.1: Cache header height + main padding for scroll-to-top offset
     const mainPaddingTop = parseFloat(getComputedStyle(document.querySelector('main')).paddingTop);

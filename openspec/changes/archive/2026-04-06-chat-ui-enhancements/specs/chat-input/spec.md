@@ -1,22 +1,4 @@
-# Chat Input
-
-## Purpose
-
-Frontend chat input UI for submitting user messages to the story writer backend.
-
-## Requirements
-
-### Requirement: Input UI
-
-The reader frontend SHALL display a chat input area below the rendered story content. The input area SHALL consist of a textarea for the user message and a submit button. The input area SHALL NOT be sticky or fixed-position; it SHALL scroll naturally with the page content below the story chapters.
-
-#### Scenario: Input area placement
-- **WHEN** the reader page is loaded with a story selected
-- **THEN** a textarea and submit button SHALL be rendered below the story content, scrolling naturally with the page
-
-#### Scenario: Input area without story
-- **WHEN** no story is selected or loaded
-- **THEN** the chat input area SHALL be hidden or disabled
+## MODIFIED Requirements
 
 ### Requirement: Submit behavior
 
@@ -41,6 +23,8 @@ When the user submits a message, the frontend SHALL POST the message to `/api/st
 #### Scenario: Empty message prevention
 - **WHEN** the user clicks submit with an empty or whitespace-only message
 - **THEN** the frontend SHALL NOT send the request and SHALL indicate that a message is required
+
+## ADDED Requirements
 
 ### Requirement: Resend button
 

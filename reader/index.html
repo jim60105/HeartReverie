@@ -561,6 +561,12 @@
                            font-size: var(--font-base); box-sizing: border-box;"></textarea>
                 <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
                     <span id="chat-error" class="text-sm" style="color: #ff6b6b; flex: 1; align-self: center;"></span>
+                    <button id="btn-chat-resend" class="px-4 py-1 rounded text-sm font-medium transition-colors"
+                        style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                        onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                        onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                        🔄 重送
+                    </button>
                     <button id="btn-chat-send" class="px-4 py-1 rounded text-sm font-medium transition-colors"
                         style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
                         onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
@@ -597,6 +603,14 @@
             btnNext: document.getElementById('btn-next'),
             btnReload: document.getElementById('btn-reload'),
             chapterProgress: document.getElementById('chapter-progress')
+        }, {
+            onChapterChange: ({ isLastChapter }) => {
+                if (isLastChapter) {
+                    showChatInput();
+                } else {
+                    hideChatInput();
+                }
+            }
         });
 
         // Wire event listeners
@@ -628,6 +642,7 @@
         initChatInput({
             textarea: document.getElementById('chat-message'),
             sendBtn: document.getElementById('btn-chat-send'),
+            resendBtn: document.getElementById('btn-chat-resend'),
             errorSpan: document.getElementById('chat-error'),
             chatArea: document.getElementById('chat-input-area')
         }, {
