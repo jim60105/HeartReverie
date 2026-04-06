@@ -25,14 +25,25 @@ import fs from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import https from "node:https";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import express from "express";
 import vento from "ventojs";
+
+const execFileAsync = promisify(execFile);
 
 // ── Resolve project directories ─────────────────────────────────
 const ROOT_DIR = path.resolve(import.meta.dirname, "..");
 const PLAYGROUND_DIR =
   process.env.PLAYGROUND_DIR || path.join(ROOT_DIR, "playground");
 const READER_DIR = process.env.READER_DIR || path.join(ROOT_DIR, "reader");
+const APPLY_PATCHES_BIN = path.join(
+  ROOT_DIR,
+  "apply-patches",
+  "target",
+  "release",
+  "apply-patches"
+);
 
 // ── TLS configuration ───────────────────────────────────────────
 const CERT_FILE = process.env.CERT_FILE;
@@ -447,7 +458,7 @@ app.post(
         { role: "system", content: afterUserMessageContent },
       ];
 
-      // Call OpenRouter via native fetch
+      // Call OpenRouter via native fetch with streaming
       const apiResponse = await fetch(OPENROUTER_API_URL, {
         method: "POST",
         headers: {
@@ -457,6 +468,7 @@ app.post(
         body: JSON.stringify({
           model: OPENROUTER_MODEL,
           messages,
+          stream: true,
           temperature: 0.1,
           frequency_penalty: 0.13,
           presence_penalty: 0.52,
@@ -478,17 +490,6 @@ app.post(
         });
       }
 
-      const responseData = await apiResponse.json();
-      const content = responseData.choices?.[0]?.message?.content;
-      if (!content) {
-        return res.status(502).json({
-          type: "about:blank",
-          title: "Bad Gateway",
-          status: 502,
-          detail: "No content in AI response",
-        });
-      }
-
       // Determine next chapter number
       const maxNum =
         chapterFiles.length > 0
@@ -500,10 +501,76 @@ app.post(
       // Ensure directory exists
       await fs.mkdir(storyDir, { recursive: true });
 
-      // Write chapter file
-      await fs.writeFile(path.join(storyDir, `${padded}.md`), content, "utf-8");
+      // Open file handle for incremental writing
+      const chapterPath = path.join(storyDir, `${padded}.md`);
+      const fileHandle = await fs.open(chapterPath, "w");
+      let fullContent = "";
 
-      res.json({ chapter: nextNum, content });
+      try {
+        // Parse SSE stream and write incrementally
+        const reader = apiResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          // Keep the last (possibly incomplete) line in the buffer
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+            const payload = trimmed.slice(6);
+            if (payload === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(payload);
+              const delta = parsed.choices?.[0]?.delta?.content;
+              if (delta) {
+                fullContent += delta;
+                await fileHandle.write(delta);
+              }
+            } catch {
+              // Skip malformed JSON chunks
+            }
+          }
+        }
+      } finally {
+        await fileHandle.close();
+      }
+
+      if (!fullContent) {
+        return res.status(502).json({
+          type: "about:blank",
+          title: "Bad Gateway",
+          status: 502,
+          detail: "No content in AI response",
+        });
+      }
+
+      // Run apply-patches to update current-status.yml
+      try {
+        await execFileAsync(APPLY_PATCHES_BIN, ["playground"], {
+          cwd: ROOT_DIR,
+        });
+      } catch (err) {
+        if (err.code === "ENOENT") {
+          console.warn("⚠️  apply-patches binary not found at", APPLY_PATCHES_BIN);
+        } else {
+          console.warn(
+            "⚠️  apply-patches exited with code",
+            err.code,
+            err.stderr || ""
+          );
+        }
+      }
+
+      res.json({ chapter: nextNum, content: fullContent });
     } catch (err) {
       console.error("Chat error:", err.message);
       res.status(500).json({
