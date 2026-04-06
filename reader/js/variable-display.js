@@ -1,5 +1,7 @@
 // js/variable-display.js — <UpdateVariable> block extraction, parsing, and rendering
 
+import { escapeHtml } from './utils.js';
+
 /**
  * Extract all <UpdateVariable>…</UpdateVariable> (complete) and unclosed
  * <UpdateVariable> (incomplete) blocks from text, replacing each with a
@@ -63,12 +65,4 @@ export function renderVariableBlock(content, isComplete) {
   return html;
 }
 
-// ── Helpers ──
 
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}

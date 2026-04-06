@@ -72,8 +72,7 @@ async function handleSend() {
         );
 
         if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || `HTTP ${res.status}`);
+            throw new Error('發送失敗');
         }
 
         els.errorSpan.textContent = '';
@@ -112,8 +111,7 @@ async function handleResend() {
         );
 
         if (!delRes.ok && delRes.status !== 404) {
-            const text = await delRes.text();
-            throw new Error(text || `DELETE failed: HTTP ${delRes.status}`);
+            throw new Error('重送失敗');
         }
 
         // Re-send the message
@@ -127,8 +125,7 @@ async function handleResend() {
         );
 
         if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || `HTTP ${res.status}`);
+            throw new Error('重送失敗');
         }
 
         els.errorSpan.textContent = '';

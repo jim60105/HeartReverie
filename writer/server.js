@@ -29,6 +29,8 @@ import https from "node:https";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import vento from "ventojs";
 
 const execFileAsync = promisify(execFile);
@@ -112,10 +114,18 @@ function safePath(...segments) {
 // ── Passphrase verification middleware ──────────────────────────
 function verifyPassphrase(req, res, next) {
   const expected = process.env.PASSPHRASE;
-  if (!expected) return next();
+  if (!expected) {
+    return res.status(503).json({
+      type: "about:blank",
+      title: "Service Unavailable",
+      status: 503,
+      detail: "Authentication not configured",
+    });
+  }
 
   const provided = req.headers["x-passphrase"];
   if (!provided) {
+    console.warn(`[auth] Rejected request: ${req.method} ${req.path} from ${req.ip}`);
     return res.status(401).json({
       type: "about:blank",
       title: "Unauthorized",
@@ -133,6 +143,7 @@ function verifyPassphrase(req, res, next) {
 
   if (match) return next();
 
+  console.warn(`[auth] Rejected request: ${req.method} ${req.path} from ${req.ip}`);
   return res.status(401).json({
     type: "about:blank",
     title: "Unauthorized",
@@ -144,6 +155,23 @@ function verifyPassphrase(req, res, next) {
 // ── Express app ─────────────────────────────────────────────────
 const app = express();
 
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // CSP handled by frontend meta tag
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow CDN scripts
+    crossOriginOpenerPolicy: false, // Allow cross-origin popups
+  })
+);
+
+// Global API rate limit
+app.use("/api", rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: "draft-8", legacyHeaders: false }));
+
+// Stricter rate limit on auth endpoint
+app.use("/api/auth/verify", rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false }));
+
+// Stricter rate limit on chat endpoint
+app.use("/api/stories/:series/:name/chat", rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false }));
+
 // JSON body parser for API routes
 app.use("/api", express.json({ limit: "1mb" }));
 app.use("/api", verifyPassphrase);
@@ -151,17 +179,6 @@ app.use("/api", verifyPassphrase);
 // Auth verification endpoint
 app.get("/api/auth/verify", (_req, res) => {
   res.json({ ok: true });
-});
-
-// Path param validation for all API story routes
-app.param("series", (req, _res, next) => {
-  next();
-});
-app.param("name", (req, _res, next) => {
-  next();
-});
-app.param("number", (req, _res, next) => {
-  next();
 });
 
 // ── API Routes ──────────────────────────────────────────────────
@@ -499,6 +516,11 @@ app.post(
         // Directory may not exist yet
       }
 
+      const MAX_CHAPTERS = 200;
+      if (chapterFiles.length > MAX_CHAPTERS) {
+        chapterFiles = chapterFiles.slice(-MAX_CHAPTERS);
+      }
+
       const chapters = [];
       for (const f of chapterFiles) {
         const content = await fs.readFile(path.join(storyDir, f), "utf-8");
@@ -574,11 +596,12 @@ app.post(
 
       if (!apiResponse.ok) {
         const errorBody = await apiResponse.text();
+        console.error("OpenRouter API error:", apiResponse.status, errorBody);
         return res.status(apiResponse.status).json({
           type: "about:blank",
           title: "AI Service Error",
           status: apiResponse.status,
-          detail: errorBody || "OpenRouter API error",
+          detail: "AI service request failed",
         });
       }
 
@@ -749,7 +772,7 @@ async function loadStatus(series, name) {
 }
 
 // ── Serve reader frontend ───────────────────────────────────────
-app.use("/", express.static(READER_DIR));
+app.use("/", express.static(READER_DIR, { dotfiles: "deny" }));
 
 // ── Start HTTPS server ──────────────────────────────────────────
 const server = https.createServer(

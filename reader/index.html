@@ -3,12 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdn.tailwindcss.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:;">
     <title>MD Story Reader</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Iansui&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+TC:wght@400;700&family=Noto+Color+Emoji&display=swap">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Iansui&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+TC:wght@400;700&family=Noto+Color+Emoji&display=swap" crossorigin="anonymous">
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"
+            integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.3.3/dist/purify.min.js"
+            integrity="sha384-pcBjnGbkyKeOXaoFkmJiuR9E08/6gkmus6/Strimnxtl3uk0Hx23v345pWyC/MMr"
+            crossorigin="anonymous"></script>
     <style>
         :root {
             --header-height:     34px;
@@ -404,6 +411,12 @@
             font-size: 0.9em;
         }
 
+        /* Button hover effects */
+        .themed-btn:hover {
+            background: var(--btn-hover-bg) !important;
+            border-color: var(--btn-hover-border) !important;
+        }
+
         /* ── Variable Display ── */
         .variable-content {
             font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
@@ -460,10 +473,8 @@
                        font-family: var(--font-system-ui); box-sizing: border-box; margin-bottom: 12px;">
             <div style="display: flex; justify-content: center; gap: 8px; align-items: center;">
                 <span id="passphrase-error" class="text-sm" style="color: #ff6b6b;"></span>
-                <button id="passphrase-submit" class="px-4 py-2 rounded text-sm font-medium transition-colors"
-                    style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                    onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                    onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                <button id="passphrase-submit" class="themed-btn px-4 py-2 rounded text-sm font-medium transition-colors"
+                    style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);">
                     進入
                 </button>
             </div>
@@ -474,19 +485,15 @@
     <header class="sticky top-0 z-10 px-3 py-1 border-b flex items-center gap-2 flex-wrap"
             style="background: var(--header-bg); border-color: var(--header-border);">
         <button id="btn-pick-folder"
-                class="px-3 py-1 rounded text-sm font-medium transition-colors"
-                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                class="themed-btn px-3 py-1 rounded text-sm font-medium transition-colors"
+                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);">
             📂 選擇資料夾
         </button>
 
         <!-- Story Selector -->
         <details id="story-selector-details" style="position: relative;">
-            <summary class="px-3 py-1 rounded text-sm font-medium transition-colors"
-                     style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); cursor: pointer; list-style: none;"
-                     onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                     onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+            <summary class="themed-btn px-3 py-1 rounded text-sm font-medium transition-colors"
+                     style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); cursor: pointer; list-style: none;">
                 📖 故事選擇
             </summary>
             <div style="position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 20;
@@ -511,17 +518,13 @@
                                   padding: 4px 8px; color: var(--text-main); font-size: var(--font-base); font-family: var(--font-system-ui);">
                     <div style="display: flex; gap: 6px; margin-top: 2px;">
                         <button id="btn-create-story"
-                                class="px-3 py-1 rounded text-sm font-medium transition-colors"
-                                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); flex: 1;"
-                                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                                class="themed-btn px-3 py-1 rounded text-sm font-medium transition-colors"
+                                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); flex: 1;">
                             ✨ 建立
                         </button>
                         <button id="btn-load-story"
-                                class="px-3 py-1 rounded text-sm font-medium transition-colors"
-                                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); flex: 1;"
-                                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                                class="themed-btn px-3 py-1 rounded text-sm font-medium transition-colors"
+                                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name); flex: 1;">
                             📥 載入
                         </button>
                     </div>
@@ -531,28 +534,22 @@
 
         <span id="folder-name" class="text-sm truncate" style="color: var(--text-label);">尚未選擇資料夾</span>
         <button id="btn-reload"
-                class="hidden px-2 py-1 rounded text-sm transition-colors"
+                class="hidden themed-btn px-2 py-1 rounded text-sm transition-colors"
                 style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'"
                 title="重新載入資料夾">
             🔄
         </button>
         <span class="flex-grow"></span>
         <button id="btn-prev"
-                class="hidden px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                class="hidden themed-btn px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'"
                 disabled>
             ← 上一章
         </button>
         <span id="chapter-progress" class="hidden text-sm" style="color: var(--text-label);">0 / 0</span>
         <button id="btn-next"
-                class="hidden px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                class="hidden themed-btn px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'"
                 disabled>
             下一章 →
         </button>
@@ -583,16 +580,12 @@
                            font-size: var(--font-base); box-sizing: border-box;"></textarea>
                 <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
                     <span id="chat-error" class="text-sm" style="color: #ff6b6b; flex: 1; align-self: center;"></span>
-                    <button id="btn-chat-resend" class="px-4 py-1 rounded text-sm font-medium transition-colors"
-                        style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                        onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                        onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                    <button id="btn-chat-resend" class="themed-btn px-4 py-1 rounded text-sm font-medium transition-colors"
+                        style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);">
                         🔄 重送
                     </button>
-                    <button id="btn-chat-send" class="px-4 py-1 rounded text-sm font-medium transition-colors"
-                        style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                        onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
-                        onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                    <button id="btn-chat-send" class="themed-btn px-4 py-1 rounded text-sm font-medium transition-colors"
+                        style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);">
                         ✨ 發送
                     </button>
                 </div>
@@ -603,11 +596,8 @@
     <script type="module">
         import { initChapterNav, handleFolderSelect, handleNext, handlePrev, handleReload, tryRestoreSession, loadFromBackend, reloadFromBackendToLast, getBackendContext } from './js/chapter-nav.js';
         import { initStorySelector } from './js/story-selector.js';
-        import { initChatInput, showChatInput, hideChatInput, appendToInput } from './js/chat-input.js';
+        import { initChatInput, showChatInput, hideChatInput } from './js/chat-input.js';
         import { initPassphraseGate } from './js/passphrase-gate.js';
-
-        // Register global bridge for inline onclick handlers (options panel)
-        window.__appendToInput = appendToInput;
 
         // DOM references
         const btnPickFolder = document.getElementById('btn-pick-folder');

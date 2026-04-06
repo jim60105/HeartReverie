@@ -1,5 +1,8 @@
 // js/options-panel.js — <options> block extraction, parsing, and rendering
 
+import { escapeHtml } from './utils.js';
+import { appendToInput } from './chat-input.js';
+
 /**
  * Extract all <options>…</options> blocks from text, replacing each with a
  * placeholder comment. Returns the modified text and an array of block
@@ -66,13 +69,7 @@ export function renderOptionsPanel(items) {
       const item = items[i];
       const escaped = esc(item.text);
       // Use data attribute for the raw text to copy
-      html += `<button class="era-action-btn" data-option-text="${escaped}" onclick="(function(btn){`
-        + `navigator.clipboard.writeText(btn.dataset.optionText).then(function(){`
-        + `var orig=btn.innerHTML;btn.textContent='已複製!';`
-        + `setTimeout(function(){btn.innerHTML=orig;},1000);`
-        + `});`
-        + `if(typeof window.__appendToInput==='function')window.__appendToInput(btn.dataset.optionText);`
-        + `})(this)"><span class="era-action-num">${item.number}.</span> ${escaped}</button>`;
+      html += `<button class="era-action-btn" data-option-text="${escaped}"><span class="era-action-num">${item.number}.</span> ${escaped}</button>`;
     } else {
       // Empty cell placeholder
       html += `<div class="era-action-btn era-action-btn--empty"></div>`;
@@ -83,12 +80,15 @@ export function renderOptionsPanel(items) {
   return html;
 }
 
-// ── Helpers ──
-
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// Event delegation for option buttons
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-option-text]');
+    if (!btn) return;
+    const text = btn.dataset.optionText;
+    navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerHTML;
+        btn.textContent = '已複製!';
+        setTimeout(() => { btn.innerHTML = orig; }, 1000);
+    });
+    appendToInput(text);
+});

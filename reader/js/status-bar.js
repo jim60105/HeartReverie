@@ -1,5 +1,7 @@
 // js/status-bar.js — <status> block extraction, parsing, and rendering
 
+import { escapeHtml } from './utils.js';
+
 /**
  * Extract all <status>…</status> blocks from text, replacing each with a
  * placeholder comment. Returns the modified text and an array of block
@@ -155,10 +157,4 @@ function splitPipe(str) {
   return str.split('|').map(s => s.trim());
 }
 
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+

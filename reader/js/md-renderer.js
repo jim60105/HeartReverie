@@ -57,8 +57,7 @@ export function renderChapter(rawMarkdown, options = {}) {
   // 5c. Strip <T-task...>…</T-task...> but keep plain <T-task>…</T-task>
   text = text.replace(/<T-task[^>]+>[\s\S]*?<\/T-task[^>]+>/g, '');
 
-  // 5b. Strip <script>…</script> to prevent XSS from markdown content
-  text = text.replace(/<script[\s>][\s\S]*?<\/script>/gi, '');
+
 
   // 6. Quote normalisation
   text = text.replace(/[\u201c\u201d\u00ab\u00bb\u300c\u300d\uff62\uff63\u300a\u300b\u201e]/g, '"');
@@ -66,11 +65,14 @@ export function renderChapter(rawMarkdown, options = {}) {
   // 7. Newline doubling
   text = text.replace(/\n/g, '\n\n');
 
-  // 8. Markdown → HTML (configured to disable raw HTML passthrough for security)
-  const html = marked.parse(text, { breaks: true });
+  // 8. Markdown → HTML
+  let html = marked.parse(text, { breaks: true });
 
   // 9. Reinsert rendered component HTML
-  return reinjectPlaceholders(html, placeholderMap);
+  html = reinjectPlaceholders(html, placeholderMap);
+
+  // 10. Sanitize HTML to prevent XSS
+  return DOMPurify.sanitize(html, { ADD_TAGS: ['details', 'summary'], ADD_ATTR: ['open'] });
 }
 
 /**
