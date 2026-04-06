@@ -42,6 +42,8 @@ export async function listChapterFiles(dirHandle) {
 
 /**
  * Read a file's content as UTF-8 text.
+ * Uses getFile() which returns a snapshot blob — no persistent file lock is held,
+ * so other applications can freely edit the file while the reader has it open.
  * @param {FileSystemFileHandle} fileHandle
  * @returns {Promise<string>}
  */

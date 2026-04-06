@@ -22,6 +22,9 @@ let els = {};
 // Task 5.1: Cached header height for scroll offset
 let headerOffset = 0;
 
+// Auto-reload polling interval ID
+let pollIntervalId = null;
+
 // Try to load renderChapter; fall back to marked.parse
 let renderChapter = null;
 try {
@@ -97,8 +100,31 @@ function updateNavState() {
     });
 }
 
+/**
+ * Poll the directory for new chapter files.
+ * Updates the file list and nav state if new files are detected.
+ */
+async function pollDirectory() {
+    if (!state.directoryHandle) return;
+    try {
+        const newFiles = await listChapterFiles(state.directoryHandle);
+        if (newFiles.length !== state.files.length) {
+            state.files = newFiles;
+            updateNavState();
+        }
+    } catch {
+        // Directory may have been removed or permission revoked — ignore silently
+    }
+}
+
 // Handle a directory handle (shared by pick and restore)
 async function handleDirectorySelected(handle) {
+    // Clear any existing polling interval
+    if (pollIntervalId !== null) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+    }
+
     state.directoryHandle = handle;
     els.folderName.textContent = handle.name;
 
@@ -114,12 +140,14 @@ async function handleDirectorySelected(handle) {
         els.btnPrev.classList.add('hidden');
         els.chapterProgress.classList.add('hidden');
         els.btnNext.classList.add('hidden');
+        els.btnReload.classList.add('hidden');
         return;
     }
 
     els.btnPrev.classList.remove('hidden');
     els.chapterProgress.classList.remove('hidden');
     els.btnNext.classList.remove('hidden');
+    els.btnReload.classList.remove('hidden');
     await saveDirectoryHandle(handle);
 
     // Task 7.7: Check URL hash for starting chapter
@@ -130,6 +158,9 @@ async function handleDirectorySelected(handle) {
 
     // Task 7.2: Load first chapter (or hash-specified chapter)
     await loadChapter(Math.max(0, startIndex));
+
+    // Start auto-reload polling (1-second interval)
+    pollIntervalId = setInterval(pollDirectory, 1000);
 }
 
 // ── Exported API ──
@@ -181,6 +212,11 @@ export function handleNext() {
 /** Task 7.4: Go to previous chapter */
 export function handlePrev() {
     loadChapter(state.currentIndex - 1);
+}
+
+/** Manually re-scan the directory for new chapter files */
+export async function handleReload() {
+    await pollDirectory();
 }
 
 /**

@@ -454,6 +454,14 @@
             📂 選擇資料夾
         </button>
         <span id="folder-name" class="text-sm truncate" style="color: var(--text-label);">尚未選擇資料夾</span>
+        <button id="btn-reload"
+                class="hidden px-2 py-1 rounded text-sm transition-colors"
+                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'"
+                title="重新載入資料夾">
+            🔄
+        </button>
         <span class="flex-grow"></span>
         <button id="btn-prev"
                 class="hidden px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -492,7 +500,7 @@
     </main>
 
     <script type="module">
-        import { initChapterNav, handleFolderSelect, handleNext, handlePrev, tryRestoreSession } from './js/chapter-nav.js';
+        import { initChapterNav, handleFolderSelect, handleNext, handlePrev, handleReload, tryRestoreSession } from './js/chapter-nav.js';
 
         // DOM references
         const btnPickFolder = document.getElementById('btn-pick-folder');
@@ -512,6 +520,7 @@
             folderName: document.getElementById('folder-name'),
             btnPrev: document.getElementById('btn-prev'),
             btnNext: document.getElementById('btn-next'),
+            btnReload: document.getElementById('btn-reload'),
             chapterProgress: document.getElementById('chapter-progress')
         });
 
@@ -519,6 +528,7 @@
         btnPickFolder.addEventListener('click', handleFolderSelect);
         document.getElementById('btn-prev').addEventListener('click', handlePrev);
         document.getElementById('btn-next').addEventListener('click', handleNext);
+        document.getElementById('btn-reload').addEventListener('click', handleReload);
 
         // Attempt to restore saved directory on load
         if ('showDirectoryPicker' in window) {
