@@ -7,6 +7,7 @@ import {
     saveDirectoryHandle,
     restoreDirectoryHandle
 } from './file-reader.js';
+import { getAuthHeaders } from './passphrase-gate.js';
 
 // Task 7.1: Module-scoped state (private, not exported)
 const state = {
@@ -268,13 +269,13 @@ export async function loadFromBackend(series, storyName) {
     state.currentStory = storyName;
 
     // Fetch chapters from backend
-    const res = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters`);
+    const res = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters`, { headers: { ...getAuthHeaders() } });
     if (!res.ok) throw new Error('Failed to load chapters');
     const chapterNums = await res.json();
 
     state.backendChapters = [];
     for (const num of chapterNums) {
-        const chRes = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters/${num}`);
+        const chRes = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters/${num}`, { headers: { ...getAuthHeaders() } });
         if (!chRes.ok) continue;
         const { content } = await chRes.json();
         state.backendChapters.push({ number: num, content });
@@ -321,13 +322,13 @@ export async function reloadFromBackendToLast() {
         pollIntervalId = null;
     }
 
-    const res = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters`);
+    const res = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters`, { headers: { ...getAuthHeaders() } });
     if (!res.ok) return;
     const chapterNums = await res.json();
 
     state.backendChapters = [];
     for (const num of chapterNums) {
-        const chRes = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters/${num}`);
+        const chRes = await fetch(`/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(storyName)}/chapters/${num}`, { headers: { ...getAuthHeaders() } });
         if (!chRes.ok) continue;
         const { content } = await chRes.json();
         state.backendChapters.push({ number: num, content });
@@ -358,7 +359,7 @@ export function getBackendContext() {
 async function pollBackend() {
     if (!state.currentSeries || !state.currentStory) return;
     try {
-        const res = await fetch(`/api/stories/${encodeURIComponent(state.currentSeries)}/${encodeURIComponent(state.currentStory)}/chapters`);
+        const res = await fetch(`/api/stories/${encodeURIComponent(state.currentSeries)}/${encodeURIComponent(state.currentStory)}/chapters`, { headers: { ...getAuthHeaders() } });
         const nums = await res.json();
         const cachedLen = state.backendChapters?.length || 0;
 
@@ -374,7 +375,7 @@ async function pollBackend() {
         // Poll the last chapter's content for streaming updates
         if (nums.length > 0 && state.backendChapters && state.backendChapters.length > 0) {
             const lastNum = nums[nums.length - 1];
-            const chRes = await fetch(`/api/stories/${encodeURIComponent(state.currentSeries)}/${encodeURIComponent(state.currentStory)}/chapters/${lastNum}`);
+            const chRes = await fetch(`/api/stories/${encodeURIComponent(state.currentSeries)}/${encodeURIComponent(state.currentStory)}/chapters/${lastNum}`, { headers: { ...getAuthHeaders() } });
             if (!chRes.ok) return;
             const { content } = await chRes.json();
             const lastIdx = state.backendChapters.length - 1;

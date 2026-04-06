@@ -21,6 +21,7 @@ try {
   // No .env file — rely on environment variables
 }
 
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -108,11 +109,49 @@ function safePath(...segments) {
   return resolved;
 }
 
+// ── Passphrase verification middleware ──────────────────────────
+function verifyPassphrase(req, res, next) {
+  const expected = process.env.PASSPHRASE;
+  if (!expected) return next();
+
+  const provided = req.headers["x-passphrase"];
+  if (!provided) {
+    return res.status(401).json({
+      type: "about:blank",
+      title: "Unauthorized",
+      status: 401,
+      detail: "Invalid or missing passphrase",
+    });
+  }
+
+  const expectedBuf = Buffer.from(expected);
+  const providedBuf = Buffer.from(provided);
+  const lengthMatch = expectedBuf.length === providedBuf.length;
+  // Always run timingSafeEqual to prevent timing leaks on length mismatch
+  const safeBuf = lengthMatch ? providedBuf : Buffer.alloc(expectedBuf.length);
+  const match = lengthMatch && crypto.timingSafeEqual(expectedBuf, safeBuf);
+
+  if (match) return next();
+
+  return res.status(401).json({
+    type: "about:blank",
+    title: "Unauthorized",
+    status: 401,
+    detail: "Invalid or missing passphrase",
+  });
+}
+
 // ── Express app ─────────────────────────────────────────────────
 const app = express();
 
 // JSON body parser for API routes
 app.use("/api", express.json({ limit: "1mb" }));
+app.use("/api", verifyPassphrase);
+
+// Auth verification endpoint
+app.get("/api/auth/verify", (_req, res) => {
+  res.json({ ok: true });
+});
 
 // Path param validation for all API story routes
 app.param("series", (req, _res, next) => {

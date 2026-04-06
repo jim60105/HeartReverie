@@ -1,5 +1,7 @@
 // js/chat-input.js — Chat input logic for backend-driven stories
 
+import { getAuthHeaders } from './passphrase-gate.js';
+
 let els = {};
 let getStoryContext = null;
 let onMessageSent = null;
@@ -64,7 +66,7 @@ async function handleSend() {
             `/api/stories/${encodeURIComponent(ctx.series)}/${encodeURIComponent(ctx.story)}/chat`,
             {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ message })
             }
         );
@@ -106,7 +108,7 @@ async function handleResend() {
         // Delete last chapter
         const delRes = await fetch(
             `/api/stories/${encodeURIComponent(ctx.series)}/${encodeURIComponent(ctx.story)}/chapters/last`,
-            { method: 'DELETE' }
+            { method: 'DELETE', headers: { ...getAuthHeaders() } }
         );
 
         if (!delRes.ok && delRes.status !== 404) {
@@ -119,7 +121,7 @@ async function handleResend() {
             `/api/stories/${encodeURIComponent(ctx.series)}/${encodeURIComponent(ctx.story)}/chat`,
             {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ message })
             }
         );

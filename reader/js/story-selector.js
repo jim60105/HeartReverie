@@ -1,13 +1,15 @@
 // js/story-selector.js — Story selector panel logic
 
+import { getAuthHeaders } from './passphrase-gate.js';
+
 export async function loadSeriesList() {
-    const res = await fetch('/api/stories');
+    const res = await fetch('/api/stories', { headers: { ...getAuthHeaders() } });
     if (!res.ok) throw new Error('Failed to load series');
     return res.json();
 }
 
 export async function loadStoryList(series) {
-    const res = await fetch(`/api/stories/${encodeURIComponent(series)}`);
+    const res = await fetch(`/api/stories/${encodeURIComponent(series)}`, { headers: { ...getAuthHeaders() } });
     if (!res.ok) throw new Error('Failed to load stories');
     return res.json();
 }
@@ -15,7 +17,7 @@ export async function loadStoryList(series) {
 export async function createStory(series, name) {
     const res = await fetch(
         `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(name)}/init`,
-        { method: 'POST' }
+        { method: 'POST', headers: { ...getAuthHeaders() } }
     );
     if (!res.ok) throw new Error('Failed to create story');
     return res.json();

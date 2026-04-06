@@ -448,6 +448,28 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
+    <!-- Passphrase Gate Overlay -->
+    <div id="passphrase-overlay" class="hidden flex items-center justify-center" style="position: fixed; inset: 0; z-index: 9999;
+        background: var(--bg-page);">
+        <div style="background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 16px;
+            padding: 2rem; max-width: 400px; width: 90%; text-align: center;">
+            <h2 style="color: var(--text-title); margin-bottom: 1rem; font-family: var(--font-system-ui);">🔒 通行密語</h2>
+            <input id="passphrase-input" type="password" placeholder="輸入通行密語…"
+                style="width: 100%; padding: 10px; background: var(--item-bg); border: 1px solid var(--item-border);
+                       border-radius: 8px; color: var(--text-main); font-size: var(--font-base);
+                       font-family: var(--font-system-ui); box-sizing: border-box; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: center; gap: 8px; align-items: center;">
+                <span id="passphrase-error" class="text-sm" style="color: #ff6b6b;"></span>
+                <button id="passphrase-submit" class="px-4 py-2 rounded text-sm font-medium transition-colors"
+                    style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                    onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                    onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'">
+                    進入
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Header: Folder Picker + Story Selector -->
     <header class="sticky top-0 z-10 px-3 py-1 border-b flex items-center gap-2 flex-wrap"
             style="background: var(--header-bg); border-color: var(--header-border);">
@@ -582,6 +604,7 @@
         import { initChapterNav, handleFolderSelect, handleNext, handlePrev, handleReload, tryRestoreSession, loadFromBackend, reloadFromBackendToLast, getBackendContext } from './js/chapter-nav.js';
         import { initStorySelector } from './js/story-selector.js';
         import { initChatInput, showChatInput, hideChatInput, appendToInput } from './js/chat-input.js';
+        import { initPassphraseGate } from './js/passphrase-gate.js';
 
         // Register global bridge for inline onclick handlers (options panel)
         window.__appendToInput = appendToInput;
@@ -625,40 +648,42 @@
         document.getElementById('btn-next').addEventListener('click', handleNext);
         document.getElementById('btn-reload').addEventListener('click', handleReload);
 
-        // Story selector
-        initStorySelector({
-            selectSeries: document.getElementById('select-series'),
-            selectStory: document.getElementById('select-story'),
-            inputNewStory: document.getElementById('input-new-story'),
-            btnCreate: document.getElementById('btn-create-story'),
-            btnLoad: document.getElementById('btn-load-story')
-        }, {
-            onLoad: async (series, story) => {
-                await loadFromBackend(series, story);
-                showChatInput();
-                // Close the selector panel
-                document.getElementById('story-selector-details').removeAttribute('open');
+        // Passphrase gate — API-dependent initialization runs after unlock
+        initPassphraseGate(document.getElementById('passphrase-overlay'), () => {
+            // Story selector
+            initStorySelector({
+                selectSeries: document.getElementById('select-series'),
+                selectStory: document.getElementById('select-story'),
+                inputNewStory: document.getElementById('input-new-story'),
+                btnCreate: document.getElementById('btn-create-story'),
+                btnLoad: document.getElementById('btn-load-story')
+            }, {
+                onLoad: async (series, story) => {
+                    await loadFromBackend(series, story);
+                    showChatInput();
+                    document.getElementById('story-selector-details').removeAttribute('open');
+                }
+            });
+
+            // Chat input
+            initChatInput({
+                textarea: document.getElementById('chat-message'),
+                sendBtn: document.getElementById('btn-chat-send'),
+                resendBtn: document.getElementById('btn-chat-resend'),
+                errorSpan: document.getElementById('chat-error'),
+                chatArea: document.getElementById('chat-input-area')
+            }, {
+                getContext: () => getBackendContext(),
+                onSent: async () => {
+                    await reloadFromBackendToLast();
+                }
+            });
+
+            // Attempt to restore saved directory on load
+            if ('showDirectoryPicker' in window) {
+                tryRestoreSession();
             }
         });
-
-        // Chat input
-        initChatInput({
-            textarea: document.getElementById('chat-message'),
-            sendBtn: document.getElementById('btn-chat-send'),
-            resendBtn: document.getElementById('btn-chat-resend'),
-            errorSpan: document.getElementById('chat-error'),
-            chatArea: document.getElementById('chat-input-area')
-        }, {
-            getContext: () => getBackendContext(),
-            onSent: async () => {
-                await reloadFromBackendToLast();
-            }
-        });
-
-        // Attempt to restore saved directory on load
-        if ('showDirectoryPicker' in window) {
-            tryRestoreSession();
-        }
     </script>
 </body>
 </html>
