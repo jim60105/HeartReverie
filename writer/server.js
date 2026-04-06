@@ -490,13 +490,23 @@ app.post(
         });
       }
 
-      // Determine next chapter number
-      const maxNum =
-        chapterFiles.length > 0
-          ? Math.max(...chapterFiles.map((f) => parseInt(f, 10)))
-          : 0;
-      const nextNum = maxNum + 1;
-      const padded = String(nextNum).padStart(3, "0");
+      // Determine target chapter: reuse last empty file or create next
+      let targetNum;
+      const lastFile = chapterFiles[chapterFiles.length - 1];
+      if (
+        lastFile &&
+        chapters[chapters.length - 1]?.content.trim() === ""
+      ) {
+        // Last chapter is empty (e.g., touched by /init) — overwrite it
+        targetNum = parseInt(lastFile, 10);
+      } else {
+        const maxNum =
+          chapterFiles.length > 0
+            ? Math.max(...chapterFiles.map((f) => parseInt(f, 10)))
+            : 0;
+        targetNum = maxNum + 1;
+      }
+      const padded = String(targetNum).padStart(3, "0");
 
       // Ensure directory exists
       await fs.mkdir(storyDir, { recursive: true });
@@ -570,7 +580,7 @@ app.post(
         }
       }
 
-      res.json({ chapter: nextNum, content: fullContent });
+      res.json({ chapter: targetNum, content: fullContent });
     } catch (err) {
       console.error("Chat error:", err.message);
       res.status(500).json({
