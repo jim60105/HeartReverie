@@ -125,7 +125,7 @@ export function renderStatusPanel(data) {
   if (data.accessories) outfitItems.push({ emoji: '⛓️', label: '飾品', value: data.accessories });
 
   if (outfitItems.length) {
-    html += `<details class="fold-section status-details">`;
+    html += `<details class="fold-section status-details" open>`;
     html += `<summary class="fold-header"><span class="fold-icon">▼</span> 👗 穿着</summary>`;
     html += `<div class="fold-content"><div class="grid-info two-col">`;
     for (const item of outfitItems) {
@@ -136,7 +136,7 @@ export function renderStatusPanel(data) {
 
   // ── 特寫 (close-up) collapsible ──
   if (data.closeUps.length) {
-    html += `<details class="fold-section status-details">`;
+    html += `<details class="fold-section status-details" open>`;
     html += `<summary class="fold-header"><span class="fold-icon">▼</span> 🔍 特寫</summary>`;
     html += `<div class="fold-content">`;
     for (const cu of data.closeUps) {

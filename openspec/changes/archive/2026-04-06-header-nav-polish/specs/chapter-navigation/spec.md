@@ -1,17 +1,4 @@
-# Chapter Navigation
-
-## Purpose
-
-Manages chapter-by-chapter navigation through a multi-file markdown story, including next/previous controls, progress tracking, URL hash state persistence, and scroll-to-top behavior.
-
-## Requirements
-
-### Requirement: Load first chapter on folder selection
-When the user selects a folder and chapter files are successfully identified, the application SHALL automatically load and render the first chapter (lowest numeric index) without requiring additional user interaction.
-
-#### Scenario: First chapter loads automatically
-- **WHEN** the user selects a folder containing `001.md`, `002.md`, and `003.md`
-- **THEN** the application SHALL immediately render the content of `001.md` as the current chapter
+## MODIFIED Requirements
 
 ### Requirement: Next chapter navigation
 The application SHALL provide a "Next" navigation button rendered within the `<header>` element. Clicking it SHALL load and render the next chapter in numeric order, replacing the currently displayed chapter. The button SHALL be hidden until a story folder is selected.
@@ -60,32 +47,3 @@ The application SHALL display a chapter progress indicator in the `<header>` sho
 #### Scenario: Progress indicator hidden before story is loaded
 - **WHEN** no story folder has been selected
 - **THEN** the chapter progress indicator SHALL not be visible in the header
-
-### Requirement: Current chapter state tracking
-The application SHALL track the current chapter index in the URL hash (e.g., `#chapter=3`) so that the reading position is preserved on page refresh and can be shared or bookmarked.
-
-#### Scenario: URL hash updates on navigation
-- **WHEN** the user navigates to the third chapter
-- **THEN** the URL hash SHALL be updated to reflect the current chapter (e.g., `#chapter=3`)
-
-#### Scenario: Page loads with hash in URL
-- **WHEN** the page is loaded with `#chapter=5` in the URL and a folder is selected containing at least 5 chapters
-- **THEN** the application SHALL navigate directly to the fifth chapter after folder selection
-
-### Requirement: Scroll to top on chapter change
-When navigating to a different chapter, the application SHALL scroll the viewport to the top of the content area so the user begins reading from the start of the new chapter. The scroll position SHALL be offset by the height of the sticky `<header>` element so that the first line of chapter content is not covered by the header.
-
-#### Scenario: Viewport scrolls to top on next chapter
-- **WHEN** the user clicks "Next" to navigate to the next chapter
-- **THEN** the viewport SHALL scroll to the top of the rendered chapter content, offset by the sticky header height, so that the first line of content is fully visible below the header
-
-#### Scenario: Scroll offset accounts for header
-- **WHEN** the sticky header has a computed height of H pixels and the user navigates to a new chapter
-- **THEN** the scroll position SHALL be set such that the top of the content area is at least H pixels below the top of the viewport
-
-### Requirement: Single chapter display
-The application SHALL display only one chapter at a time. When navigating to a new chapter, the previously displayed chapter content SHALL be fully replaced.
-
-#### Scenario: Only current chapter is visible
-- **WHEN** the user navigates from chapter 2 to chapter 3
-- **THEN** only the content of chapter 3 SHALL be visible; chapter 2 content SHALL no longer be in the DOM or SHALL be hidden

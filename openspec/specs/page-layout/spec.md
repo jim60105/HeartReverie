@@ -22,18 +22,19 @@ The page SHALL use a CSS Grid two-column layout on desktop viewports (min-width 
 - **THEN** the layout SHALL collapse to a single column with the status panel rendered inline within the normal content flow
 
 ### Requirement: Compact header sizing
-The sticky `<header>` element SHALL use reduced vertical and horizontal padding and compact button padding to minimise the space occupied at the top of the viewport, increasing the visible reading area.
+The sticky `<header>` element SHALL use reduced vertical and horizontal padding and compact button padding to minimise the space occupied at the top of the viewport, increasing the visible reading area. The header SHALL contain both the folder picker button and the navigation controls (previous button, chapter progress indicator, next button). The navigation controls SHALL be hidden until a story folder is loaded.
 
 #### Scenario: Header uses compact padding
 - **WHEN** the page is rendered
 - **THEN** the header SHALL use `py-1 px-3` padding and buttons SHALL use `px-3 py-1` padding for a minimal-height header bar
 
-### Requirement: Compact navigation bar sizing
-The bottom navigation bar (`#chapter-nav`) SHALL use reduced vertical and horizontal padding and compact button padding to minimise the space occupied at the bottom of the viewport, increasing the visible reading area.
+#### Scenario: Header contains folder picker and navigation controls
+- **WHEN** the page is rendered and a story folder has been selected
+- **THEN** the header SHALL display the folder picker button alongside the navigation controls (previous button, chapter progress indicator, next button) in a single unified bar
 
-#### Scenario: Navigation bar uses compact padding
-- **WHEN** the chapter navigation bar is visible
-- **THEN** the nav bar SHALL use `py-1 px-3` padding and buttons SHALL use `px-3 py-1` padding for a minimal-height navigation bar
+#### Scenario: Navigation controls hidden before story is loaded
+- **WHEN** the page is rendered and no story folder has been selected
+- **THEN** the navigation controls (previous button, chapter progress indicator, next button) in the header SHALL be hidden, and only the folder picker button SHALL be visible
 
 ### Requirement: Colour variable merge for love theme
 The CSS custom properties SHALL be updated to merge the following colour values into the love theme for improved prose readability:
@@ -74,3 +75,10 @@ Paragraph text in the prose content area SHALL have a `text-shadow` using `--sha
 #### Scenario: Prose paragraphs have text-shadow
 - **WHEN** paragraph text is rendered inside `#content`
 - **THEN** the paragraphs SHALL have `text-shadow: var(--shadow-width) var(--shadow-width) 4px var(--shadow-color)` applied
+
+### Requirement: Hidden sidebar scrollbar
+The `#sidebar` element SHALL hide its scrollbar while remaining scrollable, using `scrollbar-width: none` for standards-compliant browsers and `::-webkit-scrollbar { display: none }` for WebKit-based browsers. The sidebar content SHALL remain fully accessible via scroll gestures or mouse wheel.
+
+#### Scenario: Sidebar scrollbar is visually hidden
+- **WHEN** the sidebar content exceeds the visible viewport height on desktop
+- **THEN** the `#sidebar` element SHALL not display a visible scrollbar, but the user SHALL still be able to scroll through the sidebar content using scroll gestures, mouse wheel, or keyboard navigation

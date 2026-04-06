@@ -47,6 +47,15 @@
             color: var(--text-main);
         }
 
+        ::selection {
+            background: rgba(180, 30, 60, 0.6);
+            color: #fff;
+        }
+        ::-moz-selection {
+            background: rgba(180, 30, 60, 0.6);
+            color: #fff;
+        }
+
         /* Collapsible transition styles */
         details summary {
             cursor: pointer;
@@ -90,6 +99,10 @@
             top: calc(var(--header-height) + 8px);
             max-height: calc(100vh - var(--header-height) - 16px);
             overflow-y: auto;
+            scrollbar-width: none;
+        }
+        #sidebar::-webkit-scrollbar {
+            display: none;
         }
         #sidebar:empty {
             display: none;
@@ -425,6 +438,24 @@
             📂 選擇資料夾
         </button>
         <span id="folder-name" class="text-sm truncate" style="color: var(--text-label);">尚未選擇資料夾</span>
+        <span class="flex-grow"></span>
+        <button id="btn-prev"
+                class="hidden px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'"
+                disabled>
+            ← 上一章
+        </button>
+        <span id="chapter-progress" class="hidden text-sm" style="color: var(--text-label);">0 / 0</span>
+        <button id="btn-next"
+                class="hidden px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
+                onmouseover="this.style.background='var(--btn-hover-bg)';this.style.borderColor='var(--btn-hover-border)'"
+                onmouseout="this.style.background='var(--btn-bg)';this.style.borderColor='var(--btn-border)'"
+                disabled>
+            下一章 →
+        </button>
     </header>
 
     <!-- Main Content -->
@@ -443,24 +474,6 @@
             <aside id="sidebar"></aside>
         </div>
     </main>
-
-    <!-- Bottom Navigation Bar -->
-    <nav id="chapter-nav" class="sticky bottom-0 z-10 px-3 py-1 border-t flex items-center justify-between hidden"
-         style="background: var(--header-bg); border-color: var(--header-border);">
-        <button id="btn-prev"
-                class="px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                disabled>
-            ← 上一章
-        </button>
-        <span id="chapter-progress" class="text-sm" style="color: var(--text-label);">0 / 0</span>
-        <button id="btn-next"
-                class="px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);"
-                disabled>
-            下一章 →
-        </button>
-    </nav>
 
     <script type="module">
         import { initChapterNav, handleFolderSelect, handleNext, handlePrev, tryRestoreSession } from './js/chapter-nav.js';
@@ -481,7 +494,6 @@
         initChapterNav({
             content: document.getElementById('content'),
             folderName: document.getElementById('folder-name'),
-            chapterNav: document.getElementById('chapter-nav'),
             btnPrev: document.getElementById('btn-prev'),
             btnNext: document.getElementById('btn-next'),
             chapterProgress: document.getElementById('chapter-progress')

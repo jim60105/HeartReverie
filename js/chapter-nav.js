@@ -111,11 +111,15 @@ async function handleDirectorySelected(handle) {
                 <p style="color: var(--text-main);">所選資料夾中沒有符合格式的章節檔案（如 <code class="px-1 rounded" style="background: var(--item-bg);">1.md</code>、<code class="px-1 rounded" style="background: var(--item-bg);">2.md</code> 等）。</p>
                 <p class="text-sm" style="color: var(--text-label);">請選擇包含以數字命名的 .md 檔案的資料夾。</p>
             </section>`;
-        els.chapterNav.classList.add('hidden');
+        els.btnPrev.classList.add('hidden');
+        els.chapterProgress.classList.add('hidden');
+        els.btnNext.classList.add('hidden');
         return;
     }
 
-    els.chapterNav.classList.remove('hidden');
+    els.btnPrev.classList.remove('hidden');
+    els.chapterProgress.classList.remove('hidden');
+    els.btnNext.classList.remove('hidden');
     await saveDirectoryHandle(handle);
 
     // Task 7.7: Check URL hash for starting chapter
