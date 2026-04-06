@@ -516,6 +516,11 @@ app.post(
       const fileHandle = await fs.open(chapterPath, "w");
       let fullContent = "";
 
+      // Write user message at the top of the chapter file
+      const userBlock = `<user_message>\n${message}\n</user_message>\n\n`;
+      await fileHandle.write(userBlock);
+      fullContent += userBlock;
+
       try {
         // Parse SSE stream and write incrementally
         const reader = apiResponse.body.getReader();
@@ -595,11 +600,12 @@ app.post(
 
 // ── Helper functions ────────────────────────────────────────────
 
-/** Strip `<options>...</options>` and `<disclaimer>...</disclaimer>` from chapter content */
+/** Strip `<options>...</options>`, `<disclaimer>...</disclaimer>`, and `<user_message>...</user_message>` from chapter content */
 function stripPromptTags(content) {
   return content
     .replace(/<options>[\s\S]*?<\/options>/g, "")
     .replace(/<disclaimer>[\s\S]*?<\/disclaimer>/g, "")
+    .replace(/<user_message>[\s\S]*?<\/user_message>/g, "")
     .trim();
 }
 

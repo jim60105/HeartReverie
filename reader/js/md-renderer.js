@@ -51,6 +51,9 @@ export function renderChapter(rawMarkdown, options = {}) {
   // 5. Strip <disclaimer>…</disclaimer>
   text = text.replace(/<disclaimer>[\s\S]*?<\/disclaimer>/gi, '');
 
+  // 5a. Strip <user_message>…</user_message>
+  text = text.replace(/<user_message>[\s\S]*?<\/user_message>/gi, '');
+
   // 5b. Strip <script>…</script> to prevent XSS from markdown content
   text = text.replace(/<script[\s>][\s\S]*?<\/script>/gi, '');
 

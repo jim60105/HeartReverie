@@ -1,0 +1,63 @@
+## MODIFIED Requirements
+
+### Requirement: OpenRouter API proxy
+
+The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JSON body with a `message` field. The server SHALL construct the prompt using the pipeline above, send it to `https://openrouter.ai/api/v1/chat/completions` using native `fetch` with `stream: true` in the request body, and write the assistant's response incrementally as the next numbered chapter file. The server SHALL use the `OPENROUTER_API_KEY` environment variable for authentication and the `OPENROUTER_MODEL` environment variable (defaulting to `deepseek/deepseek-v3.2`) for model selection. The server SHALL pass hardcoded generation parameters: `temperature: 0.1`, `frequency_penalty: 0.13`, `presence_penalty: 0.52`, `top_k: 10`, `top_p: 0`, `repetition_penalty: 1.2`, `min_p: 0`, `top_a: 1`. The server SHALL stream the response using SSE and write content deltas to the chapter file in real time.
+
+Before streaming the AI response, the server SHALL write the user's chat message to the chapter file wrapped in `<user_message>` and `</user_message>` tags, followed by a blank line. The user message block SHALL appear at the beginning of the chapter file, before any AI-generated content. The `<user_message>` block SHALL also be included in the full content returned in the HTTP response.
+
+The server SHALL parse the SSE response by reading `data:` lines from the response body stream. Each line with a JSON payload SHALL have `choices[0].delta.content` extracted and appended to the chapter file immediately. The `data: [DONE]` sentinel SHALL signal end of stream. The server SHALL open the chapter file before streaming begins and write each content delta as it arrives, allowing the frontend auto-reload polling to display partial content during generation. After the stream completes, the server SHALL return the complete chapter content in the HTTP response.
+
+#### Scenario: Successful streaming chat completion
+- **WHEN** a client sends `POST /api/stories/:series/:name/chat` with a valid message
+- **THEN** the server SHALL call OpenRouter with `stream: true`, create the next sequential chapter file (e.g., `002.md` if `001.md` exists), write the user message wrapped in `<user_message>` tags at the top of the file, then write each content delta to the file as it arrives from the SSE stream, and return the chapter number and complete content in the response after the stream finishes
+
+#### Scenario: User message persisted before AI content
+- **WHEN** the server begins writing a new chapter file during a chat request
+- **THEN** the chapter file SHALL contain `<user_message>\n{message}\n</user_message>\n\n` at the beginning, followed by the AI response content
+
+#### Scenario: Chapter file updated incrementally during streaming
+- **WHEN** the OpenRouter SSE stream is in progress
+- **THEN** the chapter file on disk SHALL contain the user message block followed by all content deltas received so far, allowing the frontend's 1-second polling to display partial content in real time
+
+#### Scenario: Stream error mid-generation
+- **WHEN** the SSE stream errors after some content has been written to the chapter file
+- **THEN** the server SHALL keep the partial chapter file on disk (including the user message block) and return an HTTP error response with error details
+
+#### Scenario: OpenRouter API error
+- **WHEN** the OpenRouter API returns an error status
+- **THEN** the server SHALL return an appropriate HTTP error status with the error details and SHALL NOT create a new chapter file
+
+#### Scenario: Missing API key
+- **WHEN** the `OPENROUTER_API_KEY` environment variable is not set
+- **THEN** the server SHALL return HTTP 500 with a descriptive error message indicating the missing configuration
+
+#### Scenario: Path traversal prevention
+- **WHEN** a client sends a request with path parameters containing `..` or other traversal sequences
+- **THEN** the server SHALL reject the request with HTTP 400
+
+### Requirement: Prompt construction pipeline
+
+The server SHALL construct the LLM messages array following the exact structure defined in the design document. The system prompt SHALL be rendered by passing the content of `playground/:series/scenario.md` into the Vento template `playground/prompts/system.md` using the variable name `scenario`. Each existing chapter SHALL be included as a separate assistant message wrapped in `<previous_context>` tags. The user message SHALL be wrapped in `<inputs>` tags. On the first round (no existing chapter content), the user message SHALL be prefixed with hardcoded `<start_hints>` content. A system message containing the status file wrapped in `<status_current_variable>` tags and another system message with `after_user_message.md` content SHALL be appended after the user message.
+
+Before including chapter content in `<previous_context>` messages, the server SHALL strip `<options>...</options>`, `<disclaimer>...</disclaimer>`, and `<user_message>...</user_message>` tags and their enclosed content from the chapter text. The stripping SHALL be applied per-chapter using a multiline-aware regex. The result SHALL be trimmed to remove leading/trailing whitespace left by the removed tags.
+
+#### Scenario: First round prompt construction
+- **WHEN** a chat request is made and no chapters with content exist yet
+- **THEN** the messages array SHALL include the rendered system prompt, the user message prefixed with `<start_hints>` and wrapped in `<inputs>`, the status system message, and the after_user_message system message
+
+#### Scenario: Subsequent round prompt construction
+- **WHEN** a chat request is made and chapters with content already exist
+- **THEN** the messages array SHALL include the rendered system prompt, one assistant message per chapter wrapped in `<previous_context>` tags in numerical order, the user message wrapped in `<inputs>` tags without `<start_hints>`, the status system message, and the after_user_message system message
+
+#### Scenario: Chapter with options, disclaimer, and user_message tags
+- **WHEN** a chapter's content contains `<options>...</options>`, `<disclaimer>...</disclaimer>`, and/or `<user_message>...</user_message>` tags
+- **THEN** those tags and all content between them SHALL be removed from the chapter text before it is wrapped in `<previous_context>`
+
+#### Scenario: Chapter without special tags
+- **WHEN** a chapter's content does not contain `<options>`, `<disclaimer>`, or `<user_message>` tags
+- **THEN** the chapter content SHALL be included in `<previous_context>` unchanged (aside from trimming)
+
+#### Scenario: Vento template rendering
+- **WHEN** the system prompt is constructed
+- **THEN** the server SHALL use the ventojs engine to render `playground/prompts/system.md` with `{ scenario: <content of scenario.md> }` as the template data
