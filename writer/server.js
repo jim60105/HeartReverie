@@ -69,18 +69,6 @@ if (!process.env.OPENROUTER_API_KEY) {
 // ── Vento template engine ───────────────────────────────────────
 const ventoEnv = vento();
 
-// ── Hardcoded start hints ───────────────────────────────────────
-const START_HINTS = `請參考這段指示創作出一個好的起始章節:
-1. 在第一句話就拋出引人入勝的懸念，激發讀者的好奇心。
-2. 迅速介紹故事的背景和世界觀，但要通過自然的方式，避免生硬的直接說明。
-3. 及早讓主角或重要人物登場，並用簡短的情節展現其特質。
-4. 明確表達主角的目標或面臨的挑戰，確立故事的主線。
-5. 暗示未來會發生的重大事件，製造期待感。
-6. 力求開場"石破天驚"，用獨特的情節、語言或視角立即抓住讀者。
-7. 通過文字風格展現故事的類型和基調，讓讀者了解這是什麼樣的故事。
-
-起始章節完成以上任務，吸引讀者繼續閱讀。`;
-
 // ── Path traversal prevention ───────────────────────────────────
 
 function isValidParam(value) {
@@ -531,46 +519,26 @@ app.post(
       // First-round detection: no chapters with non-empty content
       const isFirstRound = chapters.every((ch) => ch.content.trim() === "");
 
-      // Build system prompt via Vento
-      const systemPrompt = await renderSystemPrompt(series);
+      // Build previous_context array with prompt tags stripped, filtering empty chapters
+      const previousContext = chapters
+        .map((ch) => stripPromptTags(ch.content))
+        .filter((content) => content.length > 0);
 
       // Load status
       const statusContent = await loadStatus(series, name);
 
-      // Load after-user-message prompt
-      const afterUserMessagePath = path.join(
-        PLAYGROUND_DIR,
-        "prompts",
-        "after_user_message.md"
-      );
-      let afterUserMessageContent = "";
-      try {
-        afterUserMessageContent = await fs.readFile(
-          afterUserMessagePath,
-          "utf-8"
-        );
-      } catch {
-        // File may not exist
-      }
-
-      // Build user content
-      const userContent = isFirstRound
-        ? `<start_hints>${START_HINTS}</start_hints>\n<inputs>${message}</inputs>`
-        : `<inputs>${message}</inputs>`;
+      // Build system prompt via Vento with all template variables
+      const systemPrompt = await renderSystemPrompt(series, {
+        previousContext,
+        userInput: message,
+        status: statusContent,
+        isFirstRound,
+      });
 
       // Construct messages array
       const messages = [
         { role: "system", content: systemPrompt },
-        ...chapters.map((ch) => ({
-          role: "assistant",
-          content: `<previous_context>${stripPromptTags(ch.content)}</previous_context>`,
-        })),
-        { role: "user", content: userContent },
-        {
-          role: "system",
-          content: `<status_current_variable>${statusContent}</status_current_variable>`,
-        },
-        { role: "system", content: afterUserMessageContent },
+        { role: "user", content: message },
       ];
 
       // Call OpenRouter via native fetch with streaming
@@ -725,7 +693,10 @@ function stripPromptTags(content) {
     .trim();
 }
 
-async function renderSystemPrompt(series) {
+async function renderSystemPrompt(
+  series,
+  { previousContext, userInput, status, isFirstRound } = {}
+) {
   const systemTemplatePath = path.join(
     PLAYGROUND_DIR,
     "prompts",
@@ -745,6 +716,10 @@ async function renderSystemPrompt(series) {
 
   const result = await ventoEnv.runString(systemTemplate, {
     scenario: scenarioContent,
+    previous_context: previousContext || [],
+    user_input: userInput || "",
+    status_data: status || "",
+    isFirstRound: isFirstRound || false,
   });
   return result.content;
 }
