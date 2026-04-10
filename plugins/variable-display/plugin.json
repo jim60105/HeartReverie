@@ -4,5 +4,6 @@
   "description": "Variable update block extraction and rendering",
   "type": "full-stack",
   "frontendModule": "./frontend.js",
-  "tags": ["UpdateVariable", "update"]
+  "tags": ["UpdateVariable", "update"],
+  "stripTags": ["UpdateVariable"]
 }
