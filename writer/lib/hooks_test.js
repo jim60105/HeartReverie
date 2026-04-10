@@ -109,4 +109,44 @@ Deno.test("HookDispatcher", async (t) => {
     const result = await hd.dispatch("strip-tags", ctx);
     assertEquals(result, { value: 42 });
   });
+
+  await t.step("default priority (100) runs after priority-50 handler", async () => {
+    const hd = new HookDispatcher();
+    const order = [];
+    // Register with default priority (100) first
+    hd.register("prompt-assembly", () => { order.push("default"); });
+    // Register with explicit priority 50 second
+    hd.register("prompt-assembly", () => { order.push("fifty"); }, 50);
+
+    await hd.dispatch("prompt-assembly", {});
+    assertEquals(order, ["fifty", "default"]);
+  });
+
+  await t.step("same priority maintains registration order", async () => {
+    const hd = new HookDispatcher();
+    const order = [];
+    hd.register("post-response", () => { order.push("first"); }, 100);
+    hd.register("post-response", () => { order.push("second"); }, 100);
+    hd.register("post-response", () => { order.push("third"); }, 100);
+
+    await hd.dispatch("post-response", {});
+    assertEquals(order, ["first", "second", "third"]);
+  });
+
+  await t.step("async handler is awaited before next handler runs", async () => {
+    const hd = new HookDispatcher();
+    let asyncFlag = false;
+    hd.register("strip-tags", async () => {
+      await new Promise((r) => setTimeout(r, 50));
+      asyncFlag = true;
+    }, 10);
+    hd.register("strip-tags", (ctx) => {
+      ctx.sawFlag = asyncFlag;
+    }, 20);
+
+    const ctx = {};
+    await hd.dispatch("strip-tags", ctx);
+    assertEquals(asyncFlag, true);
+    assertEquals(ctx.sawFlag, true);
+  });
 });

@@ -97,6 +97,55 @@ Deno.test("verifyPassphrase", async (t) => {
     if (original !== undefined) Deno.env.set("PASSPHRASE", original);
     else Deno.env.delete("PASSPHRASE");
   });
+
+  await t.step("failed auth logs audit message via console.warn", async () => {
+    const original = Deno.env.get("PASSPHRASE");
+    Deno.env.set("PASSPHRASE", "correct-pass");
+
+    const warnCalls = [];
+    const origWarn = console.warn;
+    console.warn = (...args) => { warnCalls.push(args.join(" ")); };
+
+    try {
+      const app = createTestApp(verifyPassphrase);
+      await app.fetch(new Request("http://localhost/test", {
+        headers: { "x-passphrase": "wrong-pass" },
+      }));
+
+      const hasAuditLog = warnCalls.some((msg) => msg.includes("[auth]") && msg.includes("Rejected"));
+      assertEquals(hasAuditLog, true, "console.warn should log [auth] rejection");
+    } finally {
+      console.warn = origWarn;
+      if (original !== undefined) Deno.env.set("PASSPHRASE", original);
+      else Deno.env.delete("PASSPHRASE");
+    }
+  });
+
+  await t.step("passphrase value is NOT in audit log output", async () => {
+    const original = Deno.env.get("PASSPHRASE");
+    const secretPassphrase = "super-secret-value-12345";
+    Deno.env.set("PASSPHRASE", secretPassphrase);
+
+    const warnCalls = [];
+    const origWarn = console.warn;
+    console.warn = (...args) => { warnCalls.push(args.join(" ")); };
+
+    try {
+      const app = createTestApp(verifyPassphrase);
+      await app.fetch(new Request("http://localhost/test", {
+        headers: { "x-passphrase": "wrong" },
+      }));
+
+      for (const msg of warnCalls) {
+        assertEquals(msg.includes(secretPassphrase), false, "Passphrase value must not appear in logs");
+        assertEquals(msg.includes("wrong"), false, "Provided passphrase must not appear in logs");
+      }
+    } finally {
+      console.warn = origWarn;
+      if (original !== undefined) Deno.env.set("PASSPHRASE", original);
+      else Deno.env.delete("PASSPHRASE");
+    }
+  });
 });
 
 Deno.test("validateParams", async (t) => {

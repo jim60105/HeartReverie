@@ -4,3 +4,4 @@ tmp/
 apply-patches/target/
 **/current-status.yml
 writer/node_modules/
+.coverage/

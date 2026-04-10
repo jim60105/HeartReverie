@@ -60,6 +60,8 @@ function rateLimiter({ windowMs, limit }) {
   };
 }
 
+export { rateLimiter };
+
 export function createApp(deps) {
   const app = new Hono();
 

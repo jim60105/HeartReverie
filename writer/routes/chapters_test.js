@@ -233,6 +233,24 @@ Deno.test({ name: "chapter routes – additional coverage", sanitizeOps: false, 
       const res = await makeRequest(app, "DELETE", "/api/stories/no/such/chapters/last");
       assertEquals(res.status, 404);
     });
+
+    await t.step("DELETE when only one chapter succeeds", async () => {
+      const oneChapDir = join(tmpDir, "s4", "n4");
+      await Deno.mkdir(oneChapDir, { recursive: true });
+      await Deno.writeTextFile(join(oneChapDir, "001.md"), "Only chapter");
+
+      const res = await makeRequest(app, "DELETE", "/api/stories/s4/n4/chapters/last");
+      assertEquals(res.status, 200);
+      assertEquals(res.body.deleted, 1);
+
+      // Verify file removed
+      const entries = [];
+      for await (const entry of Deno.readDir(oneChapDir)) {
+        entries.push(entry.name);
+      }
+      const mdFiles = entries.filter((f) => /^\d+\.md$/.test(f));
+      assertEquals(mdFiles.length, 0);
+    });
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }

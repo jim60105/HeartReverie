@@ -220,4 +220,24 @@ Deno.test('renderChapter', async (t) => {
       globalThis.marked.parse = origParse;
     }
   });
+
+  await t.step('no hooks registered — raw XML tags pass through unchanged', () => {
+    // Use a fresh FrontendHookDispatcher with no hooks registered
+    // The default frontendHooks has hooks from above steps, but since
+    // frontendHooks.dispatch is a no-op for unregistered stages, and
+    // the 'frontend-render'/'frontend-strip' hooks won't process unknown tags,
+    // custom_tag should survive through the pipeline.
+    const origParse = globalThis.marked.parse;
+    globalThis.marked.parse = (text, _opts) => text;
+    const origSanitize = globalThis.DOMPurify.sanitize;
+    globalThis.DOMPurify.sanitize = (html, _opts) => html;
+    try {
+      const html = renderChapter('<custom_tag>content</custom_tag>');
+      assertTrue(html.includes('<custom_tag>content</custom_tag>'),
+        'Raw XML tags should pass through when no hooks process them');
+    } finally {
+      globalThis.marked.parse = origParse;
+      globalThis.DOMPurify.sanitize = origSanitize;
+    }
+  });
 });

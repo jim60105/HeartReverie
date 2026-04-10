@@ -422,4 +422,127 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
+
+  await t.step("stream error mid-generation keeps partial file on disk", async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "chat-stream-err-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+
+    // Mock fetch to return a stream that errors partway through
+    globalThis.fetch = async (url, _opts) => {
+      if (typeof url === "string" && url.includes("openrouter")) {
+        let chunkSent = false;
+        return new Response(
+          new ReadableStream({
+            pull(controller) {
+              const encoder = new TextEncoder();
+              if (!chunkSent) {
+                chunkSent = true;
+                controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"partial data"}}]}\n\n'));
+              } else {
+                controller.error(new Error("network failure"));
+              }
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      return originalFetch(url, _opts);
+    };
+
+    try {
+      const app = createApp(makeDeps({ _tmpDir: tmpDir }));
+      await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+      await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "Stream error" });
+      // The partial file should exist on disk with at least user_message block
+      const written = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
+      assertMatch(written, /<user_message>/);
+      // If partial data was flushed before error, it's there too
+      // Either way the file exists and was not cleaned up
+    } finally {
+      globalThis.fetch = originalFetch;
+      Deno.env.delete("OPENROUTER_API_KEY");
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("error response sanitization — 502 returns generic message", async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "chat-sanitize-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+    mockOpenRouterFetchError(502, "<html>Internal gateway error with secrets</html>");
+    try {
+      const app = createApp(makeDeps({ _tmpDir: tmpDir }));
+      await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+      const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "Hello" });
+      assertEquals(res.status, 502);
+      assertEquals(res.body.detail, "AI service request failed");
+      // Verify raw upstream body is NOT leaked
+      assertEquals(res.body.title, "AI Service Error");
+      assertEquals(JSON.stringify(res.body).includes("secrets"), false);
+    } finally {
+      globalThis.fetch = originalFetch;
+      Deno.env.delete("OPENROUTER_API_KEY");
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("post-response hook receives userBlock and aiContent in content", async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "chat-hook-content-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+    mockOpenRouterFetch([
+      'data: {"choices":[{"delta":{"content":"AI reply"}}]}\n\n',
+      "data: [DONE]\n\n",
+    ]);
+    let hookContent = null;
+    const hookDispatcher = new HookDispatcher();
+    hookDispatcher.register("post-response", async (ctx) => {
+      hookContent = ctx.content;
+    });
+    try {
+      const app = createApp(makeDeps({ _tmpDir: tmpDir, hookDispatcher }));
+      await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+      await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "User msg" });
+      // Content should contain both user block and AI content
+      assertMatch(hookContent, /<user_message>\nUser msg\n<\/user_message>/);
+      assertMatch(hookContent, /AI reply/);
+    } finally {
+      globalThis.fetch = originalFetch;
+      Deno.env.delete("OPENROUTER_API_KEY");
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("no chapter file created on ventoError", async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "chat-nofile-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+    try {
+      const storyDir = join(tmpDir, "s1", "n1");
+      await Deno.mkdir(storyDir, { recursive: true });
+      const app = createApp(makeDeps({
+        _tmpDir: tmpDir,
+        buildPromptFromStory: async () => ({
+          prompt: "",
+          ventoError: { stage: "prompt-assembly", message: "template error" },
+          chapterFiles: [],
+          chapters: [],
+        }),
+      }));
+      const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "Hello" });
+      assertEquals(res.status, 422);
+
+      // Verify no .md files were created
+      const entries = [];
+      for await (const entry of Deno.readDir(storyDir)) {
+        entries.push(entry.name);
+      }
+      const mdFiles = entries.filter((f) => /^\d+\.md$/.test(f));
+      assertEquals(mdFiles.length, 0);
+    } finally {
+      Deno.env.delete("OPENROUTER_API_KEY");
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
 } });

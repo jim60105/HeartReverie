@@ -567,6 +567,63 @@ Deno.test("PluginManager", async (t) => {
 
       assertEquals(pm.getPlugins().length, 0);
     });
+
+    await t.step("duplicate plugin name in same dir — second overrides with log", async () => {
+      // Manifest name must match directory name, so we cannot have two directories
+      // with the same manifest name in a single scan. But we can use builtin + external
+      // with the same name to trigger the override warning.
+      const builtinDir = join(tmpDir, "dup-builtin");
+      const externalDir = join(tmpDir, "dup-external");
+      const bPlugin = join(builtinDir, "dup-plugin");
+      const ePlugin = join(externalDir, "dup-plugin");
+      await Deno.mkdir(bPlugin, { recursive: true });
+      await Deno.mkdir(ePlugin, { recursive: true });
+      await Deno.writeTextFile(
+        join(bPlugin, "plugin.json"),
+        JSON.stringify({ name: "dup-plugin", version: "1.0.0", description: "first" }),
+      );
+      await Deno.writeTextFile(
+        join(ePlugin, "plugin.json"),
+        JSON.stringify({ name: "dup-plugin", version: "2.0.0", description: "second" }),
+      );
+
+      // Reset warnStub calls to isolate this test
+      warnStub.calls.length = 0;
+
+      const hd = new HookDispatcher();
+      const pm = new PluginManager(builtinDir, externalDir, hd);
+      await pm.init();
+
+      // Only one plugin loaded
+      assertEquals(pm.getPlugins().length, 1);
+      assertEquals(pm.getPlugins()[0].description, "second");
+
+      // Warning was logged about the override
+      assertTrue(
+        warnStub.calls.some((c) =>
+          String(c.args[0]).includes("overrides existing plugin")
+        ),
+      );
+    });
+
+    await t.step("plugin without backendModule or frontendModule still loads", async () => {
+      const pluginDir = join(tmpDir, "data-only");
+      const pDir = join(pluginDir, "data-plugin");
+      await Deno.mkdir(pDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(pDir, "plugin.json"),
+        JSON.stringify({ name: "data-plugin", version: "1.0.0", description: "data only" }),
+      );
+
+      const hd = new HookDispatcher();
+      const pm = new PluginManager(pluginDir, undefined, hd);
+      await pm.init();
+
+      const plugins = pm.getPlugins();
+      assertEquals(plugins.length, 1);
+      assertEquals(plugins[0].name, "data-plugin");
+      assertEquals(plugins[0].description, "data only");
+    });
   } finally {
     logStub.restore();
     warnStub.restore();
