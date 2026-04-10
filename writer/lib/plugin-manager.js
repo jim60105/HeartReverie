@@ -202,26 +202,51 @@ export class PluginManager {
   /**
    * Returns a combined regex matching all tags from plugins' stripTags arrays,
    * or null if no strip tags are registered.
+   * Entries starting with "/" are treated as regex pattern strings.
+   * Plain strings are auto-wrapped as <tag>[\s\S]*?</tag>.
    */
   getStripTagPatterns() {
-    const tags = [];
+    const patterns = [];
     for (const { manifest } of this.#plugins.values()) {
       if (Array.isArray(manifest.stripTags)) {
         for (const tag of manifest.stripTags) {
-          if (typeof tag === "string" && tag.length > 0) {
-            tags.push(tag);
+          if (typeof tag !== "string" || tag.length === 0) continue;
+
+          if (tag.startsWith("/")) {
+            // Regex pattern: extract inner pattern from /pattern/flags
+            const lastSlash = tag.lastIndexOf("/");
+            if (lastSlash <= 0) {
+              console.warn(
+                `⚠️  Plugin '${manifest.name}' has invalid regex stripTag '${tag}' — skipping`
+              );
+              continue;
+            }
+            const inner = tag.slice(1, lastSlash);
+            if (inner.length === 0) {
+              console.warn(
+                `⚠️  Plugin '${manifest.name}' has empty regex stripTag '${tag}' — skipping`
+              );
+              continue;
+            }
+            try {
+              new RegExp(inner); // validate
+              patterns.push(inner);
+            } catch (err) {
+              console.warn(
+                `⚠️  Plugin '${manifest.name}' has invalid regex stripTag '${tag}': ${err.message} — skipping`
+              );
+            }
+          } else {
+            // Plain tag name: auto-wrap
+            patterns.push(`<${escapeRegex(tag)}>[\\s\\S]*?</${escapeRegex(tag)}>`);
           }
         }
       }
     }
 
-    if (tags.length === 0) return null;
+    if (patterns.length === 0) return null;
 
-    // Build a combined regex: <tag>...</tag> for each tag (non-greedy, multiline)
-    const pattern = tags
-      .map((t) => `<${escapeRegex(t)}>[\\s\\S]*?</${escapeRegex(t)}>`)
-      .join("|");
-    return new RegExp(pattern, "g");
+    return new RegExp(patterns.join("|"), "g");
   }
 
   /**

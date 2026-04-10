@@ -9,5 +9,5 @@
   ],
   "frontendModule": "./frontend.js",
   "tags": ["T-task"],
-  "stripTags": []
+  "stripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"]
 }
