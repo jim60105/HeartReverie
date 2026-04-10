@@ -1,0 +1,10 @@
+{
+  "name": "threshold-lord",
+  "version": "1.0.0",
+  "description": "Threshold Lord start and end prompt fragments",
+  "type": "prompt-only",
+  "promptFragments": [
+    { "file": "./Threshold-Lord_start.md", "variable": "threshold_lord_start", "priority": 10 },
+    { "file": "./Threshold-Lord_end.md", "variable": "threshold_lord_end", "priority": 900 }
+  ]
+}

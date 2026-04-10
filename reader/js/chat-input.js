@@ -4,11 +4,13 @@ import { getAuthHeaders } from './passphrase-gate.js';
 
 let els = {};
 let getStoryContext = null;
+let getTemplateOverride = null;
 let onMessageSent = null;
 
-export function initChatInput(elements, { getContext, onSent }) {
+export function initChatInput(elements, { getContext, getTemplate, onSent }) {
     els = elements;
     getStoryContext = getContext;
+    getTemplateOverride = getTemplate;
     onMessageSent = onSent;
 
     els.sendBtn.addEventListener('click', handleSend);
@@ -62,12 +64,16 @@ async function handleSend() {
     els.sendBtn.textContent = '⏳ 發送中…';
 
     try {
+        const body = { message };
+        const tpl = getTemplateOverride ? getTemplateOverride() : undefined;
+        if (tpl) body.template = tpl;
+
         const res = await fetch(
             `/api/stories/${encodeURIComponent(ctx.series)}/${encodeURIComponent(ctx.story)}/chat`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                body: JSON.stringify({ message })
+                body: JSON.stringify(body)
             }
         );
 
@@ -115,12 +121,16 @@ async function handleResend() {
         }
 
         // Re-send the message
+        const body = { message };
+        const tpl = getTemplateOverride ? getTemplateOverride() : undefined;
+        if (tpl) body.template = tpl;
+
         const res = await fetch(
             `/api/stories/${encodeURIComponent(ctx.series)}/${encodeURIComponent(ctx.story)}/chat`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                body: JSON.stringify({ message })
+                body: JSON.stringify(body)
             }
         );
 

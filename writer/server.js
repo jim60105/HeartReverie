@@ -32,6 +32,8 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import vento from "ventojs";
+import { HookDispatcher } from "./lib/hooks.js";
+import { PluginManager } from "./lib/plugin-manager.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -68,6 +70,12 @@ if (!process.env.OPENROUTER_API_KEY) {
 
 // ── Vento template engine ───────────────────────────────────────
 const ventoEnv = vento();
+
+// ── Plugin system ───────────────────────────────────────────────
+const hookDispatcher = new HookDispatcher();
+const PLUGINS_DIR = path.join(ROOT_DIR, "plugins");
+const pluginManager = new PluginManager(PLUGINS_DIR, process.env.PLUGIN_DIR, hookDispatcher);
+await pluginManager.init();
 
 // ── Path traversal prevention ───────────────────────────────────
 
@@ -160,6 +168,9 @@ app.use("/api/auth/verify", rateLimit({ windowMs: 60_000, limit: 10, standardHea
 
 // Stricter rate limit on chat endpoint
 app.use("/api/stories/:series/:name/chat", rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false }));
+
+// Stricter rate limit on preview-prompt endpoint (compute-heavy)
+app.use("/api/stories/:series/:name/preview-prompt", rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false }));
 
 // JSON body parser for API routes
 app.use("/api", express.json({ limit: "1mb" }));
@@ -463,7 +474,7 @@ app.post(
     }
 
     // Validate message body
-    const { message } = req.body || {};
+    const { message, template } = req.body || {};
     if (typeof message !== "string" || message.trim().length === 0) {
       return res.status(400).json({
         type: "about:blank",
@@ -528,12 +539,20 @@ app.post(
       const statusContent = await loadStatus(series, name);
 
       // Build system prompt via Vento with all template variables
-      const systemPrompt = await renderSystemPrompt(series, {
+      const { content: systemPrompt, error: ventoError } = await renderSystemPrompt(series, {
         previousContext,
         userInput: message,
         status: statusContent,
         isFirstRound,
+        templateOverride: typeof template === "string" ? template : undefined,
       });
+
+      if (ventoError) {
+        return res.status(422).json({
+          type: "vento-error",
+          ...ventoError,
+        });
+      }
 
       // Construct messages array
       const messages = [
@@ -652,22 +671,14 @@ app.post(
         });
       }
 
-      // Run apply-patches to update current-status.yml
-      try {
-        await execFileAsync(APPLY_PATCHES_BIN, ["playground"], {
-          cwd: ROOT_DIR,
-        });
-      } catch (err) {
-        if (err.code === "ENOENT") {
-          console.warn("⚠️  apply-patches binary not found at", APPLY_PATCHES_BIN);
-        } else {
-          console.warn(
-            "⚠️  apply-patches exited with code",
-            err.code,
-            err.stderr || ""
-          );
-        }
-      }
+      // Run post-response hooks (e.g., apply-patches plugin)
+      await hookDispatcher.dispatch("post-response", {
+        content: fullContent,
+        storyDir,
+        series,
+        name,
+        rootDir: ROOT_DIR,
+      });
 
       res.json({ chapter: targetNum, content: fullContent });
     } catch (err) {
@@ -684,27 +695,87 @@ app.post(
 
 // ── Helper functions ────────────────────────────────────────────
 
-/** Strip `<options>...</options>`, `<disclaimer>...</disclaimer>`, and `<user_message>...</user_message>` from chapter content */
+/** Strip plugin-registered tags from chapter content */
 function stripPromptTags(content) {
-  return content
-    .replace(/<options>[\s\S]*?<\/options>/g, "")
-    .replace(/<disclaimer>[\s\S]*?<\/disclaimer>/g, "")
-    .replace(/<user_message>[\s\S]*?<\/user_message>/g, "")
-    .trim();
+  const pluginRegex = pluginManager.getStripTagPatterns();
+  if (pluginRegex) {
+    return content.replace(pluginRegex, "").trim();
+  }
+  return content.trim();
+}
+
+/**
+ * Validate a Vento template string — only safe expressions are allowed.
+ * Prevents SSTI by whitelisting: simple variables, for/if control flow,
+ * pipe filters, includes, and comments.
+ * @returns {string[]} Array of error messages (empty = valid)
+ */
+function validateTemplate(templateStr) {
+  const tagRegex = /\{\{([\s\S]*?)\}\}/g;
+  const errors = [];
+  let match;
+
+  while ((match = tagRegex.exec(templateStr)) !== null) {
+    const expr = match[1].trim();
+    if (!expr) continue;
+
+    // Vento comments
+    if (expr.startsWith("#")) continue;
+    // End tags: /for, /if
+    if (/^\/(?:for|if)$/.test(expr)) continue;
+    // else
+    if (expr === "else") continue;
+    // for-of: for <ident> of <ident>
+    if (/^for\s+[a-zA-Z_]\w*\s+of\s+[a-zA-Z_]\w*$/.test(expr)) continue;
+    // if <ident>
+    if (/^if\s+[a-zA-Z_]\w*$/.test(expr)) continue;
+    // Simple variable: <ident>
+    if (/^[a-zA-Z_]\w*$/.test(expr)) continue;
+    // Variable with pipe filters: <ident> |> <filter> (one or more)
+    if (/^[a-zA-Z_]\w*(\s*\|>\s*[a-zA-Z_]\w*)+$/.test(expr)) continue;
+    // Include: > "path" or > <ident>
+    if (/^>\s+/.test(expr)) continue;
+
+    errors.push(
+      `Unsafe template expression at position ${match.index}: {{ ${expr} }}`
+    );
+  }
+
+  return errors;
 }
 
 async function renderSystemPrompt(
   series,
-  { previousContext, userInput, status, isFirstRound } = {}
+  { previousContext, userInput, status, isFirstRound, templateOverride } = {}
 ) {
   const systemTemplatePath = path.join(
-    PLAYGROUND_DIR,
-    "prompts",
+    ROOT_DIR,
     "system.md"
   );
   const scenarioPath = safePath(series, "scenario.md");
 
-  const systemTemplate = await fs.readFile(systemTemplatePath, "utf-8");
+  // Validate user-provided templates to prevent SSTI
+  if (templateOverride) {
+    if (templateOverride.length > 500_000) {
+      return {
+        content: null,
+        error: { title: "Template Validation Error", detail: "Template exceeds maximum length" },
+      };
+    }
+    const templateErrors = validateTemplate(templateOverride);
+    if (templateErrors.length > 0) {
+      return {
+        content: null,
+        error: {
+          title: "Template Validation Error",
+          detail: "Template contains unsafe expressions that cannot be executed",
+          expressions: templateErrors,
+        },
+      };
+    }
+  }
+
+  const systemTemplate = templateOverride || await fs.readFile(systemTemplatePath, "utf-8");
   let scenarioContent = "";
   if (scenarioPath) {
     try {
@@ -714,14 +785,26 @@ async function renderSystemPrompt(
     }
   }
 
-  const result = await ventoEnv.runString(systemTemplate, {
-    scenario: scenarioContent,
-    previous_context: previousContext || [],
-    user_input: userInput || "",
-    status_data: status || "",
-    isFirstRound: isFirstRound || false,
-  });
-  return result.content;
+  // Collect plugin prompt variables
+  const pluginVars = await pluginManager.getPromptVariables();
+
+  try {
+    const result = await ventoEnv.runString(systemTemplate, {
+      scenario: scenarioContent,
+      previous_context: previousContext || [],
+      user_input: userInput || "",
+      status_data: status || "",
+      isFirstRound: isFirstRound || false,
+      ...pluginVars.variables,
+      plugin_fragments: pluginVars.fragments || [],
+    });
+    return { content: result.content, error: null };
+  } catch (err) {
+    return {
+      content: null,
+      error: buildVentoError(err, systemTemplatePath, pluginVars),
+    };
+  }
 }
 
 async function loadStatus(series, name) {
@@ -745,6 +828,214 @@ async function loadStatus(series, name) {
   }
 
   return "";
+}
+
+function buildVentoError(err, templatePath, knownVariables) {
+  const error = {
+    type: "vento-error",
+    stage: "prompt-assembly",
+    message: err.message,
+    source: path.basename(templatePath),
+    line: null,
+    suggestion: null,
+  };
+
+  // Extract line number from Vento error if available
+  const lineMatch = err.message.match(/line (\d+)/i);
+  if (lineMatch) error.line = parseInt(lineMatch[1], 10);
+
+  // Suggest similar variable names for "not defined" errors
+  const varMatch = err.message.match(
+    /(?:Variable|variable) ['"]?(\w+)['"]? (?:is )?not defined/i
+  );
+  if (varMatch) {
+    const missing = varMatch[1];
+    const allVarNames = Object.keys(knownVariables.variables || {}).concat([
+      "scenario",
+      "previous_context",
+      "user_input",
+      "status_data",
+      "isFirstRound",
+      "plugin_fragments",
+    ]);
+    const closest = findClosestMatch(missing, allVarNames);
+    if (closest) error.suggestion = `Did you mean '${closest}'?`;
+  }
+
+  return error;
+}
+
+function findClosestMatch(target, candidates) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const c of candidates) {
+    const d = levenshtein(target, c);
+    if (d < bestDist && d <= 3) {
+      best = c;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+function levenshtein(a, b) {
+  const m = a.length;
+  const n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+  return dp[m][n];
+}
+
+// ── Plugin API endpoints ────────────────────────────────────────
+
+app.get("/api/plugins", (_req, res) => {
+  const plugins = pluginManager.getPlugins().map((p) => ({
+    name: p.name,
+    version: p.version,
+    description: p.description,
+    type: p.type,
+    tags: p.tags || [],
+    hasFrontendModule: !!p.frontendModule,
+  }));
+  res.json(plugins);
+});
+
+app.get("/api/plugins/parameters", (_req, res) => {
+  res.json(pluginManager.getParameters());
+});
+
+app.get("/api/template", async (_req, res) => {
+  try {
+    const templatePath = path.join(ROOT_DIR, "system.md");
+    const content = await fs.readFile(templatePath, "utf-8");
+    res.json({ content });
+  } catch (err) {
+    res.status(500).json({
+      type: "about:blank",
+      title: "Internal Server Error",
+      status: 500,
+      detail: "Failed to read template",
+    });
+  }
+});
+
+app.post(
+  "/api/stories/:series/:name/preview-prompt",
+  validateParams,
+  async (req, res) => {
+    const { message, template } = req.body || {};
+    if (typeof message !== "string" || message.trim().length === 0) {
+      return res.status(400).json({
+        type: "about:blank",
+        title: "Bad Request",
+        status: 400,
+        detail: "Message required",
+      });
+    }
+
+    const { series, name } = req.params;
+    const storyDir = safePath(series, name);
+    if (!storyDir) {
+      return res.status(400).json({
+        type: "about:blank",
+        title: "Bad Request",
+        status: 400,
+        detail: "Invalid path",
+      });
+    }
+
+    try {
+      let chapterFiles = [];
+      try {
+        const entries = await fs.readdir(storyDir);
+        chapterFiles = entries
+          .filter((f) => /^\d+\.md$/.test(f))
+          .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+      } catch {
+        // Directory may not exist yet
+      }
+
+      const MAX_CHAPTERS = 200;
+      if (chapterFiles.length > MAX_CHAPTERS) {
+        chapterFiles = chapterFiles.slice(-MAX_CHAPTERS);
+      }
+
+      const chapters = [];
+      for (const f of chapterFiles) {
+        const content = await fs.readFile(path.join(storyDir, f), "utf-8");
+        chapters.push({ number: parseInt(f, 10), content });
+      }
+
+      const isFirstRound = chapters.every((ch) => ch.content.trim() === "");
+      const previousContext = chapters
+        .map((ch) => stripPromptTags(ch.content))
+        .filter((c) => c.length > 0);
+      const statusContent = await loadStatus(series, name);
+
+      const { content: prompt, error: ventoError } =
+        await renderSystemPrompt(series, {
+          previousContext,
+          userInput: message,
+          status: statusContent,
+          isFirstRound,
+          templateOverride: typeof template === "string" ? template : undefined,
+        });
+
+      if (ventoError) {
+        return res.status(422).json({ type: "vento-error", ...ventoError });
+      }
+
+      const pluginVars = await pluginManager.getPromptVariables();
+      res.json({
+        prompt,
+        fragments: Object.keys(pluginVars.variables),
+        variables: {
+          scenario: "(loaded)",
+          previous_context: `${previousContext.length} chapters`,
+          user_input: message,
+          status_data: statusContent ? "(loaded)" : "(empty)",
+          isFirstRound,
+        },
+        errors: [],
+      });
+    } catch (err) {
+      console.error("Preview prompt error:", err.message);
+      res.status(500).json({
+        type: "about:blank",
+        title: "Internal Server Error",
+        status: 500,
+        detail: "Failed to preview prompt",
+      });
+    }
+  }
+);
+
+// ── Serve plugin frontend modules ───────────────────────────────
+// Serve only the declared frontendModule file for each plugin
+for (const plugin of pluginManager.getPlugins()) {
+  if (plugin.frontendModule) {
+    const pluginDir = pluginManager.getPluginDir(plugin.name);
+    const modulePath = path.resolve(pluginDir, plugin.frontendModule);
+    // Containment check: frontendModule must stay inside plugin directory
+    if (!modulePath.startsWith(pluginDir + path.sep)) {
+      console.warn(`⚠️  Plugin '${plugin.name}' frontendModule escapes plugin directory — skipping`);
+      continue;
+    }
+    // Use normalized relative path for route (strip ./ prefix from manifest values)
+    const routePath = path.relative(pluginDir, modulePath);
+    app.get(`/plugins/${plugin.name}/${routePath}`, (_req, res, next) => {
+      res.sendFile(modulePath, (err) => {
+        if (err) next();
+      });
+    });
+  }
 }
 
 // ── Serve reader frontend ───────────────────────────────────────

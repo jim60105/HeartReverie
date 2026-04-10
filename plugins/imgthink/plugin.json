@@ -1,0 +1,8 @@
+{
+  "name": "imgthink",
+  "version": "1.0.0",
+  "description": "Strip imgthink tags from reader display",
+  "type": "prompt-only",
+  "frontendModule": "./frontend.js",
+  "tags": ["imgthink"]
+}

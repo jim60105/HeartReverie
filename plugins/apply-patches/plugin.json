@@ -1,0 +1,7 @@
+{
+  "name": "apply-patches",
+  "version": "1.0.0",
+  "description": "Run apply-patches binary after LLM response",
+  "type": "hook-only",
+  "backendModule": "./handler.js"
+}

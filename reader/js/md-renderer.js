@@ -1,77 +1,49 @@
 // js/md-renderer.js — Markdown rendering pipeline
 
-import { extractStatusBlocks } from './status-bar.js';
-import { extractOptionsBlocks } from './options-panel.js';
-import { extractVariableBlocks } from './variable-display.js';
+import { frontendHooks } from './plugin-loader.js';
 
 /**
- * Render a raw markdown chapter through the full pipeline:
+ * Render a raw markdown chapter through the plugin-driven pipeline:
  *
- *  1. Extract & render <status> blocks       → placeholders
- *  2. Extract & render <options> blocks      → placeholders
- *  3. Extract & render <UpdateVariable>      → placeholders
- *  4. Strip <imgthink>…</imgthink>           → removed
- *  5. Strip <disclaimer>…</disclaimer>       → removed
- *  6. Quote normalisation                    → ASCII "
- *  7. Newline doubling                       → \n → \n\n
- *  8. Markdown → HTML via marked.parse()
- *  9. Reinsert rendered component HTML
+ *  1. Dispatch 'frontend-render' hooks    → extraction + placeholders
+ *  2. Dispatch 'frontend-strip' hooks     → tag removal
+ *  3. Quote normalisation                 → ASCII "
+ *  4. Newline doubling                    → \n → \n\n
+ *  5. Markdown → HTML via marked.parse()
+ *  6. Reinsert rendered component HTML
+ *  7. Sanitize HTML via DOMPurify
  *
  * @param {string} rawMarkdown
+ * @param {object} options
  * @returns {string} Final HTML string
  */
 export function renderChapter(rawMarkdown, options = {}) {
   let text = rawMarkdown;
   const placeholderMap = new Map();
 
-  // 1. Extract <status> blocks
-  const statusResult = extractStatusBlocks(text);
-  text = statusResult.text;
-  for (const block of statusResult.blocks) {
-    placeholderMap.set(block.placeholder, block.html);
-  }
+  // 1. Plugin-driven tag extraction and rendering
+  const renderContext = { text, placeholderMap, options };
+  frontendHooks.dispatch('frontend-render', renderContext);
+  text = renderContext.text;
 
-  // 2. Extract <options> blocks
-  const optionsResult = extractOptionsBlocks(text, { render: options.isLastChapter !== false });
-  text = optionsResult.text;
-  for (const block of optionsResult.blocks) {
-    placeholderMap.set(block.placeholder, block.html);
-  }
+  // 2. Plugin-driven tag stripping
+  const stripContext = { text };
+  frontendHooks.dispatch('frontend-strip', stripContext);
+  text = stripContext.text;
 
-  // 3. Extract <UpdateVariable> blocks (complete and incomplete)
-  const variableResult = extractVariableBlocks(text);
-  text = variableResult.text;
-  for (const block of variableResult.blocks) {
-    placeholderMap.set(block.placeholder, block.html);
-  }
-
-  // 4. Strip <imgthink>…</imgthink>
-  text = text.replace(/<imgthink>[\s\S]*?<\/imgthink>/gi, '');
-
-  // 5. Strip <disclaimer>…</disclaimer>
-  text = text.replace(/<disclaimer>[\s\S]*?<\/disclaimer>/gi, '');
-
-  // 5a. Strip <user_message>…</user_message>
-  text = text.replace(/<user_message>[\s\S]*?<\/user_message>/gi, '');
-
-  // 5c. Strip <T-task...>…</T-task...> but keep plain <T-task>…</T-task>
-  text = text.replace(/<T-task[^>]+>[\s\S]*?<\/T-task[^>]+>/g, '');
-
-
-
-  // 6. Quote normalisation
+  // 3. Quote normalisation
   text = text.replace(/[\u201c\u201d\u00ab\u00bb\u300c\u300d\uff62\uff63\u300a\u300b\u201e]/g, '"');
 
-  // 7. Newline doubling
+  // 4. Newline doubling
   text = text.replace(/\n/g, '\n\n');
 
-  // 8. Markdown → HTML
+  // 5. Markdown → HTML
   let html = marked.parse(text, { breaks: true });
 
-  // 9. Reinsert rendered component HTML
+  // 6. Reinsert rendered component HTML
   html = reinjectPlaceholders(html, placeholderMap);
 
-  // 10. Sanitize HTML to prevent XSS
+  // 7. Sanitize HTML via DOMPurify
   return DOMPurify.sanitize(html, { ADD_TAGS: ['details', 'summary'], ADD_ATTR: ['open'] });
 }
 

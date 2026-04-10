@@ -1,0 +1,9 @@
+{
+  "name": "user-message",
+  "version": "1.0.0",
+  "description": "Strip user_message tags from reader display",
+  "type": "prompt-only",
+  "frontendModule": "./frontend.js",
+  "tags": ["user_message"],
+  "stripTags": ["user_message"]
+}

@@ -463,6 +463,200 @@
             border-radius: 3px;
             font-size: 0.9em;
         }
+
+        /* ── Vento Error Card ── */
+        .vento-error-card {
+            border: 2px solid #dc2626;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            background: rgba(220, 38, 38, 0.1);
+        }
+        .vento-error-header {
+            font-weight: bold;
+            color: #dc2626;
+            margin-bottom: 8px;
+        }
+        .vento-error-message {
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin-bottom: 4px;
+        }
+        .vento-error-source {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .vento-error-suggestion {
+            color: #059669;
+            margin-top: 8px;
+        }
+
+        /* ── Prompt Preview Panel ── */
+        .panel-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 999;
+        }
+        .panel-backdrop.hidden { display: none; }
+        .prompt-preview-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 33vw;
+            height: 100vh;
+            background: var(--bg-primary, #1a1a2e);
+            border-right: 1px solid var(--border-color, #333);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .prompt-preview-panel.hidden { display: none; }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .preview-close-btn {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+        .preview-meta {
+            padding: 8px 16px;
+            font-size: 0.85em;
+            color: #888;
+        }
+        .preview-content {
+            flex: 1;
+            overflow: auto;
+            padding: 16px;
+            font-size: 0.85em;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* ── Prompt Editor Panel ── */
+        .prompt-editor-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 33vw;
+            height: 100vh;
+            background: var(--bg-primary, #1a1a2e);
+            border-left: 1px solid var(--border-color, #333);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+        }
+        .prompt-editor-panel.hidden { display: none; }
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+        .editor-header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .editor-close-btn {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+        .editor-btn-sm {
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: rgba(255,255,255,0.08);
+            color: #ccc;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        .editor-btn-sm:hover { background: rgba(255,255,255,0.15); }
+        .editor-variables {
+            flex-shrink: 0;
+            margin-bottom: 10px;
+        }
+        .editor-variables-label {
+            font-size: 0.85em;
+            color: #aaa;
+            margin-bottom: 6px;
+        }
+        .editor-hint { color: #666; font-size: 0.85em; }
+        .variable-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .variable-pill {
+            padding: 2px 8px;
+            border-radius: 12px;
+            border: 1px solid #444;
+            background: rgba(96, 165, 250, 0.12);
+            color: #60a5fa;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 0.8em;
+            transition: background 0.15s;
+        }
+        .variable-pill:hover { background: rgba(96, 165, 250, 0.3); }
+        .variable-pill.pill-core { border-color: #555; color: #93c5fd; }
+        .variable-pill.pill-plugin { border-color: #4a6; color: #6ee7b7; background: rgba(110, 231, 183, 0.1); }
+        .variable-pill.pill-plugin:hover { background: rgba(110, 231, 183, 0.25); }
+        .editor-textarea-wrap {
+            flex: 1;
+            min-height: 0;
+            margin-bottom: 10px;
+        }
+        .editor-textarea {
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            color: #e0e0e0;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.85em;
+            line-height: 1.5;
+            resize: none;
+            tab-size: 2;
+        }
+        .editor-textarea:focus { outline: none; border-color: #60a5fa; }
+        .editor-actions {
+            flex-shrink: 0;
+        }
+        .editor-btn {
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: rgba(255,255,255,0.1);
+            color: inherit;
+            cursor: pointer;
+            width: 100%;
+        }
+        .editor-btn:hover { background: rgba(255,255,255,0.18); }
+        .chat-tool-btn {
+            padding: 4px 12px;
+            border-radius: 4px;
+            border: 1px solid #444;
+            background: rgba(255,255,255,0.05);
+            color: inherit;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -587,8 +781,11 @@
                     style="width: 100%; resize: vertical; background: var(--item-bg); border: 1px solid var(--item-border);
                            border-radius: 8px; padding: 8px; color: var(--text-main); font-family: var(--font-system-ui);
                            font-size: var(--font-base); box-sizing: border-box;"></textarea>
-                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
-                    <span id="chat-error" class="text-sm" style="color: #ff6b6b; flex: 1; align-self: center;"></span>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; align-items: center;">
+                    <button id="btn-preview" title="Preview Prompt" class="chat-tool-btn">📝 Preview</button>
+                    <button id="btn-editor" title="編排器" class="chat-tool-btn">🎛️ 編排器</button>
+                    <span style="flex: 1;"></span>
+                    <span id="chat-error" class="text-sm" style="color: #ff6b6b; align-self: center;"></span>
                     <button id="btn-chat-resend" class="themed-btn px-4 py-1 rounded text-sm font-medium transition-colors"
                         style="background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-name);">
                         🔄 重送
@@ -601,12 +798,16 @@
             </div>
         </div>
     </main>
+    <div id="panel-backdrop" class="panel-backdrop hidden"></div>
 
     <script type="module">
         import { initChapterNav, handleFolderSelect, handleNext, handlePrev, handleReload, tryRestoreSession, loadFromBackend, reloadFromBackendToLast, getBackendContext } from './js/chapter-nav.js';
         import { initStorySelector } from './js/story-selector.js';
         import { initChatInput, showChatInput, hideChatInput } from './js/chat-input.js';
         import { initPassphraseGate } from './js/passphrase-gate.js';
+        import { showPromptPreview, initPromptPreview, hidePromptPreview } from './js/prompt-preview.js';
+        import { toggleEditor, hideEditor, getEditorTemplate, initEditorState } from './js/prompt-editor.js';
+        import { initPlugins } from './js/plugin-loader.js';
 
         // DOM references
         const btnPickFolder = document.getElementById('btn-pick-folder');
@@ -647,8 +848,40 @@
         document.getElementById('btn-next').addEventListener('click', handleNext);
         document.getElementById('btn-reload').addEventListener('click', handleReload);
 
+        // Prompt preview & editor buttons + backdrop
+        const panelBackdrop = document.getElementById('panel-backdrop');
+        initPromptPreview();
+
+        function updateBackdrop() {
+            const previewVisible = !document.getElementById('prompt-preview-panel')?.classList.contains('hidden');
+            const editorVisible = !document.getElementById('prompt-editor-panel')?.classList.contains('hidden');
+            panelBackdrop.classList.toggle('hidden', !previewVisible && !editorVisible);
+        }
+
+        function closeAllPanels() {
+            hidePromptPreview();
+            hideEditor();
+            panelBackdrop.classList.add('hidden');
+        }
+
+        panelBackdrop.addEventListener('click', closeAllPanels);
+        document.addEventListener('panel-closed', updateBackdrop);
+
+        document.getElementById('btn-preview')?.addEventListener('click', () => {
+            const ctx = getBackendContext();
+            const message = document.getElementById('chat-message')?.value || '';
+            showPromptPreview(ctx.series || '', ctx.story || '', message, getEditorTemplate());
+            updateBackdrop();
+        });
+        document.getElementById('btn-editor')?.addEventListener('click', () => {
+            toggleEditor();
+            updateBackdrop();
+        });
+
         // Passphrase gate — API-dependent initialization runs after unlock
-        initPassphraseGate(document.getElementById('passphrase-overlay'), () => {
+        initPassphraseGate(document.getElementById('passphrase-overlay'), async () => {
+            await initPlugins();
+            await initEditorState();
             // Story selector
             initStorySelector({
                 selectSeries: document.getElementById('select-series'),
@@ -673,6 +906,7 @@
                 chatArea: document.getElementById('chat-input-area')
             }, {
                 getContext: () => getBackendContext(),
+                getTemplate: () => getEditorTemplate(),
                 onSent: async () => {
                     await reloadFromBackendToLast();
                 }
