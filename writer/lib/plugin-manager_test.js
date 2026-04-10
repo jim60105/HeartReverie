@@ -177,6 +177,396 @@ Deno.test("PluginManager", async (t) => {
         assertTrue(params.some((p) => p.name === "scenario"));
       });
     });
+    await t.step("external plugin directory", async (t) => {
+      await t.step("non-absolute externalDir logs warning and skips", async () => {
+        const pluginDir = join(tmpDir, "ext-nonabs-builtin");
+        await Deno.mkdir(pluginDir, { recursive: true });
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, "relative/path", hd);
+        await pm.init();
+
+        assertTrue(
+          warnStub.calls.some((c) =>
+            String(c.args[0]).includes("PLUGIN_DIR must be an absolute path")
+          ),
+        );
+      });
+
+      await t.step("absolute externalDir loads plugins", async () => {
+        const builtinDir = join(tmpDir, "ext-abs-builtin");
+        const externalDir = join(tmpDir, "ext-abs-external");
+        await Deno.mkdir(builtinDir, { recursive: true });
+        const pDir = join(externalDir, "ext-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({ name: "ext-plugin", version: "1.0.0" }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(builtinDir, externalDir, hd);
+        await pm.init();
+
+        const plugins = pm.getPlugins();
+        assertEquals(plugins.length, 1);
+        assertEquals(plugins[0].name, "ext-plugin");
+      });
+
+      await t.step("external plugin overrides built-in with same name", async () => {
+        const builtinDir = join(tmpDir, "override-builtin");
+        const externalDir = join(tmpDir, "override-external");
+        const bPlugin = join(builtinDir, "shared-plugin");
+        const ePlugin = join(externalDir, "shared-plugin");
+        await Deno.mkdir(bPlugin, { recursive: true });
+        await Deno.mkdir(ePlugin, { recursive: true });
+        await Deno.writeTextFile(
+          join(bPlugin, "plugin.json"),
+          JSON.stringify({ name: "shared-plugin", version: "1.0.0", description: "builtin" }),
+        );
+        await Deno.writeTextFile(
+          join(ePlugin, "plugin.json"),
+          JSON.stringify({ name: "shared-plugin", version: "2.0.0", description: "external" }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(builtinDir, externalDir, hd);
+        await pm.init();
+
+        const plugins = pm.getPlugins();
+        assertEquals(plugins.length, 1);
+        assertEquals(plugins[0].version, "2.0.0");
+        assertEquals(plugins[0].description, "external");
+      });
+    });
+
+    await t.step("invalid plugin manifests", async (t) => {
+      await t.step("skips plugin with invalid JSON", async () => {
+        const pluginDir = join(tmpDir, "bad-json");
+        const pDir = join(pluginDir, "broken-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "plugin.json"), "NOT VALID JSON{{{");
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPlugins().length, 0);
+        assertTrue(
+          warnStub.calls.some((c) => String(c.args[0]).includes("Invalid JSON")),
+        );
+      });
+
+      await t.step("skips plugin missing name field", async () => {
+        const pluginDir = join(tmpDir, "no-name");
+        const pDir = join(pluginDir, "nameless-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "plugin.json"), JSON.stringify({}));
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPlugins().length, 0);
+        assertTrue(
+          warnStub.calls.some((c) =>
+            String(c.args[0]).includes("missing required 'name' field")
+          ),
+        );
+      });
+    });
+
+    await t.step("backend module loading", async (t) => {
+      await t.step("calls register() from backend module", async () => {
+        const pluginDir = join(tmpDir, "backend-ok");
+        const pDir = join(pluginDir, "backend-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "backend.js"),
+          `export function register(hookDispatcher) {
+             hookDispatcher.register("post-response", async (ctx) => { ctx.called = true; });
+           }`,
+        );
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({ name: "backend-plugin", version: "1.0.0", backendModule: "backend.js" }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPlugins().length, 1);
+        // Verify register was called — hook should be registered
+        const ctx = {};
+        await hd.dispatch("post-response", ctx);
+        assertEquals(ctx.called, true);
+      });
+
+      await t.step("skips backend module that escapes plugin directory", async () => {
+        const pluginDir = join(tmpDir, "backend-escape");
+        const pDir = join(pluginDir, "escape-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "escape-plugin",
+            version: "1.0.0",
+            backendModule: "../../escape.js",
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertTrue(
+          warnStub.calls.some((c) =>
+            String(c.args[0]).includes("escapes plugin directory")
+          ),
+        );
+      });
+
+      await t.step("warns when backend module has no register export", async () => {
+        const pluginDir = join(tmpDir, "backend-noreg");
+        const pDir = join(pluginDir, "noreg-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "noregister.js"),
+          `export const something = 42;`,
+        );
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "noreg-plugin",
+            version: "1.0.0",
+            backendModule: "noregister.js",
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertTrue(
+          warnStub.calls.some((c) =>
+            String(c.args[0]).includes("no register() or default export")
+          ),
+        );
+      });
+
+      await t.step("logs error when backend module import fails", async () => {
+        const pluginDir = join(tmpDir, "backend-fail");
+        const pDir = join(pluginDir, "failmod-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "failmod-plugin",
+            version: "1.0.0",
+            backendModule: "nonexistent.js",
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertTrue(
+          errorStub.calls.some((c) =>
+            String(c.args[0]).includes("Failed to load backend module")
+          ),
+        );
+      });
+    });
+
+    await t.step("getPromptVariables", async (t) => {
+      await t.step("returns named variables and unnamed fragments", async () => {
+        const pluginDir = join(tmpDir, "pv-basic");
+        const pDir = join(pluginDir, "frag-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "named.md"), "named content");
+        await Deno.writeTextFile(join(pDir, "unnamed.md"), "unnamed content");
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "frag-plugin",
+            version: "1.0.0",
+            promptFragments: [
+              { file: "named.md", variable: "myVar" },
+              { file: "unnamed.md" },
+            ],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const pv = await pm.getPromptVariables();
+        assertEquals(pv.variables["myVar"], "named content");
+        assertEquals(pv.fragments.length, 1);
+        assertEquals(pv.fragments[0], "unnamed content");
+      });
+
+      await t.step("skips fragment that escapes plugin directory", async () => {
+        const pluginDir = join(tmpDir, "pv-escape");
+        const pDir = join(pluginDir, "esc-frag-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "esc-frag-plugin",
+            version: "1.0.0",
+            promptFragments: [{ file: "../../etc/passwd" }],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const pv = await pm.getPromptVariables();
+        assertEquals(pv.fragments.length, 0);
+        assertTrue(
+          warnStub.calls.some((c) =>
+            String(c.args[0]).includes("escapes plugin directory")
+          ),
+        );
+      });
+
+      await t.step("warns on missing fragment file", async () => {
+        const pluginDir = join(tmpDir, "pv-missing");
+        const pDir = join(pluginDir, "miss-frag-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "miss-frag-plugin",
+            version: "1.0.0",
+            promptFragments: [{ file: "does-not-exist.md" }],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const pv = await pm.getPromptVariables();
+        assertEquals(pv.fragments.length, 0);
+        assertTrue(
+          warnStub.calls.some((c) =>
+            String(c.args[0]).includes("Failed to read prompt fragment")
+          ),
+        );
+      });
+
+      await t.step("sorts unnamed fragments by priority", async () => {
+        const pluginDir = join(tmpDir, "pv-priority");
+        const pDir = join(pluginDir, "prio-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "low.md"), "low priority");
+        await Deno.writeTextFile(join(pDir, "high.md"), "high priority");
+        await Deno.writeTextFile(join(pDir, "mid.md"), "mid priority");
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "prio-plugin",
+            version: "1.0.0",
+            promptFragments: [
+              { file: "low.md", priority: 200 },
+              { file: "high.md", priority: 10 },
+              { file: "mid.md" }, // default priority 100
+            ],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const pv = await pm.getPromptVariables();
+        assertEquals(pv.fragments.length, 3);
+        assertEquals(pv.fragments[0], "high priority");
+        assertEquals(pv.fragments[1], "mid priority");
+        assertEquals(pv.fragments[2], "low priority");
+      });
+    });
+
+    await t.step("getParameters with plugin parameters", async () => {
+      const pluginDir = join(tmpDir, "params-test");
+      const pDir = join(pluginDir, "param-plugin");
+      await Deno.mkdir(pDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(pDir, "plugin.json"),
+        JSON.stringify({
+          name: "param-plugin",
+          version: "1.0.0",
+          parameters: [
+            { name: "x", type: "number", description: "A number" },
+          ],
+          promptFragments: [
+            { file: "frag.md", variable: "fragVar" },
+          ],
+        }),
+      );
+      await Deno.writeTextFile(join(pDir, "frag.md"), "frag content");
+
+      const hd = new HookDispatcher();
+      const pm = new PluginManager(pluginDir, undefined, hd);
+      await pm.init();
+
+      const params = pm.getParameters();
+      const pluginParam = params.find((p) => p.name === "x");
+      assertTrue(pluginParam !== undefined);
+      assertEquals(pluginParam.type, "number");
+      assertEquals(pluginParam.description, "A number");
+      assertEquals(pluginParam.source, "param-plugin");
+
+      const fragParam = params.find((p) => p.name === "fragVar");
+      assertTrue(fragParam !== undefined);
+      assertEquals(fragParam.type, "string");
+      assertEquals(fragParam.source, "param-plugin");
+    });
+
+    await t.step("getPluginDir", async (t) => {
+      await t.step("returns correct path for loaded plugin", async () => {
+        const pluginDir = join(tmpDir, "dir-test");
+        const pDir = join(pluginDir, "dir-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({ name: "dir-plugin", version: "1.0.0" }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginDir("dir-plugin"), pDir);
+      });
+
+      await t.step("returns null for unknown plugin", async () => {
+        const pluginDir = join(tmpDir, "dir-null-test");
+        await Deno.mkdir(pluginDir, { recursive: true });
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginDir("nonexistent"), null);
+      });
+    });
+
+    await t.step("non-existent builtin directory does not throw", async () => {
+      const pluginDir = join(tmpDir, "does-not-exist-at-all");
+
+      const hd = new HookDispatcher();
+      const pm = new PluginManager(pluginDir, undefined, hd);
+      await pm.init();
+
+      assertEquals(pm.getPlugins().length, 0);
+    });
   } finally {
     logStub.restore();
     warnStub.restore();

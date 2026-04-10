@@ -13,8 +13,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assertMatch } from "@std/assert";
-import { validateTemplate } from "./template.js";
+import { assertEquals, assertExists, assertMatch } from "@std/assert";
+import { join } from "@std/path";
+import { createTemplateEngine, validateTemplate } from "./template.js";
 
 Deno.test("validateTemplate", async (t) => {
   await t.step("safe expressions accepted", async (t) => {
@@ -94,5 +95,105 @@ Deno.test("validateTemplate", async (t) => {
         [],
       );
     });
+  });
+});
+
+Deno.test("createTemplateEngine", async (t) => {
+  const mockPluginManager = {
+    getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+  };
+  const nullSafePath = () => null;
+
+  await t.step("renderSystemPrompt with templateOverride renders correctly", async () => {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
+    const result = await renderSystemPrompt("test-series", {
+      templateOverride: "Hello {{ user_input }}!",
+      userInput: "world",
+    });
+    assertEquals(result.error, null);
+    assertEquals(result.content, "Hello world!");
+  });
+
+  await t.step("templateOverride exceeding max length returns error", async () => {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
+    const longTemplate = "x".repeat(500_001);
+    const result = await renderSystemPrompt("test-series", {
+      templateOverride: longTemplate,
+    });
+    assertEquals(result.content, null);
+    assertEquals(result.error.title, "Template Validation Error");
+    assertEquals(result.error.detail, "Template exceeds maximum length");
+  });
+
+  await t.step("templateOverride with unsafe expressions returns validation error", async () => {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
+    const result = await renderSystemPrompt("test-series", {
+      templateOverride: "{{ process.env.SECRET }}",
+    });
+    assertEquals(result.content, null);
+    assertEquals(result.error.title, "Template Validation Error");
+    assertEquals(
+      result.error.detail,
+      "Template contains unsafe expressions that cannot be executed",
+    );
+    assertEquals(result.error.expressions.length, 1);
+  });
+
+  await t.step("renderSystemPrompt reads scenario.md when it exists", async () => {
+    const tmpDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(tmpDir, "scenario.md"), "Test scenario content");
+      const safePath = (_series, file) => join(tmpDir, file);
+      const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, safePath);
+      const result = await renderSystemPrompt("test-series", {
+        templateOverride: "Scenario: {{ scenario }}",
+      });
+      assertEquals(result.error, null);
+      assertEquals(result.content, "Scenario: Test scenario content");
+    } finally {
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("renderSystemPrompt handles missing scenario file gracefully", async () => {
+    const safePath = () => "/nonexistent/path/scenario.md";
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, safePath);
+    const result = await renderSystemPrompt("test-series", {
+      templateOverride: "Scenario:[{{ scenario }}]",
+    });
+    assertEquals(result.error, null);
+    assertEquals(result.content, "Scenario:[]");
+  });
+
+  await t.step("renderSystemPrompt returns error on Vento rendering failure", async () => {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
+    // Unclosed for-loop causes Vento to throw a parse/render error
+    const result = await renderSystemPrompt("test-series", {
+      templateOverride: "{{ for x of items }}no closing tag",
+    });
+    assertEquals(result.content, null);
+    assertExists(result.error);
+    assertEquals(result.error.type, "vento-error");
+  });
+
+  await t.step("ventoEnv is returned from createTemplateEngine", () => {
+    const engine = createTemplateEngine(mockPluginManager, nullSafePath);
+    assertExists(engine.ventoEnv);
+    assertEquals(typeof engine.ventoEnv.runString, "function");
+  });
+
+  await t.step("plugin variables are passed to template", async () => {
+    const pluginMgr = {
+      getPromptVariables: async () => ({
+        variables: { custom_var: "plugin_value" },
+        fragments: ["frag1"],
+      }),
+    };
+    const { renderSystemPrompt } = createTemplateEngine(pluginMgr, nullSafePath);
+    const result = await renderSystemPrompt("test-series", {
+      templateOverride: "{{ custom_var }}",
+    });
+    assertEquals(result.error, null);
+    assertEquals(result.content, "plugin_value");
   });
 });

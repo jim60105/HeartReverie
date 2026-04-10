@@ -76,6 +76,42 @@ Deno.test('parseOptions', async (t) => {
     const items = parseOptions('no options here');
     assertEquals(items.length, 0);
   });
+
+  await t.step('parses options with period separator', () => {
+    const input = '1. 探索\n2. 逃跑';
+    const items = parseOptions(input);
+    assertEquals(items.length, 2);
+    assertEquals(items[0].text, '探索');
+    assertEquals(items[1].text, '逃跑');
+  });
+
+  await t.step('skips options where text is only whitespace', () => {
+    const input = '1:   ';
+    const items = parseOptions(input);
+    assertEquals(items.length, 0);
+  });
+
+  await t.step('handles mixed separator styles', () => {
+    const input = '1: first\n2. second\n3：third';
+    const items = parseOptions(input);
+    assertEquals(items.length, 3);
+    assertEquals(items[0].text, 'first');
+    assertEquals(items[1].text, 'second');
+    assertEquals(items[2].text, 'third');
+  });
+
+  await t.step('returns empty array for empty input', () => {
+    const items = parseOptions('');
+    assertEquals(items.length, 0);
+  });
+
+  await t.step('parses option prefix with bracket style combined', () => {
+    const input = 'option1:【探索洞穴】\noption2:【返回村莊】';
+    const items = parseOptions(input);
+    assertEquals(items.length, 2);
+    assertEquals(items[0].text, '探索洞穴');
+    assertEquals(items[1].text, '返回村莊');
+  });
 });
 
 // ── renderOptionsPanel ──
@@ -113,6 +149,26 @@ Deno.test('renderOptionsPanel', async (t) => {
     const html = renderOptionsPanel(items);
     assertTrue(html.includes('行動選項'));
   });
+
+  await t.step('renders all 4 items with no empty slots', () => {
+    const items = [
+      { number: 1, text: 'A' },
+      { number: 2, text: 'B' },
+      { number: 3, text: 'C' },
+      { number: 4, text: 'D' },
+    ];
+    const html = renderOptionsPanel(items);
+    // All 4 buttons, no empty placeholders
+    assertTrue(!html.includes('era-action-btn--empty'));
+    assertTrue(html.includes('data-option-text="A"'));
+    assertTrue(html.includes('data-option-text="D"'));
+  });
+
+  await t.step('renders 4 empty cells when no items', () => {
+    const html = renderOptionsPanel([]);
+    const emptyCount = (html.match(/era-action-btn--empty/g) || []).length;
+    assertEquals(emptyCount, 4);
+  });
 });
 
 // ── extractOptionsBlocks ──
@@ -148,5 +204,14 @@ Deno.test('extractOptionsBlocks', async (t) => {
     const input = '<Options>1: X</OPTIONS>';
     const { blocks } = extractOptionsBlocks(input);
     assertEquals(blocks.length, 1);
+  });
+
+  await t.step('extracts multiple options blocks with sequential placeholders', () => {
+    const input = '<options>1: A</options> middle <options>1: B</options>';
+    const { text, blocks } = extractOptionsBlocks(input);
+    assertEquals(blocks.length, 2);
+    assertTrue(text.includes('<!--OPTIONS_BLOCK_0-->'));
+    assertTrue(text.includes('<!--OPTIONS_BLOCK_1-->'));
+    assertTrue(text.includes('middle'));
   });
 });
