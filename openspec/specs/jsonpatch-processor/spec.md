@@ -3,9 +3,7 @@
 ## Purpose
 
 Processes custom JSONPatch operations from numbered Markdown files against YAML state files, producing updated state outputs for SillyTavern story branches.
-
 ## Requirements
-
 ### Requirement: Directory discovery
 The tool SHALL scan all immediate child directories of the root directory and process only those containing a file named `init-status.yml`.
 
@@ -117,7 +115,7 @@ The tool SHALL log errors (file name, operation, path) to stderr and continue pr
 - **THEN** the tool SHALL log an error to stderr and skip that operation
 
 ### Requirement: Malformed JSON handling
-The tool SHALL handle JSON arrays containing unescaped ASCII double quotes inside string values. It SHALL attempt standard JSON parsing first (fast path), then fall back to line-by-line manual extraction for malformed entries.
+The tool SHALL handle JSON arrays containing unescaped ASCII double quotes inside string values. It SHALL attempt standard JSON parsing first (fast path), then fall back to line-by-line manual extraction for malformed entries. This logic SHALL reside in the `parser` module after refactoring.
 
 #### Scenario: Standard JSON
 - **WHEN** a `<JSONPatch>` block contains well-formed JSON
@@ -126,3 +124,4 @@ The tool SHALL handle JSON arrays containing unescaped ASCII double quotes insid
 #### Scenario: Unescaped quotes in values
 - **WHEN** a string value contains unescaped double quotes (e.g., Chinese emphasis marks)
 - **THEN** the tool SHALL extract op, path, and value fields manually and process the operation
+
