@@ -28,18 +28,22 @@ Each plugin SHALL have a `plugin.json` (or `plugin.yaml`) manifest file in its r
 
 ### Requirement: Plugin discovery and loading
 
-The server SHALL scan the built-in plugins directory (`plugins/`) at startup to discover and load plugins. The server SHALL also scan an external plugin path specified by the `PLUGIN_PATH` environment variable if set. The frontend SHALL discover available plugins via a `GET /api/plugins` endpoint that returns the list of loaded plugins with their manifest metadata and enabled status.
+The server SHALL scan the built-in plugins directory (`plugins/`) at startup to discover and load plugins. The server SHALL also scan an external plugin path specified by the `PLUGIN_DIR` environment variable if set. File system operations SHALL use Deno native APIs (`Deno.readDir()`, `Deno.readTextFile()`). Path operations SHALL use `@std/path`. Dynamic module loading SHALL use `import()` which is compatible in both Node.js and Deno. The frontend SHALL discover available plugins via a `GET /api/plugins` endpoint that returns the list of loaded plugins with their manifest metadata and enabled status.
 
 #### Scenario: Built-in plugin discovery at startup
 - **WHEN** the server starts and the `plugins/` directory contains subdirectories with valid `plugin.json` manifests
-- **THEN** the server SHALL load each valid plugin and register it in the plugin registry
+- **THEN** the server SHALL load each valid plugin using Deno file system APIs and register it in the plugin registry
 
 #### Scenario: External plugin path discovery
-- **WHEN** the `PLUGIN_PATH` environment variable is set to a directory path containing plugin subdirectories
-- **THEN** the server SHALL scan that directory and load plugins from it in addition to built-in plugins
+- **WHEN** the `PLUGIN_DIR` environment variable is set to a directory path containing plugin subdirectories
+- **THEN** the server SHALL scan that directory using `Deno.readDir()` and load plugins from it in addition to built-in plugins
 
-#### Scenario: PLUGIN_PATH not set
-- **WHEN** the `PLUGIN_PATH` environment variable is not set
+#### Scenario: Path containment check
+- **WHEN** a plugin's `backendModule`, `promptFragments`, or `frontendModule` path is resolved
+- **THEN** the system SHALL verify the resolved path is within the plugin directory using `@std/path` utilities
+
+#### Scenario: PLUGIN_DIR not set
+- **WHEN** the `PLUGIN_DIR` environment variable is not set
 - **THEN** the server SHALL load only built-in plugins from `plugins/` without error
 
 #### Scenario: Frontend plugin discovery via API
@@ -108,14 +112,14 @@ The plugin system SHALL support four plugin types that determine which capabilit
 
 ### Requirement: Built-in vs external plugins
 
-Built-in plugins SHALL ship with the project in the `plugins/` directory. External plugins SHALL be loaded from the path specified by the `PLUGIN_PATH` environment variable. Both built-in and external plugins SHALL use an identical manifest format and registration process. Built-in plugins SHALL be loaded before external plugins to establish baseline functionality.
+Built-in plugins SHALL ship with the project in the `plugins/` directory. External plugins SHALL be loaded from the path specified by the `PLUGIN_DIR` environment variable. Both built-in and external plugins SHALL use an identical manifest format and registration process. Built-in plugins SHALL be loaded before external plugins to establish baseline functionality.
 
 #### Scenario: Built-in plugins load first
 - **WHEN** both built-in and external plugins are present
-- **THEN** built-in plugins from `plugins/` SHALL be loaded and registered before external plugins from `PLUGIN_PATH`
+- **THEN** built-in plugins from `plugins/` SHALL be loaded and registered before external plugins from `PLUGIN_DIR`
 
 #### Scenario: External plugin extends functionality
-- **WHEN** an external plugin at `PLUGIN_PATH` has a valid manifest
+- **WHEN** an external plugin at `PLUGIN_DIR` has a valid manifest
 - **THEN** it SHALL be loaded and registered using the same process as built-in plugins
 
 #### Scenario: External plugin depends on built-in plugin

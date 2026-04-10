@@ -2,16 +2,16 @@
 
 ## Overview
 
-**MD Story Tools** — A toolset for AI-driven interactive fiction, built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, an Express backend that drives LLM chat via OpenRouter, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under GPL-3.0-or-later.
+**MD Story Tools** — A toolset for AI-driven interactive fiction, built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via OpenRouter, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under GPL-3.0-or-later.
 
 ## Project Structure
 
 ```
 system.md                 # Main Vento prompt template (entry point for LLM system prompt)
-serve.zsh                 # Startup script: generates TLS certs, launches Node server
-writer/                   # Backend server (Express 5, ESM, Node.js ≥20.12)
+serve.zsh                 # Startup script: generates TLS certs, launches Deno server
+writer/                   # Backend server (Hono, ESM, Deno)
   server.js               # Main server (~1030 lines): routes, prompt rendering, streaming
-  package.json            # Dependencies: express, express-rate-limit, helmet, ventojs
+  deno.json               # Import map and task definitions
   lib/
     plugin-manager.js     # PluginManager: discovery, loading, manifest validation
     hooks.js              # HookDispatcher: backend lifecycle hook system
@@ -64,7 +64,7 @@ The resulting binary at `target/release/apply-patches` is invoked by the `apply-
 
 ### JavaScript — Backend (`writer/`)
 
-- ESM modules (`import`/`export`, `"type": "module"` in package.json)
+- ESM modules (`import`/`export`)
 - **Double quotes** for strings
 - Semicolons always used
 - `async/await` for all asynchronous operations
@@ -141,12 +141,12 @@ Custom XML blocks from LLM output are processed using Extract → Placeholder �
 
 ### Security Patterns
 
-- **Authentication**: Passphrase via `X-Passphrase` header, timing-safe comparison (`crypto.timingSafeEqual`)
+- **Authentication**: Passphrase via `X-Passphrase` header, timing-safe comparison (`@std/crypto/timing-safe-equal`)
 - **Rate limiting**: Global 60 req/min, auth/chat/preview 10 req/min
 - **Path traversal prevention**: `isValidParam()`, `safePath()`, `isPathContained()`, `isValidPluginName()` — all enforce directory boundaries
 - **SSTI prevention**: `validateTemplate()` whitelist-only parser for user-submitted Vento templates — blocks function calls, property access, `process.env`
 - **Frontend security**: DOMPurify on all rendered HTML, CSP via `<meta>` tag with SRI hashes
-- **HTTP hardening**: Helmet middleware, `dotfiles: "deny"` on static serving
+- **HTTP hardening**: Hono secureHeaders middleware
 
 ## OpenSpec Workflow
 
@@ -156,7 +156,7 @@ The project uses a spec-driven development workflow managed by OpenSpec skills i
 
 - Do **NOT** read or modify files under `playground/` — they contain user story data
 - Do **NOT** commit `.env`, `.certs/`, or `current-status.yml` — they are gitignored
-- There is **no test suite** — validate changes by running the server and testing manually
+- Run tests with `deno test --allow-read --allow-write --allow-env --allow-net writer/ reader/js/`
 - The frontend has **no build step** — edit files directly, refresh browser to see changes
 - `system.md` is a Vento template — treat it as code, not documentation
 - Plugin `name` in `plugin.json` must match its directory name exactly

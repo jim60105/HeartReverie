@@ -13,8 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import fs from "node:fs/promises";
-import path from "node:path";
+import { join, resolve, isAbsolute, SEPARATOR } from "@std/path";
 
 // Reject names containing path traversal or null bytes
 function isValidPluginName(name) {
@@ -27,7 +26,7 @@ function isValidPluginName(name) {
 
 // Verify resolved path stays within a base directory
 function isPathContained(base, resolved) {
-  return resolved === base || resolved.startsWith(base + path.sep);
+  return resolved === base || resolved.startsWith(base + SEPARATOR);
 }
 
 // Escape special regex characters in a string
@@ -61,7 +60,7 @@ export class PluginManager {
 
     // Scan external plugins (override built-in on name collision)
     if (this.#externalDir) {
-      if (!path.isAbsolute(this.#externalDir)) {
+      if (!isAbsolute(this.#externalDir)) {
         console.warn(
           `⚠️  PLUGIN_DIR must be an absolute path, got '${this.#externalDir}' — skipping external plugins`
         );
@@ -88,9 +87,12 @@ export class PluginManager {
   async #scanDir(dir, source) {
     let entries;
     try {
-      entries = await fs.readdir(dir, { withFileTypes: true });
+      entries = [];
+      for await (const entry of Deno.readDir(dir)) {
+        entries.push(entry);
+      }
     } catch (err) {
-      if (err.code === "ENOENT") {
+      if (err instanceof Deno.errors.NotFound) {
         // Directory doesn't exist yet — that's fine
         return;
       }
@@ -99,7 +101,7 @@ export class PluginManager {
     }
 
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      if (!entry.isDirectory || entry.name.startsWith(".")) continue;
 
       if (!isValidPluginName(entry.name)) {
         console.warn(
@@ -108,12 +110,12 @@ export class PluginManager {
         continue;
       }
 
-      const pluginDir = path.join(dir, entry.name);
-      const manifestPath = path.join(pluginDir, "plugin.json");
+      const pluginDir = join(dir, entry.name);
+      const manifestPath = join(pluginDir, "plugin.json");
 
       let raw;
       try {
-        raw = await fs.readFile(manifestPath, "utf-8");
+        raw = await Deno.readTextFile(manifestPath);
       } catch {
         // No plugin.json — skip silently
         continue;
@@ -162,7 +164,7 @@ export class PluginManager {
    * Dynamically import a plugin's backend module and call register().
    */
   async #loadBackendModule(name, entry) {
-    const modulePath = path.resolve(
+    const modulePath = resolve(
       entry.dir,
       entry.manifest.backendModule
     );
@@ -175,7 +177,7 @@ export class PluginManager {
     }
 
     try {
-      const mod = await import(modulePath);
+      const mod = await import("file://" + modulePath);
       const registerFn = mod.register || mod.default;
       if (typeof registerFn === "function") {
         await registerFn(this.#hookDispatcher);
@@ -266,7 +268,7 @@ export class PluginManager {
       for (const frag of manifest.promptFragments) {
         if (!frag.file) continue;
 
-        const filePath = path.resolve(dir, frag.file);
+        const filePath = resolve(dir, frag.file);
 
         if (!isPathContained(dir, filePath)) {
           console.warn(
@@ -277,7 +279,7 @@ export class PluginManager {
 
         let content;
         try {
-          content = await fs.readFile(filePath, "utf-8");
+          content = await Deno.readTextFile(filePath);
         } catch (err) {
           console.warn(
             `⚠️  Failed to read prompt fragment '${frag.file}' for plugin '${manifest.name}':`,

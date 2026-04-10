@@ -17,7 +17,7 @@
 #
 # Start the story writer HTTPS backend server.
 # Generates a self-signed certificate if one does not exist,
-# then launches the Node.js Express server.
+# then launches the Deno Hono server.
 #
 # Usage:
 #   serve.zsh [port]
@@ -27,7 +27,7 @@
 #
 # Requirements:
 #   - openssl  (for certificate generation)
-#   - node     (for the backend server)
+#   - deno     (for the backend server)
 #
 # Examples:
 #   ./serve.zsh          # Serve on https://localhost:8443
@@ -58,7 +58,7 @@ check_dependency() {
 # ── Dependency checks ─────────────────────────────────────────────
 
 check_dependency openssl
-check_dependency node
+check_dependency deno
 
 # ── Configuration ─────────────────────────────────────────────────
 
@@ -101,4 +101,4 @@ export PORT
 export PLAYGROUND_DIR="${PROJECT_ROOT}/playground"
 export READER_DIR="${PROJECT_ROOT}/reader"
 
-exec node "${PROJECT_ROOT}/writer/server.js"
+exec deno run --allow-net --allow-read --allow-write --allow-env --allow-run "${PROJECT_ROOT}/writer/server.js"

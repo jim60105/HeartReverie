@@ -88,7 +88,7 @@ Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不
 
 ### 後端模組初始化
 
-具有 `backendModule` 的 plugin 會在探索完成後進行模組初始化。系統以 `import()` 動態載入模組，並呼叫其匯出的 `register(hookDispatcher)` 函式，讓 plugin 向 HookDispatcher 註冊 hook 處理函式。
+具有 `backendModule` 的 plugin 會在探索完成後進行模組初始化。系統以 `import()` 動態載入模組（在 Deno 中使用 `file://` URL），並呼叫其匯出的 `register(hookDispatcher)` 函式，讓 plugin 向 HookDispatcher 註冊 hook 處理函式。
 
 模組路徑必須通過路徑包含檢查——解析後的絕對路徑必須位於 plugin 目錄內部，否則跳過載入。
 
