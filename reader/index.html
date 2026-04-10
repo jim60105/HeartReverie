@@ -892,7 +892,6 @@
             }, {
                 onLoad: async (series, story) => {
                     await loadFromBackend(series, story);
-                    showChatInput();
                     document.getElementById('story-selector-details').removeAttribute('open');
                 }
             });

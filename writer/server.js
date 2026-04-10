@@ -505,47 +505,8 @@ app.post(
     }
 
     try {
-      // Read existing chapters
-      let chapterFiles = [];
-      try {
-        const entries = await fs.readdir(storyDir);
-        chapterFiles = entries
-          .filter((f) => /^\d+\.md$/.test(f))
-          .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-      } catch {
-        // Directory may not exist yet
-      }
-
-      const MAX_CHAPTERS = 200;
-      if (chapterFiles.length > MAX_CHAPTERS) {
-        chapterFiles = chapterFiles.slice(-MAX_CHAPTERS);
-      }
-
-      const chapters = [];
-      for (const f of chapterFiles) {
-        const content = await fs.readFile(path.join(storyDir, f), "utf-8");
-        chapters.push({ number: parseInt(f, 10), content });
-      }
-
-      // First-round detection: no chapters with non-empty content
-      const isFirstRound = chapters.every((ch) => ch.content.trim() === "");
-
-      // Build previous_context array with prompt tags stripped, filtering empty chapters
-      const previousContext = chapters
-        .map((ch) => stripPromptTags(ch.content))
-        .filter((content) => content.length > 0);
-
-      // Load status
-      const statusContent = await loadStatus(series, name);
-
-      // Build system prompt via Vento with all template variables
-      const { content: systemPrompt, error: ventoError } = await renderSystemPrompt(series, {
-        previousContext,
-        userInput: message,
-        status: statusContent,
-        isFirstRound,
-        templateOverride: typeof template === "string" ? template : undefined,
-      });
+      const { prompt: systemPrompt, ventoError } =
+        await buildPromptFromStory(series, name, storyDir, message, template);
 
       if (ventoError) {
         return res.status(422).json({
@@ -830,6 +791,52 @@ async function loadStatus(series, name) {
   return "";
 }
 
+/**
+ * Shared prompt construction logic for chat and preview endpoints.
+ * Reads chapters, strips tags, detects first-round, loads status, renders prompt.
+ * @returns {{ prompt, previousContext, statusContent, isFirstRound, ventoError }}
+ */
+async function buildPromptFromStory(series, name, storyDir, message, template) {
+  let chapterFiles = [];
+  try {
+    const entries = await fs.readdir(storyDir);
+    chapterFiles = entries
+      .filter((f) => /^\d+\.md$/.test(f))
+      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  } catch {
+    // Directory may not exist yet
+  }
+
+  const MAX_CHAPTERS = 200;
+  if (chapterFiles.length > MAX_CHAPTERS) {
+    chapterFiles = chapterFiles.slice(-MAX_CHAPTERS);
+  }
+
+  const chapters = [];
+  for (const f of chapterFiles) {
+    const content = await fs.readFile(path.join(storyDir, f), "utf-8");
+    chapters.push({ number: parseInt(f, 10), content });
+  }
+
+  const isFirstRound = chapters.every((ch) => ch.content.trim() === "");
+
+  const previousContext = chapters
+    .map((ch) => stripPromptTags(ch.content))
+    .filter((content) => content.length > 0);
+
+  const statusContent = await loadStatus(series, name);
+
+  const { content: prompt, error: ventoError } = await renderSystemPrompt(series, {
+    previousContext,
+    userInput: message,
+    status: statusContent,
+    isFirstRound,
+    templateOverride: typeof template === "string" ? template : undefined,
+  });
+
+  return { prompt, previousContext, statusContent, isFirstRound, ventoError };
+}
+
 function buildVentoError(err, templatePath, knownVariables) {
   const error = {
     type: "vento-error",
@@ -952,41 +959,8 @@ app.post(
     }
 
     try {
-      let chapterFiles = [];
-      try {
-        const entries = await fs.readdir(storyDir);
-        chapterFiles = entries
-          .filter((f) => /^\d+\.md$/.test(f))
-          .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-      } catch {
-        // Directory may not exist yet
-      }
-
-      const MAX_CHAPTERS = 200;
-      if (chapterFiles.length > MAX_CHAPTERS) {
-        chapterFiles = chapterFiles.slice(-MAX_CHAPTERS);
-      }
-
-      const chapters = [];
-      for (const f of chapterFiles) {
-        const content = await fs.readFile(path.join(storyDir, f), "utf-8");
-        chapters.push({ number: parseInt(f, 10), content });
-      }
-
-      const isFirstRound = chapters.every((ch) => ch.content.trim() === "");
-      const previousContext = chapters
-        .map((ch) => stripPromptTags(ch.content))
-        .filter((c) => c.length > 0);
-      const statusContent = await loadStatus(series, name);
-
-      const { content: prompt, error: ventoError } =
-        await renderSystemPrompt(series, {
-          previousContext,
-          userInput: message,
-          status: statusContent,
-          isFirstRound,
-          templateOverride: typeof template === "string" ? template : undefined,
-        });
+      const { prompt, previousContext, statusContent, isFirstRound, ventoError } =
+        await buildPromptFromStory(series, name, storyDir, message, template);
 
       if (ventoError) {
         return res.status(422).json({ type: "vento-error", ...ventoError });

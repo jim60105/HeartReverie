@@ -303,6 +303,10 @@ export async function loadFromBackend(series, storyName) {
         els.chapterProgress.classList.add('hidden');
         els.btnNext.classList.add('hidden');
         els.btnReload.classList.add('hidden');
+        // Notify listeners so chat input shows for empty stories
+        if (onChapterChangeCallback) {
+            onChapterChangeCallback({ isLastChapter: true });
+        }
         return;
     }
 
