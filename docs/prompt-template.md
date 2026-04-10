@@ -4,24 +4,11 @@
 
 ## 模板架構概覽
 
-主模板位於 `playground/prompts/system.md`，透過 Vento 的 `include` 指令載入多個子模板，組成完整的系統提示詞：
-
-```
-playground/prompts/
-├── system.md                  ← 主模板（入口）
-├── Threshold-Lord_start.md    ← 子模板：開頭指令
-├── de-robotization.md         ← 子模板：去機械化指令
-├── world_aesthetic_program.md ← 子模板：世界觀美學
-├── T-task.md                  ← 子模板：任務指令
-├── writestyle.md              ← 子模板：寫作風格
-├── Threshold-Lord_end.md      ← 子模板：結尾指令
-├── status.md                  ← 子模板：狀態格式說明
-└── options.md                 ← 子模板：選項格式說明
-```
+主模板位於專案根目錄的 `system.md`。過去的子模板（如 `de-robotization.md`、`writestyle.md` 等）已遷移至 [Plugin 系統][plugin-system]，各 plugin 透過 `promptFragments` 將內容注入為 Vento 模板變數。詳細說明參見 [Plugin 系統文件][plugin-system]。
 
 ## 模板變數
 
-伺服器在渲染模板時傳入以下變數：
+伺服器在渲染模板時傳入以下變數。除了下列核心變數外，各 plugin 透過 `promptFragments` 提供的具名變數也會一併傳入。完整的 plugin 變數列表參見 [Plugin 系統文件][plugin-system]。
 
 | 變數名稱 | 型別 | 說明 |
 |---|---|---|
@@ -147,3 +134,5 @@ const messages = [
 ### 6. 發送至 LLM
 
 訊息陣列透過串流方式發送至 OpenRouter API，回應即時串流回客戶端。
+
+[plugin-system]: ./plugin-system.md
