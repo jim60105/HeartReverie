@@ -5,7 +5,7 @@
 | 工具 | 說明 | 技術 |
 |------|------|------|
 | **[reader/](reader/)** | 瀏覽器多章節 Markdown 故事閱讀器 | 純前端（HTML / JS） |
-| **[apply-patches/](apply-patches/)** | 從章節檔案擷取 `<JSONPatch>` 並套用至角色狀態 | Rust CLI |
+| **[plugins/apply-patches/rust/](plugins/apply-patches/rust/)** | 從章節檔案擷取 `<JSONPatch>` 並套用至角色狀態 | Rust CLI |
 
 ---
 
@@ -70,7 +70,7 @@ Rust CLI 工具，掃描目錄中的 `init-status.yml` 與編號 `.md` 檔案，
 需要 Rust 工具鏈（`cargo`）。
 
 ```bash
-cd apply-patches
+cd plugins/apply-patches/rust
 cargo build --release
 ./target/release/apply-patches [root_dir]
 ```
@@ -86,9 +86,16 @@ reader/              網頁閱讀器應用程式
   index.html           入口頁面（所有 CSS 內嵌）
   js/                  ES 模組（6 個檔案）
   serve.zsh            HTTPS 開發伺服器（zsh + Node.js）
-apply-patches/       狀態補丁處理器（Rust CLI）
-  src/main.rs          主程式
-  Cargo.toml           套件設定
+plugins/
+  apply-patches/       狀態補丁處理器插件
+    plugin.json          插件清單
+    handler.js           後處理掛鉤：呼叫 Rust 二進位檔
+    rust/                Rust CLI 實作
+      src/               Rust 原始碼模組
+      Cargo.toml         套件設定
+tests/               測試檔案（鏡像原始碼結構）
+  writer/              後端測試
+  reader/js/           前端測試
 openspec/            規格說明與變更歷史
 regex.json           SillyTavern 正則表達式腳本
 short-template/      故事範本章節

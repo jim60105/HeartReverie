@@ -1,7 +1,7 @@
 // js/utils.test.js — Tests for escapeHtml utility
 
 import { assertEquals } from '@std/assert';
-import { escapeHtml } from './utils.js';
+import { escapeHtml } from '../../../reader/js/utils.js';
 
 Deno.test('escapeHtml', async (t) => {
   await t.step('escapes & to &amp;', () => {

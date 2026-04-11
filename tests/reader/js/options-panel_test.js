@@ -15,7 +15,7 @@ if (typeof globalThis.navigator === 'undefined') {
 }
 
 const { extractOptionsBlocks, parseOptions, renderOptionsPanel } = await import(
-  './options-panel.js'
+  '../../../reader/js/options-panel.js'
 );
 
 // ── parseOptions ──

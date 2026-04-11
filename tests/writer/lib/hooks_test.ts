@@ -14,8 +14,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
-import { HookDispatcher } from "./hooks.ts";
-import type { HookHandler, HookStage } from "../types.ts";
+import { HookDispatcher } from "../../../writer/lib/hooks.ts";
+import type { HookHandler, HookStage } from "../../../writer/types.ts";
 
 Deno.test("HookDispatcher", async (t) => {
   await t.step("registers a handler for a valid stage", () => {

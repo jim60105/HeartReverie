@@ -1,7 +1,7 @@
 // js/variable-display.test.js — Tests for variable-display extraction and rendering
 
 import { assert as assertTrue, assertEquals } from '@std/assert';
-import { extractVariableBlocks, renderVariableBlock } from './variable-display.js';
+import { extractVariableBlocks, renderVariableBlock } from '../../../reader/js/variable-display.js';
 
 // ── renderVariableBlock ──
 

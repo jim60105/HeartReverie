@@ -15,9 +15,9 @@
 
 import { assertEquals, assertExists, assertMatch } from "@std/assert";
 import { join } from "@std/path";
-import { createTemplateEngine, validateTemplate } from "./template.ts";
-import type { PluginManager } from "./plugin-manager.ts";
-import type { SafePathFn } from "../types.ts";
+import { createTemplateEngine, validateTemplate } from "../../../writer/lib/template.ts";
+import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
+import type { SafePathFn } from "../../../writer/types.ts";
 
 Deno.test("validateTemplate", async (t) => {
   await t.step("safe expressions accepted", async (t) => {

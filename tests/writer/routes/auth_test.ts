@@ -14,12 +14,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals } from "@std/assert";
-import { createApp } from "../app.ts";
-import { verifyPassphrase } from "../lib/middleware.ts";
-import { HookDispatcher } from "../lib/hooks.ts";
+import { createApp } from "../../../writer/app.ts";
+import { verifyPassphrase } from "../../../writer/lib/middleware.ts";
+import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import type { Hono } from "@hono/hono";
-import type { AppDeps, AppConfig } from "../types.ts";
-import type { PluginManager } from "../lib/plugin-manager.ts";
+import type { AppDeps, AppConfig } from "../../../writer/types.ts";
+import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
 async function makeRequest(
   app: Hono,
@@ -64,7 +64,7 @@ Deno.test({ name: "GET /api/auth/verify", sanitizeOps: false, sanitizeResources:
       getStripTagPatterns: () => null,
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
-    buildPromptFromStory: async () => ({}) as unknown as import("../types.ts").BuildPromptResult,
+    buildPromptFromStory: async () => ({}) as unknown as import("../../../writer/types.ts").BuildPromptResult,
     verifyPassphrase,
   } as AppDeps);
 

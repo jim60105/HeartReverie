@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals, assert as assertTrue } from "@std/assert";
-import { levenshtein, findClosestMatch } from "./errors.ts";
+import { levenshtein, findClosestMatch } from "../../../writer/lib/errors.ts";
 
 Deno.test("levenshtein", async (t) => {
   await t.step("returns 0 for identical strings", () => {

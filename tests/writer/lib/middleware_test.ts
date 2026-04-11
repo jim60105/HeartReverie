@@ -16,7 +16,7 @@
 import { assertEquals, assertMatch } from "@std/assert";
 import { Hono } from "@hono/hono";
 import type { MiddlewareHandler } from "@hono/hono";
-import { verifyPassphrase, validateParams } from "./middleware.ts";
+import { verifyPassphrase, validateParams } from "../../../writer/lib/middleware.ts";
 
 function createTestApp(middleware: MiddlewareHandler) {
   const app = new Hono();

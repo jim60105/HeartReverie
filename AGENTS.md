@@ -9,21 +9,33 @@
 ```
 system.md                 # Main Vento prompt template (entry point for LLM system prompt)
 serve.zsh                 # Startup script: generates TLS certs, launches Deno server
-writer/                   # Backend server (Hono, ESM, Deno)
-  server.js               # Main server (~1030 lines): routes, prompt rendering, streaming
-  deno.json               # Import map and task definitions
+writer/                   # Backend server (Hono, TypeScript ESM, Deno)
+  server.ts               # Main server (~1030 lines): routes, prompt rendering, streaming
+  types.ts                # Shared TypeScript interfaces and types
+  vendor/
+    ventojs.d.ts          # Ambient type declarations for ventojs
   lib/
-    plugin-manager.js     # PluginManager: discovery, loading, manifest validation
-    hooks.js              # HookDispatcher: backend lifecycle hook system
+    plugin-manager.ts     # PluginManager: discovery, loading, manifest validation
+    hooks.ts              # HookDispatcher: backend lifecycle hook system
 reader/                   # Frontend app (vanilla ES modules, no build step)
   index.html              # Single entry point, all CSS inline, Tailwind via CDN
   js/                     # 15 ES module files (~1620 lines total)
   AGENTS.md               # Frontend-specific instructions
 plugins/                  # 12 built-in plugins (manifest-driven)
-apply-patches/            # Rust CLI for YAML state patch processing
-  src/main.rs             # Single-file implementation
-  Cargo.toml              # Rust 2024 edition
-  AGENTS.md               # Rust-specific instructions
+  apply-patches/
+    plugin.json           # Plugin manifest
+    handler.js            # Post-response hook: invokes Rust binary
+    rust/                 # Rust CLI for YAML state patch processing
+      Cargo.toml          # Rust 2024 edition
+      src/                # Rust source modules
+      tests/              # Integration tests
+      AGENTS.md           # Rust-specific instructions
+tests/                    # All test files (mirroring source structure)
+  writer/
+    lib/                  # Backend library tests (*_test.ts)
+    routes/               # Backend route handler tests (*_test.ts)
+  reader/
+    js/                   # Frontend tests (*_test.js)
 playground/               # Story data directory (series/stories/chapters)
 openspec/                 # Spec-driven workflow: specs, changes, archives
 docs/                     # Documentation (Traditional Chinese)
@@ -54,7 +66,7 @@ The `.env` file is gitignored. Create it manually with `OPENROUTER_API_KEY` and 
 ## Building the Rust CLI
 
 ```bash
-cd apply-patches
+cd plugins/apply-patches/rust
 cargo build --release
 ```
 
@@ -81,7 +93,7 @@ The resulting binary at `target/release/apply-patches` is invoked by the `apply-
 - JSDoc `@param`/`@returns` on exported functions
 - UI text in Traditional Chinese (zh-TW); comments and code in English
 
-### Rust (`apply-patches/`)
+### Rust (`plugins/apply-patches/rust/`)
 
 - 2024 edition, single-file architecture (`main.rs`)
 - Standard `rustfmt` formatting
@@ -115,8 +127,8 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. See `docs/plugin-system.md` for full documentation.
 
 Key classes:
-- `PluginManager` (`writer/lib/plugin-manager.js`) — scans `plugins/` and optional `PLUGIN_DIR`, validates manifests, loads modules
-- `HookDispatcher` (`writer/lib/hooks.js`) — registers and dispatches async lifecycle hooks with priority ordering
+- `PluginManager` (`writer/lib/plugin-manager.ts`) — scans `plugins/` and optional `PLUGIN_DIR`, validates manifests, loads modules
+- `HookDispatcher` (`writer/lib/hooks.ts`) — registers and dispatches async lifecycle hooks with priority ordering
 
 Plugin interaction layers:
 1. **Prompt injection** — `promptFragments` field maps Markdown files to Vento template variables
@@ -156,7 +168,7 @@ The project uses a spec-driven development workflow managed by OpenSpec skills i
 
 - Do **NOT** read or modify files under `playground/` — they contain user story data
 - Do **NOT** commit `.env`, `.certs/`, or `current-status.yml` — they are gitignored
-- Run tests with `deno test --allow-read --allow-write --allow-env --allow-net writer/ reader/js/`
+- Run tests with `deno test --allow-read --allow-write --allow-env --allow-net tests/writer/ tests/reader/js/`
 - The frontend has **no build step** — edit files directly, refresh browser to see changes
 - `system.md` is a Vento template — treat it as code, not documentation
 - Plugin `name` in `plugin.json` must match its directory name exactly

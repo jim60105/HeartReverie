@@ -9,9 +9,9 @@
   },
   "tasks": {
     "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts",
-    "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net writer/",
-    "test:frontend": "deno test --allow-read reader/js/",
-    "test": "deno test --allow-read --allow-write --allow-env --allow-net writer/ reader/js/"
+    "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net tests/writer/",
+    "test:frontend": "deno test --allow-read tests/reader/js/",
+    "test": "deno test --allow-read --allow-write --allow-env --allow-net tests/writer/ tests/reader/js/"
   },
   "imports": {
     "@hono/hono": "jsr:@hono/hono@^4",

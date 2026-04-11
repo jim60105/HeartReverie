@@ -15,7 +15,7 @@
 
 import { assertEquals } from "@std/assert";
 import { Hono } from "@hono/hono";
-import { rateLimiter } from "../app.ts";
+import { rateLimiter } from "../../../writer/app.ts";
 
 function createRateLimitApp({ windowMs, limit }: { windowMs: number; limit: number }) {
   const app = new Hono();

@@ -1,7 +1,7 @@
 // js/plugin-hooks.test.js — Tests for FrontendHookDispatcher
 
 import { assert as assertTrue, assertEquals, assertStrictEquals } from '@std/assert';
-import { FrontendHookDispatcher } from './plugin-hooks.js';
+import { FrontendHookDispatcher } from '../../../reader/js/plugin-hooks.js';
 
 Deno.test('FrontendHookDispatcher', async (t) => {
   await t.step('registers and dispatches a handler', () => {

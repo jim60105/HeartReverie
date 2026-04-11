@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals } from "@std/assert";
-import { problemJson, buildVentoError } from "./errors.ts";
+import { problemJson, buildVentoError } from "../../../writer/lib/errors.ts";
 
 Deno.test("problemJson", async (t) => {
   await t.step("generates correct RFC 9457 structure", () => {
