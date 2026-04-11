@@ -1,20 +1,14 @@
 ## 章節摘要
 
-在你完成本章故事內容後，請在章節末尾附上 `<chapter_summary>` 標籤，標籤內包含本章的結構化摘要。
+Chapter summary output format:
+    rule:
+    - you must output the chapter summary at the end of every reply, after all story content
+    - the summary is wrapped in `<chapter_summary>` tags
+    - the summary must be written in the same language as the story content
+    - keep the summary between 100-200 characters, using concise declarative sentences
+    - the summary must be self-contained — when multiple chapter summaries are concatenated in sequence, the result should read as a coherent story overview
+    format: |-
+    <chapter_summary>
+    第 ${chapter_number} 章：${key_events_in_chronological_order}。${character_state_or_relationship_changes}。${unresolved_plot_threads_or_foreshadowing}
+    </chapter_summary>
 
-摘要格式要求：
-- 以「第 N 章：」開頭標記章節編號
-- 列出本章關鍵事件（按時序）
-- 記錄角色狀態或關係的重要變化
-- 標記未解決的伏筆或懸念
-- 使用簡潔的敘述句，避免冗長描述
-- 摘要長度控制在 100-200 字以內
-
-範例：
-```
-<chapter_summary>
-第 3 章：小夜在圖書館發現一封藏在舊書中的信件，信件提到地下室的暗門。她嘗試開啟暗門但被管理員撞見，謊稱在找書後離開。回家路上遇到轉學生陸明，他似乎對信件的內容有所了解。伏筆：信件署名「K」的身分未明；陸明的真實目的不明。
-</chapter_summary>
-```
-
-請務必在每次回覆的故事內容後附上此摘要標籤。
