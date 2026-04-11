@@ -7,7 +7,7 @@ Test coverage for the reader frontend's pure parser/renderer functions, hook dis
 ## Requirements
 
 ### Requirement: Pure function tests for parsers
-Unit tests SHALL cover all pure parser/renderer functions in the reader frontend: `escapeHtml()`, `extractStatusBlocks()`, `parseStatus()`, `renderStatusPanel()`, `extractOptionsBlocks()`, `parseOptions()`, `extractVariableBlocks()`, `renderVariableBlock()`, `renderVentoError()`.
+Unit tests SHALL cover all pure parser/renderer functions in the reader frontend: `escapeHtml()`, `extractStatusBlocks()`, `parseStatus()`, `renderStatusPanel()`, `extractOptionsBlocks()`, `parseOptions()`, `extractVariableBlocks()`, `renderVariableBlock()`, `renderVentoError()`. Test files SHALL reside in `tests/reader/js/` with relative imports back to `reader/js/`.
 
 #### Scenario: Status block extraction
 - **WHEN** `extractStatusBlocks()` receives text containing a `<status>` XML block
@@ -22,7 +22,7 @@ Unit tests SHALL cover all pure parser/renderer functions in the reader frontend
 - **THEN** it returns the string with all special characters replaced by HTML entities
 
 ### Requirement: FrontendHookDispatcher tests
-Unit tests SHALL cover the `FrontendHookDispatcher` class: registration, dispatch order, and priority sorting.
+Unit tests SHALL cover the `FrontendHookDispatcher` class: registration, dispatch order, and priority sorting. Test files SHALL reside in `tests/reader/js/`.
 
 #### Scenario: Priority-ordered dispatch
 - **WHEN** multiple handlers are registered for the same stage with different priorities
@@ -33,7 +33,7 @@ Unit tests SHALL cover the `FrontendHookDispatcher` class: registration, dispatc
 - **THEN** subsequent handlers receive the mutated context
 
 ### Requirement: Markdown rendering pipeline tests
-Unit tests SHALL cover the `reinjectPlaceholders()` function.
+Unit tests SHALL cover the `reinjectPlaceholders()` function. Test files SHALL reside in `tests/reader/js/`.
 
 #### Scenario: Placeholder reinsertion
 - **WHEN** `reinjectPlaceholders()` receives HTML with comment placeholders and a map of extracted blocks

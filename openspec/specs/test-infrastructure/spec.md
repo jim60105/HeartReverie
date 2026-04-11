@@ -11,15 +11,15 @@ The project SHALL include a test runner configuration that supports both backend
 
 #### Scenario: Run all tests
 - **WHEN** the developer executes the test command
-- **THEN** all backend and frontend tests execute and report pass/fail results with exit code 0 on success, non-zero on failure
+- **THEN** all backend and frontend tests execute from the `tests/` directory and report pass/fail results with exit code 0 on success, non-zero on failure
 
 ### Requirement: Test file convention
 
-Test files SHALL be co-located alongside their source files. Writer backend test files SHALL use the `_test.ts` suffix (TypeScript). Reader frontend test files SHALL continue to use the `_test.js` suffix (JavaScript).
+Test files SHALL reside in a dedicated `tests/` directory at the project root, mirroring the source directory structure. Backend tests use the `_test.ts` suffix under `tests/writer/`. Frontend tests use the `_test.js` suffix under `tests/reader/js/`.
 
 #### Scenario: Test file discovery
 - **WHEN** the test runner scans the project
-- **THEN** it discovers all files matching `_test.ts` in the `writer/` directory and all files matching `_test.js` in the `reader/js/` directory
+- **THEN** it discovers all files matching the test suffix pattern in `tests/writer/` and `tests/reader/js/` directories
 
 #### Scenario: Writer tests are TypeScript
 - **WHEN** a developer creates a new test file for a writer backend module
