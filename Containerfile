@@ -47,6 +47,13 @@ RUN deno cache --lock=deno.lock writer/server.ts
 FROM docker.io/denoland/deno:debian AS final
 
 ARG UID
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+# Install openssl (required by entrypoint for TLS cert generation)
+RUN --mount=type=cache,id=apt-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/apt \
+    --mount=type=cache,id=aptlists-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/lib/apt/lists \
+    apt-get update && apt-get install -y --no-install-recommends openssl
 
 # Create non-root user (OpenShift compatible: UID:GID 0)
 RUN useradd -l -u $UID -g 0 -m -s /bin/sh -N appuser
@@ -102,4 +109,4 @@ LABEL name="heartreverie" \
     release=${RELEASE} \
     io.k8s.display-name="HeartReverie 浮心夜夢" \
     summary="AI-driven interactive fiction engine" \
-    description="An AI-driven interactive fiction toolset built around SillyTavern alternative. Powered by Deno, Hono, and LLM via OpenRouter. For more information: https://codeberg.org/jim60105/HeartReverie"
+    description="An AI-driven interactive fiction engine built around SillyTavern. The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via any OpenAI-compatible API, and a plugin system for extensible prompt assembly and tag processing. For more information: https://codeberg.org/jim60105/HeartReverie"
