@@ -115,7 +115,7 @@ cd plugins/state-patches/rust
 cargo build --release
 ```
 
-The resulting binary at `target/release/apply-patches` is invoked by the `state-patches` plugin after each LLM response.
+The resulting binary at `target/release/state-patches` is invoked by the `state-patches` plugin after each LLM response.
 
 ## Code Style
 
@@ -235,4 +235,4 @@ The project uses a spec-driven development workflow managed by OpenSpec skills i
 - The frontend has **no build step** — edit files directly, refresh browser to see changes
 - `system.md` is a Vento template — treat it as code, not documentation
 - Plugin `name` in `plugin.json` must match its directory name exactly
-- The malformed-JSON fallback parser in apply-patches exists intentionally — some source `.md` files contain unescaped quotes in string values
+- The malformed-JSON fallback parser in state-patches exists intentionally — some source `.md` files contain unescaped quotes in string values

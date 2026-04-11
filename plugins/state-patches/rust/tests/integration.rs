@@ -5,10 +5,10 @@ use tempfile::TempDir;
 
 /// Returns the path to the compiled binary.
 fn binary_path() -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_BIN_EXE_apply-patches"));
+    let mut path = PathBuf::from(env!("CARGO_BIN_EXE_state-patches"));
     // Fallback: try to find the binary in the target directory
     if !path.exists() {
-        path = PathBuf::from("target/debug/apply-patches");
+        path = PathBuf::from("target/debug/state-patches");
     }
     path
 }

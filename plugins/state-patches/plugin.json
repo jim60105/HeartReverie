@@ -1,7 +1,7 @@
 {
   "name": "state-patches",
   "version": "1.0.0",
-  "description": "State patch lifecycle: run apply-patches binary post-response and render UpdateVariable blocks on frontend",
+  "description": "State patch lifecycle: run state-patches binary post-response and render UpdateVariable blocks on frontend",
   "type": "full-stack",
   "backendModule": "./handler.js",
   "frontendModule": "./frontend.js",

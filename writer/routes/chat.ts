@@ -226,7 +226,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
 
         const fullContent = preContent + aiContent;
 
-        // Run post-response hooks (e.g., apply-patches plugin)
+        // Run post-response hooks (e.g., state-patches plugin)
         await hookDispatcher.dispatch("post-response", {
           content: fullContent,
           storyDir,

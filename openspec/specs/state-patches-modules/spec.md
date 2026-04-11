@@ -1,13 +1,13 @@
-# apply-patches-modules Specification
+# state-patches-modules Specification
 
 ## Purpose
-TBD - created by archiving change apply-patches-test-refactor. Update Purpose after archive.
+TBD - created by archiving change apply-patches-test-refactor (now state-patches). Update Purpose after archive.
 ## Requirements
 ### Requirement: Module separation
 The codebase SHALL be organized into focused modules within `src/`, each with a single responsibility.
 
 #### Scenario: Module inventory
-- **WHEN** the `plugins/apply-patches/rust/src/` directory is examined
+- **WHEN** the `plugins/state-patches/rust/src/` directory is examined
 - **THEN** it SHALL contain at minimum: `main.rs`, `pipeline.rs`, `parser.rs`, `patch_ops.rs`, `yaml_nav.rs`, `convert.rs`
 
 #### Scenario: main.rs is thin orchestration
