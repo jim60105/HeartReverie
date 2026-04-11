@@ -76,6 +76,8 @@ Use full-width punctuation marks for chinese, and use single-width punctuation m
 
 {{ writestyle_reinforce }}
 
+{{ context_compaction }}
+
 {{ status }}
 
 {{ options }}
