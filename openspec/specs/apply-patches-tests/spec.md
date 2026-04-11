@@ -86,7 +86,7 @@ The test suite SHALL include integration tests that verify the full pipeline fro
 - **THEN** the valid patches SHALL still be applied and `current-status.yml` SHALL reflect the successful operations
 
 ### Requirement: Test organization
-Tests SHALL be organized into module-specific `#[cfg(test)]` blocks within each source module, not concentrated in a single test file.
+Tests SHALL be organized into module-specific `#[cfg(test)]` blocks within each source module, not concentrated in a single test file. The Rust crate SHALL reside at `plugins/apply-patches/rust/`.
 
 #### Scenario: Tests distributed across modules
 - **WHEN** the source tree is examined
@@ -94,7 +94,11 @@ Tests SHALL be organized into module-specific `#[cfg(test)]` blocks within each 
 
 #### Scenario: Integration tests separate from unit tests
 - **WHEN** the source tree is examined
-- **THEN** integration tests SHALL reside in the `tests/` directory, separate from unit test modules
+- **THEN** integration tests SHALL reside in the `plugins/apply-patches/rust/tests/` directory, separate from unit test modules
+
+#### Scenario: Cargo test invocation
+- **WHEN** `cargo test` is run from `plugins/apply-patches/rust/`
+- **THEN** all unit and integration tests SHALL execute and pass
 
 ### Requirement: Test coverage threshold
 The test suite SHALL achieve at least 75% line coverage across the `apply-patches` crate.

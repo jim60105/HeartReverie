@@ -7,7 +7,7 @@ Test coverage for the writer backend including utility functions, middleware, ro
 ## Requirements
 
 ### Requirement: Utility function tests
-Unit tests SHALL cover all pure utility functions: `isValidParam()`, `safePath()`, `validateTemplate()`, `levenshtein()`, `findClosestMatch()`, `stripPromptTags()`, `escapeRegex()`, `isValidPluginName()`, `isPathContained()`. Test files SHALL use the `_test.ts` suffix and be written in TypeScript. Mock objects used in tests SHALL satisfy the corresponding TypeScript interfaces they represent.
+Unit tests SHALL cover all pure utility functions: `isValidParam()`, `safePath()`, `validateTemplate()`, `levenshtein()`, `findClosestMatch()`, `stripPromptTags()`, `escapeRegex()`, `isValidPluginName()`, `isPathContained()`. Test files SHALL reside in `tests/writer/lib/` with relative imports back to `writer/lib/`.
 
 #### Scenario: Path traversal rejection
 - **WHEN** `isValidParam()` receives a string containing `..` or null bytes
@@ -33,7 +33,7 @@ Unit tests SHALL cover the `verifyPassphrase` middleware with correct, incorrect
 - **THEN** it responds with HTTP 401 and an RFC 9457 Problem Details body
 
 ### Requirement: Route handler tests
-Integration tests SHALL cover all API route handlers with mocked file system and plugin dependencies.
+Integration tests SHALL cover all API route handlers with mocked file system and plugin dependencies. Test files SHALL reside in `tests/writer/routes/` with relative imports back to `writer/`.
 
 #### Scenario: List series
 - **WHEN** a GET request is sent to `/api/stories` with valid auth
@@ -70,7 +70,7 @@ Unit tests SHALL cover `renderSystemPrompt()` and `buildPromptFromStory()` with 
 Test files SHALL pass `deno check` without type errors. Mock objects SHALL conform to the interfaces they mock (e.g., `AppDeps`, `PluginManifest`, `HookDispatcher`). Tests SHALL NOT use `as any` to bypass type checking on mock objects.
 
 #### Scenario: Test files pass type checking
-- **WHEN** a developer runs `deno check` on all test files under `writer/`
+- **WHEN** a developer runs `deno check` on all test files under `tests/writer/`
 - **THEN** all `_test.ts` files SHALL pass type checking without errors
 
 #### Scenario: Type-safe mock objects
