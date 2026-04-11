@@ -53,7 +53,7 @@ Deno.test("PluginManager", async (t) => {
           JSON.stringify({
             name: "strip-plugin",
             version: "1.0.0",
-            stripTags: ["user_message"],
+            promptStripTags: ["user_message"],
           }),
         );
 
@@ -76,7 +76,7 @@ Deno.test("PluginManager", async (t) => {
           JSON.stringify({
             name: "regex-plugin",
             version: "1.0.0",
-            stripTags: ["/\\[hidden\\]/"],
+            promptStripTags: ["/\\[hidden\\]/"],
           }),
         );
 
@@ -98,7 +98,7 @@ Deno.test("PluginManager", async (t) => {
           JSON.stringify({
             name: "empty-regex-plugin",
             version: "1.0.0",
-            stripTags: ["//"],
+            promptStripTags: ["//"],
           }),
         );
 
@@ -118,7 +118,7 @@ Deno.test("PluginManager", async (t) => {
           JSON.stringify({
             name: "bad-regex-plugin",
             version: "1.0.0",
-            stripTags: ["/[invalid/"],
+            promptStripTags: ["/[invalid/"],
           }),
         );
 

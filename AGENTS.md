@@ -192,7 +192,7 @@ Key classes:
 
 Plugin interaction layers:
 1. **Prompt injection** — `promptFragments` field maps Markdown files to Vento template variables
-2. **Tag stripping** — `stripTags` field declares plain tag names or regex patterns to remove from LLM output
+2. **Tag stripping** — `promptStripTags` field declares plain tag names or regex patterns to remove from previousContext when building prompts
 3. **Backend hooks** — `backendModule` registers handlers for 5 lifecycle stages: `prompt-assembly`, `response-stream`, `pre-write`, `post-response`, `strip-tags`
 4. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` and `frontend-strip` hooks
 

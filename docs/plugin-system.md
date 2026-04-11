@@ -32,7 +32,7 @@ plugins/                       ← 內建 plugin 目錄
 Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不同欄位：
 
 - **提示詞注入**：透過 `promptFragments` 將 Markdown 片段載入為 Vento 模板變數
-- **標籤清除**：透過 `stripTags` 宣告需要從 LLM 回應中移除的 XML 標籤或正規表達式
+- **標籤清除**：透過 `promptStripTags` 宣告需要從 previousContext（已儲存章節內容）中移除的 XML 標籤或正規表達式，在組建提示詞時生效
 - **後端 hook**：透過 `backendModule` 註冊伺服器端生命週期事件的處理函式
 - **前端模組**：透過 `frontendModule` 提供瀏覽器端的標籤渲染或清除邏輯
 
@@ -50,7 +50,7 @@ Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不
 | `backendModule` | `string` | ❌ | 後端模組路徑（相對於 plugin 目錄） |
 | `frontendModule` | `string` | ❌ | 前端模組路徑（相對於 plugin 目錄） |
 | `tags` | `array` | ❌ | 此 plugin 管理的 XML 標籤名稱列表 |
-| `stripTags` | `array` | ❌ | 需從 LLM 回應中移除的標籤或正規表達式 |
+| `promptStripTags` | `array` | ❌ | 組建提示詞時從 previousContext 中移除的標籤或正規表達式 |
 | `parameters` | `array` | ❌ | 自訂 Vento 模板參數宣告 |
 
 ### Plugin 類型
@@ -143,7 +143,7 @@ Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不
 
 ## 標籤清除
 
-LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T-task>`），這些標籤在伺服器端需要被移除，避免寫入章節檔案。`stripTags` 欄位讓 plugin 宣告需要清除的標籤模式。
+LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T-task>`），這些標籤會隨回應一同寫入章節檔案。當系統讀取已儲存的章節內容組建 `previousContext` 時，`promptStripTags` 欄位讓 plugin 宣告需要清除的標籤模式，確保這些標籤不會出現在送往 LLM 的提示詞中。
 
 ### 純文字標籤
 
@@ -151,7 +151,7 @@ LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T
 
 ```json
 {
-  "stripTags": ["disclaimer", "user_message"]
+  "promptStripTags": ["disclaimer", "user_message"]
 }
 ```
 
@@ -163,7 +163,7 @@ LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T
 
 ```json
 {
-  "stripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"]
+  "promptStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"]
 }
 ```
 
@@ -332,7 +332,7 @@ Plugin 系統在多個層面實施安全防護：
   "backendModule": "./handler.js",
   "frontendModule": "./frontend.js",
   "tags": ["mytag"],
-  "stripTags": ["mytag"]
+  "promptStripTags": ["mytag"]
 }
 ```
 

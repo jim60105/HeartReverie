@@ -29,6 +29,7 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       type: p.type,
       tags: p.tags || [],
       hasFrontendModule: !!p.frontendModule,
+      displayStripTags: p.displayStripTags || [],
     }));
     return c.json(plugins);
   });

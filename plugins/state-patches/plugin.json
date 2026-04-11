@@ -6,5 +6,5 @@
   "backendModule": "./handler.js",
   "frontendModule": "./frontend.js",
   "tags": ["UpdateVariable", "update"],
-  "stripTags": ["UpdateVariable"]
+  "promptStripTags": ["UpdateVariable"]
 }

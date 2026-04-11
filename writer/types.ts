@@ -64,7 +64,8 @@ export interface PluginManifest {
   readonly tags?: readonly string[];
   readonly backendModule?: string;
   readonly frontendModule?: string;
-  readonly stripTags?: readonly string[];
+  readonly promptStripTags?: readonly string[];
+  readonly displayStripTags?: readonly string[];
   readonly promptFragments?: readonly PromptFragment[];
   readonly parameters?: readonly PluginParameter[];
 }

@@ -226,7 +226,7 @@ export class PluginManager {
   }
 
   /**
-   * Returns a combined regex matching all tags from plugins' stripTags arrays,
+   * Returns a combined regex matching all tags from plugins' promptStripTags arrays,
    * or null if no strip tags are registered.
    * Entries starting with "/" are treated as regex pattern strings.
    * Plain strings are auto-wrapped as <tag>[\s\S]*?</tag>.
@@ -234,8 +234,8 @@ export class PluginManager {
   getStripTagPatterns(): RegExp | null {
     const patterns: string[] = [];
     for (const { manifest } of this.#plugins.values()) {
-      if (Array.isArray(manifest.stripTags)) {
-        for (const tag of manifest.stripTags) {
+      if (Array.isArray(manifest.promptStripTags)) {
+        for (const tag of manifest.promptStripTags) {
           if (typeof tag !== "string" || tag.length === 0) continue;
 
           if (tag.startsWith("/")) {
@@ -243,14 +243,14 @@ export class PluginManager {
             const lastSlash = tag.lastIndexOf("/");
             if (lastSlash <= 0) {
               console.warn(
-                `⚠️  Plugin '${manifest.name}' has invalid regex stripTag '${tag}' — skipping`
+                `⚠️  Plugin '${manifest.name}' has invalid regex promptStripTag '${tag}' — skipping`
               );
               continue;
             }
             const inner = tag.slice(1, lastSlash);
             if (inner.length === 0) {
               console.warn(
-                `⚠️  Plugin '${manifest.name}' has empty regex stripTag '${tag}' — skipping`
+                `⚠️  Plugin '${manifest.name}' has empty regex promptStripTag '${tag}' — skipping`
               );
               continue;
             }
@@ -259,7 +259,7 @@ export class PluginManager {
               patterns.push(inner);
             } catch (err: unknown) {
               console.warn(
-                `⚠️  Plugin '${manifest.name}' has invalid regex stripTag '${tag}': ${err instanceof Error ? err.message : String(err)} — skipping`
+                `⚠️  Plugin '${manifest.name}' has invalid regex promptStripTag '${tag}': ${err instanceof Error ? err.message : String(err)} — skipping`
               );
             }
           } else {

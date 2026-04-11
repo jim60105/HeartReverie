@@ -8,5 +8,5 @@
   ],
   "frontendModule": "./frontend.js",
   "tags": ["status"],
-  "stripTags": ["status"]
+  "promptStripTags": ["status"]
 }

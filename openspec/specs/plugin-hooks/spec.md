@@ -14,7 +14,6 @@ The hook system SHALL define the following ordered hook stages that plugins can 
 - `pre-write`: Invoked after OpenRouter response is confirmed but before chapter file writing — plugins can inject content to prepend to the chapter file (e.g., user message wrappers)
 - `post-response`: Invoked after the response stream completes — plugins can run side effects (e.g., apply-patches status update)
 - `frontend-render`: Invoked during frontend rendering — plugins register tag extractors and custom renderers for LLM output tags
-- `frontend-strip`: Invoked during frontend rendering — plugins register tag names to strip from rendered output
 - `strip-tags`: Invoked during server-side chapter content stripping — plugins register tag names to strip from `previous_context` before prompt assembly
 
 Each stage SHALL have a well-defined context object that handlers receive and can modify.
@@ -42,10 +41,6 @@ Each stage SHALL have a well-defined context object that handlers receive and ca
 #### Scenario: Frontend-render stage invocation
 - **WHEN** the frontend `md-renderer` processes chapter content for display
 - **THEN** the hook system SHALL invoke all `frontend-render` handlers to register tag extractors and renderers before the rendering pipeline executes
-
-#### Scenario: Frontend-strip stage invocation
-- **WHEN** the frontend `md-renderer` processes chapter content for display
-- **THEN** the hook system SHALL invoke all `frontend-strip` handlers to collect tag names that should be stripped from the rendered output
 
 #### Scenario: Strip-tags stage invocation
 - **WHEN** the server strips tags from chapter content before including it in `previous_context`
@@ -117,7 +112,7 @@ Plugins SHALL register hook handlers via `hooks.on(stage, handler, priority?)` w
 
 ### Requirement: Handler execution
 
-For each hook stage invocation, the hook system SHALL execute all registered handlers in priority order. `prompt-assembly` handlers SHALL receive a mutable context object containing `templateVariables` and `promptFragments`, and MAY modify these to contribute prompt content or adjust template data. `response-stream` handlers SHALL receive the current chunk and MAY return a transformed chunk. `post-response` handlers SHALL receive the completed response content and story metadata for side effects. `frontend-render` and `frontend-strip` handlers SHALL receive a registration API to declare tag extractors, renderers, and strip patterns. `strip-tags` handlers SHALL receive a registration API to declare tag names for server-side stripping.
+For each hook stage invocation, the hook system SHALL execute all registered handlers in priority order. `prompt-assembly` handlers SHALL receive a mutable context object containing `templateVariables` and `promptFragments`, and MAY modify these to contribute prompt content or adjust template data. `response-stream` handlers SHALL receive the current chunk and MAY return a transformed chunk. `post-response` handlers SHALL receive the completed response content and story metadata for side effects. `frontend-render` handlers SHALL receive a registration API to declare tag extractors and renderers. `strip-tags` handlers SHALL receive a registration API to declare tag names for server-side stripping.
 
 #### Scenario: Prompt-assembly handler contributes a prompt fragment
 - **WHEN** a `prompt-assembly` handler pushes a string into `context.promptFragments`
