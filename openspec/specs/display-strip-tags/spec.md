@@ -11,7 +11,7 @@ Declarative frontend tag stripping via the `displayStripTags` manifest field, re
 The plugin system SHALL support a `displayStripTags` field in `plugin.json` manifests. This field SHALL be an optional array of strings following the same format as the existing `promptStripTags` field:
 
 - Plain tag names (e.g., `"disclaimer"`) SHALL be auto-wrapped as the regex pattern `<tagName>[\s\S]*?</tagName>` with case-insensitive matching
-- Regex pattern strings starting with `/` (e.g., `"/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"`) SHALL be parsed as regular expressions with the specified flags
+- Regex pattern strings starting with `/` (e.g., `"/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"`) SHALL be parsed as regular expressions with the specified flags
 
 The frontend SHALL compile all `displayStripTags` patterns from all loaded plugins into a single combined regex during plugin initialization. This combined regex SHALL be applied to chapter content during the rendering pipeline's strip phase, removing all matching blocks from the rendered output.
 
@@ -20,7 +20,7 @@ The frontend SHALL compile all `displayStripTags` patterns from all loaded plugi
 - **THEN** the frontend rendering pipeline SHALL remove all `<disclaimer>...</disclaimer>` blocks (case-insensitive) from the rendered output
 
 #### Scenario: Regex pattern in displayStripTags
-- **WHEN** a plugin declares `"displayStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"]` in its `plugin.json`
+- **WHEN** a plugin declares `"displayStripTags": ["/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"]` in its `plugin.json`
 - **THEN** the frontend rendering pipeline SHALL remove all blocks matching the regex pattern from the rendered output
 
 #### Scenario: Multiple plugins contribute displayStripTags

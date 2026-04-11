@@ -170,7 +170,7 @@ The system SHALL support both plain tag names and regex pattern strings in the `
 - **THEN** the system generates a regex pattern `<tagName>[\s\S]*?</tagName>` as before
 
 #### Scenario: Regex pattern string
-- **WHEN** a `promptStripTags` entry starts with `/` (e.g., `"/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"`)
+- **WHEN** a `promptStripTags` entry starts with `/` (e.g., `"/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"`)
 - **THEN** the system extracts the inner pattern (stripping leading `/` and trailing `/flags`) and uses it directly in the combined regex
 
 #### Scenario: Invalid regex pattern
