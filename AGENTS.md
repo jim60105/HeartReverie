@@ -17,19 +17,45 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
   lib/
     plugin-manager.ts     # PluginManager: discovery, loading, manifest validation
     hooks.ts              # HookDispatcher: backend lifecycle hook system
+    config.ts             # Environment variable loading and validation
+    errors.ts             # RFC 9457 Problem Details helpers
+    middleware.ts         # Auth, rate limiting, secure headers
+    story.ts              # Story/chapter file operations
+    template.ts           # Vento template rendering engine
+    string-utils.ts       # Levenshtein distance, tag stripping, escaping
+  routes/
+    auth.ts               # POST /api/auth — passphrase verification
+    chapters.ts           # GET/PUT chapters — read and write chapter content
+    chat.ts               # POST chat — OpenRouter streaming proxy
+    plugins.ts            # GET plugins — frontend module discovery
+    prompt.ts             # GET/POST prompt — template preview
+    stories.ts            # GET stories — series/story listing
 reader/                   # Frontend app (vanilla ES modules, no build step)
-  index.html              # Single entry point, all CSS inline, Tailwind via CDN
-  js/                     # 15 ES module files (~1620 lines total)
-  AGENTS.md               # Frontend-specific instructions
+  index.html              # Single entry point — all CSS inline, Tailwind via CDN
+  js/
+    chapter-nav.js        # App orchestrator: navigation, state, sidebar relocation
+    file-reader.js        # File System Access API + IndexedDB persistence
+    md-renderer.js        # 9-step markdown rendering pipeline
+    status-bar.js         # <status> block parser → themed HTML card
+    options-panel.js      # <options> block parser → 2×2 button grid
+    variable-display.js   # <UpdateVariable> block parser → collapsible <pre>
+    vento-error-display.js # Vento template error display component
+    chat-input.js         # Chat message input and submission
+    story-selector.js     # Series/story selection UI
+    prompt-editor.js      # System prompt template editor
+    prompt-preview.js     # Rendered prompt preview
+    passphrase-gate.js    # Authentication gate
+    plugin-loader.js      # Frontend plugin module loader
+    plugin-hooks.js       # FrontendHookDispatcher for browser-side hooks
+    utils.js              # Shared utilities (escapeHtml, etc.)
 plugins/                  # 12 built-in plugins (manifest-driven)
   apply-patches/
     plugin.json           # Plugin manifest
     handler.js            # Post-response hook: invokes Rust binary
     rust/                 # Rust CLI for YAML state patch processing
       Cargo.toml          # Rust 2024 edition
-      src/                # Rust source modules
+      src/                # Rust source modules (main, pipeline, parser, patch_ops, yaml_nav, convert)
       tests/              # Integration tests
-      AGENTS.md           # Rust-specific instructions
 tests/                    # All test files (mirroring source structure)
   writer/
     lib/                  # Backend library tests (*_test.ts)
@@ -39,6 +65,24 @@ tests/                    # All test files (mirroring source structure)
 playground/               # Story data directory (series/stories/chapters)
 openspec/                 # Spec-driven workflow: specs, changes, archives
 docs/                     # Documentation (Traditional Chinese)
+```
+
+### Frontend Module Dependency Graph
+
+```
+index.html
+  └── chapter-nav.js
+        ├── file-reader.js
+        ├── story-selector.js
+        ├── chat-input.js
+        ├── plugin-loader.js
+        │     └── plugin-hooks.js
+        └── md-renderer.js
+              ├── status-bar.js
+              ├── options-panel.js
+              ├── variable-display.js
+              ├── vento-error-display.js
+              └── utils.js
 ```
 
 ## Running the Server
@@ -74,30 +118,45 @@ The resulting binary at `target/release/apply-patches` is invoked by the `apply-
 
 ## Code Style
 
-### JavaScript — Backend (`writer/`)
+### TypeScript — Backend (`writer/`)
 
-- ESM modules (`import`/`export`)
+- TypeScript ESM modules (`import`/`export`) with `.ts` extensions in import paths
 - **Double quotes** for strings
 - Semicolons always used
 - `async/await` for all asynchronous operations
 - Private class fields with `#` prefix
+- Strict compiler config: `strict`, `noImplicitAny`, `strictNullChecks`, `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`
+- Shared types in `writer/types.ts`; use `unknown` with type narrowing instead of `any`
 - JSDoc comments on functions
 - Error responses follow RFC 9457 Problem Details format (`type`, `title`, `status`, `detail`)
 - GPL-3.0 license header at the top of every source file
 
 ### JavaScript — Frontend (`reader/js/`)
 
-- ESM modules, no build step, no bundler, no framework
+- Vanilla ES modules, no TypeScript, no build step, no bundler, no framework
 - **Single quotes** for strings (differs from backend)
 - Semicolons always used
 - JSDoc `@param`/`@returns` on exported functions
+- Silent error handling — graceful degradation, no `console.error`
+- All inline CSS in `index.html` `<style>` block — no external stylesheet
 - UI text in Traditional Chinese (zh-TW); comments and code in English
+
+### Frontend Technology Stack
+
+- **Tailwind CSS** — Via CDN (`cdn.tailwindcss.com`)
+- **marked.js** — Markdown parser via CDN
+- **DOMPurify** — HTML sanitization
+- **Google Fonts** — Iansui, Noto Sans TC/JP/SC, Noto Color Emoji
+- **File System Access API** — For reading local `.md` files (requires HTTPS secure context)
+- **IndexedDB** — Persists directory handle for session restoration
 
 ### Rust (`plugins/apply-patches/rust/`)
 
-- 2024 edition, single-file architecture (`main.rs`)
+- 2024 edition, modular architecture (main, pipeline, parser, patch_ops, yaml_nav, convert)
 - Standard `rustfmt` formatting
 - `Result`-based error handling, errors logged to stderr
+- Custom JSONPatch format (not RFC 6902): supports `replace`, `delta`, `insert`, `remove` operations
+- Dependencies: `serde_yaml`, `serde_json`, `regex`
 
 ### Git Commits
 
@@ -145,11 +204,13 @@ Plugin interaction layers:
 
 ### Frontend Rendering Pipeline
 
-Custom XML blocks from LLM output are processed using Extract → Placeholder → Reinsert pattern:
+Custom XML blocks from LLM output are processed using the **Extract → Placeholder → Reinsert** pattern:
 1. Extract XML blocks (e.g., `<status>`, `<options>`) before markdown parsing
 2. Replace with HTML comment placeholders
 3. Run `marked.parse()` + DOMPurify sanitization
 4. Reinsert extracted blocks as rendered HTML components
+
+This prevents markdown from mangling component HTML inside custom XML blocks.
 
 ### Security Patterns
 
@@ -172,3 +233,4 @@ The project uses a spec-driven development workflow managed by OpenSpec skills i
 - The frontend has **no build step** — edit files directly, refresh browser to see changes
 - `system.md` is a Vento template — treat it as code, not documentation
 - Plugin `name` in `plugin.json` must match its directory name exactly
+- The malformed-JSON fallback parser in apply-patches exists intentionally — some source `.md` files contain unescaped quotes in string values
