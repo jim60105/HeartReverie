@@ -1,6 +1,8 @@
 # HeartReverie 浮心夜夢
 
-<img src="assets/heart.webp" alt="HeartReverie" width="500" />
+<section align="center">
+  <img src="assets/heart.webp"/>
+</section>
 
 面向開發者的 AI 互動小說引擎，作為 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 的替代方案。
 
