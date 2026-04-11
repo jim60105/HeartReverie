@@ -2,7 +2,7 @@
 
 ## Overview
 
-**HeartReverie 浮心夜夢** — An AI-driven interactive fiction engine built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via any OpenAI-compatible API, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under GPL-3.0-or-later.
+**HeartReverie 浮心夜夢** — An AI-driven interactive fiction engine built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via any OpenAI-compatible API, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under AGPL-3.0-or-later.
 
 ## Project Structure
 
