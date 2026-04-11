@@ -65,8 +65,9 @@ export function extractThinkingBlocks(text) {
 export function renderThinkingBlock(content, isComplete) {
   const summary = isComplete ? '思考過程' : '思考中...';
   const escaped = escapeHtml(content.trim());
+  const openAttr = isComplete ? '' : ' open';
 
-  let html = '<details class="thinking-block fold-section">';
+  let html = `<details class="thinking-block fold-section"${openAttr}>`;
   html += `<summary class="fold-header"><span class="fold-icon">▼</span> ${summary}</summary>`;
   html += `<div class="fold-content"><pre class="thinking-content">${escaped}</pre></div>`;
   html += '</details>';
