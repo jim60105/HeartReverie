@@ -1,6 +1,14 @@
 {
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
   "tasks": {
-    "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.js",
+    "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts",
     "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net writer/",
     "test:frontend": "deno test --allow-read reader/js/",
     "test": "deno test --allow-read --allow-write --allow-env --allow-net writer/ reader/js/"
