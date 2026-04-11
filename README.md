@@ -52,7 +52,7 @@ zsh ./serve.zsh
 3. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`post-response`、`strip-tags` 四個階段
 4. **前端模組**：`frontendModule` 在瀏覽器端透過 `frontend-render` 和 `frontend-strip` 掛鉤處理自訂區塊
 
-目前有 12 個內建外掛，涵蓋角色狀態面板、選項按鈕、變數顯示、文風控制、去機器人化等。完整文件見 [`docs/plugin-system.md`](docs/plugin-system.md)。
+內建外掛涵蓋角色狀態面板、選項按鈕、變數顯示、文風控制、去機器人化等。完整文件見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
 ## 🧪 測試
 
