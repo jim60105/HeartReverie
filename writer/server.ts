@@ -26,8 +26,10 @@ import { createApp } from "./app.ts";
 
 const certFile = config.CERT_FILE;
 const keyFile = config.KEY_FILE;
-if (!certFile || !keyFile) {
-  console.error("❌ CERT_FILE and KEY_FILE environment variables are required");
+const httpOnly = Deno.env.get("HTTP_ONLY") === "true";
+
+if (!httpOnly && (!certFile || !keyFile)) {
+  console.error("❌ CERT_FILE and KEY_FILE environment variables are required (set HTTP_ONLY=true to disable TLS)");
   Deno.exit(1);
 }
 
@@ -54,15 +56,21 @@ const app = createApp({
   verifyPassphrase,
 });
 
-// ── Start HTTPS server ──────────────────────────────────────────
-Deno.serve({
+// ── Start server (HTTPS by default, HTTP when HTTP_ONLY=true) ───
+const protocol = httpOnly ? "http" : "https";
+/** @type {Deno.ServeOptions} */
+const serveOptions = {
   port: config.PORT,
   hostname: "::",
-  cert: Deno.readTextFileSync(certFile),
-  key: Deno.readTextFileSync(keyFile),
   onListen({ port }) {
-    console.log(`✅ HTTPS server listening on https://localhost:${port}`);
+    console.log(`✅ ${protocol.toUpperCase()} server listening on ${protocol}://localhost:${port}`);
     console.log(`   Reader: ${config.READER_DIR}`);
     console.log(`   Playground: ${config.PLAYGROUND_DIR}`);
   },
-}, (req, info) => app.fetch(req, info));
+  ...(httpOnly ? {} : {
+    cert: Deno.readTextFileSync(certFile!),
+    key: Deno.readTextFileSync(keyFile!),
+  }),
+};
+
+Deno.serve(serveOptions, (req, info) => app.fetch(req, info));
