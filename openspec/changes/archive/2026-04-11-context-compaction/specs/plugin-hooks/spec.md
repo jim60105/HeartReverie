@@ -3,7 +3,7 @@
 ### Requirement: Hook stages
 
 The hook system SHALL define the following ordered hook stages that plugins can subscribe to:
-- `prompt-assembly`: Invoked during prompt construction — plugins can modify the `previousContext` array (e.g., replace full chapter text with summaries), contribute prompt fragments, and modify template variables. The context object SHALL include a mutable `previousContext` (array of strings) field and a `rawChapters` (array of strings containing unstripped chapter content) field, in addition to `templateVariables` and `promptFragments`.
+- `prompt-assembly`: Invoked during prompt construction — plugins can modify the `previousContext` array (e.g., replace full chapter text with summaries). The context object SHALL include a mutable `previousContext` (array of strings) field, a `rawChapters` (array of strings containing unstripped chapter content) field, `storyDir` (string), `series` (string), and `name` (string).
 - `response-stream`: Invoked during streaming — plugins can observe or transform stream chunks as they arrive from OpenRouter
 - `post-response`: Invoked after the response stream completes — plugins can run side effects (e.g., apply-patches status update)
 - `frontend-render`: Invoked during frontend rendering — plugins register tag extractors and custom renderers for LLM output tags
@@ -14,7 +14,7 @@ Each stage SHALL have a well-defined context object that handlers receive and ca
 
 #### Scenario: Prompt-assembly stage invocation
 - **WHEN** the server constructs the system prompt for an LLM request
-- **THEN** the hook system SHALL invoke all `prompt-assembly` handlers in priority order, passing a context object containing `previousContext` (mutable array of stripped chapter strings), `rawChapters` (array of original unstripped chapter contents for tag extraction), `templateVariables` (the Vento template data), and `promptFragments` (an array of contributed prompt sections)
+- **THEN** the hook system SHALL invoke all `prompt-assembly` handlers in priority order, passing a context object containing `previousContext` (mutable array of stripped chapter strings), `rawChapters` (array of original unstripped chapter contents for tag extraction), `storyDir` (string path to the story directory), `series` (string series name), and `name` (string story name)
 
 #### Scenario: Prompt-assembly stage dispatch point
 - **WHEN** `buildPromptFromStory()` has constructed the initial `previousContext` array from chapter files (after tag stripping)
