@@ -38,8 +38,18 @@ pub(crate) fn json_to_yaml(json: &serde_json::Value) -> Value {
 ///
 /// Strips the leading `/` and splits on subsequent `/` separators.
 /// For example, `"/a/b/c"` yields `["a", "b", "c"]`.
-pub(crate) fn parse_path(path: &str) -> Vec<&str> {
-    path.split('/').filter(|s| !s.is_empty()).collect()
+pub(crate) fn parse_path(path: &str) -> Vec<String> {
+    if path.is_empty() {
+        return vec![];
+    }
+    let stripped = path.strip_prefix('/').unwrap_or(path);
+    if stripped.is_empty() {
+        return vec![];
+    }
+    stripped
+        .split('/')
+        .map(|s| s.replace("~1", "/").replace("~0", "~"))
+        .collect()
 }
 
 /// Extracts an `f64` from a YAML number value.
@@ -71,7 +81,8 @@ mod tests {
 
     #[test]
     fn test_parse_path_segments() {
-        assert_eq!(parse_path("/a/b/c"), vec!["a", "b", "c"]);
+        let expected: Vec<String> = vec!["a", "b", "c"].into_iter().map(String::from).collect();
+        assert_eq!(parse_path("/a/b/c"), expected);
     }
 
     #[test]
@@ -82,6 +93,29 @@ mod tests {
     #[test]
     fn test_parse_path_root_slash() {
         assert!(parse_path("/").is_empty());
+    }
+
+    #[test]
+    fn test_parse_path_escaped_tilde() {
+        assert_eq!(parse_path("/a~0b"), vec!["a~b".to_string()]);
+    }
+
+    #[test]
+    fn test_parse_path_escaped_slash() {
+        assert_eq!(parse_path("/a~1b"), vec!["a/b".to_string()]);
+    }
+
+    #[test]
+    fn test_parse_path_empty_segment() {
+        let expected: Vec<String> = vec!["a", "", "b"].into_iter().map(String::from).collect();
+        assert_eq!(parse_path("/a//b"), expected);
+    }
+
+    #[test]
+    fn test_parse_path_double_escape() {
+        // ~01: replace "~1" with "/" first → "~01" has no "~1" → "~01"
+        //      replace "~0" with "~" → "~1"
+        assert_eq!(parse_path("/~01"), vec!["~1".to_string()]);
     }
 
     #[test]

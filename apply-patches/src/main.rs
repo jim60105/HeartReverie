@@ -66,9 +66,28 @@ fn main() {
         }
     };
     child_dirs.retain(|d| d.join("init-status.yml").is_file());
+    child_dirs.retain(|d| {
+        match std::fs::symlink_metadata(d) {
+            Ok(meta) if meta.is_symlink() => {
+                eprintln!("Warning: skipping symlink {}", d.display());
+                false
+            }
+            _ => true,
+        }
+    });
 
     for child_dir in &child_dirs {
         let init_path = child_dir.join("init-status.yml");
+
+        // Reject symlinked init-status.yml
+        if std::fs::symlink_metadata(&init_path).is_ok_and(|m| m.is_symlink()) {
+            eprintln!(
+                "Warning: skipping symlinked init file {}",
+                init_path.display()
+            );
+            continue;
+        }
+
         let init_state = match std::fs::read_to_string(&init_path) {
             Ok(content) => match serde_yaml::from_str::<Value>(&content) {
                 Ok(v) => v,

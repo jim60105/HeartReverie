@@ -266,3 +266,53 @@ fn test_file_ordering_numeric() {
     // Last applied wins — if numeric order, "D" from 10.md is last
     assert_eq!(order, "D", "Expected numeric ordering, got '{}'", order);
 }
+
+// -----------------------------------------------------------------------
+// Symlink traversal prevention
+// -----------------------------------------------------------------------
+
+#[test]
+#[cfg(unix)]
+fn test_symlink_chapter_skipped() {
+    let tmp = TempDir::new().expect("failed to create temp dir");
+    let scenario = tmp.path().join("scenario");
+    fs::create_dir(&scenario).unwrap();
+    fs::write(scenario.join("init-status.yml"), "hp: 100\n").unwrap();
+
+    // Create a real chapter
+    let real_chapter = scenario.join("chapter-01");
+    fs::create_dir(&real_chapter).unwrap();
+    let md = r#"
+<JSONPatch>
+[{"op": "delta", "path": "/hp", "value": 10}]
+</JSONPatch>
+"#;
+    fs::write(real_chapter.join("1.md"), md).unwrap();
+
+    // Create a separate target directory outside scenario for the symlink
+    let external_target = tmp.path().join("external-target");
+    fs::create_dir(&external_target).unwrap();
+    fs::write(external_target.join("1.md"), md).unwrap();
+
+    // Create a symlinked chapter pointing to the external target
+    let link_chapter = scenario.join("chapter-02");
+    std::os::unix::fs::symlink(&external_target, &link_chapter).unwrap();
+
+    let output = run_binary(tmp.path());
+    assert!(output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Warning: skipping symlink"),
+        "Expected symlink warning in stderr: {}",
+        stderr
+    );
+
+    // Real chapter should be processed
+    let real_out = scenario.join("chapter-01").join("current-status.yml");
+    assert!(real_out.exists(), "Real chapter output should exist");
+
+    // External target should NOT have current-status.yml written
+    let external_out = external_target.join("current-status.yml");
+    assert!(!external_out.exists(), "Symlinked chapter should not produce output");
+}

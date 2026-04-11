@@ -16,6 +16,15 @@ pub(crate) fn sorted_subdirs(dir: &Path) -> Result<Vec<PathBuf>, std::io::Error>
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|p| p.is_dir())
+        .filter(|p| {
+            match fs::symlink_metadata(p) {
+                Ok(meta) if meta.is_symlink() => {
+                    eprintln!("Warning: skipping symlink {}", p.display());
+                    false
+                }
+                _ => true,
+            }
+        })
         .collect();
     dirs.sort();
     Ok(dirs)
@@ -33,6 +42,7 @@ pub(crate) fn collect_numbered_md_files(dir: &Path) -> Result<Vec<(u64, PathBuf)
         .map(|e| e.path())
         .filter(|p| {
             p.is_file()
+                && !fs::symlink_metadata(p).is_ok_and(|m| m.is_symlink())
                 && p.extension().is_some_and(|ext| ext == "md")
                 && p.file_stem()
                     .and_then(|s| s.to_str())
@@ -95,7 +105,28 @@ pub(crate) fn process_subdirectory(sub_dir: &Path, init_state: &Value, patch_re:
         }
     }
 
-    let out_path = sub_dir.join("current-status.yml");
+    let canonical_sub = match fs::canonicalize(sub_dir) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Error resolving path {}: {}", sub_dir.display(), e);
+            return;
+        }
+    };
+    let out_path = canonical_sub.join("current-status.yml");
+
+    // Reject symlinked output files to prevent writes outside root
+    if out_path.exists() {
+        if let Ok(meta) = fs::symlink_metadata(&out_path) {
+            if meta.is_symlink() {
+                eprintln!(
+                    "Warning: refusing to write to symlink {}",
+                    out_path.display()
+                );
+                return;
+            }
+        }
+    }
+
     match serde_yaml::to_string(&state) {
         Ok(yaml_str) => {
             if let Err(e) = fs::write(&out_path, &yaml_str) {
@@ -246,5 +277,47 @@ mod tests {
         let hp = result.as_mapping().unwrap().get(&Value::String("hp".into())).unwrap();
         // 100 + 10 + 5 = 115 (error on remove doesn't stop processing)
         assert_eq!(yaml_to_f64(hp), Some(115.0));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_sorted_subdirs_skips_symlinks() {
+        let tmp = TempDir::new().unwrap();
+        let real_dir = tmp.path().join("real");
+        fs::create_dir(&real_dir).unwrap();
+        let link_dir = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real_dir, &link_dir).unwrap();
+
+        let dirs = sorted_subdirs(tmp.path()).unwrap();
+        let names: Vec<&str> = dirs
+            .iter()
+            .map(|p| p.file_name().unwrap().to_str().unwrap())
+            .collect();
+        assert_eq!(names, vec!["real"]);
+        assert!(!names.contains(&"link"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_sorted_subdirs_symlink_only() {
+        let tmp = TempDir::new().unwrap();
+        let target = tmp.path().join("target");
+        fs::create_dir(&target).unwrap();
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        // Remove the real dir from direct listing
+        let parent = TempDir::new().unwrap();
+        let real = parent.path().join("real_target");
+        fs::create_dir(&real).unwrap();
+        let sym = parent.path().join("sym");
+        std::os::unix::fs::symlink(&real, &sym).unwrap();
+
+        let dirs = sorted_subdirs(parent.path()).unwrap();
+        let names: Vec<&str> = dirs
+            .iter()
+            .map(|p| p.file_name().unwrap().to_str().unwrap())
+            .collect();
+        assert!(names.contains(&"real_target"));
+        assert!(!names.contains(&"sym"));
     }
 }

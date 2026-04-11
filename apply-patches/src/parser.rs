@@ -15,30 +15,54 @@ pub(crate) fn parse_patch_operations(json_text: &str) -> Vec<PatchOperation> {
         return ops.iter().filter_map(json_value_to_patch_op).collect();
     }
 
-    // Fallback: line-by-line parsing for malformed JSON
+    // Fallback: brace-aware block accumulation for malformed JSON
     let mut results = Vec::new();
-    for line in json_text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed == "[" || trimmed == "]" {
+    let mut brace_depth = 0i32;
+    let mut in_string = false;
+    let mut escape_next = false;
+    let mut buffer = String::new();
+
+    for ch in json_text.chars() {
+        if escape_next {
+            buffer.push(ch);
+            escape_next = false;
             continue;
         }
-
-        let entry = trimmed.trim_end_matches(',').trim();
-        if !entry.starts_with('{') || !entry.ends_with('}') {
+        if ch == '\\' && in_string {
+            buffer.push(ch);
+            escape_next = true;
             continue;
         }
-
-        // Try standard parsing for this single entry
-        if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(entry)
-            && let Some(op) = json_value_to_patch_op(&json_val)
-        {
-            results.push(op);
+        if ch == '"' {
+            in_string = !in_string;
+            buffer.push(ch);
             continue;
         }
-
-        // Manual extraction for entries with unescaped quotes in value strings
-        if let Some(op) = parse_malformed_entry(entry) {
-            results.push(op);
+        if !in_string {
+            if ch == '{' {
+                brace_depth += 1;
+                buffer.push(ch);
+                continue;
+            }
+            if ch == '}' {
+                brace_depth -= 1;
+                buffer.push(ch);
+                if brace_depth == 0 {
+                    let entry = buffer.trim();
+                    if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(entry) {
+                        if let Some(op) = json_value_to_patch_op(&json_val) {
+                            results.push(op);
+                        }
+                    } else if let Some(op) = parse_malformed_entry(entry) {
+                        results.push(op);
+                    }
+                    buffer.clear();
+                }
+                continue;
+            }
+        }
+        if brace_depth > 0 {
+            buffer.push(ch);
         }
     }
     results
@@ -249,5 +273,41 @@ mod tests {
     fn test_extract_value_field_none() {
         let entry = r#"{"op": "remove", "path": "/x"}"#;
         assert!(extract_value_field(entry).is_none());
+    }
+
+    #[test]
+    fn test_parse_patch_operations_multiline_malformed() {
+        let input = r#"[
+  {
+    "op": "replace",
+    "path": "/desc",
+    "value": "He said "hello" to her"
+  },
+  {"op": "delta", "path": "/hp", "value": 5}
+]"#;
+        let ops = parse_patch_operations(input);
+        assert_eq!(ops.len(), 2);
+        assert_eq!(ops[0].op, "replace");
+        assert_eq!(ops[0].path, "/desc");
+        assert_eq!(ops[1].op, "delta");
+    }
+
+    #[test]
+    fn test_parse_patch_operations_mixed_single_and_multiline() {
+        let input = r#"[
+  {"op": "delta", "path": "/hp", "value": 10},
+  {
+    "op": "replace",
+    "path": "/name",
+    "value": "She whispered "run" softly"
+  },
+  {"op": "remove", "path": "/old"}
+]"#;
+        let ops = parse_patch_operations(input);
+        assert_eq!(ops.len(), 3);
+        assert_eq!(ops[0].op, "delta");
+        assert_eq!(ops[1].op, "replace");
+        assert_eq!(ops[1].path, "/name");
+        assert_eq!(ops[2].op, "remove");
     }
 }

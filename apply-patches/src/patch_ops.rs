@@ -56,12 +56,13 @@ fn not_container_err(op_name: &str) -> String {
 /// path, missing required value, type mismatch for sequence operations).
 pub(crate) fn apply_operation(state: &mut Value, op: &PatchOperation) -> Result<(), String> {
     let segments = parse_path(&op.path);
+    let seg_refs: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
 
     match op.op.as_str() {
-        "replace" => apply_replace(state, &segments, op),
-        "delta" => apply_delta(state, &segments, op),
-        "insert" => apply_insert(state, &segments, op),
-        "remove" => apply_remove(state, &segments),
+        "replace" => apply_replace(state, &seg_refs, op),
+        "delta" => apply_delta(state, &seg_refs, op),
+        "insert" => apply_insert(state, &seg_refs, op),
+        "remove" => apply_remove(state, &seg_refs),
         _ => Err(format!("unknown operation '{}'", op.op)),
     }
 }
@@ -157,23 +158,22 @@ fn apply_insert(
     }
 
     let (parent, key) = navigate_to_parent(state, segments, true)?;
-    match parent {
-        Value::Mapping(map) => {
-            map.insert(Value::String(key), yaml_val);
-        }
-        Value::Sequence(seq) => {
-            if key == "-" {
+    if key == "-" {
+        match parent {
+            Value::Sequence(seq) => {
                 seq.push(yaml_val);
-            } else {
-                return Err(format!(
-                    "insert: for sequences, path must end with '-', got '{key}'"
-                ));
+            }
+            _ => {
+                *parent = Value::Sequence(vec![yaml_val]);
             }
         }
-        _ if key == "-" => {
-            *parent = Value::Sequence(vec![yaml_val]);
+    } else {
+        match parent {
+            Value::Mapping(map) => {
+                map.insert(Value::String(key), yaml_val);
+            }
+            _ => return Err(not_container_err("insert")),
         }
-        _ => return Err(not_container_err("insert")),
     }
     Ok(())
 }
@@ -221,13 +221,18 @@ mod tests {
         }
     }
 
+    fn seg_refs(segments: &[String]) -> Vec<&str> {
+        segments.iter().map(|s| s.as_str()).collect()
+    }
+
     // -- apply_replace -------------------------------------------------------
 
     #[test]
     fn test_apply_replace_existing() {
         let mut state: Value = serde_yaml::from_str("name: Bob").unwrap();
         let op = make_op("replace", "/name", Some(Value::String("Alice".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_replace(&mut state, &segs, &op).is_ok());
         let map = state.as_mapping().unwrap();
         assert_eq!(
@@ -240,7 +245,8 @@ mod tests {
     fn test_apply_replace_upsert() {
         let mut state: Value = serde_yaml::from_str("a: 1").unwrap();
         let op = make_op("replace", "/b", Some(Value::Number(serde_yaml::Number::from(2))));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_replace(&mut state, &segs, &op).is_ok());
         assert!(state.as_mapping().unwrap().get(&Value::String("b".into())).is_some());
     }
@@ -249,7 +255,8 @@ mod tests {
     fn test_apply_replace_root() {
         let mut state = Value::String("old".into());
         let op = make_op("replace", "", Some(Value::String("new".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_replace(&mut state, &segs, &op).is_ok());
         assert_eq!(state, Value::String("new".into()));
     }
@@ -258,7 +265,8 @@ mod tests {
     fn test_apply_replace_sequence_element() {
         let mut state: Value = serde_yaml::from_str("items:\n  - a\n  - b").unwrap();
         let op = make_op("replace", "/items/1", Some(Value::String("c".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_replace(&mut state, &segs, &op).is_ok());
         let items = state.as_mapping().unwrap()
             .get(&Value::String("items".into())).unwrap()
@@ -270,7 +278,8 @@ mod tests {
     fn test_apply_replace_out_of_bounds() {
         let mut state: Value = serde_yaml::from_str("items:\n  - a").unwrap();
         let op = make_op("replace", "/items/5", Some(Value::String("x".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         let result = apply_replace(&mut state, &segs, &op);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("out of bounds"));
@@ -280,7 +289,8 @@ mod tests {
     fn test_apply_replace_non_container() {
         let mut state: Value = serde_yaml::from_str("x: hello").unwrap();
         let op = make_op("replace", "/x/0", Some(Value::String("y".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         let result = apply_replace(&mut state, &segs, &op);
         assert!(result.is_ok());
     }
@@ -291,7 +301,8 @@ mod tests {
     fn test_apply_delta_positive() {
         let mut state: Value = serde_yaml::from_str("hp: 100").unwrap();
         let op = make_op("delta", "/hp", Some(Value::Number(serde_yaml::Number::from(10))));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_delta(&mut state, &segs, &op).is_ok());
         let hp = state.as_mapping().unwrap().get(&Value::String("hp".into())).unwrap();
         assert_eq!(yaml_to_f64(hp), Some(110.0));
@@ -301,7 +312,8 @@ mod tests {
     fn test_apply_delta_negative() {
         let mut state: Value = serde_yaml::from_str("hp: 100").unwrap();
         let op = make_op("delta", "/hp", Some(Value::Number(serde_yaml::Number::from(-20))));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_delta(&mut state, &segs, &op).is_ok());
         let hp = state.as_mapping().unwrap().get(&Value::String("hp".into())).unwrap();
         assert_eq!(yaml_to_f64(hp), Some(80.0));
@@ -311,7 +323,8 @@ mod tests {
     fn test_apply_delta_missing_path_treat_as_zero() {
         let mut state: Value = serde_yaml::from_str("a: 1").unwrap();
         let op = make_op("delta", "/new_field", Some(Value::Number(serde_yaml::Number::from(5))));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_delta(&mut state, &segs, &op).is_ok());
         let val = state.as_mapping().unwrap().get(&Value::String("new_field".into())).unwrap();
         assert_eq!(yaml_to_f64(val), Some(5.0));
@@ -321,7 +334,8 @@ mod tests {
     fn test_apply_delta_string_numeric() {
         let mut state: Value = serde_yaml::from_str("x: 10").unwrap();
         let op = make_op("delta", "/x", Some(Value::String("3".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_delta(&mut state, &segs, &op).is_ok());
         let val = state.as_mapping().unwrap().get(&Value::String("x".into())).unwrap();
         assert_eq!(yaml_to_f64(val), Some(13.0));
@@ -331,7 +345,8 @@ mod tests {
     fn test_apply_delta_non_numeric_error() {
         let mut state: Value = serde_yaml::from_str("x: 10").unwrap();
         let op = make_op("delta", "/x", Some(Value::String("abc".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         let result = apply_delta(&mut state, &segs, &op);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not a number"));
@@ -341,7 +356,8 @@ mod tests {
     fn test_apply_delta_sequence_element() {
         let mut state: Value = serde_yaml::from_str("scores:\n  - 10\n  - 20").unwrap();
         let op = make_op("delta", "/scores/0", Some(Value::Number(serde_yaml::Number::from(5))));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_delta(&mut state, &segs, &op).is_ok());
         let seq = state.as_mapping().unwrap()
             .get(&Value::String("scores".into())).unwrap()
@@ -353,7 +369,8 @@ mod tests {
     fn test_apply_delta_root_value() {
         let mut state = Value::Number(serde_yaml::Number::from(10));
         let op = make_op("delta", "", Some(Value::Number(serde_yaml::Number::from(7))));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_delta(&mut state, &segs, &op).is_ok());
         assert_eq!(yaml_to_f64(&state), Some(17.0));
     }
@@ -364,7 +381,8 @@ mod tests {
     fn test_apply_insert_into_mapping() {
         let mut state: Value = serde_yaml::from_str("a: 1").unwrap();
         let op = make_op("insert", "/b", Some(Value::Number(serde_yaml::Number::from(2))));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_insert(&mut state, &segs, &op).is_ok());
         assert!(state.as_mapping().unwrap().get(&Value::String("b".into())).is_some());
     }
@@ -373,7 +391,8 @@ mod tests {
     fn test_apply_insert_upsert() {
         let mut state: Value = serde_yaml::from_str("a: 1").unwrap();
         let op = make_op("insert", "/a", Some(Value::Number(serde_yaml::Number::from(99))));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_insert(&mut state, &segs, &op).is_ok());
         let val = state.as_mapping().unwrap().get(&Value::String("a".into())).unwrap();
         assert_eq!(yaml_to_f64(val), Some(99.0));
@@ -383,7 +402,8 @@ mod tests {
     fn test_apply_insert_append_to_sequence() {
         let mut state: Value = serde_yaml::from_str("items:\n  - a\n  - b").unwrap();
         let op = make_op("insert", "/items/-", Some(Value::String("c".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         assert!(apply_insert(&mut state, &segs, &op).is_ok());
         let items = state.as_mapping().unwrap()
             .get(&Value::String("items".into())).unwrap()
@@ -396,7 +416,8 @@ mod tests {
     fn test_apply_insert_empty_path_error() {
         let mut state = Value::Null;
         let op = make_op("insert", "", Some(Value::String("x".into())));
-        let segs = parse_path(&op.path);
+        let segments = parse_path(&op.path);
+        let segs = seg_refs(&segments);
         let result = apply_insert(&mut state, &segs, &op);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("empty path"));
@@ -406,10 +427,20 @@ mod tests {
     fn test_apply_insert_scalar_to_sequence_with_dash() {
         let mut state: Value = serde_yaml::from_str("x: hello").unwrap();
         let op = make_op("insert", "/x/-", Some(Value::String("item".into())));
-        let segs = parse_path(&op.path);
-        assert!(apply_insert(&mut state, &segs, &op).is_ok());
+        assert!(apply_operation(&mut state, &op).is_ok());
         let x = state.as_mapping().unwrap().get(&Value::String("x".into())).unwrap();
-        assert!(x.as_mapping().is_some());
+        assert!(x.as_sequence().is_some(), "expected sequence, got {:?}", x);
+        assert_eq!(x.as_sequence().unwrap(), &vec![Value::String("item".into())]);
+    }
+
+    #[test]
+    fn test_apply_insert_mapping_to_sequence_with_dash() {
+        let mut state: Value = serde_yaml::from_str("x:\n  a: 1").unwrap();
+        let op = make_op("insert", "/x/-", Some(Value::String("item".into())));
+        assert!(apply_operation(&mut state, &op).is_ok());
+        let x = state.as_mapping().unwrap().get(&Value::String("x".into())).unwrap();
+        assert!(x.as_sequence().is_some(), "expected sequence, got {:?}", x);
+        assert_eq!(x.as_sequence().unwrap(), &vec![Value::String("item".into())]);
     }
 
     // -- apply_remove --------------------------------------------------------
@@ -417,7 +448,8 @@ mod tests {
     #[test]
     fn test_apply_remove_mapping_key() {
         let mut state: Value = serde_yaml::from_str("a: 1\nb: 2").unwrap();
-        let segs = parse_path("/a");
+        let segments = parse_path("/a");
+        let segs = seg_refs(&segments);
         assert!(apply_remove(&mut state, &segs).is_ok());
         assert!(state.as_mapping().unwrap().get(&Value::String("a".into())).is_none());
         assert!(state.as_mapping().unwrap().get(&Value::String("b".into())).is_some());
@@ -426,7 +458,8 @@ mod tests {
     #[test]
     fn test_apply_remove_sequence_element() {
         let mut state: Value = serde_yaml::from_str("items:\n  - a\n  - b\n  - c").unwrap();
-        let segs = parse_path("/items/1");
+        let segments = parse_path("/items/1");
+        let segs = seg_refs(&segments);
         assert!(apply_remove(&mut state, &segs).is_ok());
         let items = state.as_mapping().unwrap()
             .get(&Value::String("items".into())).unwrap()
@@ -438,7 +471,8 @@ mod tests {
     #[test]
     fn test_apply_remove_non_existent_key() {
         let mut state: Value = serde_yaml::from_str("a: 1").unwrap();
-        let segs = parse_path("/missing");
+        let segments = parse_path("/missing");
+        let segs = seg_refs(&segments);
         let result = apply_remove(&mut state, &segs);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not found"));
@@ -447,7 +481,8 @@ mod tests {
     #[test]
     fn test_apply_remove_out_of_bounds() {
         let mut state: Value = serde_yaml::from_str("items:\n  - a").unwrap();
-        let segs = parse_path("/items/5");
+        let segments = parse_path("/items/5");
+        let segs = seg_refs(&segments);
         let result = apply_remove(&mut state, &segs);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("out of bounds"));
@@ -456,7 +491,8 @@ mod tests {
     #[test]
     fn test_apply_remove_empty_path() {
         let mut state = Value::Null;
-        let segs = parse_path("");
+        let segments = parse_path("");
+        let segs = seg_refs(&segments);
         let result = apply_remove(&mut state, &segs);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("empty path"));
@@ -465,7 +501,8 @@ mod tests {
     #[test]
     fn test_apply_remove_non_container() {
         let mut state: Value = serde_yaml::from_str("a: hello").unwrap();
-        let segs = parse_path("/a/x");
+        let segments = parse_path("/a/x");
+        let segs = seg_refs(&segments);
         let result = apply_remove(&mut state, &segs);
         assert!(result.is_err());
         let err = result.unwrap_err();
