@@ -57,7 +57,7 @@ const app = createApp({
 // ── Start HTTPS server ──────────────────────────────────────────
 Deno.serve({
   port: config.PORT,
-  hostname: "0.0.0.0",
+  hostname: "::",
   cert: Deno.readTextFileSync(certFile),
   key: Deno.readTextFileSync(keyFile),
   onListen({ port }) {
