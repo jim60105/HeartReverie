@@ -1,7 +1,7 @@
 tmp/
 .certs/
 .env
-apply-patches/target/
+plugins/apply-patches/rust/target/
 **/current-status.yml
 writer/node_modules/
 .coverage/

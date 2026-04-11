@@ -1,7 +1,7 @@
 // js/status-bar.test.js — Tests for status-bar extraction, parsing, and rendering
 
 import { assert as assertTrue, assertEquals } from '@std/assert';
-import { extractStatusBlocks, parseStatus, renderStatusPanel } from './status-bar.js';
+import { extractStatusBlocks, parseStatus, renderStatusPanel } from '../../../reader/js/status-bar.js';
 
 // ── parseStatus ──
 

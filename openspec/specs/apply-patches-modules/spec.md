@@ -7,7 +7,7 @@ TBD - created by archiving change apply-patches-test-refactor. Update Purpose af
 The codebase SHALL be organized into focused modules within `src/`, each with a single responsibility.
 
 #### Scenario: Module inventory
-- **WHEN** the `apply-patches/src/` directory is examined
+- **WHEN** the `plugins/apply-patches/rust/src/` directory is examined
 - **THEN** it SHALL contain at minimum: `main.rs`, `pipeline.rs`, `parser.rs`, `patch_ops.rs`, `yaml_nav.rs`, `convert.rs`
 
 #### Scenario: main.rs is thin orchestration

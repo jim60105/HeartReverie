@@ -6,8 +6,8 @@ import { assert as assertTrue, assertEquals } from '@std/assert';
 globalThis.marked = { parse: (text, _opts) => `<p>${text}</p>` };
 globalThis.DOMPurify = { sanitize: (html, _opts) => html };
 
-import { reinjectPlaceholders, renderChapter } from './md-renderer.js';
-import { frontendHooks } from './plugin-loader.js';
+import { reinjectPlaceholders, renderChapter } from '../../../reader/js/md-renderer.js';
+import { frontendHooks } from '../../../reader/js/plugin-loader.js';
 
 Deno.test('reinjectPlaceholders', async (t) => {
   await t.step('replaces a single placeholder', () => {

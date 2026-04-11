@@ -1,7 +1,7 @@
 // js/vento-error-display.test.js — Tests for Vento error rendering
 
 import { assert as assertTrue } from '@std/assert';
-import { renderVentoError } from './vento-error-display.js';
+import { renderVentoError } from '../../../reader/js/vento-error-display.js';
 
 Deno.test('renderVentoError', async (t) => {
   await t.step('renders error card with message', () => {

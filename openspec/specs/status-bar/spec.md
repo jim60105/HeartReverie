@@ -91,7 +91,7 @@ The status-bar SHALL register itself as a full-stack plugin with the plugin syst
 During plugin initialization, the status-bar plugin SHALL:
 1. Register its `<status>` tag with the md-renderer's tag handler registration API as type `render`
 2. Register a `prompt-assembly` hook handler that reads and returns the `status.md` prompt fragment
-3. Register a `post-response` hook handler that executes `./apply-patches/target/release/apply-patches playground` via `execFile`
+3. Register a `post-response` hook handler that executes `./plugins/apply-patches/rust/target/release/apply-patches playground` via `execFile`
 
 The existing detection, parsing, rendering, collapsible sections, and partial data handling requirements remain unchanged — they are now invoked through the plugin system's `frontend-render` hook rather than hardcoded pipeline calls.
 
@@ -109,13 +109,13 @@ The existing detection, parsing, rendering, collapsible sections, and partial da
 
 ### Requirement: Post-response hook for apply-patches
 
-The status-bar plugin SHALL register a `post-response` hook handler that replaces the hardcoded `apply-patches` invocation previously in `server.js`. After each completed AI response, the hook system SHALL invoke registered `post-response` handlers in priority order. The status-bar plugin's handler SHALL execute `./apply-patches/target/release/apply-patches playground` using `execFile` (not `exec`). The handler SHALL await completion before the hook chain continues. If the command exits with a non-zero status code or writes to stderr, the handler SHALL log a warning but SHALL NOT fail the hook chain or the HTTP response. If the `apply-patches` binary is not found, the handler SHALL log a warning and return without error.
+The status-bar plugin SHALL register a `post-response` hook handler that replaces the hardcoded `apply-patches` invocation previously in `server.js`. After each completed AI response, the hook system SHALL invoke registered `post-response` handlers in priority order. The status-bar plugin's handler SHALL execute `./plugins/apply-patches/rust/target/release/apply-patches playground` using `execFile` (not `exec`). The handler SHALL await completion before the hook chain continues. If the command exits with a non-zero status code or writes to stderr, the handler SHALL log a warning but SHALL NOT fail the hook chain or the HTTP response. If the `apply-patches` binary is not found, the handler SHALL log a warning and return without error.
 
 The same `execFile` safety requirements from the `post-response-patch` spec apply: the command SHALL be invoked with explicit arguments (not shell string) to prevent command injection, and no user-supplied input SHALL be interpolated into the command or its arguments.
 
 #### Scenario: Post-response hook triggers apply-patches
 - **WHEN** the AI response stream completes and the `post-response` hook stage is invoked
-- **THEN** the status-bar plugin's hook handler SHALL execute `execFile('./apply-patches/target/release/apply-patches', ['playground'])` and await its completion
+- **THEN** the status-bar plugin's hook handler SHALL execute `execFile('./plugins/apply-patches/rust/target/release/apply-patches', ['playground'])` and await its completion
 
 #### Scenario: Apply-patches failure in hook does not fail response
 - **WHEN** the `apply-patches` command exits with a non-zero exit code during the post-response hook

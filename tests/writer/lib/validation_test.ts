@@ -15,7 +15,7 @@
 
 import { assertEquals } from "@std/assert";
 import { resolve } from "@std/path";
-import { isValidParam, createSafePath } from "./middleware.ts";
+import { isValidParam, createSafePath } from "../../../writer/lib/middleware.ts";
 
 Deno.test("isValidParam", async (t) => {
   await t.step("accepts simple valid strings", () => {

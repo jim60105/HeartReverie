@@ -16,8 +16,8 @@
 import { assertEquals, assert as assertTrue } from "@std/assert";
 import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
-import { PluginManager } from "./plugin-manager.ts";
-import { HookDispatcher } from "./hooks.ts";
+import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
+import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 
 Deno.test("PluginManager", async (t) => {
   const tmpDir = await Deno.makeTempDir({ prefix: "pm-test-" });
