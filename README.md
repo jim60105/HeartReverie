@@ -1,102 +1,68 @@
-# MD Story Tools
+# HeartReverie 浮心夜夢
 
-搭配 [SillyTavern](https://github.com/SillyTavern/SillyTavern) AI 角色扮演的故事工具集——包含網頁閱讀器與狀態補丁處理器。
+<img src="assets/heart.webp" alt="HeartReverie" width="500" />
 
-| 工具 | 說明 | 技術 |
-|------|------|------|
-| **[reader/](reader/)** | 瀏覽器多章節 Markdown 故事閱讀器 | 純前端（HTML / JS） |
-| **[plugins/apply-patches/rust/](plugins/apply-patches/rust/)** | 從章節檔案擷取 `<JSONPatch>` 並套用至角色狀態 | Rust CLI |
+面向開發者的 AI 互動小說引擎，作為 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 的替代方案。
 
----
+提示詞的骨架是一個 [Vento](https://vento.js.org/) 模板（[`system.md`](system.md)），外掛透過 Markdown 片段注入自己的內容。後端透過 [OpenRouter](https://openrouter.ai/) 串接 LLM，將回應逐步寫入章節檔案，前端以輪詢偵測檔案變化並即時顯示。
 
-## Reader — 網頁閱讀器
+所有客製化都透過外掛系統完成，撰寫外掛需要基本的程式能力。後端用 TypeScript + [Hono](https://hono.dev/)，前端是 Vanilla JS（無框架無建置步驟）。
 
-以瀏覽器閱讀多章節 Markdown 故事檔案，支援 SillyTavern AI 對話中產生的自訂 XML 區塊（`<status>`、`<options>`、`<UpdateVariable>`）。
+## 🚀 快速開始
 
-純前端應用——不需要建置步驟、不使用框架、不需要後端伺服器。
-
-### 功能特色
-
-- 📂 透過 File System Access API 開啟本機故事資料夾
-- 📖 逐章閱讀，支援鍵盤快捷鍵（← →）切換章節
-- 🎭 角色狀態面板——顯示角色數值、服裝、特寫，於桌面版以側邊欄呈現
-- 🎲 選項面板——可點擊的選擇按鈕，點擊後自動複製至剪貼簿
-- 📝 變數更新區塊——可收合的原始資料檢視
-- 💾 工作階段記憶——重新整理頁面後自動恢復上次開啟的資料夾
-- 🌙 暗色主題搭配 CJK 最佳化字型排版
-
-### 快速開始
+需要 [Deno](https://deno.com/) ≥ 2.0 和 [Rust](https://www.rust-lang.org/) 工具鏈。
 
 ```bash
-cd reader
-./serve.zsh          # https://localhost:8443
-./serve.zsh 8080     # 自訂連接埠
+# 建置 Rust CLI
+cd plugins/apply-patches/rust && cargo build --release && cd ../../..
+
+# 建立 .env
+cat > .env << 'EOF'
+OPENROUTER_API_KEY=your-api-key-here
+PASSPHRASE=your-passphrase-here
+EOF
+
+# 啟動
+zsh ./serve.zsh
 ```
 
-> HTTPS 為必要條件——File System Access API 僅在安全環境（Secure Context）下運作。
-> 開發伺服器會在首次執行時自動產生自簽 TLS 憑證。
+伺服器預設跑在 `https://localhost:8443`。首次啟動會自動產生自簽 TLS 憑證。
 
-開啟瀏覽器造訪上述網址，點擊「**選擇資料夾**」，選取包含編號 `.md` 檔案的資料夾（例如 `001.md`、`002.md`）即可開始閱讀。
+> [!NOTE]
+> 前端使用 [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API)，只在 HTTPS 安全環境下運作
 
-### 瀏覽器支援
+### 環境變數
 
-本應用依賴 [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API)，僅支援 Chromium 系列瀏覽器：
+| 變數 | 必要 | 預設值 | 說明 |
+|------|:---:|--------|------|
+| `OPENROUTER_API_KEY` | ✅ | — | OpenRouter API 金鑰 |
+| `PASSPHRASE` | ✅ | — | 前端驗證用通關密語 |
+| `PORT` | — | `8443` | 監聽埠號 |
+| `OPENROUTER_MODEL` | — | `deepseek/deepseek-v3.2` | LLM 模型 |
+| `PLUGIN_DIR` | — | — | 外部外掛目錄（絕對路徑） |
+| `PLAYGROUND_DIR` | — | `./playground` | 故事資料根目錄 |
+| `READER_DIR` | — | `./reader` | 前端靜態檔案根目錄 |
 
-| 瀏覽器 | 支援狀態 | 最低版本 |
-|--------|---------|---------|
-| Chrome | ✅ 支援 | 86+ |
-| Edge | ✅ 支援 | 86+ |
-| Opera | ✅ 支援 | 72+ |
-| Firefox | ❌ 不支援 | — |
-| Safari | ❌ 不支援 | — |
+## 🔌 外掛系統
 
----
+每個外掛是一個資料夾加上一份 `plugin.json`，宣告它要做的事。系統有四層擴展點：
 
-## Apply-Patches — 狀態補丁處理器
+1. **提示詞注入**：`promptFragments` 把 Markdown 檔案映射成 Vento 模板變數，渲染時自動塞進提示詞
+2. **標籤移除**：`stripTags` 告訴引擎哪些 XML 標籤要從 LLM 輸出裡拿掉
+3. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`post-response`、`strip-tags` 四個階段
+4. **前端模組**：`frontendModule` 在瀏覽器端透過 `frontend-render` 和 `frontend-strip` 掛鉤處理自訂區塊
 
-Rust CLI 工具，掃描目錄中的 `init-status.yml` 與編號 `.md` 檔案，從章節內容擷取 `<JSONPatch>` 區塊並依序套用，產出最新的 `current-status.yml`。
+目前有 12 個內建外掛，涵蓋角色狀態面板、選項按鈕、變數顯示、文風控制、去機器人化等。完整文件見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
-### 支援的操作
-
-| 操作 | 說明 |
-|------|------|
-| `replace` | 替換指定路徑的值 |
-| `delta` | 對數值做加減運算 |
-| `insert` | 在陣列或物件中插入新項目 |
-| `remove` | 移除指定路徑的值 |
-
-### 快速開始
-
-需要 Rust 工具鏈（`cargo`）。
+## 🧪 測試
 
 ```bash
-cd plugins/apply-patches/rust
-cargo build --release
-./target/release/apply-patches [root_dir]
+deno task test                                    # 全部
+deno task test:backend                            # 僅後端
+deno task test:frontend                           # 僅前端
+cd plugins/apply-patches/rust && cargo test       # Rust 整合測試
 ```
 
-工具會遞迴掃描 `root_dir` 下每個含有 `init-status.yml` 的子目錄，依檔名順序讀取 `.md` 檔案中的補丁，最終在該子目錄輸出 `current-status.yml`。
+## 📄 授權
 
----
-
-## 專案結構
-
-```
-reader/              網頁閱讀器應用程式
-  index.html           入口頁面（所有 CSS 內嵌）
-  js/                  ES 模組（6 個檔案）
-  serve.zsh            HTTPS 開發伺服器（zsh + Node.js）
-plugins/
-  apply-patches/       狀態補丁處理器插件
-    plugin.json          插件清單
-    handler.js           後處理掛鉤：呼叫 Rust 二進位檔
-    rust/                Rust CLI 實作
-      src/               Rust 原始碼模組
-      Cargo.toml         套件設定
-tests/               測試檔案（鏡像原始碼結構）
-  writer/              後端測試
-  reader/js/           前端測試
-openspec/            規格說明與變更歷史
-regex.json           SillyTavern 正則表達式腳本
-short-template/      故事範本章節
-```
+[GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html)
