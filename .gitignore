@@ -1,8 +1,19 @@
+# Project-specific
 tmp/
 .certs/
 .env
-plugins/state-patches/rust/target/
 **/current-status.yml
-writer/node_modules/
-.coverage/
 playground/
+
+# Deno
+.coverage/
+writer/node_modules/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

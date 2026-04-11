@@ -17,7 +17,7 @@ import { join } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
 import type { Hono } from "@hono/hono";
-import type { AppDeps, OpenRouterStreamChunk } from "../types.ts";
+import type { AppDeps, LLMStreamChunk } from "../types.ts";
 import type { ContentfulStatusCode } from "@hono/hono/utils/http-status";
 
 export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "hookDispatcher" | "buildPromptFromStory" | "config">): void {
@@ -28,8 +28,8 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
     validateParams,
     async (c) => {
       // Validate API key
-      if (!Deno.env.get("OPENROUTER_API_KEY")) {
-        return c.json(problemJson("Internal Server Error", 500, "OPENROUTER_API_KEY is not configured"), 500);
+      if (!Deno.env.get("LLM_API_KEY")) {
+        return c.json(problemJson("Internal Server Error", 500, "LLM_API_KEY is not configured"), 500);
       }
 
       // Validate message body
@@ -82,32 +82,32 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           { role: "user", content: message },
         ];
 
-        // Call OpenRouter via native fetch with streaming
-        const apiResponse = await fetch(config.OPENROUTER_API_URL, {
+        // Call LLM API via native fetch with streaming
+        const apiResponse = await fetch(config.LLM_API_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${Deno.env.get("OPENROUTER_API_KEY")}`,
+            Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
           },
           body: JSON.stringify({
-            model: config.OPENROUTER_MODEL,
+            model: config.LLM_MODEL,
             messages,
             stream: true,
-            temperature: 0.1,
-            frequency_penalty: 0.13,
-            presence_penalty: 0.52,
-            top_k: 10,
-            top_p: 0,
-            repetition_penalty: 1.2,
-            min_p: 0,
-            top_a: 1,
+            temperature: config.LLM_TEMPERATURE,
+            frequency_penalty: config.LLM_FREQUENCY_PENALTY,
+            presence_penalty: config.LLM_PRESENCE_PENALTY,
+            top_k: config.LLM_TOP_K,
+            top_p: config.LLM_TOP_P,
+            repetition_penalty: config.LLM_REPETITION_PENALTY,
+            min_p: config.LLM_MIN_P,
+            top_a: config.LLM_TOP_A,
           }),
         });
 
         if (!apiResponse.ok) {
           const errorBody = await apiResponse.text();
           console.error(
-            "OpenRouter API error:",
+            "LLM API error:",
             apiResponse.status,
             errorBody
           );
@@ -185,7 +185,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
               try {
                 const raw: unknown = JSON.parse(payload);
                 if (typeof raw !== "object" || raw === null) continue;
-                const parsed = raw as OpenRouterStreamChunk;
+                const parsed = raw as LLMStreamChunk;
                 const delta = parsed.choices?.[0]?.delta?.content;
                 if (delta) {
                   aiContent += delta;
@@ -204,7 +204,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
               try {
                 const raw: unknown = JSON.parse(trimmed.slice(6));
                 if (typeof raw === "object" && raw !== null) {
-                  const parsed = raw as OpenRouterStreamChunk;
+                  const parsed = raw as LLMStreamChunk;
                   const delta = parsed.choices?.[0]?.delta?.content;
                   if (delta) {
                     aiContent += delta;

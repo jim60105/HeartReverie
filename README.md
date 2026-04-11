@@ -4,7 +4,7 @@
 
 面向開發者的 AI 互動小說引擎，作為 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 的替代方案。
 
-提示詞的骨架是一個 [Vento](https://vento.js.org/) 模板（[`system.md`](system.md)），外掛透過 Markdown 片段注入自己的內容。後端透過 [OpenRouter](https://openrouter.ai/) 串接 LLM，將回應逐步寫入章節檔案，前端以輪詢偵測檔案變化並即時顯示。
+提示詞的骨架是一個 [Vento](https://vento.js.org/) 模板（[`system.md`](system.md)），外掛透過 Markdown 片段注入自己的內容。後端透過任何 OpenAI 相容的 API 串接 LLM（預設使用 [OpenRouter](https://openrouter.ai/)），將回應逐步寫入章節檔案，前端以輪詢偵測檔案變化並即時顯示。
 
 所有客製化都透過外掛系統完成，撰寫外掛需要基本的程式能力。後端用 TypeScript + [Hono](https://hono.dev/)，前端是 Vanilla JS（無框架無建置步驟）。
 
@@ -16,9 +16,9 @@
 # 建置 Rust CLI
 cd plugins/state-patches/rust && cargo build --release && cd ../../..
 
-# 建立 .env
+# 建立 .env（或複製 .env.example）
 cat > .env << 'EOF'
-OPENROUTER_API_KEY=your-api-key-here
+LLM_API_KEY=your-api-key-here
 PASSPHRASE=your-passphrase-here
 EOF
 
@@ -35,10 +35,11 @@ zsh ./serve.zsh
 
 | 變數 | 必要 | 預設值 | 說明 |
 |------|:---:|--------|------|
-| `OPENROUTER_API_KEY` | ✅ | — | OpenRouter API 金鑰 |
+| `LLM_API_KEY` | ✅ | — | LLM 提供者 API 金鑰 |
 | `PASSPHRASE` | ✅ | — | 前端驗證用通關密語 |
 | `PORT` | — | `8443` | 監聽埠號 |
-| `OPENROUTER_MODEL` | — | `deepseek/deepseek-v3.2` | LLM 模型 |
+| `LLM_MODEL` | — | `deepseek/deepseek-v3.2` | LLM 模型 |
+| `LLM_API_URL` | — | `https://openrouter.ai/api/v1/chat/completions` | LLM 聊天完成端點 |
 | `PLUGIN_DIR` | — | — | 外部外掛目錄（絕對路徑） |
 | `PLAYGROUND_DIR` | — | `./playground` | 故事資料根目錄 |
 | `READER_DIR` | — | `./reader` | 前端靜態檔案根目錄 |

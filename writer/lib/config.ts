@@ -23,9 +23,27 @@ const PLUGINS_DIR: string = join(ROOT_DIR, "plugins");
 const PORT: number = parseInt(Deno.env.get("PORT") || "8443", 10);
 const CERT_FILE: string | undefined = Deno.env.get("CERT_FILE");
 const KEY_FILE: string | undefined = Deno.env.get("KEY_FILE");
-const OPENROUTER_API_URL: string = "https://openrouter.ai/api/v1/chat/completions";
-const OPENROUTER_MODEL: string =
-  Deno.env.get("OPENROUTER_MODEL") || "deepseek/deepseek-v3.2";
+const LLM_API_URL: string =
+  Deno.env.get("LLM_API_URL") || "https://openrouter.ai/api/v1/chat/completions";
+const LLM_MODEL: string =
+  Deno.env.get("LLM_MODEL") || "deepseek/deepseek-v3.2";
+
+/** Parse a numeric env var with a fallback default. */
+function numEnv(key: string, fallback: number): number {
+  const raw = Deno.env.get(key);
+  if (raw === undefined) return fallback;
+  const parsed = parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+const LLM_TEMPERATURE: number = numEnv("LLM_TEMPERATURE", 0.1);
+const LLM_FREQUENCY_PENALTY: number = numEnv("LLM_FREQUENCY_PENALTY", 0.13);
+const LLM_PRESENCE_PENALTY: number = numEnv("LLM_PRESENCE_PENALTY", 0.52);
+const LLM_TOP_K: number = numEnv("LLM_TOP_K", 10);
+const LLM_TOP_P: number = numEnv("LLM_TOP_P", 0);
+const LLM_REPETITION_PENALTY: number = numEnv("LLM_REPETITION_PENALTY", 1.2);
+const LLM_MIN_P: number = numEnv("LLM_MIN_P", 0);
+const LLM_TOP_A: number = numEnv("LLM_TOP_A", 1);
 
 export {
   ROOT_DIR,
@@ -35,6 +53,14 @@ export {
   PORT,
   CERT_FILE,
   KEY_FILE,
-  OPENROUTER_API_URL,
-  OPENROUTER_MODEL,
+  LLM_API_URL,
+  LLM_MODEL,
+  LLM_TEMPERATURE,
+  LLM_FREQUENCY_PENALTY,
+  LLM_PRESENCE_PENALTY,
+  LLM_TOP_K,
+  LLM_TOP_P,
+  LLM_REPETITION_PENALTY,
+  LLM_MIN_P,
+  LLM_TOP_A,
 };

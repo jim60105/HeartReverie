@@ -51,7 +51,7 @@ async function makeRequest(
 Deno.test({ name: "chat routes", sanitizeOps: false, sanitizeResources: false, fn: async (t) => {
   const tmpDir = await Deno.makeTempDir({ prefix: "chat-test-" });
   Deno.env.set("PASSPHRASE", "test-pass");
-  Deno.env.set("OPENROUTER_API_KEY", "test-key-for-validation");
+  Deno.env.set("LLM_API_KEY", "test-key-for-validation");
 
   const safePath = createSafePath(tmpDir);
   const app = createApp({
@@ -59,8 +59,8 @@ Deno.test({ name: "chat routes", sanitizeOps: false, sanitizeResources: false, f
       READER_DIR: "/nonexistent-reader",
       PLAYGROUND_DIR: tmpDir,
       ROOT_DIR: "/nonexistent-root",
-      OPENROUTER_API_URL: "https://openrouter.ai/api/v1/chat/completions",
-      OPENROUTER_MODEL: "test-model",
+      LLM_API_URL: "https://openrouter.ai/api/v1/chat/completions",
+      LLM_MODEL: "test-model",
     } as unknown as AppConfig,
     safePath,
     pluginManager: {
@@ -103,9 +103,9 @@ Deno.test({ name: "chat routes", sanitizeOps: false, sanitizeResources: false, f
       assertEquals(res.status, 400);
     });
 
-    await t.step("returns 500 when OPENROUTER_API_KEY not set", async () => {
-      const origKey = Deno.env.get("OPENROUTER_API_KEY");
-      Deno.env.delete("OPENROUTER_API_KEY");
+    await t.step("returns 500 when LLM_API_KEY not set", async () => {
+      const origKey = Deno.env.get("LLM_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
 
       const res = await makeRequest(
         app,
@@ -114,12 +114,12 @@ Deno.test({ name: "chat routes", sanitizeOps: false, sanitizeResources: false, f
         { message: "Hello" },
       );
       assertEquals(res.status, 500);
-      assertMatch(res.body.detail, /OPENROUTER_API_KEY/);
+      assertMatch(res.body.detail, /LLM_API_KEY/);
 
-      Deno.env.set("OPENROUTER_API_KEY", origKey!);
+      Deno.env.set("LLM_API_KEY", origKey!);
     });
   } finally {
-    Deno.env.delete("OPENROUTER_API_KEY");
+    Deno.env.delete("LLM_API_KEY");
     await Deno.remove(tmpDir, { recursive: true });
   }
 } });
@@ -137,8 +137,16 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
         READER_DIR: "/nonexistent-reader",
         PLAYGROUND_DIR: tmpDir,
         ROOT_DIR: "/nonexistent-root",
-        OPENROUTER_API_URL: "https://openrouter.ai/api/v1/chat/completions",
-        OPENROUTER_MODEL: "test-model",
+        LLM_API_URL: "https://openrouter.ai/api/v1/chat/completions",
+        LLM_MODEL: "test-model",
+        LLM_TEMPERATURE: 0.1,
+        LLM_FREQUENCY_PENALTY: 0.13,
+        LLM_PRESENCE_PENALTY: 0.52,
+        LLM_TOP_K: 10,
+        LLM_TOP_P: 0,
+        LLM_REPETITION_PENALTY: 1.2,
+        LLM_MIN_P: 0,
+        LLM_TOP_A: 1,
       } as unknown as AppConfig,
       safePath: createSafePath(tmpDir),
       pluginManager: {
@@ -160,9 +168,9 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
     } as AppDeps;
   }
 
-  function mockOpenRouterFetch(sseChunks: string[], statusCode = 200) {
+  function mockLLMFetch(sseChunks: string[], statusCode = 200) {
     globalThis.fetch = async (url: string | URL | Request, opts?: RequestInit) => {
-      if (typeof url === "string" && url.includes("openrouter")) {
+      if (typeof url === "string" && url.includes("chat/completions")) {
         return new Response(
           new ReadableStream({
             start(controller) {
@@ -180,9 +188,9 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
     };
   }
 
-  function mockOpenRouterFetchError(statusCode: number, body = "API error") {
+  function mockLLMFetchError(statusCode: number, body = "API error") {
     globalThis.fetch = async (url: string | URL | Request, _opts?: RequestInit) => {
-      if (typeof url === "string" && url.includes("openrouter")) {
+      if (typeof url === "string" && url.includes("chat/completions")) {
         return new Response(body, { status: statusCode });
       }
       return originalFetch(url, _opts);
@@ -192,7 +200,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("returns 400 when message exceeds max length", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-maxlen-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+    Deno.env.set("LLM_API_KEY", "test-key");
     try {
       const app = createApp(makeDeps({ _tmpDir: tmpDir }));
       const longMessage = "a".repeat(100_001);
@@ -200,7 +208,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertEquals(res.status, 400);
       assertMatch(res.body.detail, /exceeds maximum length/);
     } finally {
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -208,7 +216,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("returns 422 when buildPromptFromStory returns ventoError", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-vento-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+    Deno.env.set("LLM_API_KEY", "test-key");
     try {
       const app = createApp(makeDeps({
         _tmpDir: tmpDir,
@@ -225,7 +233,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertEquals(res.body.type, "vento-error");
       assertEquals(res.body.message, "bad template");
     } finally {
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -233,7 +241,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("returns 500 when buildPromptFromStory throws", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-throw-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+    Deno.env.set("LLM_API_KEY", "test-key");
     try {
       const app = createApp(makeDeps({
         _tmpDir: tmpDir,
@@ -244,16 +252,16 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertEquals(res.status, 500);
       assertMatch(res.body.detail, /Failed to process/);
     } finally {
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
 
-  await t.step("returns error status when OpenRouter API returns non-200", async () => {
+  await t.step("returns error status when LLM API returns non-200", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-apierr-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetchError(429, "rate limited");
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetchError(429, "rate limited");
     try {
       const app = createApp(makeDeps({ _tmpDir: tmpDir }));
       await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
@@ -262,7 +270,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertMatch(res.body.detail, /AI service request failed/);
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -270,8 +278,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("returns 502 when AI response has no content (only [DONE])", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-empty-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetch(["data: [DONE]\n\n"]);
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetch(["data: [DONE]\n\n"]);
     try {
       const app = createApp(makeDeps({ _tmpDir: tmpDir }));
       await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
@@ -280,7 +288,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertMatch(res.body.detail, /No content/);
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -288,8 +296,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("successful SSE streaming writes file and returns chapter + content", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-sse-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetch([
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetch([
       'data: {"choices":[{"delta":{"content":"Hello "}}]}\n\n',
       'data: {"choices":[{"delta":{"content":"world"}}]}\n\n',
       "data: [DONE]\n\n",
@@ -309,7 +317,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertMatch(written, /Hello world/);
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -317,8 +325,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("reuses last empty chapter file instead of creating next", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-reuse-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetch([
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetch([
       'data: {"choices":[{"delta":{"content":"Response"}}]}\n\n',
       "data: [DONE]\n\n",
     ]);
@@ -346,7 +354,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertMatch(written, /Response/);
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -354,8 +362,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("creates next chapter when last chapter has content", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-next-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetch([
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetch([
       'data: {"choices":[{"delta":{"content":"New chapter"}}]}\n\n',
       "data: [DONE]\n\n",
     ]);
@@ -378,7 +386,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertEquals(res.body.chapter, 3);
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -386,8 +394,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("post-response hook is dispatched after successful chat", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-hook-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetch([
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetch([
       'data: {"choices":[{"delta":{"content":"hook test"}}]}\n\n',
       "data: [DONE]\n\n",
     ]);
@@ -409,7 +417,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertEquals(hookContext!.name, "n1");
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -417,8 +425,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("handles malformed JSON in SSE stream gracefully", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-malform-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetch([
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetch([
       "data: {bad json}\n\n",
       'data: {"choices":[{"delta":{"content":"OK"}}]}\n\n',
       "data: [DONE]\n\n",
@@ -431,7 +439,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertMatch(res.body.content, /OK/);
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -439,11 +447,11 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("stream error mid-generation keeps partial file on disk", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-stream-err-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+    Deno.env.set("LLM_API_KEY", "test-key");
 
     // Mock fetch to return a stream that errors partway through
     globalThis.fetch = async (url: string | URL | Request, _opts?: RequestInit) => {
-      if (typeof url === "string" && url.includes("openrouter")) {
+      if (typeof url === "string" && url.includes("chat/completions")) {
         let chunkSent = false;
         return new Response(
           new ReadableStream({
@@ -474,7 +482,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       // Either way the file exists and was not cleaned up
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -482,8 +490,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("error response sanitization — 502 returns generic message", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-sanitize-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetchError(502, "<html>Internal gateway error with secrets</html>");
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetchError(502, "<html>Internal gateway error with secrets</html>");
     try {
       const app = createApp(makeDeps({ _tmpDir: tmpDir }));
       await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
@@ -495,7 +503,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertEquals(JSON.stringify(res.body).includes("secrets"), false);
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -503,8 +511,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("post-response hook receives userBlock and aiContent in content", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-hook-content-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
-    mockOpenRouterFetch([
+    Deno.env.set("LLM_API_KEY", "test-key");
+    mockLLMFetch([
       'data: {"choices":[{"delta":{"content":"AI reply"}}]}\n\n',
       "data: [DONE]\n\n",
     ]);
@@ -522,7 +530,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertMatch(hookContent!, /AI reply/);
     } finally {
       globalThis.fetch = originalFetch;
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
@@ -530,7 +538,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
   await t.step("no chapter file created on ventoError", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-nofile-" });
     Deno.env.set("PASSPHRASE", "test-pass");
-    Deno.env.set("OPENROUTER_API_KEY", "test-key");
+    Deno.env.set("LLM_API_KEY", "test-key");
     try {
       const storyDir = join(tmpDir, "s1", "n1");
       await Deno.mkdir(storyDir, { recursive: true });
@@ -554,7 +562,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       const mdFiles = entries.filter((f) => /^\d+\.md$/.test(f));
       assertEquals(mdFiles.length, 0);
     } finally {
-      Deno.env.delete("OPENROUTER_API_KEY");
+      Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
