@@ -17,7 +17,7 @@ import { Hono } from "@hono/hono";
 import { secureHeaders } from "@hono/hono/secure-headers";
 import { bodyLimit } from "@hono/hono/body-limit";
 import { serveStatic } from "@hono/hono/deno";
-import { relative } from "@std/path";
+import { join, relative } from "@std/path";
 import { problemJson } from "./lib/errors.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerStoriesRoutes } from "./routes/stories.ts";
@@ -25,6 +25,7 @@ import { registerChapterRoutes } from "./routes/chapters.ts";
 import { registerChatRoutes } from "./routes/chat.ts";
 import { registerPluginRoutes } from "./routes/plugins.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
+import { registerConfigRoutes } from "./routes/config.ts";
 import type { Context, Next } from "@hono/hono";
 import type { AppDeps } from "./types.ts";
 
@@ -94,13 +95,15 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/stories/:series/:name/chat", rateLimiter({ windowMs: 60_000, limit: 10 }));
   app.use("/api/stories/:series/:name/preview-prompt", rateLimiter({ windowMs: 60_000, limit: 10 }));
 
-  // Auth middleware for API routes
+  // Auth middleware for API routes (skip public endpoints)
   app.use("/api/*", async (c, next) => {
+    if (new URL(c.req.url).pathname === "/api/config") return next();
     return deps.verifyPassphrase(c, next);
   });
 
   // Routes
   registerAuthRoutes(app);
+  registerConfigRoutes(app, deps);
   registerStoriesRoutes(app, deps);
   registerChapterRoutes(app, deps);
   registerChatRoutes(app, deps);
@@ -115,6 +118,13 @@ export function createApp(deps: AppDeps): Hono {
     }
     await next();
   });
+
+  // Serve project assets (e.g., background images)
+  const assetsRelative = relative(Deno.cwd(), join(deps.config.ROOT_DIR, "assets"));
+  app.use(
+    "/assets/*",
+    serveStatic({ root: assetsRelative, rewriteRequestPath: (p) => p.replace(/^\/assets/, "") })
+  );
 
   // Serve reader frontend
   const readerRelative = relative(Deno.cwd(), deps.config.READER_DIR);

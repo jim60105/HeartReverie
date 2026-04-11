@@ -91,11 +91,15 @@ The `#content` element SHALL have horizontal padding so that prose text has brea
 - **THEN** the content area SHALL have horizontal padding applied (e.g., `padding: 0 1rem`)
 
 ### Requirement: Body background colour preserved
-The `body` element's `background-color` SHALL remain `#0f0a0c` (original love theme). The colour merge only affects text and tint variables, not the page background.
+The `body` element's `background-color` SHALL remain `#0f0a0c` (original love theme) as a fallback. When a background image is configured (via the `frontend-background` capability), the background colour SHALL serve as the fallback beneath the image and overlay layers. The colour merge only affects text and tint variables, not the page background base colour.
 
 #### Scenario: Body background unchanged
 - **WHEN** the page is rendered
 - **THEN** the body background-color SHALL be `#0f0a0c`
+
+#### Scenario: Background colour visible as fallback under image
+- **WHEN** the page is rendered with a configured background image that fails to load
+- **THEN** the `#0f0a0c` background colour SHALL remain visible as the fallback
 
 ### Requirement: Prose text-shadow
 Paragraph text in the prose content area SHALL have a `text-shadow` using `--shadow-width` and `--shadow-color` to improve legibility against the background.

@@ -44,6 +44,8 @@ const LLM_TOP_P: number = numEnv("LLM_TOP_P", 0);
 const LLM_REPETITION_PENALTY: number = numEnv("LLM_REPETITION_PENALTY", 1.2);
 const LLM_MIN_P: number = numEnv("LLM_MIN_P", 0);
 const LLM_TOP_A: number = numEnv("LLM_TOP_A", 1);
+const BACKGROUND_IMAGE: string =
+  Deno.env.get("BACKGROUND_IMAGE") || "/assets/heart.webp";
 
 export {
   ROOT_DIR,
@@ -63,4 +65,5 @@ export {
   LLM_REPETITION_PENALTY,
   LLM_MIN_P,
   LLM_TOP_A,
+  BACKGROUND_IMAGE,
 };

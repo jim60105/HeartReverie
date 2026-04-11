@@ -114,6 +114,7 @@ The script auto-generates self-signed TLS certs in `.certs/` on first run. HTTPS
 | `PLUGIN_DIR` | No | — | External plugin directory (absolute path) |
 | `PLAYGROUND_DIR` | No | `./playground` | Story data root |
 | `READER_DIR` | No | `./reader` | Frontend static files root |
+| `BACKGROUND_IMAGE` | No | `/assets/heart.webp` | Background image URL path for the web reader |
 
 The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_API_KEY` and `PASSPHRASE`.
 
