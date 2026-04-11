@@ -1,9 +1,0 @@
-{
-  "name": "world-aesthetic",
-  "version": "1.0.0",
-  "description": "World aesthetic program prompt fragment",
-  "type": "prompt-only",
-  "promptFragments": [
-    { "file": "./world_aesthetic_program.md", "variable": "world_aesthetic_program", "priority": 100 }
-  ]
-}

@@ -28,8 +28,6 @@ Use full-width punctuation marks for chinese, and use single-width punctuation m
 [Details of the fictional world the RP is set in:
 {{ de_robotization }}
 
-{{ world_aesthetic_program }}
-
 {{ t_task }}
 ]
 

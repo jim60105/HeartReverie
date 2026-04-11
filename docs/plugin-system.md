@@ -132,7 +132,6 @@ Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不
 |----------|-------------|----------|------|
 | `threshold_lord_start` | threshold-lord | 10 | 故事節奏控制（開場指令） |
 | `de_robotization` | de-robotization | 100 | 去機械化寫作指令 |
-| `world_aesthetic_program` | world-aesthetic | 100 | 世界觀美學設定 |
 | `t_task` | t-task | 100 | 親密場景質感任務指令 |
 | `t_task_think_format` | t-task | 100 | 質感任務思考格式 |
 | `writestyle` | writestyle | 100 | 寫作風格指令 |
@@ -386,7 +385,6 @@ export function register(hooks) {
 | t-task | prompt-only | 親密場景質感任務指令，支援正規表達式標籤清除 |
 | threshold-lord | full-stack | 故事節奏控制（開場 priority 10、結尾 priority 900），免責聲明標籤前端清除 |
 | user-message | full-stack | 使用者訊息標籤前端清除，pre-write hook 注入使用者訊息區塊 |
-| world-aesthetic | prompt-only | 世界觀美學設定 |
 | writestyle | prompt-only | 寫作風格指令與強化（priority 100 + 800） |
 
 [prompt-template]: ./prompt-template.md
