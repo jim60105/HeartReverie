@@ -308,6 +308,8 @@ export async function loadFromBackend(series, storyName) {
         if (onChapterChangeCallback) {
             onChapterChangeCallback({ isLastChapter: true });
         }
+        // Keep polling so new chapters are detected after resend
+        pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
         return;
     }
 
@@ -349,7 +351,11 @@ export async function reloadFromBackendToLast() {
         state.backendChapters.push({ number: num, content });
     }
 
-    if (state.backendChapters.length === 0) return;
+    if (state.backendChapters.length === 0) {
+        // Keep polling so new chapters are detected after resend
+        pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
+        return;
+    }
 
     els.btnPrev.classList.remove('hidden');
     els.chapterProgress.classList.remove('hidden');
