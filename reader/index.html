@@ -149,6 +149,9 @@
         #sidebar:empty {
             display: none;
         }
+        .content-wrapper:has(#sidebar:empty) {
+            grid-template-columns: 1fr;
+        }
         @media (max-width: 767px) {
             .content-wrapper {
                 grid-template-columns: 1fr;
@@ -778,9 +781,9 @@
     <main class="flex-1 px-4 py-6">
         <div class="content-wrapper">
             <div id="content">
-                <section class="flex flex-col items-center justify-center py-20 text-center gap-4">
-                    <h1 class="text-2xl font-bold" style="color: var(--text-title);">HeartReverie</h1>
-                    <p style="color: var(--text-main);">點擊上方「選擇資料夾」按鈕，選取包含章節 <code class="px-1 rounded" style="background: var(--item-bg);">.md</code> 檔案的資料夾以開始閱讀。</p>
+                <section class="flex flex-col items-center justify-center text-center gap-4" style="min-height: calc(100vh - 10rem);">
+                    <h1 class="text-3xl font-bold" style="color: var(--text-title);">HeartReverie 浮心夜夢</h1>
+                    <p class="text-lg" style="color: var(--text-main);">點擊上方「選擇資料夾」按鈕，選取包含章節 <code class="px-1 rounded" style="background: var(--item-bg);">.md</code> 檔案的資料夾以開始閱讀。</p>
                     <p id="browser-warning" class="hidden text-sm mt-4 px-4 py-3 rounded border"
                        style="color: #ff6b6b; border-color: #6d1a2a; background: rgba(180,30,60,0.15);">
                         ⚠️ 您的瀏覽器不支援 File System Access API。請使用最新版的 Chrome、Edge 或 Opera 瀏覽器。
