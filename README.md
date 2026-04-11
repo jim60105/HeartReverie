@@ -45,12 +45,13 @@ zsh ./serve.zsh
 
 ## 🔌 外掛系統
 
-每個外掛是一個資料夾加上一份 `plugin.json`，宣告它要做的事。系統有四層擴展點：
+每個外掛是一個資料夾加上一份 `plugin.json`，宣告它要做的事。系統有五層擴展點：
 
 1. **提示詞注入**：`promptFragments` 把 Markdown 檔案映射成 Vento 模板變數，渲染時自動塞進提示詞
-2. **標籤移除**：`promptStripTags` 告訴引擎在組建提示詞時從 previousContext（已儲存章節內容）中移除哪些 XML 標籤
-3. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
-4. **前端模組**：`frontendModule` 在瀏覽器端透過 `frontend-render` 和 `frontend-strip` 掛鉤處理自訂區塊
+2. **提示詞標籤移除**：`promptStripTags` 告訴引擎在組建提示詞時從 previousContext（已儲存章節內容）中移除哪些 XML 標籤
+3. **顯示標籤移除**：`displayStripTags` 告訴前端在瀏覽器渲染時移除哪些 XML 標籤，讀者不會看到這些內部標記
+4. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
+5. **前端模組**：`frontendModule` 在瀏覽器端透過 `frontend-render` 掛鉤處理自訂區塊渲染
 
 內建外掛涵蓋角色狀態面板、選項按鈕、變數顯示、文風控制、去機器人化等。完整文件見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
