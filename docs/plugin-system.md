@@ -29,12 +29,13 @@ plugins/                       ← 內建 plugin 目錄
 └── ...（共 10 個 plugin）
 ```
 
-Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不同欄位：
+Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不同欄位：
 
 - **提示詞注入**：透過 `promptFragments` 將 Markdown 片段載入為 Vento 模板變數
-- **標籤清除**：透過 `promptStripTags` 宣告需要從 previousContext（已儲存章節內容）中移除的 XML 標籤或正規表達式，在組建提示詞時生效
+- **提示詞標籤清除**：透過 `promptStripTags` 宣告需要從 previousContext（已儲存章節內容）中移除的 XML 標籤或正規表達式，在組建提示詞時生效
+- **顯示標籤清除**：透過 `displayStripTags` 宣告需要從前端顯示中移除的 XML 標籤或正規表達式，在瀏覽器渲染時生效
 - **後端 hook**：透過 `backendModule` 註冊伺服器端生命週期事件的處理函式
-- **前端模組**：透過 `frontendModule` 提供瀏覽器端的標籤渲染或清除邏輯
+- **前端模組**：透過 `frontendModule` 提供瀏覽器端的自訂標籤渲染邏輯
 
 ## Plugin Manifest 規格
 
@@ -51,6 +52,7 @@ Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不
 | `frontendModule` | `string` | ❌ | 前端模組路徑（相對於 plugin 目錄） |
 | `tags` | `array` | ❌ | 此 plugin 管理的 XML 標籤名稱列表 |
 | `promptStripTags` | `array` | ❌ | 組建提示詞時從 previousContext 中移除的標籤或正規表達式 |
+| `displayStripTags` | `array` | ❌ | 前端顯示時移除的標籤或正規表達式 |
 | `parameters` | `array` | ❌ | 自訂 Vento 模板參數宣告 |
 
 ### Plugin 類型
@@ -143,7 +145,12 @@ Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不
 
 ## 標籤清除
 
-LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T-task>`），這些標籤會隨回應一同寫入章節檔案。當系統讀取已儲存的章節內容組建 `previousContext` 時，`promptStripTags` 欄位讓 plugin 宣告需要清除的標籤模式，確保這些標籤不會出現在送往 LLM 的提示詞中。
+LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T-task>`），這些標籤會隨回應一同寫入章節檔案。系統提供兩種標籤清除機制：
+
+- **`promptStripTags`**：在後端組建提示詞時生效。系統讀取已儲存的章節內容組建 `previousContext` 時，移除符合 pattern 的標籤，確保這些標籤不會出現在送往 LLM 的提示詞中。
+- **`displayStripTags`**：在前端瀏覽器渲染時生效。前端在顯示章節內容時移除符合 pattern 的標籤，確保讀者不會看到這些內部標記。
+
+兩個欄位支援相同的 pattern 格式：純文字標籤名稱和正規表達式。
 
 ### 純文字標籤
 
@@ -151,7 +158,8 @@ LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T
 
 ```json
 {
-  "promptStripTags": ["disclaimer", "user_message"]
+  "promptStripTags": ["disclaimer", "user_message"],
+  "displayStripTags": ["disclaimer", "imgthink"]
 }
 ```
 
@@ -163,7 +171,8 @@ LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T
 
 ```json
 {
-  "promptStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"]
+  "promptStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"],
+  "displayStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"]
 }
 ```
 
@@ -173,6 +182,7 @@ LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T
 
 - 空 pattern（例如 `//g`）會被記錄警告並跳過
 - 無效的正規表達式語法會被 try-catch 捕獲並跳過，不影響其餘 pattern
+- 前端的 `displayStripTags` 會額外執行 ReDoS 安全檢測，自動跳過可能造成效能問題的 pattern
 
 ## Hook 系統
 
@@ -204,19 +214,20 @@ export function register(hookDispatcher) {
 
 ### 前端 Hook
 
-前端 plugin 以 ES module 形式由瀏覽器載入，透過獨立的 FrontendHookDispatcher 註冊同步處理函式。前端 hook 有兩個階段：
+前端 plugin 以 ES module 形式由瀏覽器載入，透過獨立的 FrontendHookDispatcher 註冊同步處理函式。前端 hook 目前僅支援一個階段：
 
 | 階段 | 用途 | Context 參數 |
 |------|------|-------------|
 | `frontend-render` | 自訂內容渲染（例如將 `<options>` 轉為互動式 UI） | `{ text, element }` |
-| `frontend-strip` | 移除前端不需要顯示的標籤 | `{ text }` |
+
+前端的標籤清除已改為宣告式設定，透過 `displayStripTags` manifest 欄位處理，不再需要前端模組。
 
 前端模組的結構：
 
 ```javascript
 export function register(hooks) {
-  hooks.register('frontend-strip', (context) => {
-    context.text = context.text.replace(/<mytag>[\s\S]*?<\/mytag>/g, '');
+  hooks.register('frontend-render', (context) => {
+    // 自訂渲染邏輯
   }, 100);
 }
 ```
@@ -239,6 +250,7 @@ export function register(hooks) {
     "description": "Apply state patches and render variable updates",
     "type": "full-stack",
     "tags": ["UpdateVariable"],
+    "displayStripTags": [],
     "hasFrontendModule": true
   }
 ]
@@ -332,7 +344,8 @@ Plugin 系統在多個層面實施安全防護：
   "backendModule": "./handler.js",
   "frontendModule": "./frontend.js",
   "tags": ["mytag"],
-  "promptStripTags": ["mytag"]
+  "promptStripTags": ["mytag"],
+  "displayStripTags": ["mytag"]
 }
 ```
 
@@ -350,8 +363,8 @@ export function register(hookDispatcher) {
 
 ```javascript
 export function register(hooks) {
-  hooks.register('frontend-strip', (context) => {
-    context.text = context.text.replace(/<mytag>[\s\S]*?<\/mytag>/g, '');
+  hooks.register('frontend-render', (context) => {
+    // 自訂渲染邏輯
   }, 100);
 }
 ```
