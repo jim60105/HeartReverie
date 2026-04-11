@@ -298,6 +298,7 @@ export async function loadFromBackend(series, storyName) {
                 <p style="color: var(--text-main);">此故事尚未有任何章節內容。</p>
                 <p class="text-sm" style="color: var(--text-label);">請使用下方的聊天輸入框發送指令以開始創作。</p>
             </section>`;
+        moveStatusToSidebar();
         els.folderName.textContent = `${series} / ${storyName}`;
         els.btnPrev.classList.add('hidden');
         els.chapterProgress.classList.add('hidden');
