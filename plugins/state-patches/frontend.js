@@ -1,4 +1,4 @@
-// Plugin: variable-display — UpdateVariable block extraction, parsing, and rendering
+// Plugin: state-patches — UpdateVariable block extraction, parsing, and rendering
 import { escapeHtml } from '/js/utils.js';
 
 export function register(hooks) {

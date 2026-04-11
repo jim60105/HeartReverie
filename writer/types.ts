@@ -90,7 +90,7 @@ export interface PluginModule {
 }
 
 /** Valid hook lifecycle stages. */
-export type HookStage = "prompt-assembly" | "response-stream" | "post-response" | "strip-tags";
+export type HookStage = "prompt-assembly" | "response-stream" | "pre-write" | "post-response" | "strip-tags";
 
 /** Hook handler function signature. */
 export type HookHandler = (context: Record<string, unknown>) => Promise<void>;

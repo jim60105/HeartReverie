@@ -1,8 +1,9 @@
 {
   "name": "user-message",
   "version": "1.0.0",
-  "description": "Strip user_message tags from reader display",
-  "type": "prompt-only",
+  "description": "User message lifecycle: wrap input in tags, strip from context and display",
+  "type": "full-stack",
+  "backendModule": "./handler.ts",
   "frontendModule": "./frontend.js",
   "tags": ["user_message"],
   "stripTags": ["user_message"]

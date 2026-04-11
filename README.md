@@ -14,7 +14,7 @@
 
 ```bash
 # 建置 Rust CLI
-cd plugins/apply-patches/rust && cargo build --release && cd ../../..
+cd plugins/state-patches/rust && cargo build --release && cd ../../..
 
 # 建立 .env
 cat > .env << 'EOF'
@@ -49,7 +49,7 @@ zsh ./serve.zsh
 
 1. **提示詞注入**：`promptFragments` 把 Markdown 檔案映射成 Vento 模板變數，渲染時自動塞進提示詞
 2. **標籤移除**：`stripTags` 告訴引擎哪些 XML 標籤要從 LLM 輸出裡拿掉
-3. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`post-response`、`strip-tags` 四個階段
+3. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
 4. **前端模組**：`frontendModule` 在瀏覽器端透過 `frontend-render` 和 `frontend-strip` 掛鉤處理自訂區塊
 
 內建外掛涵蓋角色狀態面板、選項按鈕、變數顯示、文風控制、去機器人化等。完整文件見 [`docs/plugin-system.md`](docs/plugin-system.md)。
@@ -60,7 +60,7 @@ zsh ./serve.zsh
 deno task test                                    # 全部
 deno task test:backend                            # 僅後端
 deno task test:frontend                           # 僅前端
-cd plugins/apply-patches/rust && cargo test       # Rust 整合測試
+cd plugins/state-patches/rust && cargo test       # Rust 整合測試
 ```
 
 ## 📄 授權
