@@ -7,7 +7,7 @@ Test coverage for the writer backend including utility functions, middleware, ro
 ## Requirements
 
 ### Requirement: Utility function tests
-Unit tests SHALL cover all pure utility functions: `isValidParam()`, `safePath()`, `validateTemplate()`, `levenshtein()`, `findClosestMatch()`, `stripPromptTags()`, `escapeRegex()`, `isValidPluginName()`, `isPathContained()`.
+Unit tests SHALL cover all pure utility functions: `isValidParam()`, `safePath()`, `validateTemplate()`, `levenshtein()`, `findClosestMatch()`, `stripPromptTags()`, `escapeRegex()`, `isValidPluginName()`, `isPathContained()`. Test files SHALL use the `_test.ts` suffix and be written in TypeScript. Mock objects used in tests SHALL satisfy the corresponding TypeScript interfaces they represent.
 
 #### Scenario: Path traversal rejection
 - **WHEN** `isValidParam()` receives a string containing `..` or null bytes
@@ -64,6 +64,18 @@ Unit tests SHALL cover `renderSystemPrompt()` and `buildPromptFromStory()` with 
 #### Scenario: First round detection
 - **WHEN** all chapter files are empty
 - **THEN** `buildPromptFromStory()` sets `isFirstRound` to `true`
+
+### Requirement: Type checking in tests
+
+Test files SHALL pass `deno check` without type errors. Mock objects SHALL conform to the interfaces they mock (e.g., `AppDeps`, `PluginManifest`, `HookDispatcher`). Tests SHALL NOT use `as any` to bypass type checking on mock objects.
+
+#### Scenario: Test files pass type checking
+- **WHEN** a developer runs `deno check` on all test files under `writer/`
+- **THEN** all `_test.ts` files SHALL pass type checking without errors
+
+#### Scenario: Type-safe mock objects
+- **WHEN** a test creates a mock object for a dependency (e.g., a mock `AppDeps` for route handler tests)
+- **THEN** the mock SHALL satisfy the corresponding TypeScript interface, and any missing or incorrectly typed property SHALL produce a compile-time error
 
 ### Requirement: Error helper tests
 Unit tests SHALL cover `problemJson()` helper and `buildVentoError()` output format.
