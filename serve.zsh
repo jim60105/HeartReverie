@@ -101,4 +101,4 @@ export PORT
 export PLAYGROUND_DIR="${PROJECT_ROOT}/playground"
 export READER_DIR="${PROJECT_ROOT}/reader"
 
-exec deno run --allow-net --allow-read --allow-write --allow-env --allow-run "${PROJECT_ROOT}/writer/server.js"
+exec deno run --allow-net --allow-read --allow-write --allow-env --allow-run "${PROJECT_ROOT}/writer/server.ts"
