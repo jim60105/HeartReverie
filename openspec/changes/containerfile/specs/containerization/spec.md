@@ -15,11 +15,11 @@ The containerization MUST use two separate Containerfiles:
 
 The Rust Containerfile at `plugins/state-patches/rust/Containerfile` MUST use the cargo-chef pattern with the following stages:
 
-1. **`chef`** — Base stage from `docker.io/lukemathwalker/cargo-chef:latest-rust-alpine` (musl, statically linked) with `WORKDIR /app` and `/licenses` directory creation
+1. **`chef`** — Base stage from `docker.io/lukemathwalker/cargo-chef:latest-rust-alpine` (musl, statically linked) with `WORKDIR /app`, `/licenses` directory creation, and `ENV RUSTFLAGS="-C target-feature=+crt-static"` for explicit static linking. MUST detect the host target triple dynamically via `rustc -vV | sed -n 's|host: ||p'` and save it to `/tmp/rust-target` for use in subsequent stages.
 2. **`planner`** — Runs `cargo chef prepare --recipe-path recipe.json` with bind-mounted source files (`Cargo.toml`, `Cargo.lock`, `src/`)
-3. **`cook`** — Installs system build dependencies (`pkg-config`, `libssl-dev`) with BuildKit apt cache mounts keyed by `$TARGETARCH$TARGETVARIANT`, mounts recipe from planner, runs `cargo chef cook --release --locked`
-4. **`builder`** — Builds the binary via `cargo build --release --locked` with bind-mounted source files
-5. **`binary`** — `FROM scratch AS binary`, COPYs the compiled binary from the builder stage for `--output` extraction
+3. **`cook`** — Installs system build dependencies with BuildKit apk cache mounts keyed by `$TARGETARCH$TARGETVARIANT`, mounts recipe from planner, runs `cargo chef cook --release --locked --target "$(cat /tmp/rust-target)"`. The explicit `--target` flag separates host (proc-macro) from target compilation, ensuring `RUSTFLAGS` only applies to the final binary.
+4. **`builder`** — Builds the binary via `cargo build --release --locked --target "$(cat /tmp/rust-target)"` with bind-mounted source files. Output binary is at `target/*/release/state-patches` (the target triple creates a subdirectory).
+5. **`binary`** — `FROM scratch AS binary`, COPYs the compiled binary from the builder stage using a glob pattern `target/*/release/state-patches` to handle the target-specific subdirectory, for `--output` extraction.
 
 The `binary` stage MUST be the last stage in the Rust Containerfile. It MUST NOT have a `final` stage — the Rust Containerfile is a builder only, not a runtime image.
 
@@ -42,11 +42,14 @@ The extracted binary MUST be committed to git so that:
 
 The root `Containerfile` MUST use a multi-stage build with these stages:
 
+**Download stage:**
+1. **`download`** — Base `docker.io/library/debian:bookworm-slim`, installs `curl` and `ca-certificates` via BuildKit apt cache mounts, downloads the `dumb-init` static binary with SHA256 checksum verification. This stage exists because the `deno:debian` base image does not include `curl`.
+
 **Deno cache stage:**
-1. **`deno-cache`** — Base `docker.io/denoland/deno:debian`, copies `deno.json`, `deno.lock`, and `writer/`, runs `deno cache --lock=deno.lock writer/server.ts`
+2. **`deno-cache`** — Base `docker.io/denoland/deno:debian`, copies `deno.json`, `deno.lock`, and `writer/`, runs `deno cache --lock=deno.lock writer/server.ts`
 
 **Final stage:**
-2. **`final`** — Base `docker.io/denoland/deno:debian`, assembles the runtime image with all application files
+3. **`final`** — Base `docker.io/denoland/deno:debian`, installs `openssl` (not pre-installed in the deno:debian image, required by entrypoint.sh for TLS cert generation), assembles the runtime image with all application files
 
 The `final` stage MUST be the last stage in the root Containerfile.
 
@@ -110,18 +113,33 @@ Note: `plugins/state-patches/rust/` (Rust source) does NOT need to be included i
 
 ### R11: dumb-init as PID 1
 
-- The final stage MUST download the `dumb-init` static binary appropriate for the target architecture
+- The `download` stage MUST download the `dumb-init` static binary appropriate for the target architecture
 - Architecture mapping MUST handle at least `amd64` → `x86_64` and `arm64` → `aarch64`
-- `dumb-init` MUST be used as PID 1 in the `ENTRYPOINT` to ensure proper signal forwarding and zombie reaping
+- The download MUST include SHA256 checksum verification for integrity
+- The binary MUST be COPYd from the `download` stage into the `final` stage (since `deno:debian` lacks `curl`)
+- `dumb-init` MUST be used as PID 1 in the container `ENTRYPOINT` to ensure proper signal forwarding and zombie reaping
+- In local development, the entrypoint script MUST gracefully skip `dumb-init` when it is not available
 
-### R12: TLS Certificate Handling
+### R12: TLS Certificate Handling and HTTP_ONLY Mode
 
-- An `entrypoint.sh` script MUST be provided that handles TLS certificate provisioning
+- An `entrypoint.sh` script MUST be provided that handles both container and local development startup
+- When `HTTP_ONLY=true` environment variable is set, the entrypoint MUST skip TLS certificate generation entirely and the server MUST start in plain HTTP mode. This supports Kubernetes deployments where TLS termination is handled at the ingress/reverse-proxy level (e.g., Traefik, Nginx Ingress).
 - If `CERT_FILE` and `KEY_FILE` environment variables are set and point to existing files, the entrypoint MUST use them directly
-- If either is not set or the files don't exist, the entrypoint MUST generate a self-signed certificate and key using `openssl req` and set `CERT_FILE`/`KEY_FILE` accordingly
-- The generated certificates MUST be placed in a directory writable by the non-root user (e.g., `/certs/`)
-- The entrypoint MUST `exec` the final command (dumb-init + deno) to ensure proper signal handling
-- The script MUST use `#!/bin/sh` and `set -eu` for portability
+- If either is not set or the files don't exist, the entrypoint MUST auto-detect the certificate directory: `/certs/` in container (when the directory exists), or `$CERT_DIR` / `.certs/` for local development
+- The entrypoint MUST reuse existing certificates if they already exist in the cert directory, only generating new ones when missing
+- Certificate generation MUST use `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1` and set `CERT_FILE`/`KEY_FILE` accordingly
+- The `openssl` package MUST be explicitly installed in the final stage (it is NOT pre-installed in `deno:debian`)
+- The generated certificates MUST be placed in a directory writable by the non-root user
+- The entrypoint MUST use `dumb-init` as PID 1 when available (container), or `exec deno run` directly when `dumb-init` is not present (local dev)
+- The entrypoint MUST `exec` the final command to ensure proper signal handling
+- The script MUST use `#!/bin/sh` and `set -eu` for POSIX portability
+- The server MUST listen on `::` (dual-stack IPv4+IPv6) instead of `0.0.0.0` (IPv4-only) to support clients that connect via IPv6
+
+### R12a: Unified Startup Scripts
+
+- The `entrypoint.sh` MUST work for both container and local development environments
+- A thin wrapper script (`serve.zsh`) MAY exist for local development convenience, setting project-relative environment variables (`PORT`, `PLAYGROUND_DIR`, `READER_DIR`, `CERT_DIR`) and delegating to `entrypoint.sh`
+- The wrapper script MUST NOT duplicate any cert generation or server startup logic — all such logic MUST be in `entrypoint.sh`
 
 ### R13: OCI Labels
 

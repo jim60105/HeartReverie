@@ -41,6 +41,8 @@ Base stage with shared configuration:
 - **Base image**: `docker.io/lukemathwalker/cargo-chef:latest-rust-alpine` (musl, statically linked)
 - `WORKDIR /app`
 - Create `/licenses` directory
+- `ENV RUSTFLAGS="-C target-feature=+crt-static"` for explicit static linking (future-proofing per compiler-team#422)
+- Dynamic host target detection: `rustc -vV | sed -n 's|host: ||p'` saved to `/tmp/rust-target`
 
 #### Stage 2: `planner`
 
@@ -53,20 +55,21 @@ Generates a dependency recipe from project source:
 Pre-builds dependencies separately from source code:
 - Install system build deps (`musl-dev`) with BuildKit apk cache mounts keyed by `$TARGETARCH$TARGETVARIANT`
 - Mount `recipe.json` from planner stage
-- Run `cargo chef cook --release --locked`
+- Run `cargo chef cook --release --locked --target "$(cat /tmp/rust-target)"`
+- The explicit `--target` flag separates host (proc-macro) from target compilation, ensuring `RUSTFLAGS` only applies to the final binary (not proc-macros like `serde_derive`)
 
 #### Stage 4: `builder`
 
 Builds the actual binary:
 - Bind-mount source files (`Cargo.toml`, `Cargo.lock`, `src/`)
-- Run `cargo build --release --locked`
-- Output: `/app/target/release/state-patches` statically-linked binary
+- Run `cargo build --release --locked --target "$(cat /tmp/rust-target)"`
+- Output: `/app/target/*/release/state-patches` statically-linked binary (target triple creates a subdirectory)
 
 #### Stage 5: `binary`
 
 Extraction stage for `--output` workflow:
 - `FROM scratch AS binary`
-- `COPY --from=builder` the compiled binary
+- `COPY --from=builder` the compiled binary using glob `target/*/release/state-patches`
 - Users run `podman build --output=. --target=binary` to extract the binary to the host
 
 ### Build Command
@@ -79,7 +82,18 @@ podman build --output=. --target=binary -f rust/Containerfile rust/
 
 ## Root Containerfile Design
 
-### Stage 1: `deno-cache`
+### Stage 1: `download`
+
+**Base image**: `docker.io/library/debian:bookworm-slim`
+
+Downloads external binaries that are not available in the `deno:debian` image:
+1. Install `curl` and `ca-certificates` via BuildKit apt cache mounts
+2. Download `dumb-init` static binary with architecture mapping (`amd64` → `x86_64`, `arm64` → `aarch64`)
+3. Verify SHA256 checksum integrity
+
+This stage exists because `deno:debian` does not include `curl` or `wget`.
+
+### Stage 2: `deno-cache`
 
 **Base image**: `docker.io/denoland/deno:debian`
 
@@ -88,17 +102,17 @@ Pre-caches all Deno dependencies:
 2. Run `deno cache --lock=deno.lock writer/server.ts`
 3. Output: populated `/deno-dir/` cache directory
 
-### Stage 2: `final`
+### Stage 3: `final`
 
 **Base image**: `docker.io/denoland/deno:debian`
 
 Assembles the runtime image:
-1. Download `dumb-init` static binary (architecture-aware via `TARGETARCH` mapping: `amd64` → `x86_64`, `arm64` → `aarch64`)
+1. Install `openssl` package (NOT pre-installed in `deno:debian`, required by entrypoint.sh for TLS cert generation) via BuildKit apt cache mounts
 2. Create non-root user with UID from `$UID` build arg and GID 0
 3. Create application directories (`/app`, `/licenses`, `/certs`, `/deno-dir/`)
-4. Copy license to `/licenses/`
-5. Copy Deno cache from `deno-cache` stage to `/deno-dir/`
-6. Copy pre-built Rust binary from source tree to `/app/plugins/state-patches/state-patches`
+4. Copy `dumb-init` from `download` stage
+5. Copy license to `/licenses/`
+6. Copy Deno cache from `deno-cache` stage to `/deno-dir/`
 7. Copy application files (writer, reader, assets, plugins, system.md, deno.json, deno.lock)
 8. Copy `entrypoint.sh`
 9. Configure ENV, WORKDIR, VOLUME, EXPOSE, USER, STOPSIGNAL, ENTRYPOINT/CMD
@@ -133,14 +147,17 @@ Assembles the runtime image:
 
 ## TLS Certificate Handling
 
-The `entrypoint.sh` script handles TLS certificate provisioning:
+The `entrypoint.sh` script handles TLS certificate provisioning and supports both container and local development:
 
-1. **User-provided certs**: If `CERT_FILE` and `KEY_FILE` are set and point to existing files, use them directly
-2. **Auto-generated certs**: If not provided, generate a self-signed certificate pair at `/certs/cert.pem` and `/certs/key.pem` using `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 365 -subj '/CN=localhost'`, then set `CERT_FILE` and `KEY_FILE` accordingly
+1. **HTTP-only mode**: When `HTTP_ONLY=true`, skip TLS entirely — useful for K8s where TLS is handled at the ingress level (e.g., Traefik)
+2. **User-provided certs**: If `CERT_FILE` and `KEY_FILE` are set and point to existing files, use them directly
+3. **Auto-generated certs**: If not provided, auto-detect the cert directory (`/certs/` in container, `$CERT_DIR` or `.certs/` locally), reuse existing certs if present, or generate new ones via `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 365 -subj '/CN=localhost'`
 
-The `openssl` binary is already available in the `denoland/deno:debian` base image. The `/certs/` directory is created during build with appropriate permissions.
+**Important**: The `openssl` package is NOT pre-installed in `deno:debian` and MUST be explicitly installed in the final stage.
 
-The entrypoint script then exec's `dumb-init` → `deno run` with the required permissions. Script uses `#!/bin/sh` and `set -eu` for portability.
+The entrypoint uses `dumb-init` as PID 1 when available (container), or direct `exec deno run` when not (local dev). The server listens on `::` (dual-stack IPv4+IPv6).
+
+A thin wrapper script (`serve.zsh`) exists for local development, setting project-relative paths and delegating to `entrypoint.sh`. All startup logic is consolidated in `entrypoint.sh` to avoid duplication.
 
 ## Volume Strategy
 
@@ -157,6 +174,7 @@ The container ships with an empty `/app/playground` directory. Users mount their
 |----------|----------|---------|-------------|
 | `LLM_API_KEY` | Yes | — | LLM API key (e.g. OpenRouter) |
 | `PASSPHRASE` | Yes | — | API authentication passphrase |
+| `HTTP_ONLY` | No | — | Set to `true` to disable TLS and serve plain HTTP (for K8s/reverse-proxy) |
 | `PORT` | No | `8443` | Server listen port |
 | `OPENROUTER_MODEL` | No | (server default) | LLM model identifier |
 | `CERT_FILE` | No | (auto-generated) | Path to TLS certificate file |
@@ -232,6 +250,15 @@ podman run -d \
   -e KEY_FILE=/certs/key.pem \
   -v ./playground:/app/playground \
   -v ./my-certs:/certs:ro \
+  heartreverie:latest
+
+# Run in HTTP-only mode (for K8s / behind reverse proxy)
+podman run -d \
+  -p 8080:8443 \
+  -e HTTP_ONLY=true \
+  -e LLM_API_KEY=sk-... \
+  -e PASSPHRASE=mysecret \
+  -v ./playground:/app/playground \
   heartreverie:latest
 ```
 
