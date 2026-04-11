@@ -36,6 +36,7 @@ export interface AppConfig {
   readonly LLM_REPETITION_PENALTY: number;
   readonly LLM_MIN_P: number;
   readonly LLM_TOP_A: number;
+  readonly BACKGROUND_IMAGE: string;
 }
 
 /** Function that resolves path segments under the playground directory, returning null on traversal. */
