@@ -516,12 +516,12 @@
             white-space: pre-wrap;
         }
         .vento-error-source {
-            color: #666;
+            color: rgba(255, 122, 150, 0.5);
             font-size: 0.9em;
         }
         .vento-error-suggestion {
             margin-top: 8px;
-            color: #059669;
+            color: var(--text-label);
         }
 
         /* ── Prompt Preview Panel ── */
@@ -539,8 +539,8 @@
             left: 0;
             flex-direction: column;
             z-index: 1000;
-            border-right: 1px solid var(--border-color, #333);
-            background: var(--bg-primary, #1a1a2e);
+            border-right: 1px solid var(--border-color);
+            background: linear-gradient(145deg, #1a0810, #220c16);
             width: 33vw;
             height: 100vh;
             overflow: hidden;
@@ -550,7 +550,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--border-color, #333);
+            border-bottom: 1px solid var(--border-color);
             padding: 12px 16px;
         }
         .preview-close-btn {
@@ -562,7 +562,7 @@
         }
         .preview-meta {
             padding: 8px 16px;
-            color: #888;
+            color: var(--text-label);
             font-size: 0.85em;
         }
         .preview-content {
@@ -582,8 +582,8 @@
             right: 0;
             flex-direction: column;
             z-index: 1000;
-            border-left: 1px solid var(--border-color, #333);
-            background: var(--bg-primary, #1a1a2e);
+            border-left: 1px solid var(--border-color);
+            background: linear-gradient(145deg, #1a0810, #220c16);
             padding: 16px;
             width: 33vw;
             height: 100vh;
@@ -610,24 +610,24 @@
         }
         .editor-btn-sm {
             cursor: pointer;
-            border: 1px solid #555;
+            border: 1px solid var(--btn-border);
             border-radius: 4px;
-            background: rgba(255,255,255,0.08);
+            background: var(--btn-bg);
             padding: 4px 10px;
-            color: #ccc;
+            color: var(--text-label);
             font-size: 0.85em;
         }
-        .editor-btn-sm:hover { background: rgba(255,255,255,0.15); }
+        .editor-btn-sm:hover { background: var(--btn-hover-bg); }
         .editor-variables {
             flex-shrink: 0;
             margin-bottom: 10px;
         }
         .editor-variables-label {
             margin-bottom: 6px;
-            color: #aaa;
+            color: var(--text-label);
             font-size: 0.85em;
         }
-        .editor-hint { color: #666; font-size: 0.85em; }
+        .editor-hint { color: rgba(255, 122, 150, 0.5); font-size: 0.85em; }
         .variable-pills {
             display: flex;
             flex-wrap: wrap;
@@ -636,56 +636,56 @@
         .variable-pill {
             transition: background 0.15s;
             cursor: pointer;
-            border: 1px solid #444;
+            border: 1px solid var(--item-border);
             border-radius: 12px;
-            background: rgba(96, 165, 250, 0.12);
+            background: rgba(224, 80, 112, 0.12);
             padding: 2px 8px;
-            color: #60a5fa;
+            color: var(--text-name);
             font-size: 0.8em;
             font-family: monospace;
         }
-        .variable-pill:hover { background: rgba(96, 165, 250, 0.3); }
-        .variable-pill.pill-core { border-color: #555; color: #93c5fd; }
-        .variable-pill.pill-plugin { border-color: #4a6; background: rgba(110, 231, 183, 0.1); color: #6ee7b7; }
-        .variable-pill.pill-plugin:hover { background: rgba(110, 231, 183, 0.25); }
+        .variable-pill:hover { background: rgba(224, 80, 112, 0.3); }
+        .variable-pill.pill-core { border-color: var(--border-color); color: #ff8aaa; }
+        .variable-pill.pill-plugin { border-color: rgba(180, 30, 60, 0.6); background: rgba(180, 30, 60, 0.12); color: var(--text-label); }
+        .variable-pill.pill-plugin:hover { background: rgba(180, 30, 60, 0.25); }
         .editor-textarea-wrap {
             flex: 1;
             margin-bottom: 10px;
             min-height: 0;
         }
         .editor-textarea {
-            border: 1px solid #444;
+            border: 1px solid var(--item-border);
             border-radius: 6px;
             background: rgba(0,0,0,0.3);
             padding: 10px;
             width: 100%;
             height: 100%;
             resize: none;
-            color: #e0e0e0;
+            color: var(--text-main);
             font-size: 0.85em;
             line-height: 1.5;
             font-family: monospace;
             tab-size: 2;
         }
-        .editor-textarea:focus { outline: none; border-color: #60a5fa; }
+        .editor-textarea:focus { outline: none; border-color: var(--text-title); }
         .editor-actions {
             flex-shrink: 0;
         }
         .editor-btn {
             cursor: pointer;
-            border: 1px solid #555;
+            border: 1px solid var(--btn-border);
             border-radius: 4px;
-            background: rgba(255,255,255,0.1);
+            background: var(--btn-bg);
             padding: 8px 16px;
             width: 100%;
             color: inherit;
         }
-        .editor-btn:hover { background: rgba(255,255,255,0.18); }
+        .editor-btn:hover { background: var(--btn-hover-bg); }
         .chat-tool-btn {
             cursor: pointer;
-            border: 1px solid #444;
+            border: 1px solid var(--btn-border);
             border-radius: 4px;
-            background: rgba(255,255,255,0.05);
+            background: var(--btn-bg);
             padding: 4px 12px;
             color: inherit;
             font-size: 0.85em;
