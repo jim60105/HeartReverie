@@ -23,6 +23,7 @@ interface HandlerEntry {
 const VALID_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
   "prompt-assembly",
   "response-stream",
+  "pre-write",
   "post-response",
   "strip-tags",
 ]);
@@ -32,7 +33,7 @@ export class HookDispatcher {
 
   /**
    * Register a handler for a given hook stage.
-   * @param {HookStage} stage - One of: prompt-assembly, response-stream, post-response, strip-tags
+   * @param {HookStage} stage - One of: prompt-assembly, response-stream, pre-write, post-response, strip-tags
    * @param {function} handler - Async function receiving a context object
    * @param {number} priority - Lower runs first (default 100)
    */

@@ -141,13 +141,24 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
 
         // Open file for incremental writing
         const chapterPath = join(storyDir, `${padded}.md`);
-        const file = await Deno.open(chapterPath, { write: true, create: true, truncate: true });
         const encoder = new TextEncoder();
         let aiContent = "";
 
-        // Write user message at the top of the chapter file
-        const userBlock = `<user_message>\n${message}\n</user_message>\n\n`;
-        await file.write(encoder.encode(userBlock));
+        // Dispatch pre-write hook before file truncation
+        const preWriteCtx = await hookDispatcher.dispatch("pre-write", {
+          message,
+          chapterPath,
+          storyDir,
+          series,
+          name,
+          preContent: "",
+        });
+        const preContent = preWriteCtx.preContent as string;
+
+        const file = await Deno.open(chapterPath, { write: true, create: true, truncate: true });
+        if (preContent) {
+          await file.write(encoder.encode(preContent));
+        }
 
         try {
           // Parse SSE stream and write incrementally
@@ -213,7 +224,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           return c.json(problemJson("Bad Gateway", 502, "No content in AI response"), 502);
         }
 
-        const fullContent = userBlock + aiContent;
+        const fullContent = preContent + aiContent;
 
         // Run post-response hooks (e.g., apply-patches plugin)
         await hookDispatcher.dispatch("post-response", {

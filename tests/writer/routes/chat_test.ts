@@ -18,6 +18,7 @@ import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
+import { register as registerUserMessage } from "../../../plugins/user-message/handler.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps, AppConfig, BuildPromptResult } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
@@ -128,6 +129,9 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
 
   function makeDeps(overrides: Record<string, unknown> = {}): AppDeps {
     const tmpDir = overrides._tmpDir as string;
+    // Create hookDispatcher with user-message plugin registered (pre-write hook)
+    const hd = (overrides.hookDispatcher as HookDispatcher | undefined) ?? new HookDispatcher();
+    registerUserMessage(hd);
     return {
       config: {
         READER_DIR: "/nonexistent-reader",
@@ -144,7 +148,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
       } as unknown as PluginManager,
-      hookDispatcher: (overrides.hookDispatcher ?? new HookDispatcher()) as HookDispatcher,
+      hookDispatcher: hd,
       buildPromptFromStory: (overrides.buildPromptFromStory ?? (async () => ({
         prompt: "test prompt",
         ventoError: null,

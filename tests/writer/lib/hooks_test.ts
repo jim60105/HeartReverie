@@ -150,4 +150,36 @@ Deno.test("HookDispatcher", async (t) => {
     assertEquals(asyncFlag, true);
     assertEquals(ctx.sawFlag, true);
   });
+
+  await t.step("pre-write: registers and dispatches handler", async () => {
+    const hd = new HookDispatcher();
+    hd.register("pre-write", async (ctx) => {
+      ctx.preContent = `<user_message>\n${ctx.message}\n</user_message>\n\n`;
+    });
+
+    const ctx: Record<string, unknown> = { message: "hello", preContent: "" };
+    await hd.dispatch("pre-write", ctx);
+    assertEquals(ctx.preContent, "<user_message>\nhello\n</user_message>\n\n");
+  });
+
+  await t.step("pre-write: preContent remains empty when no handlers", async () => {
+    const hd = new HookDispatcher();
+    const ctx: Record<string, unknown> = { message: "hello", preContent: "" };
+    await hd.dispatch("pre-write", ctx);
+    assertEquals(ctx.preContent, "");
+  });
+
+  await t.step("pre-write: multiple handlers append in priority order", async () => {
+    const hd = new HookDispatcher();
+    hd.register("pre-write", async (ctx) => {
+      (ctx.preContent as string) += "B";
+    }, 100);
+    hd.register("pre-write", async (ctx) => {
+      (ctx.preContent as string) += "A";
+    }, 50);
+
+    const ctx: Record<string, unknown> = { preContent: "" };
+    await hd.dispatch("pre-write", ctx);
+    assertEquals(ctx.preContent, "AB");
+  });
 });

@@ -1,9 +1,0 @@
-{
-  "name": "disclaimer",
-  "version": "1.0.0",
-  "description": "Strip disclaimer tags from reader display",
-  "type": "prompt-only",
-  "frontendModule": "./frontend.js",
-  "tags": ["disclaimer"],
-  "stripTags": ["disclaimer"]
-}

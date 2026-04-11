@@ -12,9 +12,11 @@ writer/
     └── hooks.js               ← HookDispatcher 類別：後端 hook 註冊與分派
 
 plugins/                       ← 內建 plugin 目錄
-├── apply-patches/
+├── state-patches/
 │   ├── plugin.json
-│   └── handler.js
+│   ├── handler.js
+│   ├── frontend.js
+│   └── rust/
 ├── de-robotization/
 │   ├── plugin.json
 │   └── de-robotization.md
@@ -24,7 +26,7 @@ plugins/                       ← 內建 plugin 目錄
 │   └── prompt-fragments/
 │       ├── T-task.md
 │       └── T-task_think_format.md
-└── ...（共 12 個 plugin）
+└── ...（共 10 個 plugin）
 ```
 
 Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不同欄位：
@@ -58,7 +60,7 @@ Plugin 與伺服器的互動分為四個層面，分別對應 manifest 中的不
 | 類型 | 說明 | 範例 |
 |------|------|------|
 | `prompt-only` | 僅提供提示詞片段，不包含後端或前端邏輯 | de-robotization、writestyle |
-| `hook-only` | 僅透過後端 hook 參與生命週期，不提供提示詞 | apply-patches |
+| `hook-only` | 僅透過後端 hook 參與生命週期，不提供提示詞 | — |
 | `full-stack` | 同時包含提示詞片段、後端模組、前端模組 | options、status |
 | `frontend-only` | 僅提供前端模組 | — |
 
@@ -176,12 +178,13 @@ LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T
 
 ### 後端 Hook
 
-HookDispatcher 提供四個生命週期階段，plugin 可在任意階段註冊非同步處理函式：
+HookDispatcher 提供五個生命週期階段，plugin 可在任意階段註冊非同步處理函式：
 
 | 階段 | 觸發時機 | Context 參數 |
 |------|---------|-------------|
 | `prompt-assembly` | 系統提示詞渲染期間 | `{ prompt, variables }` |
 | `response-stream` | 接收 LLM 串流回應時 | `{ chunk, content }` |
+| `pre-write` | LLM 回應完成、寫入檔案之前 | `{ message, chapterPath, storyDir, series, name, preContent }` |
 | `post-response` | LLM 回應完成後 | `{ content, storyDir, series, name, rootDir }` |
 | `strip-tags` | 內容標籤清除時 | `{ content }` |
 
@@ -231,12 +234,12 @@ export function register(hooks) {
 ```json
 [
   {
-    "name": "apply-patches",
+    "name": "state-patches",
     "version": "1.0.0",
-    "description": "Run apply-patches binary after LLM response",
-    "type": "hook-only",
-    "tags": [],
-    "hasFrontendModule": false
+    "description": "Apply state patches and render variable updates",
+    "type": "full-stack",
+    "tags": ["UpdateVariable"],
+    "hasFrontendModule": true
   }
 ]
 ```
@@ -361,16 +364,15 @@ export function register(hooks) {
 
 | Plugin | 類型 | 功能 |
 |--------|------|------|
-| apply-patches | hook-only | LLM 回應完成後執行 `apply-patches` 二進位檔 |
+| context-compaction | full-stack | 長篇脈絡壓縮，自動摘要早期章節 |
 | de-robotization | prompt-only | 去機械化寫作指令 |
-| disclaimer | prompt-only | 免責聲明標籤的前端清除 |
 | imgthink | prompt-only | 圖像思考標籤處理 |
 | options | full-stack | 選項面板的提示詞說明、標籤清除、前端渲染 |
+| state-patches | full-stack | LLM 回應完成後執行 Rust 二進位檔處理狀態 patch，前端渲染變數更新區塊 |
 | status | full-stack | 狀態面板的提示詞說明、標籤清除、前端渲染 |
 | t-task | prompt-only | 親密場景質感任務指令，支援正規表達式標籤清除 |
-| threshold-lord | prompt-only | 故事節奏控制（開場 priority 10、結尾 priority 900） |
-| user-message | prompt-only | 使用者訊息標籤的前端清除 |
-| variable-display | full-stack | 變數更新區塊的標籤清除與前端渲染 |
+| threshold-lord | full-stack | 故事節奏控制（開場 priority 10、結尾 priority 900），免責聲明標籤前端清除 |
+| user-message | full-stack | 使用者訊息標籤前端清除，pre-write hook 注入使用者訊息區塊 |
 | world-aesthetic | prompt-only | 世界觀美學設定 |
 | writestyle | prompt-only | 寫作風格指令與強化（priority 100 + 800） |
 

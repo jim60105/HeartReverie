@@ -48,10 +48,11 @@ reader/                   # Frontend app (vanilla ES modules, no build step)
     plugin-loader.js      # Frontend plugin module loader
     plugin-hooks.js       # FrontendHookDispatcher for browser-side hooks
     utils.js              # Shared utilities (escapeHtml, etc.)
-plugins/                  # 12 built-in plugins (manifest-driven)
-  apply-patches/
+plugins/                  # 10 built-in plugins (manifest-driven)
+  state-patches/
     plugin.json           # Plugin manifest
     handler.js            # Post-response hook: invokes Rust binary
+    frontend.js           # UpdateVariable block extraction and rendering
     rust/                 # Rust CLI for YAML state patch processing
       Cargo.toml          # Rust 2024 edition
       src/                # Rust source modules (main, pipeline, parser, patch_ops, yaml_nav, convert)
@@ -110,11 +111,11 @@ The `.env` file is gitignored. Create it manually with `OPENROUTER_API_KEY` and 
 ## Building the Rust CLI
 
 ```bash
-cd plugins/apply-patches/rust
+cd plugins/state-patches/rust
 cargo build --release
 ```
 
-The resulting binary at `target/release/apply-patches` is invoked by the `apply-patches` plugin after each LLM response.
+The resulting binary at `target/release/apply-patches` is invoked by the `state-patches` plugin after each LLM response.
 
 ## Code Style
 
@@ -150,7 +151,7 @@ The resulting binary at `target/release/apply-patches` is invoked by the `apply-
 - **File System Access API** — For reading local `.md` files (requires HTTPS secure context)
 - **IndexedDB** — Persists directory handle for session restoration
 
-### Rust (`plugins/apply-patches/rust/`)
+### Rust (`plugins/state-patches/rust/`)
 
 - 2024 edition, modular architecture (main, pipeline, parser, patch_ops, yaml_nav, convert)
 - Standard `rustfmt` formatting
@@ -192,7 +193,7 @@ Key classes:
 Plugin interaction layers:
 1. **Prompt injection** — `promptFragments` field maps Markdown files to Vento template variables
 2. **Tag stripping** — `stripTags` field declares plain tag names or regex patterns to remove from LLM output
-3. **Backend hooks** — `backendModule` registers handlers for 4 lifecycle stages: `prompt-assembly`, `response-stream`, `post-response`, `strip-tags`
+3. **Backend hooks** — `backendModule` registers handlers for 5 lifecycle stages: `prompt-assembly`, `response-stream`, `pre-write`, `post-response`, `strip-tags`
 4. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` and `frontend-strip` hooks
 
 ### Prompt Rendering Pipeline

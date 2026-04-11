@@ -1,9 +1,0 @@
-{
-  "name": "variable-display",
-  "version": "1.0.0",
-  "description": "Variable update block extraction and rendering",
-  "type": "full-stack",
-  "frontendModule": "./frontend.js",
-  "tags": ["UpdateVariable", "update"],
-  "stripTags": ["UpdateVariable"]
-}
