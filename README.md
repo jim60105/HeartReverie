@@ -12,12 +12,9 @@
 
 ## 🚀 快速開始
 
-需要 [Deno](https://deno.com/) ≥ 2.0 和 [Rust](https://www.rust-lang.org/) 工具鏈。
+需要 [Deno](https://deno.com/) ≥ 2.0。預建置的 `state-patches` 二進位檔已包含在倉庫中。
 
 ```bash
-# 建置 Rust CLI
-cd plugins/state-patches/rust && cargo build --release && cd ../../..
-
 # 建立 .env（或複製 .env.example）
 cat > .env << 'EOF'
 LLM_API_KEY=your-api-key-here
@@ -75,6 +72,28 @@ deno task test                                    # 全部
 deno task test:backend                            # 僅後端
 deno task test:frontend                           # 僅前端
 cd plugins/state-patches/rust && cargo test       # Rust 整合測試
+```
+
+## 🐳 容器部署
+
+```bash
+# 建置容器映像
+podman build -t heartreverie:latest .
+
+# 執行
+podman run -d --name heartreverie \
+  -p 8443:8443 \
+  -e LLM_API_KEY=your-api-key \
+  -e PASSPHRASE=your-passphrase \
+  -v ./playground:/app/playground:z \
+  heartreverie:latest
+```
+
+若需重建 Rust 二進位檔（通常不需要，倉庫已包含預建置版本）：
+
+```bash
+cd plugins/state-patches
+podman build --output=. --target=binary -f rust/Containerfile rust/
 ```
 
 ## 📄 授權

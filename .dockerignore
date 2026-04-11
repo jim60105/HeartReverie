@@ -1,0 +1,38 @@
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Security-sensitive
+.certs/
+.env
+
+# User data
+playground/
+
+# Development artifacts
+tmp/
+openspec/
+docs/
+tests/
+skills/
+.github/
+serve.zsh
+AGENTS.md
+
+# Rust source (binary is at plugins/state-patches/state-patches)
+plugins/state-patches/rust/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Deno
+.coverage/
+writer/node_modules/
+node_modules/

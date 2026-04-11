@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile);
 
 export function register(hookDispatcher) {
   hookDispatcher.register('post-response', async (context) => {
-    const statePatchesBin = path.join(context.rootDir, 'plugins', 'state-patches', 'rust', 'target', 'release', 'state-patches');
+    const statePatchesBin = path.join(context.rootDir, 'plugins', 'state-patches', 'state-patches');
     try {
       await execFileAsync(statePatchesBin, ['playground'], { cwd: context.rootDir });
     } catch (err) {

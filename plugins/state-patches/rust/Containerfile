@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1
+
+#! This Containerfile is designed for SELinux-enabled systems.
+#! On non-SELinux systems, remove the ",z" flags from --mount options.
+
+ARG UID=1001
+ARG VERSION=EDGE
+ARG RELEASE=0
+
+########################################
+# Chef base stage
+########################################
+FROM docker.io/lukemathwalker/cargo-chef:latest-rust-alpine AS chef
+WORKDIR /app
+
+ARG UID
+RUN install -d -m 775 -o $UID -g 0 /licenses
+
+# Explicitly request static linking for musl targets (future-proof)
+# See: https://github.com/rust-lang/compiler-team/issues/422
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+
+# Determine the Rust target triple from the native host
+# Using --target separates host (proc-macro) from target compilation,
+# so RUSTFLAGS only applies to the target binary, not proc-macros.
+RUN rustc -vV | sed -n 's|host: ||p' > /tmp/rust-target
+ENV RUST_TARGET_FILE=/tmp/rust-target
+
+########################################
+# Planner stage
+########################################
+FROM chef AS planner
+RUN --mount=source=src,target=src,z \
+    --mount=source=Cargo.toml,target=Cargo.toml,z \
+    --mount=source=Cargo.lock,target=Cargo.lock,z \
+    cargo chef prepare --recipe-path recipe.json
+
+########################################
+# Cook stage
+########################################
+FROM chef AS cook
+
+ARG TARGETARCH
+ARG TARGETVARIANT
+RUN --mount=type=cache,id=apk-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/apk \
+    apk add --no-cache musl-dev
+
+RUN --mount=source=/app/recipe.json,target=recipe.json,from=planner \
+    cargo chef cook --release --target "$(cat /tmp/rust-target)" --recipe-path recipe.json --locked
+
+########################################
+# Builder stage
+########################################
+FROM cook AS builder
+
+RUN --mount=source=src,target=src,z \
+    --mount=source=Cargo.toml,target=Cargo.toml,z \
+    --mount=source=Cargo.lock,target=Cargo.lock,z \
+    cargo build --release --target "$(cat /tmp/rust-target)" --locked
+
+########################################
+# Binary stage
+# How to: podman build --output=. --target=binary -f rust/Containerfile rust/
+########################################
+FROM scratch AS binary
+
+COPY --chown=0:0 --chmod=777 --from=builder /app/target/*/release/state-patches /state-patches

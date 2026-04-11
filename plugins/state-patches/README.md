@@ -34,12 +34,23 @@
 
 ## 建置 Rust 二進位檔
 
+使用 Containerfile 建置（不需安裝 Rust 工具鏈）：
+
 ```bash
-cd plugins/state-patches/rust
-cargo build --release
+cd plugins/state-patches
+podman build --output=. --target=binary -f rust/Containerfile rust/
 ```
 
-產出路徑：`rust/target/release/state-patches`
+產出路徑：`plugins/state-patches/state-patches`（外掛根目錄）
+
+> [!TIP]
+> 若已安裝 [Rust](https://www.rust-lang.org/) 工具鏈，也可直接以 cargo 建置：
+>
+> ```bash
+> cd plugins/state-patches/rust
+> cargo build --release
+> cp target/release/state-patches ../state-patches
+> ```
 
 ## 檔案結構
 
@@ -48,7 +59,9 @@ plugins/state-patches/
 ├── plugin.json        # 外掛 manifest
 ├── handler.js         # post-response hook，執行 Rust 二進位檔
 ├── frontend.js        # 前端更新區塊渲染模組
+├── state-patches      # 預建置 Rust 二進位檔（已提交至 git）
 ├── rust/              # Rust CLI 專案
+│   ├── Containerfile  # 多階段建置（cargo-chef 模式）
 │   ├── Cargo.toml
 │   ├── Cargo.lock
 │   ├── .gitignore

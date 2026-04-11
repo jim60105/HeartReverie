@@ -127,6 +127,51 @@ cargo build --release
 
 The resulting binary at `target/release/state-patches` is invoked by the `state-patches` plugin after each LLM response.
 
+## Container Deployment
+
+The project uses a two-Containerfile architecture:
+
+1. **Rust binary builder** (`plugins/state-patches/rust/Containerfile`) — Builds the `state-patches` binary using cargo-chef pattern. The binary is committed to git so most users never need this.
+2. **Main application** (`Containerfile`) — Deno-only image that copies the pre-built binary and all application files.
+
+### Rebuild Rust binary (only when Rust source changes)
+
+```bash
+cd plugins/state-patches
+podman build --output=. --target=binary -f rust/Containerfile rust/
+```
+
+This outputs `plugins/state-patches/state-patches` which should be committed to git.
+
+### Build and run the application container
+
+```bash
+# Build
+podman build -t heartreverie:latest .
+
+# Run
+podman run -d --name heartreverie \
+  -p 8443:8443 \
+  -e LLM_API_KEY=your-api-key \
+  -e PASSPHRASE=your-passphrase \
+  -v ./playground:/app/playground:z \
+  heartreverie:latest
+```
+
+Optional: mount TLS certificates instead of using auto-generated ones:
+
+```bash
+podman run -d --name heartreverie \
+  -p 8443:8443 \
+  -e LLM_API_KEY=your-api-key \
+  -e PASSPHRASE=your-passphrase \
+  -e CERT_FILE=/certs/cert.pem \
+  -e KEY_FILE=/certs/key.pem \
+  -v ./certs:/certs:z \
+  -v ./playground:/app/playground:z \
+  heartreverie:latest
+```
+
 ## Code Style
 
 ### TypeScript — Backend (`writer/`)
