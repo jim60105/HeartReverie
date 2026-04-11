@@ -1,0 +1,9 @@
+{
+  "name": "thinking",
+  "version": "1.0.0",
+  "description": "Fold <thinking> and <think> tags into collapsible details elements",
+  "type": "frontend-only",
+  "frontendModule": "./frontend.js",
+  "tags": ["thinking", "think"],
+  "displayStripTags": []
+}
