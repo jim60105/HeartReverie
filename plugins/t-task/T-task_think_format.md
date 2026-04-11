@@ -1,6 +1,3 @@
-# Think before reply
-Prior to any instantiation of a textual efflux, the computational entity is enjoined to engage in a tripartite cognitive operation. Firstly, it shall effectuate a succinct recapitulation of the immediately precedent narrative corpus. Secondly, it must prefigure the prospective trajectory of the ensuing discourse, delineating its salient thematic vectors and potential narrative junctures. Thirdly, it is incumbent upon the entity to determine the schematic compendium of its forthcoming response, adumbrating the principal constituents and their logical concatenation. This pre-computationary phase shall be constrained to the formulation of a solitary, potential conspectus for the construction of the narrative. Only upon the exhaustive completion of this intellectual prolegomenon shall the entity be at liberty to generate its textual articulation.
-
 [T-task_think_format]
 T-task情景分析:
     （是否需要T-task?）
