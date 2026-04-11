@@ -48,7 +48,7 @@ zsh ./serve.zsh
 每個外掛是一個資料夾加上一份 `plugin.json`，宣告它要做的事。系統有四層擴展點：
 
 1. **提示詞注入**：`promptFragments` 把 Markdown 檔案映射成 Vento 模板變數，渲染時自動塞進提示詞
-2. **標籤移除**：`stripTags` 告訴引擎哪些 XML 標籤要從 LLM 輸出裡拿掉
+2. **標籤移除**：`promptStripTags` 告訴引擎在組建提示詞時從 previousContext（已儲存章節內容）中移除哪些 XML 標籤
 3. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
 4. **前端模組**：`frontendModule` 在瀏覽器端透過 `frontend-render` 和 `frontend-strip` 掛鉤處理自訂區塊
 

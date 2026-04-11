@@ -31,7 +31,7 @@ The following interfaces and types SHALL be defined:
 - `AppConfig` interface for readonly configuration from environment variables
 - `AppDeps` interface for the dependency injection bag, including properties: `config`, `safePath`, `pluginManager`, `hookDispatcher`, `buildPromptFromStory`, `verifyPassphrase`
 - `SafePathFn` type alias for the safe path resolution function
-- `PluginManifest` interface for plugin.json schema, including properties: `name`, `version`, `description`, `type`, `tags`, `backendModule`, `frontendModule`, `stripTags`, `promptFragments`, `parameters`
+- `PluginManifest` interface for plugin.json schema, including properties: `name`, `version`, `description`, `type`, `tags`, `backendModule`, `frontendModule`, `promptStripTags`, `displayStripTags`, `promptFragments`, `parameters`
 - `PluginParameter` interface for parameter entries in plugin manifests
 - `PromptFragment` interface for prompt fragment entries in plugin manifests
 - `PluginModule` interface for dynamically imported backend modules, with optional members: `register?: function`, `default?: function`
@@ -61,7 +61,7 @@ The following interfaces and types SHALL be defined:
 
 #### Scenario: PluginManifest covers plugin.json schema
 - **WHEN** a plugin.json file is loaded and typed as `PluginManifest`
-- **THEN** all declared properties (`name`, `version`, `description`, `type`, `tags`, `backendModule`, `frontendModule`, `stripTags`, `promptFragments`, `parameters`) SHALL be accessible with their correct types
+- **THEN** all declared properties (`name`, `version`, `description`, `type`, `tags`, `backendModule`, `frontendModule`, `promptStripTags`, `displayStripTags`, `promptFragments`, `parameters`) SHALL be accessible with their correct types
 
 ### Requirement: Explicit return types
 

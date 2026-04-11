@@ -1,12 +1,12 @@
 // js/md-renderer.js — Markdown rendering pipeline
 
-import { frontendHooks } from './plugin-loader.js';
+import { frontendHooks, applyDisplayStrip } from './plugin-loader.js';
 
 /**
  * Render a raw markdown chapter through the plugin-driven pipeline:
  *
  *  1. Dispatch 'frontend-render' hooks    → extraction + placeholders
- *  2. Dispatch 'frontend-strip' hooks     → tag removal
+ *  2. Apply declarative displayStripTags    → tag removal
  *  3. Quote normalisation                 → ASCII "
  *  4. Newline doubling                    → \n → \n\n
  *  5. Markdown → HTML via marked.parse()
@@ -26,10 +26,8 @@ export function renderChapter(rawMarkdown, options = {}) {
   frontendHooks.dispatch('frontend-render', renderContext);
   text = renderContext.text;
 
-  // 2. Plugin-driven tag stripping
-  const stripContext = { text };
-  frontendHooks.dispatch('frontend-strip', stripContext);
-  text = stripContext.text;
+  // 2. Declarative display strip tag removal
+  text = applyDisplayStrip(text);
 
   // 3. Quote normalisation
   text = text.replace(/[\u201c\u201d\u00ab\u00bb\u300c\u300d\uff62\uff63\u300a\u300b\u201e]/g, '"');

@@ -47,18 +47,18 @@ The renderer SHALL convert the processed prose text from markdown format to HTML
 
 ### Requirement: Hidden XML block removal
 
-XML blocks registered in the `frontend-strip` hook stage SHALL be completely removed from the rendered output. Their content MUST NOT be visible to the user in any form. The list of tags to strip SHALL be determined dynamically from plugins that register `frontend-strip` handlers, rather than a hardcoded list of `<imgthink>` and `<disclaimer>`.
+XML blocks declared in a plugin's `displayStripTags` manifest field SHALL be completely removed from the rendered output. Their content MUST NOT be visible to the user in any form. The list of tags to strip SHALL be determined declaratively from plugin manifests via the `displayStripTags` field, rather than through hook handlers or a hardcoded list.
 
-#### Scenario: Plugin-registered strip tag is hidden
-- **WHEN** the chapter contains a block matching a tag registered in the `frontend-strip` hook (e.g., `<imgthink>some internal note</imgthink>`)
+#### Scenario: Plugin-declared display strip tag is hidden
+- **WHEN** the chapter contains a block matching a tag declared in a plugin's `displayStripTags` (e.g., `<imgthink>some internal note</imgthink>`)
 - **THEN** the block and its content SHALL not appear in the rendered HTML output
 
-#### Scenario: Multiple plugins register strip tags
-- **WHEN** multiple plugins register different tag names in the `frontend-strip` hook (e.g., one registers `imgthink`, another registers `disclaimer`)
-- **THEN** all registered tags SHALL be stripped from the rendered output
+#### Scenario: Multiple plugins declare display strip tags
+- **WHEN** multiple plugins declare different tag names in `displayStripTags` (e.g., one declares `imgthink`, another declares `disclaimer`)
+- **THEN** all declared tags SHALL be stripped from the rendered output
 
-#### Scenario: No strip tags registered
-- **WHEN** no plugins have registered `frontend-strip` handlers
+#### Scenario: No display strip tags declared
+- **WHEN** no plugins have declared `displayStripTags` entries
 - **THEN** no tags SHALL be stripped and all content passes through to rendering
 
 ### Requirement: Chinese and Japanese text rendering

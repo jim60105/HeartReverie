@@ -26,7 +26,7 @@ The system prompt template (`system.md`) SHALL receive the following variables f
 
 #### Scenario: previous_context contains stripped chapters without compaction
 - **WHEN** chapters with content exist and the context-compaction plugin is not active
-- **THEN** `previous_context` SHALL contain one string per chapter, ordered numerically, with tags registered by all active plugins' `stripTags` (including `state-patches` for `UpdateVariable`, `threshold-lord` for `disclaimer`, and `user-message` for `user_message`) already removed
+- **THEN** `previous_context` SHALL contain one string per chapter, ordered numerically, with tags registered by all active plugins' `promptStripTags` (including `state-patches` for `UpdateVariable`, `threshold-lord` for `disclaimer`, and `user-message` for `user_message`) already removed
 
 #### Scenario: previous_context contains tiered content with compaction
 - **WHEN** chapters with content exist and the context-compaction plugin is active with summaries available

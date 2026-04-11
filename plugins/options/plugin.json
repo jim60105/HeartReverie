@@ -8,5 +8,5 @@
   ],
   "frontendModule": "./frontend.js",
   "tags": ["options"],
-  "stripTags": ["options"]
+  "promptStripTags": ["options"]
 }

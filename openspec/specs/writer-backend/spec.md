@@ -106,7 +106,7 @@ The content previously delivered via `after_user_message.md` as a separate syste
 
 The messages array SHALL be simplified to exactly two messages: a system message containing the fully rendered template output, followed by a user message containing the raw user input.
 
-Before including chapter content in the `previous_context` array, the server SHALL strip tags registered in the `frontend-strip` hook stage from the chapter text, rather than using a hardcoded list. Plugins that register strip-tags handlers SHALL declare which tag names to strip. The stripping SHALL be applied per-chapter using a multiline-aware regex. The result SHALL be trimmed to remove leading/trailing whitespace left by the removed tags.
+Before including chapter content in the `previous_context` array, the server SHALL strip tags declared in each plugin's `promptStripTags` manifest field from the chapter text, rather than using a hardcoded list. The stripping SHALL be applied per-chapter using a multiline-aware regex. The result SHALL be trimmed to remove leading/trailing whitespace left by the removed tags.
 
 #### Scenario: First round prompt construction
 - **WHEN** a chat request is made and no chapters with content exist yet
@@ -126,12 +126,12 @@ Before including chapter content in the `previous_context` array, the server SHA
 - **WHEN** the `prompt-assembly` hook is invoked and no plugins have registered handlers
 - **THEN** `plugin_prompts` SHALL be an empty array and the template SHALL render without plugin prompt sections
 
-#### Scenario: Chapter tag stripping uses plugin-registered strip list
-- **WHEN** a chapter's content contains tags registered by plugins in the `frontend-strip` hook stage (e.g., `<options>`, `<disclaimer>`, `<user_message>`)
+#### Scenario: Chapter tag stripping uses plugin-declared promptStripTags
+- **WHEN** a chapter's content contains tags declared by plugins in their `promptStripTags` manifest field (e.g., `<options>`, `<disclaimer>`, `<user_message>`)
 - **THEN** those tags and all content between them SHALL be removed from the chapter text before it is included in the `previous_context` array
 
 #### Scenario: Chapter without special tags
-- **WHEN** a chapter's content does not contain any tags registered in the `frontend-strip` hook stage
+- **WHEN** a chapter's content does not contain any tags declared in any plugin's `promptStripTags`
 - **THEN** the chapter content SHALL be included in `previous_context` unchanged (aside from trimming)
 
 #### Scenario: Vento template rendering

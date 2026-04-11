@@ -4,7 +4,7 @@
   "description": "User message lifecycle: wrap input in tags, strip from context and display",
   "type": "full-stack",
   "backendModule": "./handler.ts",
-  "frontendModule": "./frontend.js",
+  "displayStripTags": ["user_message"],
   "tags": ["user_message"],
-  "stripTags": ["user_message"]
+  "promptStripTags": ["user_message"]
 }

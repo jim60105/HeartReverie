@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "description": "Threshold Lord prompt fragments and disclaimer tag cleanup",
   "type": "prompt-only",
-  "frontendModule": "./frontend.js",
+  "displayStripTags": ["disclaimer"],
   "tags": ["disclaimer"],
-  "stripTags": ["disclaimer"],
+  "promptStripTags": ["disclaimer"],
   "promptFragments": [
     { "file": "./Threshold-Lord_start.md", "variable": "threshold_lord_start", "priority": 10 },
     { "file": "./Threshold-Lord_end.md", "variable": "threshold_lord_end", "priority": 900 }

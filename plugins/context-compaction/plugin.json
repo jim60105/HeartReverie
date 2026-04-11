@@ -10,7 +10,7 @@
       "priority": 800
     }
   ],
-  "stripTags": ["chapter_summary"],
-  "backendModule": "./handler.ts",
-  "frontendModule": "./frontend.js"
+  "promptStripTags": ["chapter_summary"],
+  "displayStripTags": ["chapter_summary"],
+  "backendModule": "./handler.ts"
 }

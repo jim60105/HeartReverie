@@ -1,0 +1,76 @@
+# Plugin Core
+
+## MODIFIED Requirements
+
+### Requirement: Plugin manifest format
+
+Each plugin SHALL have a `plugin.json` (or `plugin.yaml`) manifest file in its root directory. The manifest SHALL contain the following fields: `name` (string, unique identifier), `version` (semver string), `description` (string), `type` (one of `full-stack`, `prompt-only`, `frontend-only`, `hook-only`), `prompts` (array of relative paths to prompt files to contribute), `frontend` (array of relative paths to frontend ES module scripts), `hooks` (object mapping hook stage names to handler file paths), `dependencies` (array of plugin names this plugin depends on), `promptStripTags` (array of plain tag names or regex pattern strings for prompt-time stripping from previousContext, formerly `stripTags`), and `displayStripTags` (array of plain tag names or regex pattern strings for display-time stripping in the frontend). The `name` and `version` fields SHALL be required; all other fields SHALL be optional with sensible defaults (empty arrays/objects).
+
+Plugins that only need frontend tag stripping SHALL declare `displayStripTags` without requiring a `frontendModule`. The `frontendModule` field SHALL only be needed for plugins that register `frontend-render` hooks.
+
+#### Scenario: Valid full-stack plugin manifest
+- **WHEN** a plugin directory contains a `plugin.json` with `name`, `version`, `type` set to `full-stack`, `prompts`, `frontend`, and `hooks` fields
+- **THEN** the loader SHALL parse the manifest and register the plugin with all declared capabilities
+
+#### Scenario: Minimal prompt-only plugin manifest
+- **WHEN** a plugin directory contains a `plugin.json` with only `name`, `version`, and `prompts` fields
+- **THEN** the loader SHALL parse the manifest successfully, defaulting `type` to `prompt-only`, `frontend` to `[]`, `hooks` to `{}`, `dependencies` to `[]`, and `displayStripTags` to `[]`
+
+#### Scenario: Invalid manifest missing required fields
+- **WHEN** a plugin directory contains a `plugin.json` without a `name` or `version` field
+- **THEN** the loader SHALL log an error identifying the plugin directory and the missing field(s), and SHALL skip loading that plugin
+
+#### Scenario: YAML manifest format
+- **WHEN** a plugin directory contains a `plugin.yaml` instead of `plugin.json`
+- **THEN** the loader SHALL parse the YAML manifest identically to JSON and register the plugin
+
+#### Scenario: Plugin with displayStripTags but no frontendModule
+- **WHEN** a plugin declares `displayStripTags: ["imgthink"]` but does not declare `frontendModule`
+- **THEN** the loader SHALL register the plugin and the frontend SHALL apply the strip patterns from metadata without loading a JavaScript module
+
+### Requirement: Plugin discovery and loading
+
+The server SHALL scan the built-in plugins directory (`plugins/`) at startup to discover and load plugins. The server SHALL also scan an external plugin path specified by the `PLUGIN_DIR` environment variable if set. File system operations SHALL use Deno native APIs (`Deno.readDir()`, `Deno.readTextFile()`). Path operations SHALL use `@std/path`. Dynamic module loading SHALL use `import()` which is compatible in both Node.js and Deno. The frontend SHALL discover available plugins via a `GET /api/plugins` endpoint that returns the list of loaded plugins with their manifest metadata and enabled status.
+
+The built-in plugin set SHALL include the following consolidated plugins:
+- `state-patches` (full-stack): merged from former `apply-patches` and `variable-display` plugins — owns the complete `<UpdateVariable><JSONPatch>…</JSONPatch></UpdateVariable>` lifecycle including backend state mutation, frontend rendering, and tag stripping
+- `threshold-lord` (prompt-only): merged from former `threshold-lord` and `disclaimer` plugins — owns both prompt injection and `<disclaimer>` tag cleanup via `displayStripTags`
+- `user-message` (full-stack): expanded to own the full `<user_message>` lifecycle including block construction via `pre-write` hook, tag stripping from previousContext, and frontend display stripping via `displayStripTags`
+
+The former standalone plugin directories `apply-patches`, `variable-display`, and `disclaimer` SHALL no longer exist.
+
+#### Scenario: Built-in plugin discovery at startup
+- **WHEN** the server starts and the `plugins/` directory contains subdirectories with valid `plugin.json` manifests
+- **THEN** the server SHALL load each valid plugin using Deno file system APIs and register it in the plugin registry
+
+#### Scenario: External plugin path discovery
+- **WHEN** the `PLUGIN_DIR` environment variable is set to a directory path containing plugin subdirectories
+- **THEN** the server SHALL scan that directory using `Deno.readDir()` and load plugins from it in addition to built-in plugins
+
+#### Scenario: Path containment check
+- **WHEN** a plugin's `backendModule`, `promptFragments`, or `frontendModule` path is resolved
+- **THEN** the system SHALL verify the resolved path is within the plugin directory using `@std/path` utilities
+
+#### Scenario: PLUGIN_DIR not set
+- **WHEN** the `PLUGIN_DIR` environment variable is not set
+- **THEN** the server SHALL load only built-in plugins from `plugins/` without error
+
+#### Scenario: Frontend plugin discovery via API
+- **WHEN** the frontend sends `GET /api/plugins`
+- **THEN** the server SHALL return a JSON array of objects, each containing the plugin's `name`, `version`, `description`, `type`, `enabled` status, and `displayStripTags` array
+
+#### Scenario: Plugin directory with no valid manifest
+- **WHEN** a subdirectory in `plugins/` contains no `plugin.json` or `plugin.yaml`
+- **THEN** the loader SHALL log a warning for that subdirectory and skip it without affecting other plugins
+
+#### Scenario: Consolidated state-patches plugin loaded
+- **WHEN** the server discovers the `state-patches` plugin directory
+- **THEN** it SHALL load a `full-stack` plugin with backend module (post-response hook for Rust binary), frontend module (UpdateVariable renderer), and `promptStripTags` for `UpdateVariable`
+
+#### Scenario: Consolidated threshold-lord plugin loaded
+- **WHEN** the server discovers the `threshold-lord` plugin directory
+- **THEN** it SHALL load a plugin with promptFragments (`threshold_lord_start`, `threshold_lord_end`), `displayStripTags` for `disclaimer`, and `promptStripTags` for `disclaimer`
+
+#### Scenario: Expanded user-message plugin loaded
+- **WHEN** the server discovers the `user-message` plugin directory
+- **THEN** it SHALL load a plugin with backend module (pre-write hook for user message block injection), `displayStripTags` for `user_message`, and `promptStripTags` for `user_message`

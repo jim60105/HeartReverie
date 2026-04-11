@@ -47,7 +47,7 @@ Integration tests SHALL cover all API route handlers with mocked file system and
 Unit tests SHALL cover `PluginManager` methods: `getStripTagPatterns()`, `getPromptVariables()`, `getParameters()`, and manifest validation logic.
 
 #### Scenario: Strip tag pattern generation
-- **WHEN** plugins declare both plain tag names and regex patterns in `stripTags`
+- **WHEN** plugins declare both plain tag names and regex patterns in `promptStripTags`
 - **THEN** `getStripTagPatterns()` returns a combined RegExp that matches all declared patterns
 
 #### Scenario: Invalid plugin name rejection

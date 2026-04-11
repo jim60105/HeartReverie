@@ -24,7 +24,7 @@ The context-compaction plugin SHALL declare a `promptFragments` entry that injec
 
 ### Requirement: Chapter summary tag stripping
 
-The context-compaction plugin SHALL declare `chapter_summary` in its `stripTags` configuration and SHALL provide a `frontendModule` that strips the `<chapter_summary>` tag from display. The backend `stripPromptTags()` function SHALL remove `<chapter_summary>` tags from chapter content when building `previous_context` for recent chapters (L2 layer). The frontend SHALL not render the `<chapter_summary>` tag content to the reader.
+The context-compaction plugin SHALL declare `chapter_summary` in its `promptStripTags` configuration and SHALL declare `chapter_summary` in its `displayStripTags` configuration to strip the `<chapter_summary>` tag from display. The backend `stripPromptTags()` function SHALL remove `<chapter_summary>` tags from chapter content when building `previous_context` for recent chapters (L2 layer). The frontend SHALL not render the `<chapter_summary>` tag content to the reader.
 
 #### Scenario: Backend strips summary from recent chapters
 - **WHEN** `stripPromptTags()` processes a chapter containing a `<chapter_summary>` tag
@@ -85,9 +85,9 @@ If no configuration file exists at either level, the plugin SHALL use default va
 
 The context-compaction plugin SHALL register as a `full-stack` type plugin with:
 1. A `promptFragments` entry injecting the chapter summary instruction into the system prompt.
-2. A `stripTags` entry declaring `chapter_summary` for backend tag stripping.
+2. A `promptStripTags` entry declaring `chapter_summary` for backend tag stripping.
 3. A `backendModule` that exports a `register(hookDispatcher)` function registering a `prompt-assembly` handler (priority 100) for tiered context assembly.
-4. A `frontendModule` that strips `<chapter_summary>` tags from the reader display.
+4. A `displayStripTags` entry declaring `chapter_summary` for frontend display stripping.
 
 #### Scenario: Prompt-assembly hook registration
 - **WHEN** the plugin is loaded by the plugin manager

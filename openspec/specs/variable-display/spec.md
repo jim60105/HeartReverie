@@ -48,7 +48,7 @@ The variable-display functionality SHALL be provided by the consolidated `state-
 - **type**: `full-stack`
 - **backendModule**: handler for `post-response` hook (Rust binary invocation)
 - **frontendModule**: handler for `frontend-render` hook (UpdateVariable block rendering)
-- **stripTags**: `["UpdateVariable"]`
+- **promptStripTags**: `["UpdateVariable"]`
 - **tags**: `["UpdateVariable", "update"]`
 
 The `state-patches` plugin SHALL register:
