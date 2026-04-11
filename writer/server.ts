@@ -31,8 +31,8 @@ if (!certFile || !keyFile) {
   Deno.exit(1);
 }
 
-if (!Deno.env.get("OPENROUTER_API_KEY")) {
-  console.warn("⚠️  OPENROUTER_API_KEY is not set — chat functionality will not work");
+if (!Deno.env.get("LLM_API_KEY")) {
+  console.warn("⚠️  LLM_API_KEY is not set — chat functionality will not work");
 }
 
 // ── Plugin system ───────────────────────────────────────────────

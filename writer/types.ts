@@ -26,8 +26,16 @@ export interface AppConfig {
   readonly PORT: number;
   readonly CERT_FILE: string | undefined;
   readonly KEY_FILE: string | undefined;
-  readonly OPENROUTER_API_URL: string;
-  readonly OPENROUTER_MODEL: string;
+  readonly LLM_API_URL: string;
+  readonly LLM_MODEL: string;
+  readonly LLM_TEMPERATURE: number;
+  readonly LLM_FREQUENCY_PENALTY: number;
+  readonly LLM_PRESENCE_PENALTY: number;
+  readonly LLM_TOP_K: number;
+  readonly LLM_TOP_P: number;
+  readonly LLM_REPETITION_PENALTY: number;
+  readonly LLM_MIN_P: number;
+  readonly LLM_TOP_A: number;
 }
 
 /** Function that resolves path segments under the playground directory, returning null on traversal. */
@@ -166,8 +174,8 @@ export interface ProblemDetail {
   [key: string]: unknown;
 }
 
-/** OpenRouter SSE stream chunk shape. */
-export interface OpenRouterStreamChunk {
+/** LLM SSE stream chunk shape (OpenAI-compatible format). */
+export interface LLMStreamChunk {
   choices?: ReadonlyArray<{
     delta?: {
       content?: string;

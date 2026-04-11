@@ -2,7 +2,7 @@
 
 ## Overview
 
-**HeartReverie 浮心夜夢** — An AI-driven interactive fiction engine built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via OpenRouter, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under GPL-3.0-or-later.
+**HeartReverie 浮心夜夢** — An AI-driven interactive fiction engine built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via any OpenAI-compatible API, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under GPL-3.0-or-later.
 
 ## Project Structure
 
@@ -98,15 +98,24 @@ The script auto-generates self-signed TLS certs in `.certs/` on first run. HTTPS
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OPENROUTER_API_KEY` | Yes | — | OpenRouter API key (stored in `.env`) |
+| `LLM_API_KEY` | Yes | — | LLM provider API key (stored in `.env`) |
 | `PASSPHRASE` | Yes | — | API authentication passphrase (stored in `.env`) |
 | `PORT` | No | `8443` | Server listen port |
-| `OPENROUTER_MODEL` | No | `deepseek/deepseek-v3.2` | LLM model identifier |
+| `LLM_MODEL` | No | `deepseek/deepseek-v3.2` | LLM model identifier |
+| `LLM_API_URL` | No | `https://openrouter.ai/api/v1/chat/completions` | LLM chat completions endpoint |
+| `LLM_TEMPERATURE` | No | `0.1` | Sampling temperature |
+| `LLM_FREQUENCY_PENALTY` | No | `0.13` | Frequency penalty |
+| `LLM_PRESENCE_PENALTY` | No | `0.52` | Presence penalty |
+| `LLM_TOP_K` | No | `10` | Top-K sampling |
+| `LLM_TOP_P` | No | `0` | Top-P (nucleus) sampling |
+| `LLM_REPETITION_PENALTY` | No | `1.2` | Repetition penalty |
+| `LLM_MIN_P` | No | `0` | Min-P sampling |
+| `LLM_TOP_A` | No | `1` | Top-A sampling |
 | `PLUGIN_DIR` | No | — | External plugin directory (absolute path) |
 | `PLAYGROUND_DIR` | No | `./playground` | Story data root |
 | `READER_DIR` | No | `./reader` | Frontend static files root |
 
-The `.env` file is gitignored. Create it manually with `OPENROUTER_API_KEY` and `PASSPHRASE`.
+The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_API_KEY` and `PASSPHRASE`.
 
 ## Building the Rust CLI
 
