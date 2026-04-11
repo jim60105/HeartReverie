@@ -2,7 +2,7 @@
 
 ## Overview
 
-**MD Story Tools** — A toolset for AI-driven interactive fiction, built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via OpenRouter, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under GPL-3.0-or-later.
+**HeartReverie 浮心夜夢** — An AI-driven interactive fiction engine built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via OpenRouter, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under GPL-3.0-or-later.
 
 ## Project Structure
 
@@ -200,7 +200,7 @@ Plugin interaction layers:
 1. `buildPromptFromStory()` reads chapters, strips tags, loads status YAML, detects first-round
 2. `renderSystemPrompt()` collects plugin variables via `getPromptVariables()`, renders `system.md` through Vento engine
 3. Result is sent as the system message to OpenRouter, user input as the user message
-4. LLM response is streamed back, tags stripped, post-response hooks dispatched
+4. LLM response is streamed from OpenRouter, written incrementally to chapter file, tags stripped, post-response hooks dispatched
 
 ### Frontend Rendering Pipeline
 
