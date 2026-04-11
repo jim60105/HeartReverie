@@ -20,6 +20,7 @@
     "@std/crypto": "jsr:@std/crypto@^1",
     "@std/dotenv": "jsr:@std/dotenv@^0.225",
     "@std/testing": "jsr:@std/testing@^1",
+    "@std/yaml": "jsr:@std/yaml@^1",
     "ventojs": "npm:ventojs@^2.3.1"
   }
 }
