@@ -14,7 +14,7 @@ The system prompt template (`system.md`) SHALL receive the following variables f
 - `user_input` (string): The raw user message.
 - `status_data` (string): The status file content (from `current-status.yml` or `init-status.yml`). Named `status_data` to avoid conflict with the template-local `status` variable set via `{{ set status }}{{ include "./status.md" }}{{ /set }}`.
 - `isFirstRound` (boolean): `true` when no chapters with non-empty content exist, `false` otherwise.
-- `plugin_prompts` (array of `{name, content}` objects): Prompt fragments contributed by plugins via the `prompt-assembly` hook. Each object contains the plugin `name` (string) and the prompt fragment `content` (string). The array is ordered by hook handler priority.
+- `plugin_prompts` (array of `{name, content}` objects): Prompt fragments contributed by plugins via the `prompt-assembly` hook. Each object contains the plugin `name` (string) and the prompt fragment `content` (string). The array is ordered by hook handler priority. After plugin consolidation, the `threshold-lord` plugin contributes prompt fragments under its own name (unchanged), absorbing the former `disclaimer` plugin's functionality.
 
 #### Scenario: All variables passed to template
 - **WHEN** the system prompt is rendered
@@ -26,7 +26,7 @@ The system prompt template (`system.md`) SHALL receive the following variables f
 
 #### Scenario: previous_context contains stripped chapters without compaction
 - **WHEN** chapters with content exist and the context-compaction plugin is not active
-- **THEN** `previous_context` SHALL contain one string per chapter, ordered numerically, with tags registered in the `frontend-strip` hook stage already removed
+- **THEN** `previous_context` SHALL contain one string per chapter, ordered numerically, with tags registered by all active plugins' `stripTags` (including `state-patches` for `UpdateVariable`, `threshold-lord` for `disclaimer`, and `user-message` for `user_message`) already removed
 
 #### Scenario: previous_context contains tiered content with compaction
 - **WHEN** chapters with content exist and the context-compaction plugin is active with summaries available
@@ -39,6 +39,10 @@ The system prompt template (`system.md`) SHALL receive the following variables f
 #### Scenario: plugin_prompts is empty when no plugins contribute
 - **WHEN** no plugins have registered `prompt-assembly` handlers
 - **THEN** `plugin_prompts` SHALL be an empty array
+
+#### Scenario: threshold-lord prompt fragments unchanged after merge
+- **WHEN** the consolidated `threshold-lord` plugin contributes prompt fragments
+- **THEN** the template variables `threshold_lord_start` and `threshold_lord_end` SHALL remain available with identical content as before the merger
 
 ### Requirement: Template prompt structure
 

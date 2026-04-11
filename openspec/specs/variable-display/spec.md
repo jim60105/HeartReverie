@@ -43,26 +43,28 @@ All `<UpdateVariable>` collapsible sections (both complete and incomplete) SHALL
 
 ### Requirement: Plugin manifest and registration
 
-The variable-display SHALL register itself as a frontend-only plugin with the plugin system. The plugin manifest SHALL declare:
-- **name**: `variable-display`
-- **type**: `frontend-only`
-- **frontend tag handler**: The plugin SHALL register a `frontend-render` handler for the `<UpdateVariable>` tag name, with the existing variable display renderer as the handler function
+The variable-display functionality SHALL be provided by the consolidated `state-patches` plugin (merged from former `apply-patches` and `variable-display` plugins). The `state-patches` plugin manifest SHALL declare:
+- **name**: `state-patches`
+- **type**: `full-stack`
+- **backendModule**: handler for `post-response` hook (Rust binary invocation)
+- **frontendModule**: handler for `frontend-render` hook (UpdateVariable block rendering)
+- **stripTags**: `["UpdateVariable"]`
+- **tags**: `["UpdateVariable", "update"]`
 
-During plugin initialization, the variable-display plugin SHALL:
-1. Register its `<UpdateVariable>` tag with the md-renderer's tag handler registration API as type `render`
+The `state-patches` plugin SHALL register:
+1. A `post-response` hook handler for running the `apply-patches` Rust binary
+2. A `frontend-render` hook handler for extracting and rendering `<UpdateVariable>` blocks
 
-The plugin SHALL NOT register any `prompt-assembly`, `post-response`, or `frontend-strip` hooks, as it is a frontend-only plugin that only renders extracted blocks.
+The former standalone `variable-display` plugin directory SHALL no longer exist. All UpdateVariable rendering behavior (complete blocks, incomplete blocks, content display, multiple blocks, default collapsed state) SHALL be preserved identically in the merged plugin's frontend module.
 
-The existing complete/incomplete block rendering, content display, multiple blocks handling, and default collapsed state requirements remain unchanged — they are now invoked through the plugin system's `frontend-render` hook rather than hardcoded pipeline calls.
+#### Scenario: state-patches registers as a full-stack plugin
+- **WHEN** the plugin system initializes the `state-patches` plugin
+- **THEN** the plugin SHALL register its manifest with type `full-stack`, register its `post-response` backend hook handler, and register its `<UpdateVariable>` frontend-render handler
 
-#### Scenario: Variable-display registers as a frontend-only plugin
-- **WHEN** the plugin system initializes the variable-display plugin
-- **THEN** the plugin SHALL register its manifest with type `frontend-only` and register its `<UpdateVariable>` tag handler with the md-renderer's tag handler registration API
-
-#### Scenario: UpdateVariable tag rendered via plugin system
+#### Scenario: UpdateVariable tag rendered via merged plugin
 - **WHEN** the md-renderer encounters an `<UpdateVariable>` block during XML extraction
-- **THEN** the block SHALL be passed to the variable-display plugin's registered renderer, producing the same collapsible `<details>` output as before
+- **THEN** the block SHALL be passed to the `state-patches` plugin's registered renderer, producing the same collapsible `<details>` output as the former `variable-display` plugin
 
-#### Scenario: No backend hooks registered
-- **WHEN** the variable-display plugin is initialized
-- **THEN** it SHALL NOT register any `prompt-assembly`, `post-response`, or `frontend-strip` hook handlers
+#### Scenario: Backend and frontend capabilities coexist
+- **WHEN** the `state-patches` plugin is loaded
+- **THEN** it SHALL provide both `post-response` hook handling (Rust binary invocation) and `frontend-render` hook handling (UpdateVariable rendering) within the same plugin
