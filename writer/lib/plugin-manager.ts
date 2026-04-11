@@ -272,7 +272,7 @@ export class PluginManager {
 
     if (patterns.length === 0) return null;
 
-    return new RegExp(patterns.join("|"), "g");
+    return new RegExp(patterns.join("|"), "gi");
   }
 
   /**

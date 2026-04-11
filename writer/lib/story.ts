@@ -16,11 +16,13 @@
 import { join } from "@std/path";
 import type { SafePathFn, StoryEngine, BuildPromptResult, RenderResult, RenderOptions, ChapterEntry } from "../types.ts";
 import type { PluginManager } from "./plugin-manager.ts";
+import type { HookDispatcher } from "./hooks.ts";
 
 export function createStoryEngine(
   pluginManager: PluginManager,
   safePath: SafePathFn,
   renderSystemPrompt: (series: string, options?: RenderOptions) => Promise<RenderResult>,
+  hookDispatcher: HookDispatcher,
 ): StoryEngine {
   function stripPromptTags(content: string): string {
     const pluginRegex = pluginManager.getStripTagPatterns();
@@ -91,15 +93,35 @@ export function createStoryEngine(
 
     const isFirstRound: boolean = chapters.every((ch) => ch.content.trim() === "");
 
-    const previousContext: string[] = chapters
-      .map((ch) => stripPromptTags(ch.content))
-      .filter((content) => content.length > 0);
+    // Filter to non-empty chapters first, then build both arrays from the same set
+    // to keep indices aligned for the compaction plugin
+    const nonEmptyChapters = chapters.filter((ch) => ch.content.trim().length > 0);
+
+    const previousContext: string[] = nonEmptyChapters
+      .map((ch) => stripPromptTags(ch.content));
+
+    const rawChapters: string[] = nonEmptyChapters
+      .map((ch) => ch.content);
+
+    // Allow plugins to modify previousContext (e.g., context compaction)
+    const hookContext: Record<string, unknown> = {
+      previousContext,
+      rawChapters,
+      storyDir,
+      series,
+      name,
+    };
+    await hookDispatcher.dispatch("prompt-assembly", hookContext);
+
+    // Remove entries that became empty after stripping (before hook, some entries
+    // may be empty if a chapter consisted only of stripped tags)
+    const filteredContext = previousContext.filter((c) => c.length > 0);
 
     const statusContent: string = await loadStatus(series, name);
 
     const { content: prompt, error: ventoError } =
       await renderSystemPrompt(series, {
-        previousContext,
+        previousContext: filteredContext,
         userInput: message,
         status: statusContent,
         isFirstRound,
@@ -109,7 +131,7 @@ export function createStoryEngine(
 
     return {
       prompt,
-      previousContext,
+      previousContext: filteredContext,
       statusContent,
       isFirstRound,
       ventoError,

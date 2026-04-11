@@ -1,0 +1,16 @@
+{
+  "name": "context-compaction",
+  "version": "1.0.0",
+  "description": "Tiered context compaction via inline chapter summaries",
+  "type": "full-stack",
+  "promptFragments": [
+    {
+      "file": "./chapter-summary-instruction.md",
+      "variable": "context_compaction",
+      "priority": 800
+    }
+  ],
+  "stripTags": ["chapter_summary"],
+  "backendModule": "./handler.ts",
+  "frontendModule": "./frontend.js"
+}
