@@ -2,7 +2,7 @@
 
 ## Overview
 
-**apply-patches** — A Rust CLI tool that processes YAML state files by applying custom JSONPatch operations extracted from numbered markdown files. For each sub-directory containing an `init-status.yml`, it clones the initial state, applies `<JSONPatch>` blocks from `.md` files in numeric order, and writes the result to `current-status.yml`.
+**state-patches** — A Rust CLI tool that processes YAML state files by applying custom JSONPatch operations extracted from numbered markdown files. For each sub-directory containing an `init-status.yml`, it clones the initial state, applies `<JSONPatch>` blocks from `.md` files in numeric order, and writes the result to `current-status.yml`.
 
 ## File Structure
 
@@ -62,7 +62,7 @@ Paths use JSON Pointer style: `/key1/key2/key3`
 
 ```bash
 cargo build --release
-./target/release/apply-patches [root_directory]  # default: current directory
+./target/release/state-patches [root_directory]  # default: current directory
 ```
 
 ### Important Constraints

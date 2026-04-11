@@ -43,7 +43,7 @@ All `<UpdateVariable>` collapsible sections (both complete and incomplete) SHALL
 
 ### Requirement: Plugin manifest and registration
 
-The variable-display functionality SHALL be provided by the consolidated `state-patches` plugin (merged from former `apply-patches` and `variable-display` plugins). The `state-patches` plugin manifest SHALL declare:
+The variable-display functionality SHALL be provided by the consolidated `state-patches` plugin (merged from former `state-patches` and `variable-display` plugins). The `state-patches` plugin manifest SHALL declare:
 - **name**: `state-patches`
 - **type**: `full-stack`
 - **backendModule**: handler for `post-response` hook (Rust binary invocation)
@@ -52,7 +52,7 @@ The variable-display functionality SHALL be provided by the consolidated `state-
 - **tags**: `["UpdateVariable", "update"]`
 
 The `state-patches` plugin SHALL register:
-1. A `post-response` hook handler for running the `apply-patches` Rust binary
+1. A `post-response` hook handler for running the `state-patches` Rust binary
 2. A `frontend-render` hook handler for extracting and rendering `<UpdateVariable>` blocks
 
 The former standalone `variable-display` plugin directory SHALL no longer exist. All UpdateVariable rendering behavior (complete blocks, incomplete blocks, content display, multiple blocks, default collapsed state) SHALL be preserved identically in the merged plugin's frontend module.

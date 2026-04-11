@@ -3,7 +3,7 @@
 //!
 //! # Overview
 //!
-//! `apply-patches` scans a root directory for scenario directories containing
+//! `state-patches` scans a root directory for scenario directories containing
 //! `init-status.yml`. For each scenario, it iterates sub-directories, reads
 //! numbered `.md` files in order, extracts `<JSONPatch>` blocks, and applies
 //! the patch operations to produce a `current-status.yml` output.
@@ -36,7 +36,7 @@
 //! # Usage
 //!
 //! ```bash
-//! apply-patches [root_directory]
+//! state-patches [root_directory]
 //! ```
 
 mod convert;
