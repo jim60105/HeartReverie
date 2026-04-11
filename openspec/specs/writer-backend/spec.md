@@ -174,6 +174,18 @@ The server SHALL parse the SSE response by reading `data:` lines from the respon
 - **WHEN** the `LLM_API_KEY` environment variable is not set
 - **THEN** the server SHALL return HTTP 500 with a descriptive error message indicating the missing configuration
 
+#### Scenario: Custom LLM API URL
+- **WHEN** `LLM_API_URL` is set to a non-default value (e.g., a self-hosted vLLM endpoint)
+- **THEN** the server SHALL send chat completion requests to that URL instead of the OpenRouter default
+
+#### Scenario: Custom sampling parameters
+- **WHEN** `LLM_TEMPERATURE` is set to `0.7` in the environment
+- **THEN** the chat completion request body SHALL contain `temperature: 0.7` instead of the default `0.1`
+
+#### Scenario: Invalid sampling parameter value
+- **WHEN** an LLM parameter env var contains a non-numeric value (e.g., `LLM_TEMPERATURE=abc`)
+- **THEN** the server SHALL fall back to the default value for that parameter
+
 #### Scenario: Path traversal prevention
 - **WHEN** a client sends a request with path parameters containing `..` or other traversal sequences
 - **THEN** the server SHALL reject the request with HTTP 400
