@@ -170,8 +170,8 @@ LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T
 
 ```json
 {
-  "promptStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"],
-  "displayStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"]
+  "promptStripTags": ["/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"],
+  "displayStripTags": ["/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"]
 }
 ```
 

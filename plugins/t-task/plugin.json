@@ -7,7 +7,7 @@
     { "file": "./T-task.md", "variable": "t_task", "priority": 100 },
     { "file": "./T-task_think_format.md", "variable": "t_task_think_format", "priority": 100 }
   ],
-  "displayStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"],
+  "displayStripTags": ["/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"],
   "tags": ["T-task"],
-  "promptStripTags": ["/<T-task\\b[^>]*>[\\s\\S]*?<\\/T-task>/g"]
+  "promptStripTags": ["/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"]
 }
