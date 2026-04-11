@@ -497,6 +497,20 @@
             padding: 0.1em 0.3em;
             font-size: 0.9em;
         }
+        #content hr {
+            margin: 2rem auto;
+            border: none;
+            border-block-start: 0.1875rem double var(--border-inner);
+            overflow: visible;
+            text-align: center;
+        }
+        #content hr::after {
+            position: relative;
+            inset-block-start: -1.25rem;
+            content: "💕";
+            color: var(--border-inner);
+            font-size: 1.5rem;
+        }
 
         /* ── Vento Error Card ── */
         .vento-error-card {
