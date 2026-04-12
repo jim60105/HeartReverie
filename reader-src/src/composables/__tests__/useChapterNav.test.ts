@@ -17,11 +17,31 @@ vi.mock("@/router", () => ({
   },
 }));
 
+// Mock useWebSocket
+const mockWsIsConnected = ref(false);
+const mockWsSend = vi.fn();
+const mockWsOnMessage = vi.fn(() => vi.fn());
+
+vi.mock("@/composables/useWebSocket", () => ({
+  useWebSocket: () => ({
+    isConnected: mockWsIsConnected,
+    isAuthenticated: ref(true),
+    send: mockWsSend,
+    onMessage: mockWsOnMessage,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  }),
+}));
+
 describe("useChapterNav", () => {
   beforeEach(() => {
     vi.resetModules();
     stubSessionStorage();
     mockRouteParams.value = {};
+    mockWsIsConnected.value = false;
+    mockWsSend.mockClear();
+    mockWsOnMessage.mockClear();
+    mockWsOnMessage.mockImplementation(() => vi.fn());
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
@@ -151,5 +171,65 @@ describe("useChapterNav", () => {
   it("folderName is initially empty", async () => {
     const nav = await getNav();
     expect(nav.folderName.value).toBe("");
+  });
+
+  describe("WebSocket integration", () => {
+    it("subscribe on loadFromBackend when WS connected", async () => {
+      mockWsIsConnected.value = true;
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve([1]),
+          headers: new Headers(),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ content: "ch1" }),
+          headers: new Headers(),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const nav = await getNav();
+      await nav.loadFromBackend("series1", "story1");
+
+      expect(mockWsSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "subscribe",
+          series: "series1",
+          story: "story1",
+        }),
+      );
+    });
+
+    it("polling does not start when WS is connected", async () => {
+      mockWsIsConnected.value = true;
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve([1]),
+          headers: new Headers(),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ content: "ch1" }),
+          headers: new Headers(),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const nav = await getNav();
+      await nav.loadFromBackend("series1", "story1");
+
+      // After loadFromBackend, the fetch count should be 2 (list + content).
+      // If polling started, additional fetches would be queued.
+      // Wait a tick to ensure no immediate polling.
+      await new Promise((r) => setTimeout(r, 0));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

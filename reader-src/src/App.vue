@@ -3,6 +3,8 @@ import { usePlugins } from "@/composables/usePlugins";
 import { useBackground } from "@/composables/useBackground";
 import { useFileReader } from "@/composables/useFileReader";
 import { useChapterNav } from "@/composables/useChapterNav";
+import { useWebSocket } from "@/composables/useWebSocket";
+import { useAuth } from "@/composables/useAuth";
 import { useRoute } from "vue-router";
 import PassphraseGate from "@/components/PassphraseGate.vue";
 import "@/styles/base.css";
@@ -12,9 +14,15 @@ const { initPlugins } = usePlugins();
 const { applyBackground } = useBackground();
 const { restoreHandle } = useFileReader();
 const { loadFromFSA, loadFromBackend } = useChapterNav();
+const { connect } = useWebSocket();
+const { passphrase } = useAuth();
 
 async function handleUnlocked() {
   await Promise.all([initPlugins(), applyBackground()]);
+
+  // Connect WebSocket after successful auth
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  connect(`${protocol}//${location.host}/api/ws`, passphrase.value);
 
   // If the route has series/story params, load from backend
   const series = route.params.series as string | undefined;

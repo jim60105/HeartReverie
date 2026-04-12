@@ -1,10 +1,4 @@
-# Auto Reload
-
-## Purpose
-
-Provides automatic detection of new chapter files through directory polling and a manual reload button, enabling real-time updates when external applications write new content.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Automatic directory polling
 
@@ -33,22 +27,6 @@ The `useChapterNav()` composable SHALL poll the selected directory to detect new
 #### Scenario: Polling resumes on WebSocket disconnection
 - **WHEN** the WebSocket connection is lost while in backend mode
 - **THEN** the composable SHALL resume the 3-second HTTP polling mechanism within one polling cycle
-
-### Requirement: Manual reload button
-
-The application SHALL provide a reload button (🔄) in the header component that allows the user to manually re-scan the directory for new chapter files. The button click SHALL be wired via a Vue component event handler (e.g., `@click`) instead of an imperative DOM event listener added via `addEventListener`. The button SHALL be hidden until a story folder is loaded, controlled by Vue's conditional rendering (`v-show` or `v-if`).
-
-#### Scenario: Reload button triggers directory re-scan
-- **WHEN** the user clicks the reload button
-- **THEN** the application SHALL immediately re-scan the directory for chapter files and update the file list and navigation UI
-
-#### Scenario: Reload button hidden before story is loaded
-- **WHEN** no story folder has been selected
-- **THEN** the reload button SHALL not be visible in the header
-
-#### Scenario: Reload button uses Vue event binding
-- **WHEN** the reload button is rendered in the header component
-- **THEN** its click handler SHALL be bound via `@click` directive in the Vue template instead of an imperative `addEventListener` call
 
 ### Requirement: Rate-limit backoff
 

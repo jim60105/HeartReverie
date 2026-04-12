@@ -270,10 +270,28 @@ Custom XML blocks from LLM output are processed using the **Extract → Placehol
 
 This prevents markdown from mangling component HTML inside custom XML blocks.
 
+### WebSocket Streaming
+
+The server exposes a WebSocket endpoint at `GET /api/ws` for real-time streaming:
+
+- **Single connection** — one WebSocket per client, registered before body-limit and auth middleware in `writer/app.ts`
+- **First-message auth** — client sends `{ type: "auth", passphrase }` as the first message; server validates with timing-safe comparison, responds `auth:ok` or `auth:error` (close code 4001)
+- **JSON protocol** — all messages are `{ type: "...", ... }` discriminated unions defined in `writer/types.ts` (`WsClientMessage` / `WsServerMessage`)
+- **Chat streaming** — `chat:send` / `chat:resend` messages trigger LLM generation via shared `executeChat()` function in `writer/lib/chat-shared.ts`; each SSE chunk is dual-written (file + WebSocket `chat:delta`); completed with `chat:done` or `chat:error`
+- **Story subscription** — `subscribe` message starts 1-second server-side polling of a story's chapter directory; pushes `chapters:updated` on count change and `chapters:content` on last-chapter content change
+- **Frontend composable** — `useWebSocket.ts` singleton manages connection, auth handshake, and exponential backoff reconnection (1s → 30s cap)
+- **Graceful degradation** — `useChatApi.ts` uses WebSocket when connected, falls back to HTTP POST; `useChapterNav.ts` disables polling when WebSocket is active, resumes on disconnect
+- **Idle timeout** — 60-second inactivity closes connection with code 4002
+
+Key files:
+- `writer/routes/ws.ts` — WebSocket upgrade handler and message dispatching
+- `writer/lib/chat-shared.ts` — Shared chat logic (extracted from HTTP handler, reused by WebSocket)
+- `reader-src/src/composables/useWebSocket.ts` — Frontend WebSocket connection management
+
 ### Security Patterns
 
-- **Authentication**: Passphrase via `X-Passphrase` header, timing-safe comparison (`@std/crypto/timing-safe-equal`)
-- **Rate limiting**: Global 60 req/min, auth/chat/preview 10 req/min
+- **Authentication**: Passphrase via `X-Passphrase` header (HTTP) or first-message auth (WebSocket), timing-safe comparison (`@std/crypto/timing-safe-equal`)
+- **Rate limiting**: Global 60 req/min, auth/chat/preview 10 req/min (WebSocket bypasses rate limiting)
 - **Path traversal prevention**: `isValidParam()`, `safePath()`, `isPathContained()`, `isValidPluginName()` — all enforce directory boundaries
 - **SSTI prevention**: `validateTemplate()` whitelist-only parser for user-submitted Vento templates — blocks function calls, property access, `process.env`
 - **Frontend security**: DOMPurify on all rendered HTML, CSP via `<meta>` tag with SRI hashes
