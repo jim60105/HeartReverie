@@ -126,6 +126,12 @@ export function createApp(deps: AppDeps): Hono {
     serveStatic({ root: assetsRelative, rewriteRequestPath: (p) => p.replace(/^\/assets/, "") })
   );
 
+  // Compatibility route: serve legacy /js/utils.js for third-party plugins
+  app.get("/js/utils.js", (c) => {
+    const js = `export function escapeHtml(str){return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#x27;");}`;
+    return c.body(js, 200, { "Content-Type": "application/javascript; charset=utf-8" });
+  });
+
   // Serve reader frontend
   const readerRelative = relative(Deno.cwd(), deps.config.READER_DIR);
   app.use(

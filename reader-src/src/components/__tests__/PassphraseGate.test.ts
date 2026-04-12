@@ -1,4 +1,4 @@
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import PassphraseGate from "@/components/PassphraseGate.vue";
 

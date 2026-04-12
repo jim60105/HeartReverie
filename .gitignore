@@ -9,6 +9,11 @@ playground/
 .coverage/
 writer/node_modules/
 
+# Vue frontend build
+reader-dist/
+reader-src/node_modules/
+.vite/
+
 # Editor / OS
 .vscode/
 .idea/

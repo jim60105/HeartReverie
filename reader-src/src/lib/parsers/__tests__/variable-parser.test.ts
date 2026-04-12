@@ -30,7 +30,7 @@ describe("extractVariableBlocks", () => {
 
   it("extracts incomplete short form <update> tag", () => {
     const input = "text <update>partial content";
-    const { text, blocks } = extractVariableBlocks(input);
+    const { blocks } = extractVariableBlocks(input);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.data.isComplete).toBe(false);
   });
@@ -38,7 +38,7 @@ describe("extractVariableBlocks", () => {
   it("handles both complete and incomplete blocks", () => {
     const input =
       "<UpdateVariable>done</UpdateVariable> then <UpdateVariable>streaming";
-    const { text, blocks } = extractVariableBlocks(input);
+    const { blocks } = extractVariableBlocks(input);
     expect(blocks).toHaveLength(2);
     expect(blocks[0]!.data.isComplete).toBe(true);
     expect(blocks[0]!.data.content).toBe("done");

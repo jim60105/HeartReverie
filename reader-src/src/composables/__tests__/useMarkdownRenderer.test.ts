@@ -122,7 +122,7 @@ describe("useMarkdownRenderer", () => {
     const { marked } = await import("marked");
     const { renderChapter } = await getRenderer();
     renderChapter("\u201cHello\u201d");
-    const calls = (marked.parse as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = (marked.parse as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const lastCall = calls[calls.length - 1]![0] as string;
     expect(lastCall).toContain('"');
   });
@@ -131,7 +131,7 @@ describe("useMarkdownRenderer", () => {
     const { marked } = await import("marked");
     const { renderChapter } = await getRenderer();
     renderChapter("line1\nline2");
-    const calls = (marked.parse as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = (marked.parse as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const lastCall = calls[calls.length - 1]![0] as string;
     expect(lastCall).toContain("line1\n\nline2");
   });
@@ -140,7 +140,7 @@ describe("useMarkdownRenderer", () => {
     const { marked } = await import("marked");
     const { renderChapter } = await getRenderer();
     renderChapter("test");
-    const calls = (marked.parse as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = (marked.parse as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const lastOpts = calls[calls.length - 1]![1] as { breaks?: boolean };
     expect(lastOpts.breaks).toBe(true);
   });
@@ -149,7 +149,7 @@ describe("useMarkdownRenderer", () => {
     const DOMPurify = (await import("dompurify")).default;
     const { renderChapter } = await getRenderer();
     renderChapter("test");
-    const calls = (DOMPurify.sanitize as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = (DOMPurify.sanitize as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const lastOpts = calls[calls.length - 1]![1] as {
       ADD_TAGS?: string[];
       ADD_ATTR?: string[];

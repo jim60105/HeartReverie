@@ -1,6 +1,10 @@
 // Plugin: options — Options panel extraction, parsing, and rendering
-import { escapeHtml } from '/js/utils.js';
-import { appendToInput } from '/js/chat-input.js';
+
+/** @param {string} str */
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
 
 export function register(hooks) {
   hooks.register('frontend-render', (context) => {
@@ -99,5 +103,6 @@ document.addEventListener('click', (e) => {
         btn.textContent = '已複製!';
         setTimeout(() => { btn.innerHTML = orig; }, 1000);
     });
-    appendToInput(text);
+    // Dispatch custom event for Vue ChatInput to pick up
+    document.dispatchEvent(new CustomEvent('option-selected', { detail: { text } }));
 });

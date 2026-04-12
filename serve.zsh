@@ -46,7 +46,7 @@ fi
 
 export PORT="${1:-8443}"
 export PLAYGROUND_DIR="${PROJECT_ROOT}/playground"
-export READER_DIR="${PROJECT_ROOT}/reader"
+export READER_DIR="${PROJECT_ROOT}/reader-dist"
 export CERT_DIR="${PROJECT_ROOT}/.certs"
 
 echo "🚀 Story writer starting on https://localhost:${PORT}"

@@ -1,5 +1,10 @@
 // Plugin: status — Status panel extraction, parsing, and rendering
-import { escapeHtml } from '/js/utils.js';
+
+/** @param {string} str */
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
 
 export function register(hooks) {
   hooks.register('frontend-render', (context) => {

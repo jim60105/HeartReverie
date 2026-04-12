@@ -9,9 +9,11 @@
   },
   "tasks": {
     "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts",
+    "dev:reader": "cd reader-src && npx vite",
+    "build:reader": "cd reader-src && npx vite build --outDir ../reader-dist",
     "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net tests/writer/",
-    "test:frontend": "deno test --allow-read tests/reader/js/",
-    "test": "deno test --allow-read --allow-write --allow-env --allow-net tests/writer/ tests/reader/js/"
+    "test:frontend": "cd reader-src && npx vitest run",
+    "test": "deno test --allow-read --allow-write --allow-env --allow-net tests/writer/ && cd reader-src && npx vitest run"
   },
   "imports": {
     "@hono/hono": "jsr:@hono/hono@^4",
