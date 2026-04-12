@@ -38,6 +38,37 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
     return c.json(pluginManager.getParameters());
   });
 
+  // Serve shared plugin utility modules from plugins/_shared/
+  const sharedDir = resolve(pluginManager.getBuiltinDir(), "_shared");
+  app.get("/plugins/_shared/:path{.+}", async (c) => {
+    const reqPath = c.req.param("path");
+    if (!reqPath.endsWith(".js")) {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+    // Reject dotfiles (path segments starting with '.')
+    if (reqPath.split("/").some((seg) => seg.startsWith("."))) {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+    const filePath = resolve(sharedDir, reqPath);
+    if (!filePath.startsWith(sharedDir + SEPARATOR)) {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+    try {
+      // Canonicalize to defeat symlink escapes
+      const realShared = await Deno.realPath(sharedDir);
+      const realFile = await Deno.realPath(filePath);
+      if (!realFile.startsWith(realShared + SEPARATOR)) {
+        return c.json(problemJson("Not Found", 404, "Not found"), 404);
+      }
+      const content = await Deno.readTextFile(realFile);
+      return new Response(content, {
+        headers: { "Content-Type": "application/javascript" },
+      });
+    } catch {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+  });
+
   // Serve plugin frontend modules
   for (const plugin of pluginManager.getPlugins()) {
     if (plugin.frontendModule) {

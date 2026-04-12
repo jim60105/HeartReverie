@@ -340,6 +340,11 @@ export class PluginManager {
     return entry ? entry.dir : null;
   }
 
+  /** Returns the absolute path to the built-in plugins directory. */
+  getBuiltinDir(): string {
+    return this.#builtinDir;
+  }
+
   /**
    * Returns all available Vento parameters from core + plugins.
    * Each entry: { name, type, description, source }

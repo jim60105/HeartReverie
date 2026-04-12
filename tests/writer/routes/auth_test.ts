@@ -60,6 +60,7 @@ Deno.test({ name: "GET /api/auth/verify", sanitizeOps: false, sanitizeResources:
       getPlugins: () => [],
       getParameters: () => [],
       getPluginDir: () => null,
+        getBuiltinDir: () => "/nonexistent-plugins",
       getPromptVariables: async () => ({ variables: {}, fragments: [] }),
       getStripTagPatterns: () => null,
     } as unknown as PluginManager,

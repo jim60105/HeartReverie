@@ -78,6 +78,7 @@ Deno.test({ name: "plugin routes", sanitizeOps: false, sanitizeResources: false,
         },
       ],
       getPluginDir: () => null,
+      getBuiltinDir: () => "/nonexistent-plugins",
       getPromptVariables: async () => ({ variables: {}, fragments: [] }),
       getStripTagPatterns: () => null,
     } as unknown as PluginManager,
@@ -130,6 +131,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
           },
         ],
         getPluginDir: (name: string) => name === "my-plugin" ? pluginDir : null,
+        getBuiltinDir: () => "/nonexistent-plugins",
         getParameters: () => [],
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
@@ -163,6 +165,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
           },
         ],
         getPluginDir: (name: string) => name === "my-plugin" ? pluginDir : null,
+        getBuiltinDir: () => "/nonexistent-plugins",
         getParameters: () => [],
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
@@ -205,6 +208,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
           },
         ],
         getPluginDir: (name: string) => name === "missing-plugin" ? missingDir : null,
+        getBuiltinDir: () => "/nonexistent-plugins",
         getParameters: () => [],
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
@@ -240,6 +244,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
           },
         ],
         getPluginDir: (name: string) => name === "escape-plugin" ? escapedDir : null,
+        getBuiltinDir: () => "/nonexistent-plugins",
         getParameters: () => [],
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
@@ -252,6 +257,75 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
     // The route should not be registered at all, so any request to it returns 404
     const res = await makeRequest(app, "GET", "/plugins/escape-plugin/escape.js");
     assertEquals(res.status, 404);
+  });
+
+  // Cleanup
+  await Deno.remove(tmpDir, { recursive: true });
+} });
+
+Deno.test({ name: "shared plugin utils routes", sanitizeOps: false, sanitizeResources: false, fn: async (t) => {
+  Deno.env.set("PASSPHRASE", "test-pass");
+
+  const tmpDir = await Deno.makeTempDir();
+  const sharedDir = join(tmpDir, "_shared");
+  await Deno.mkdir(sharedDir, { recursive: true });
+  await Deno.writeTextFile(join(sharedDir, "utils.js"), "export function escapeHtml(s) { return s; }");
+  await Deno.writeTextFile(join(sharedDir, "secret.env"), "SECRET=bad");
+
+  function makeApp() {
+    return createApp({
+      config: {
+        READER_DIR: "/nonexistent-reader",
+        PLAYGROUND_DIR: "/nonexistent-playground",
+        ROOT_DIR: "/nonexistent-root",
+      } as unknown as AppConfig,
+      safePath: () => null,
+      pluginManager: {
+        getPlugins: () => [],
+        getParameters: () => [],
+        getPluginDir: () => null,
+        getBuiltinDir: () => tmpDir,
+        getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+        getStripTagPatterns: () => null,
+      } as unknown as PluginManager,
+      hookDispatcher: new HookDispatcher(),
+      buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      verifyPassphrase,
+    } as AppDeps);
+  }
+
+  await t.step("GET /plugins/_shared/utils.js serves JS file with correct content-type", async () => {
+    const app = makeApp();
+    const res = await app.fetch(
+      new Request("http://localhost/plugins/_shared/utils.js", {
+        headers: { "x-passphrase": "test-pass" },
+      })
+    );
+    assertEquals(res.status, 200);
+    assertEquals(res.headers.get("content-type"), "application/javascript");
+    const text = await res.text();
+    assertEquals(text, "export function escapeHtml(s) { return s; }");
+  });
+
+  await t.step("GET /plugins/_shared/secret.env returns 404 (non-JS rejected)", async () => {
+    const app = makeApp();
+    const res = await makeRequest(app, "GET", "/plugins/_shared/secret.env");
+    assertEquals(res.status, 404);
+  });
+
+  await t.step("GET /plugins/_shared/../../.env is rejected (path traversal)", async () => {
+    const app = makeApp();
+    const res = await makeRequest(app, "GET", "/plugins/_shared/../../.env");
+    // Hono normalizes the URL before routing, so traversal paths hit auth middleware (403) or 404
+    assert(res.status === 403 || res.status === 404, `Expected 403 or 404, got ${res.status}`);
+  });
+
+  await t.step("GET /plugins/_shared/.secret.js returns 404 (dotfile rejected)", async () => {
+    await Deno.writeTextFile(join(sharedDir, ".secret.js"), "// hidden");
+    const app = makeApp();
+    const res = await makeRequest(app, "GET", "/plugins/_shared/.secret.js");
+    assertEquals(res.status, 404);
+    await Deno.remove(join(sharedDir, ".secret.js"));
   });
 
   // Cleanup

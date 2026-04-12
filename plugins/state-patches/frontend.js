@@ -1,10 +1,6 @@
 // Plugin: state-patches — UpdateVariable block extraction, parsing, and rendering
 
-/** @param {string} str */
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
-}
+import { escapeHtml } from '../_shared/utils.js';
 
 export function register(hooks) {
   hooks.register('frontend-render', (context) => {
