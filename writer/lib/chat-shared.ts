@@ -29,12 +29,18 @@ export interface ChatOptions {
   readonly hookDispatcher: HookDispatcher;
   readonly buildPromptFromStory: BuildPromptFn;
   readonly onDelta?: (content: string) => void;
+  readonly signal?: AbortSignal;
 }
 
 /** Successful chat result. */
 export interface ChatResult {
   readonly chapter: number;
   readonly content: string;
+}
+
+/** Error thrown when a chat generation is aborted by the client. */
+export class ChatAbortError extends Error {
+  override readonly name = "ChatAbortError";
 }
 
 /** Error thrown when chat execution encounters a known failure. */
@@ -57,7 +63,7 @@ export class ChatError extends Error {
  * @returns The chapter number and full generated content
  */
 export async function executeChat(options: ChatOptions): Promise<ChatResult> {
-  const { series, name, message, template, config, safePath, hookDispatcher, buildPromptFromStory, onDelta } = options;
+  const { series, name, message, template, config, safePath, hookDispatcher, buildPromptFromStory, onDelta, signal } = options;
 
   // 1. Validate API key
   if (!Deno.env.get("LLM_API_KEY")) {
@@ -126,6 +132,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       min_p: config.LLM_MIN_P,
       top_a: config.LLM_TOP_A,
     }),
+    signal,
   });
 
   if (!apiResponse.ok) {
@@ -173,6 +180,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     await file.write(encoder.encode(preContent));
   }
 
+  let aborted = false;
   try {
     // 7. Parse SSE stream and write incrementally, calling onDelta for each chunk
     const reader = apiResponse.body.getReader();
@@ -230,8 +238,19 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
         }
       }
     }
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      aborted = true;
+    } else {
+      throw err;
+    }
   } finally {
     file.close();
+  }
+
+  // On abort: throw ChatAbortError after file cleanup so callers can handle it
+  if (aborted) {
+    throw new ChatAbortError("Generation aborted by client");
   }
 
   if (!aiContent) {

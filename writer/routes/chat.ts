@@ -15,7 +15,7 @@
 
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
-import { executeChat, ChatError } from "../lib/chat-shared.ts";
+import { executeChat, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
 import type { ContentfulStatusCode } from "@hono/hono/utils/http-status";
@@ -62,10 +62,15 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           safePath,
           hookDispatcher,
           buildPromptFromStory,
+          signal: c.req.raw.signal,
         });
 
         return c.json(result);
       } catch (err: unknown) {
+        if (err instanceof ChatAbortError) {
+          // Client disconnected — return 499 (client closed request)
+          return c.json(problemJson("Client Closed Request", 499, "Generation aborted by client"), 499 as ContentfulStatusCode);
+        }
         if (err instanceof ChatError) {
           if (err.code === "vento" && err.ventoError) {
             return c.json({ type: "vento-error", ...err.ventoError }, 422);

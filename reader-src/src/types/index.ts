@@ -186,6 +186,7 @@ export interface UseChatApiReturn {
     story: string,
     message: string,
   ) => Promise<boolean>;
+  abortCurrentRequest: () => void;
 }
 
 export interface UseBackgroundReturn {
@@ -275,11 +276,18 @@ export interface WsSubscribeMessage {
   story: string;
 }
 
+/** Client-to-server: abort an active chat generation. */
+export interface WsChatAbortMessage {
+  type: "chat:abort";
+  id: string;
+}
+
 /** All client-to-server message types. */
 export type WsClientMessage =
   | WsAuthMessage
   | WsChatSendMessage
   | WsChatResendMessage
+  | WsChatAbortMessage
   | WsSubscribeMessage;
 
 /** Server-to-client: authentication successful. */
@@ -336,6 +344,12 @@ export interface WsErrorMessage {
   detail: string;
 }
 
+/** Server-to-client: chat generation aborted. */
+export interface WsChatAbortedMessage {
+  type: "chat:aborted";
+  id: string;
+}
+
 /** All server-to-client message types. */
 export type WsServerMessage =
   | WsAuthOkMessage
@@ -343,6 +357,7 @@ export type WsServerMessage =
   | WsChatDeltaMessage
   | WsChatDoneMessage
   | WsChatErrorMessage
+  | WsChatAbortedMessage
   | WsChaptersUpdatedMessage
   | WsChaptersContentMessage
   | WsErrorMessage;

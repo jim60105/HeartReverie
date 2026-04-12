@@ -272,6 +272,43 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       await waitForClose(ws);
     });
 
+    // ── chat:abort ──
+
+    await t.step("chat:abort: unknown id is silently ignored", async () => {
+      const ws = await openWs(addr);
+      await authenticate(ws);
+
+      ws.send(JSON.stringify({ type: "chat:abort", id: "nonexistent-id" }));
+      // Unknown id returns silently — no response expected
+      let gotMessage = false;
+      try {
+        await readMessage(ws, 500);
+        gotMessage = true;
+      } catch {
+        // Timeout expected: unknown id produces no response
+      }
+      assertEquals(gotMessage, false);
+      ws.close();
+      await waitForClose(ws);
+    });
+
+    await t.step("chat:abort: missing id is silently ignored", async () => {
+      const ws = await openWs(addr);
+      await authenticate(ws);
+
+      ws.send(JSON.stringify({ type: "chat:abort" }));
+      let gotMessage = false;
+      try {
+        await readMessage(ws, 500);
+        gotMessage = true;
+      } catch {
+        // Timeout expected: missing id produces no response
+      }
+      assertEquals(gotMessage, false);
+      ws.close();
+      await waitForClose(ws);
+    });
+
     // ── 8.6: Connection lifecycle ──
 
     await t.step("connection closes cleanly", async () => {

@@ -5,6 +5,7 @@ import ChatInput from "@/components/ChatInput.vue";
 const isLoadingRef = ref(false);
 const errorMessageRef = ref("");
 const streamingContentRef = ref("");
+const abortCurrentRequestFn = vi.fn();
 
 vi.mock("@/composables/useChatApi", () => ({
   useChatApi: () => ({
@@ -13,6 +14,7 @@ vi.mock("@/composables/useChatApi", () => ({
     streamingContent: streamingContentRef,
     sendMessage: vi.fn(),
     resendMessage: vi.fn(),
+    abortCurrentRequest: abortCurrentRequestFn,
   }),
 }));
 
@@ -21,6 +23,7 @@ describe("ChatInput", () => {
     isLoadingRef.value = false;
     errorMessageRef.value = "";
     streamingContentRef.value = "";
+    abortCurrentRequestFn.mockClear();
   });
 
   it("renders textarea and buttons", () => {
@@ -116,5 +119,53 @@ describe("ChatInput", () => {
     const wrapper = mount(ChatInput);
     await wrapper.vm.$nextTick();
     expect(wrapper.find(".streaming-preview").exists()).toBe(false);
+  });
+
+  describe("Stop button", () => {
+    it("shows Stop button and hides Send button when loading", async () => {
+      isLoadingRef.value = true;
+      const wrapper = mount(ChatInput);
+      await wrapper.vm.$nextTick();
+      const stopBtn = wrapper.find(".chat-btn-stop");
+      expect(stopBtn.exists()).toBe(true);
+      expect(stopBtn.text()).toContain("停止");
+      // Send button should not exist (v-if/v-else)
+      const buttons = wrapper.findAll(".chat-btn");
+      const sendBtn = buttons.find((b) => b.text().includes("發送"));
+      expect(sendBtn).toBeUndefined();
+    });
+
+    it("shows Send button and hides Stop button when not loading", () => {
+      isLoadingRef.value = false;
+      const wrapper = mount(ChatInput);
+      const stopBtn = wrapper.find(".chat-btn-stop");
+      expect(stopBtn.exists()).toBe(false);
+      const buttons = wrapper.findAll(".chat-btn");
+      const sendBtn = buttons.find((b) => b.text().includes("發送"));
+      expect(sendBtn).toBeTruthy();
+    });
+
+    it("calls abortCurrentRequest when Stop button clicked", async () => {
+      isLoadingRef.value = true;
+      const wrapper = mount(ChatInput);
+      await wrapper.vm.$nextTick();
+      const stopBtn = wrapper.find(".chat-btn-stop");
+      await stopBtn.trigger("click");
+      expect(abortCurrentRequestFn).toHaveBeenCalledTimes(1);
+    });
+
+    it("Send button reappears after loading ends", async () => {
+      isLoadingRef.value = true;
+      const wrapper = mount(ChatInput);
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find(".chat-btn-stop").exists()).toBe(true);
+
+      isLoadingRef.value = false;
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find(".chat-btn-stop").exists()).toBe(false);
+      const buttons = wrapper.findAll(".chat-btn");
+      const sendBtn = buttons.find((b) => b.text().includes("發送"));
+      expect(sendBtn).toBeTruthy();
+    });
   });
 });

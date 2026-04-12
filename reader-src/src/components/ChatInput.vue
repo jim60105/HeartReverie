@@ -10,7 +10,7 @@ const emit = defineEmits<{
   resend: [message: string];
 }>();
 
-const { isLoading, errorMessage, streamingContent } = useChatApi();
+const { isLoading, errorMessage, streamingContent, abortCurrentRequest } = useChatApi();
 
 const inputText = ref("");
 const isResending = ref(false);
@@ -75,11 +75,19 @@ defineExpose({ appendText });
           {{ isLoading && isResending ? '⏳ 重送中…' : '🔄 重送' }}
         </button>
         <button
+          v-if="isLoading"
+          class="themed-btn chat-btn chat-btn-stop"
+          @click="abortCurrentRequest"
+        >
+          ⏹ 停止
+        </button>
+        <button
+          v-else
           class="themed-btn chat-btn"
-          :disabled="disabled || isLoading"
+          :disabled="disabled"
           @click="handleSend"
         >
-          {{ isLoading && !isResending ? '⏳ 發送中…' : '✨ 發送' }}
+          ✨ 發送
         </button>
       </div>
     </div>
@@ -155,6 +163,17 @@ defineExpose({ appendText });
 .chat-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+.chat-btn-stop {
+  background: #dc2626;
+  border-color: #b91c1c;
+  color: #fff;
+}
+
+.chat-btn-stop:hover {
+  background: #ef4444;
+  border-color: #dc2626;
 }
 
 .streaming-preview {

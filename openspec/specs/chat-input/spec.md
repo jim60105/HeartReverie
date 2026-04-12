@@ -20,7 +20,7 @@ The reader frontend SHALL render a `ChatInput.vue` component below the story con
 
 ### Requirement: Submit behavior
 
-When the user submits a message, the chat input component SHALL emit a `send` event with the message text. The parent component or a `useChatApi()` composable SHALL handle the actual API call. When a WebSocket connection is active, the composable SHALL send the message as `{ type: "chat:send", id, series, story, message }` over the WebSocket and process incoming `chat:delta` messages to update a reactive `streamingContent` ref in real time. When WebSocket is unavailable, the composable SHALL fall back to the existing `POST /api/stories/:series/:name/chat` HTTP endpoint with the `X-Passphrase` header. The submit button, resend button, and textarea SHALL be disabled during the request via a reactive `isLoading` ref. After a successful response (either `chat:done` WebSocket message or HTTP 200), the component SHALL emit a `sent` event so the parent can reload chapters. The frontend SHALL NOT clear the textarea after a successful send; the user's message text SHALL remain in the textarea. On error (either `chat:error` WebSocket message or HTTP error), the frontend SHALL display a generic error message (e.g., "發送失敗，請稍後再試") and SHALL NOT display raw server response text. The resend flow (DELETE last chapter then re-POST, or `chat:resend` via WebSocket) SHALL also include the `X-Passphrase` header on HTTP requests.
+When the user submits a message, the chat input component SHALL emit a `send` event with the message text. The parent component or a `useChatApi()` composable SHALL handle the actual API call. When a WebSocket connection is active, the composable SHALL send the message as `{ type: "chat:send", id, series, story, message }` over the WebSocket and process incoming `chat:delta` messages to update a reactive `streamingContent` ref in real time. When WebSocket is unavailable, the composable SHALL fall back to the existing `POST /api/stories/:series/:name/chat` HTTP endpoint with the `X-Passphrase` header. The submit button, resend button, and textarea SHALL be disabled during the request via a reactive `isLoading` ref. A Stop button SHALL replace the Send button while `isLoading` is `true`, allowing the user to abort the active generation. After a successful response (either `chat:done` WebSocket message or HTTP 200), the component SHALL emit a `sent` event so the parent can reload chapters. The frontend SHALL NOT clear the textarea after a successful send; the user's message text SHALL remain in the textarea. On error (either `chat:error` WebSocket message or HTTP error), the frontend SHALL display a generic error message (e.g., "發送失敗，請稍後再試") and SHALL NOT display raw server response text. The resend flow (DELETE last chapter then re-POST, or `chat:resend` via WebSocket) SHALL also include the `X-Passphrase` header on HTTP requests.
 
 #### Scenario: Successful message submission via WebSocket
 - **WHEN** the user types a message, clicks submit, and WebSocket is connected
@@ -36,7 +36,19 @@ When the user submits a message, the chat input component SHALL emit a `send` ev
 
 #### Scenario: Input disabled during request
 - **WHEN** a chat request is in progress (component's `isLoading` ref is `true`)
-- **THEN** the textarea, submit button, and resend button SHALL be disabled via `:disabled="isLoading"` and a loading indicator SHALL be visible
+- **THEN** the textarea and resend button SHALL be disabled, the Send button SHALL be replaced by a Stop button, and a loading indicator SHALL be visible
+
+#### Scenario: Stop button replaces Send during generation
+- **WHEN** a chat request is in progress (`isLoading` is `true`)
+- **THEN** the Send button SHALL be hidden and a Stop button (labeled "⏹ 停止") SHALL be displayed in its place
+
+#### Scenario: Stop button aborts active generation
+- **WHEN** the user clicks the Stop button during an active WebSocket generation
+- **THEN** the composable's `abortCurrentRequest()` method SHALL be called, a `chat:abort` message SHALL be sent over WebSocket, and the UI SHALL return to the idle state after receiving `chat:aborted`
+
+#### Scenario: Stop button aborts HTTP generation
+- **WHEN** the user clicks the Stop button during an active HTTP chat request
+- **THEN** the composable's `abortCurrentRequest()` method SHALL abort the HTTP fetch via `AbortController.abort()`, and the UI SHALL return to the idle state
 
 #### Scenario: Error during WebSocket submission shows generic message
 - **WHEN** the server sends `{ type: "chat:error", id, detail }` over WebSocket
@@ -126,7 +138,7 @@ The `ChatInput.vue` component SHALL define typed emits using `defineEmits<{ send
 - **THEN** the component SHALL emit a typed `send` event with the message string, and the parent component SHALL receive it via `@send="handleSend"`
 
 ### Requirement: API logic in composable
-All API calls (WebSocket messages, POST chat, DELETE chapter) SHALL be extracted into a `useChatApi()` composable or equivalent, keeping the `ChatInput.vue` component focused on UI concerns. The composable SHALL accept the WebSocket connection from a shared `useWebSocket` composable and fall back to HTTP with authentication headers from a shared auth composable when WebSocket is unavailable.
+All API calls (WebSocket messages, POST chat, DELETE chapter) SHALL be extracted into a `useChatApi()` composable or equivalent, keeping the `ChatInput.vue` component focused on UI concerns. The composable SHALL accept the WebSocket connection from a shared `useWebSocket` composable and fall back to HTTP with authentication headers from a shared auth composable when WebSocket is unavailable. The composable SHALL expose an `abortCurrentRequest()` method that sends `{ type: "chat:abort", id }` over WebSocket (when connected) or calls `AbortController.abort()` on the HTTP fetch (when using HTTP fallback). Module-level state SHALL track the current request ID and HTTP `AbortController` for abort coordination.
 
 #### Scenario: Component does not call fetch or WebSocket directly
 - **WHEN** inspecting the `ChatInput.vue` component source
@@ -139,3 +151,19 @@ All API calls (WebSocket messages, POST chat, DELETE chapter) SHALL be extracted
 #### Scenario: Composable falls back to HTTP when WebSocket unavailable
 - **WHEN** `useChatApi()` is initialized and no WebSocket connection is active
 - **THEN** the composable SHALL use the existing HTTP endpoints for chat send/resend
+
+#### Scenario: Composable exposes abort method
+- **WHEN** `useChatApi()` is initialized
+- **THEN** the composable SHALL return an `abortCurrentRequest()` method that the component can call to abort the active generation
+
+#### Scenario: Abort via WebSocket sends abort message
+- **WHEN** `abortCurrentRequest()` is called while a WebSocket generation is active
+- **THEN** the composable SHALL send `{ type: "chat:abort", id }` over the WebSocket connection using the tracked request ID
+
+#### Scenario: Abort via HTTP cancels fetch
+- **WHEN** `abortCurrentRequest()` is called while an HTTP chat request is active
+- **THEN** the composable SHALL call `abort()` on the HTTP `AbortController`, the fetch SHALL throw an `AbortError`, and the composable SHALL handle it silently without displaying an error message
+
+#### Scenario: Abort when idle is no-op
+- **WHEN** `abortCurrentRequest()` is called but no generation is active
+- **THEN** the method SHALL return without side effects

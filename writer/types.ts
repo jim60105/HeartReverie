@@ -218,11 +218,18 @@ export interface WsSubscribeMessage {
   readonly story: string;
 }
 
+/** Client-to-server: abort an active chat generation. */
+export interface WsChatAbortMessage {
+  readonly type: "chat:abort";
+  readonly id: string;
+}
+
 /** All client-to-server message types. */
 export type WsClientMessage =
   | WsAuthMessage
   | WsChatSendMessage
   | WsChatResendMessage
+  | WsChatAbortMessage
   | WsSubscribeMessage;
 
 /** Server-to-client: authentication successful. */
@@ -279,6 +286,12 @@ export interface WsErrorMessage {
   readonly detail: string;
 }
 
+/** Server-to-client: chat generation aborted. */
+export interface WsChatAbortedMessage {
+  readonly type: "chat:aborted";
+  readonly id: string;
+}
+
 /** All server-to-client message types. */
 export type WsServerMessage =
   | WsAuthOkMessage
@@ -286,6 +299,7 @@ export type WsServerMessage =
   | WsChatDeltaMessage
   | WsChatDoneMessage
   | WsChatErrorMessage
+  | WsChatAbortedMessage
   | WsChaptersUpdatedMessage
   | WsChaptersContentMessage
   | WsErrorMessage;
