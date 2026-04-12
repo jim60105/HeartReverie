@@ -23,6 +23,13 @@ interface TokenData {
   data: StatusBarProps | OptionItem[] | VariableDisplayProps | VentoErrorCardProps;
 }
 
+function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ["details", "summary"],
+    ADD_ATTR: ["open"],
+  });
+}
+
 function renderChapter(
   rawMarkdown: string,
   options: RenderOptions = {},
@@ -87,20 +94,17 @@ function renderChapter(
   // 6. Reinject placeholders (for plugin-provided HTML content)
   html = reinjectPlaceholders(html, placeholderMap);
 
-  // 7. Sanitize HTML via DOMPurify
-  html = DOMPurify.sanitize(html, {
-    ADD_TAGS: ["details", "summary"],
-    ADD_ATTR: ["open"],
-  });
-
-  // 8. Split HTML on structured placeholders to create RenderToken[]
+  // 7. Split HTML on structured placeholders to create RenderToken[]
+  //    This must happen BEFORE DOMPurify because DOMPurify strips
+  //    HTML comment placeholders (<!--STATUS_BLOCK_0--> etc.).
   const tokens: RenderToken[] = [];
   const allPlaceholders = Array.from(tokenDataMap.keys());
 
   if (allPlaceholders.length === 0) {
     // No structured tokens — return a single HTML token
-    if (html.trim()) {
-      tokens.push({ type: "html", content: html });
+    const sanitized = sanitizeHtml(html);
+    if (sanitized.trim()) {
+      tokens.push({ type: "html", content: sanitized });
     }
     return tokens;
   }
@@ -142,7 +146,11 @@ function renderChapter(
           break;
       }
     } else if (part.trim()) {
-      tokens.push({ type: "html", content: part });
+      // 8. Sanitize HTML via DOMPurify (per-fragment, after split)
+      const sanitized = sanitizeHtml(part);
+      if (sanitized.trim()) {
+        tokens.push({ type: "html", content: sanitized });
+      }
     }
   }
 
