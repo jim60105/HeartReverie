@@ -4,7 +4,7 @@ import { stubSessionStorage } from "@/__tests__/setup";
 const mockWsIsConnected = ref(false);
 const mockWsIsAuthenticated = ref(false);
 const mockWsSendFn = vi.fn();
-const mockWsOnMessageFn = vi.fn(() => vi.fn());
+const mockWsOnMessageFn: ReturnType<typeof vi.fn> = vi.fn(() => vi.fn());
 
 vi.mock("@/composables/useWebSocket", () => ({
   useWebSocket: () => ({
@@ -259,6 +259,89 @@ describe("useChatApi", () => {
       const result = await promise;
       expect(result).toBe(false);
       expect(api.errorMessage.value).toBeTruthy();
+      expect(api.isLoading.value).toBe(false);
+    });
+
+    it("chat:aborted resolves false and resets loading state", async () => {
+      const capturedHandlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation((type: string, handler: (msg: unknown) => void) => {
+        capturedHandlers[type] = handler;
+        return vi.fn();
+      });
+
+      const api = await getChatApi();
+      const promise = api.sendMessage("s", "t", "hello");
+
+      const sentArg = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      const id = sentArg.id as string;
+
+      // Simulate server-side abort confirmation
+      capturedHandlers["chat:aborted"]!({ type: "chat:aborted", id });
+      const result = await promise;
+      expect(result).toBe(false);
+      expect(api.streamingContent.value).toBe("");
+      expect(api.isLoading.value).toBe(false);
+    });
+
+    it("abortCurrentRequest sends chat:abort when WS request active", async () => {
+      const capturedHandlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation((type: string, handler: (msg: unknown) => void) => {
+        capturedHandlers[type] = handler;
+        return vi.fn();
+      });
+
+      const api = await getChatApi();
+      api.sendMessage("s", "t", "hello");
+
+      const sentArg = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      const id = sentArg.id as string;
+
+      // Call abort
+      api.abortCurrentRequest();
+
+      // Should have sent chat:abort with the same id
+      expect(mockWsSendFn).toHaveBeenCalledTimes(2);
+      const abortArg = mockWsSendFn.mock.calls[1]![0] as Record<string, unknown>;
+      expect(abortArg.type).toBe("chat:abort");
+      expect(abortArg.id).toBe(id);
+    });
+
+    it("abortCurrentRequest is no-op when no active request", async () => {
+      const api = await getChatApi();
+      // Should not throw
+      api.abortCurrentRequest();
+      expect(mockWsSendFn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("HTTP abort", () => {
+    it("abortCurrentRequest aborts HTTP fetch", async () => {
+      let fetchAbortSignal: AbortSignal | undefined;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((_url: string, init?: RequestInit) => {
+          fetchAbortSignal = init?.signal as AbortSignal | undefined;
+          return new Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; headers: Headers }>(
+            (_resolve, reject) => {
+              if (fetchAbortSignal) {
+                fetchAbortSignal.addEventListener("abort", () => {
+                  reject(new DOMException("The operation was aborted.", "AbortError"));
+                });
+              }
+            },
+          );
+        }),
+      );
+
+      const api = await getChatApi();
+      const promise = api.sendMessage("s", "t", "msg");
+
+      // Abort the request
+      api.abortCurrentRequest();
+      const result = await promise;
+      expect(result).toBe(false);
+      // AbortError should not set errorMessage
+      expect(api.errorMessage.value).toBe("");
       expect(api.isLoading.value).toBe(false);
     });
   });

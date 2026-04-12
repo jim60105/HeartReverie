@@ -17,7 +17,7 @@ import { upgradeWebSocket } from "@hono/hono/deno";
 import { timingSafeEqual } from "@std/crypto/timing-safe-equal";
 import { join } from "@std/path";
 import { isValidParam } from "../lib/middleware.ts";
-import { executeChat, ChatError } from "../lib/chat-shared.ts";
+import { executeChat, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
 import type { Hono } from "@hono/hono";
 import type { WSContext } from "@hono/hono/ws";
 import type { AppDeps, WsServerMessage } from "../types.ts";
@@ -57,6 +57,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
     let subscriptionIntervalId: number | null = null;
     let idleTimer: number | null = null;
     let activeGenerations = 0;
+    const abortControllers = new Map<string, AbortController>();
 
     // ── Helper functions ──
 
@@ -94,6 +95,11 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
         clearTimeout(idleTimer);
         idleTimer = null;
       }
+      // Abort all active generations on disconnect to save tokens
+      for (const controller of abortControllers.values()) {
+        controller.abort(new ChatAbortError("Connection closed"));
+      }
+      abortControllers.clear();
     }
 
     // ── Message handlers ──
@@ -198,6 +204,8 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
       }
 
       activeGenerations++;
+      const controller = new AbortController();
+      abortControllers.set(id, controller);
       try {
         await executeChat({
           series,
@@ -210,14 +218,20 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
           onDelta: (content) => {
             wsSend(ws, { type: "chat:delta", id, content });
           },
+          signal: controller.signal,
         });
         wsSend(ws, { type: "chat:done", id });
       } catch (err: unknown) {
+        if (err instanceof ChatAbortError) {
+          wsSend(ws, { type: "chat:aborted", id });
+          return;
+        }
         const detail = err instanceof ChatError
           ? err.message
           : "Failed to process chat request";
         wsSend(ws, { type: "chat:error", id, detail });
       } finally {
+        abortControllers.delete(id);
         activeGenerations--;
         resetIdleTimer(ws);
       }
@@ -284,6 +298,16 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
       await handleChatSend(ws, msg);
     }
 
+    function handleChatAbort(_ws: WSContext, msg: Record<string, unknown>): void {
+      const id = msg.id;
+      if (typeof id !== "string") return;
+
+      const controller = abortControllers.get(id);
+      if (!controller) return;
+
+      controller.abort(new ChatAbortError("Generation aborted by client"));
+    }
+
     // ── WebSocket event handlers ──
 
     return {
@@ -340,6 +364,9 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
             break;
           case "chat:resend":
             await handleChatResend(ws, msg);
+            break;
+          case "chat:abort":
+            handleChatAbort(ws, msg);
             break;
           // Unknown types: silently ignore
         }

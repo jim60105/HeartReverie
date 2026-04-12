@@ -7,6 +7,24 @@ const isLoading = ref(false);
 const errorMessage = ref("");
 const streamingContent = ref("");
 
+let currentRequestId: string | null = null;
+let httpAbortController: AbortController | null = null;
+
+function abortCurrentRequest(): void {
+  const { isConnected, isAuthenticated, send } = useWebSocket();
+
+  if (currentRequestId && isConnected.value && isAuthenticated.value) {
+    // WebSocket path: send abort message
+    send({ type: "chat:abort", id: currentRequestId });
+  } else if (httpAbortController) {
+    // HTTP path: abort the fetch request
+    httpAbortController.abort();
+    httpAbortController = null;
+    streamingContent.value = "";
+    isLoading.value = false;
+  }
+}
+
 async function sendMessage(
   series: string,
   story: string,
@@ -20,6 +38,7 @@ async function sendMessage(
   if (isConnected.value && isAuthenticated.value) {
     // ── WebSocket path ──
     const id = crypto.randomUUID();
+    currentRequestId = id;
     return new Promise<boolean>((resolve) => {
       const unsubDelta = onMessage('chat:delta', (msg) => {
         if (msg.id !== id) return;
@@ -37,6 +56,13 @@ async function sendMessage(
         cleanup();
         streamingContent.value = '';
         errorMessage.value = '發送失敗';
+        isLoading.value = false;
+        resolve(false);
+      });
+      const unsubAborted = onMessage('chat:aborted', (msg) => {
+        if (msg.id !== id) return;
+        cleanup();
+        streamingContent.value = '';
         isLoading.value = false;
         resolve(false);
       });
@@ -66,6 +92,8 @@ async function sendMessage(
         unsubDelta();
         unsubDone();
         unsubError();
+        unsubAborted();
+        currentRequestId = null;
       }
 
       send({ type: 'chat:send', id, series, story, message });
@@ -74,6 +102,7 @@ async function sendMessage(
 
   // ── HTTP fallback ──
   const { getAuthHeaders } = useAuth();
+  httpAbortController = new AbortController();
 
   try {
     const body: Record<string, string> = { message };
@@ -84,6 +113,7 @@ async function sendMessage(
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(body),
+        signal: httpAbortController.signal,
       },
     );
 
@@ -93,10 +123,14 @@ async function sendMessage(
     }
 
     return true;
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return false;
+    }
     errorMessage.value = "發送失敗";
     return false;
   } finally {
+    httpAbortController = null;
     isLoading.value = false;
   }
 }
@@ -114,6 +148,7 @@ async function resendMessage(
   if (isConnected.value && isAuthenticated.value) {
     // ── WebSocket path ──
     const id = crypto.randomUUID();
+    currentRequestId = id;
     return new Promise<boolean>((resolve) => {
       const unsubDelta = onMessage('chat:delta', (msg) => {
         if (msg.id !== id) return;
@@ -131,6 +166,13 @@ async function resendMessage(
         cleanup();
         streamingContent.value = '';
         errorMessage.value = '重送失敗';
+        isLoading.value = false;
+        resolve(false);
+      });
+      const unsubAborted = onMessage('chat:aborted', (msg) => {
+        if (msg.id !== id) return;
+        cleanup();
+        streamingContent.value = '';
         isLoading.value = false;
         resolve(false);
       });
@@ -158,6 +200,8 @@ async function resendMessage(
         unsubDelta();
         unsubDone();
         unsubError();
+        unsubAborted();
+        currentRequestId = null;
       }
 
       send({ type: 'chat:resend', id, series, story, message });
@@ -166,12 +210,13 @@ async function resendMessage(
 
   // ── HTTP fallback ──
   const { getAuthHeaders } = useAuth();
+  httpAbortController = new AbortController();
 
   try {
     // Delete last chapter
     const delRes = await fetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/last`,
-      { method: "DELETE", headers: { ...getAuthHeaders() } },
+      { method: "DELETE", headers: { ...getAuthHeaders() }, signal: httpAbortController.signal },
     );
 
     if (!delRes.ok && delRes.status !== 404) {
@@ -188,6 +233,7 @@ async function resendMessage(
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(body),
+        signal: httpAbortController.signal,
       },
     );
 
@@ -197,10 +243,14 @@ async function resendMessage(
     }
 
     return true;
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return false;
+    }
     errorMessage.value = "重送失敗";
     return false;
   } finally {
+    httpAbortController = null;
     isLoading.value = false;
   }
 }
@@ -212,5 +262,6 @@ export function useChatApi(): UseChatApiReturn {
     streamingContent,
     sendMessage,
     resendMessage,
+    abortCurrentRequest,
   };
 }
