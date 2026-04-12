@@ -11,8 +11,8 @@ const {
 
 const contentRef = ref<HTMLElement | null>(null);
 
-// Relocate plugin-rendered .status-float elements from content to sidebar.
-// This mirrors the original moveStatusToSidebar() in the vanilla JS app.
+// Relocate plugin-rendered .plugin-sidebar elements from content to sidebar.
+// Any plugin can opt into sidebar placement by adding the .plugin-sidebar class.
 watchPostEffect(() => {
   // Track reactive deps so the effect re-runs on chapter changes
   currentContent.value;
@@ -25,7 +25,7 @@ watchPostEffect(() => {
   if (!sidebar) return;
 
   sidebar.innerHTML = "";
-  const panels = wrapper.querySelectorAll(".status-float");
+  const panels = wrapper.querySelectorAll(".plugin-sidebar");
   panels.forEach((panel) => sidebar.appendChild(panel));
 });
 </script>

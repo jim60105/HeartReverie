@@ -108,7 +108,7 @@ export function renderStatusPanel(data) {
   const esc = escapeHtml;
 
   // ── Character header ──
-  let html = `<div class="status-panel main-card status-float">`;
+  let html = `<div class="status-panel main-card plugin-sidebar">`;
 
   if (data.name || data.title) {
     html += `<div class="char-header">`;

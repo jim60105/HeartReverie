@@ -6,21 +6,25 @@ Defines the overall page structure, grid layout, header/navigation sizing, colou
 
 ## Requirements
 
-### Requirement: Two-column status panel layout
+### Requirement: Content area and sidebar responsive layout
 
-The page SHALL use a CSS Grid two-column layout on desktop viewports (min-width 768px). The left column SHALL contain the story content with the same max-width as the original single-column layout (48rem / max-w-3xl). The right column SHALL contain a sticky sidebar that takes the remaining width. The status panel SHALL be placed in the sidebar column via Vue component composition (e.g., rendering `<StatusBar>` inside a `<Sidebar>` component) instead of JavaScript DOM relocation after rendering. On mobile viewports (below 768px), the layout SHALL collapse to a single column with the status panel rendered inline.
+The `ContentArea.vue` component SHALL render the chapter content and provide a sidebar region for plugin-relocated elements. The sidebar placement mechanism SHALL use a generic `.plugin-sidebar` CSS class convention: `ContentArea.vue` SHALL use a `watchPostEffect` to query all elements matching `.plugin-sidebar` within the content wrapper and relocate them to the sidebar DOM node via `appendChild`. This imperative DOM relocation is appropriate because plugin-rendered HTML arrives as raw strings via `v-html` — Vue's `<Teleport>` directive cannot be used for plugin content since it is not a Vue component. On mobile viewports (below 768px), CSS media queries SHALL make the sidebar `position: static` with a single-column grid layout, causing it to flow below the chapter content. No plugin-specific class names (such as `.status-float`) SHALL be hardcoded in the main project's component code.
 
-#### Scenario: Desktop viewport shows two-column layout
-- **WHEN** the viewport width is 768px or greater and a `<status>` block is present
-- **THEN** the page SHALL display the story content in the left column and the status panel in a separate right sidebar column, not mixed into the text content
+#### Scenario: Plugin elements relocated to sidebar on desktop
+- **WHEN** plugin-rendered HTML contains an element with the `.plugin-sidebar` class and the viewport is 768px or wider
+- **THEN** `ContentArea.vue`'s `watchPostEffect` SHALL relocate the element to the sidebar DOM node
 
-#### Scenario: Status panel placed via component composition
-- **WHEN** the status panel is rendered on desktop
-- **THEN** it SHALL be placed in the sidebar via Vue component hierarchy (parent renders `<StatusBar>` inside sidebar slot/section) instead of imperative `appendChild()` DOM relocation after rendering
+#### Scenario: Sidebar flows below content on mobile
+- **WHEN** plugin-rendered HTML contains an element with the `.plugin-sidebar` class and the viewport is below 768px
+- **THEN** the element SHALL still be relocated to the sidebar DOM node, but CSS media queries SHALL make the sidebar `position: static` with a single-column grid layout so it flows below the chapter content
 
-#### Scenario: Mobile viewport shows single-column layout
-- **WHEN** the viewport width is below 768px and a `<status>` block is present
-- **THEN** the layout SHALL collapse to a single column with the status panel rendered inline within the normal content flow
+#### Scenario: Generic class name used for relocation
+- **WHEN** inspecting `ContentArea.vue` source for sidebar relocation logic
+- **THEN** the querySelector SHALL use `.plugin-sidebar` — no plugin-specific class names SHALL be hardcoded
+
+#### Scenario: Multiple plugins use sidebar placement
+- **WHEN** two different plugins produce HTML elements with the `.plugin-sidebar` class
+- **THEN** `ContentArea.vue` SHALL relocate both elements to the sidebar in document order
 
 ### Requirement: Compact header sizing
 The sticky `<header>` element SHALL use reduced vertical and horizontal padding and compact button padding to minimise the space occupied at the top of the viewport, increasing the visible reading area. The header SHALL contain both the folder picker button and the navigation controls (previous button, chapter progress indicator, next button). The navigation controls SHALL be hidden until a story folder is loaded.

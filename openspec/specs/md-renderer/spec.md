@@ -72,26 +72,25 @@ The renderer SHALL correctly handle Chinese and Japanese Unicode characters thro
 
 After text transformations and markdown-to-HTML conversion, the pipeline SHALL split the result by placeholder positions and produce an array of `RenderToken` objects instead of a single HTML string. Each prose segment between placeholders SHALL become a `{ type: 'html', content: string }` token whose `content` is sanitized with `DOMPurify.sanitize()` using DOMPurify imported as an npm package dependency (via `import DOMPurify from 'dompurify'`) instead of a CDN global. The DOMPurify configuration SHALL preserve the existing `ADD_TAGS` and `ADD_ATTR` settings. The existing regex-based `<script>` tag removal SHALL be removed since DOMPurify handles script stripping comprehensively.
 
-Each placeholder SHALL become a structured data token by looking up the tag name in the plugin tag handler registry and invoking the corresponding plugin parser to produce typed data. The token types SHALL be:
-- `{ type: 'html', content: string }` — sanitized HTML segment rendered via `v-html`
-- `{ type: 'status', data: StatusData }` — rendered as `<StatusBar :data="token.data" />`
-- `{ type: 'options', data: OptionItem[] }` — rendered as `<OptionsPanel :items="token.data" />`
-- `{ type: 'variable', data: { content: string, isComplete: boolean } }` — rendered as `<VariableDisplay />`
-- `{ type: 'vento-error', data: VentoErrorData }` — rendered as `<VentoErrorCard />`
+Each placeholder SHALL be reinserted as rendered HTML produced by the corresponding plugin's `frontend-render` hook handler. The rendered HTML is stored in `context.placeholderMap` (a `Map<string, string>` mapping placeholder comments to HTML strings) during `frontend-render` hook dispatch. After reinsertion, each placeholder's rendered HTML becomes part of the surrounding `html` token's `content` string. The core rendering pipeline SHALL NOT define or branch on plugin-specific token types (such as `status`, `options`, or `variable`) — plugin rendering is fully delegated to `frontend-render` hooks as described in the `plugin-hooks` spec.
 
-The parent component SHALL iterate over the token array using `v-for`, rendering HTML tokens with `v-html` on a `<div>` and custom block tokens as their respective Vue components with bound props. This enables Vue reactivity (events, props, emits) for custom blocks while keeping efficient HTML rendering for prose content.
+The only non-HTML token type is `vento-error`, which represents template engine errors detected by the core renderer (not a plugin concern). The `RenderToken` union is therefore:
+- `{ type: 'html', content: string }` — sanitized HTML segment (may contain plugin-rendered HTML after placeholder reinsertion), rendered via `v-html`
+- `{ type: 'vento-error', data: VentoErrorCardProps }` — rendered as `<VentoErrorCard v-bind="token.data" />`
 
-#### Scenario: Rendered blocks appear in correct positions as tokens
-- **WHEN** a chapter contains prose, then a `<status>` block, then more prose, then an `<options>` block, and both tags have plugin-registered renderers
-- **THEN** the pipeline SHALL return a token array `[{ type: 'html', ... }, { type: 'status', ... }, { type: 'html', ... }, { type: 'options', ... }]` preserving the original document order
+The parent component SHALL iterate over the token array using `v-for`, rendering HTML tokens with `v-html` on a `<div>` and vento-error tokens as `<VentoErrorCard>` Vue components with bound props.
 
-#### Scenario: Plugin parser invoked for each extracted block
-- **WHEN** a placeholder is encountered during token construction
-- **THEN** the pipeline SHALL look up the tag name in the plugin registry, invoke the registered parser with the extracted block content, and produce a typed data token (not HTML) at the placeholder position
+#### Scenario: Rendered blocks appear in correct positions within HTML tokens
+- **WHEN** a chapter contains prose, then a `<status>` block, then more prose, then an `<options>` block, and both tags have plugin-registered `frontend-render` handlers
+- **THEN** the pipeline SHALL return a token array where plugin-rendered HTML is embedded within `html` tokens at the correct positions (the exact number of `html` tokens depends on whether adjacent plugin blocks merge into a single token)
 
-#### Scenario: No renderer registered for extracted block
-- **WHEN** a placeholder references a tag name with no registered plugin renderer
-- **THEN** the pipeline SHALL omit the block from the token array and log a warning
+#### Scenario: Plugin-rendered HTML is embedded via placeholderMap
+- **WHEN** a `frontend-render` handler extracts a `<status>` block from `context.text` and adds a `placeholder → renderedHTML` entry to `context.placeholderMap`
+- **THEN** the core pipeline SHALL reinsert the rendered HTML at the placeholder position and include it within the surrounding `html` token's content
+
+#### Scenario: No plugin-specific token types exist
+- **WHEN** the `RenderToken` type is inspected
+- **THEN** it SHALL contain only `html` and `vento-error` variants — no `status`, `options`, `variable`, or other plugin-specific types SHALL be defined
 
 #### Scenario: DOMPurify sanitizes HTML tokens
 - **WHEN** the rendering pipeline produces HTML tokens from prose segments
@@ -113,34 +112,6 @@ The parent component SHALL iterate over the token array using `v-for`, rendering
 - **WHEN** the rendering pipeline processes chapter content
 - **THEN** no regex-based `<script>` stripping logic SHALL exist; DOMPurify handles all script removal
 
-#### Scenario: Custom block tokens enable Vue component features
-- **WHEN** the parent component renders a `{ type: 'options', data: [...] }` token
-- **THEN** it SHALL instantiate `<OptionsPanel>` as a real Vue component with bound props and event listeners (e.g., `@optionSelected`), enabling full Vue reactivity that `v-html` cannot provide
-
-### Requirement: Plugin tag handler registration API
-
-The markdown renderer SHALL expose a registration API that allows plugins to register tag handlers. The API SHALL accept the following registration parameters: `tagName` (string), `type` (enum: `render` or `strip`), and `handler` (function; required for `render` type). For `render` type handlers, the handler function SHALL return a structured data object (parsed props) suitable for constructing a `RenderToken`, rather than an HTML string. A plugin MAY register multiple tag names. Registrations SHALL be stored in an internal registry keyed by tag name.
-
-The registration API SHALL be callable during plugin initialization (before any content is rendered). Duplicate tag name registrations SHALL log a warning and the later registration SHALL overwrite the earlier one.
-
-In the Vue architecture, this registry SHALL be accessible via the plugin composable or a shared module so that both the rendering pipeline and plugin initialization can interact with it.
-
-#### Scenario: Plugin registers a render tag handler
-- **WHEN** a plugin calls the registration API with `{ tagName: 'status', type: 'render', handler: renderStatusFn }`
-- **THEN** the registry SHALL store the handler and the `<status>` tag SHALL be recognized during XML block extraction
-
-#### Scenario: Plugin registers a strip tag handler
-- **WHEN** a plugin calls the registration API with `{ tagName: 'imgthink', type: 'strip' }`
-- **THEN** the registry SHALL store the strip entry and `<imgthink>` blocks SHALL be removed during hidden block removal
-
-#### Scenario: Duplicate tag name registration
-- **WHEN** two plugins register handlers for the same tag name
-- **THEN** the renderer SHALL log a warning and the second registration SHALL overwrite the first
-
-#### Scenario: Registration after rendering has started
-- **WHEN** a plugin attempts to register a tag handler after the first render call has occurred
-- **THEN** the registration SHALL still succeed and SHALL apply to subsequent render calls
-
 ### Requirement: npm package imports replace CDN globals
 The rendering pipeline SHALL import `marked` and `dompurify` as npm package dependencies managed by the project's `package.json` (or `deno.json` import map). The former CDN script tags for `marked` and `DOMPurify` SHALL be removed from `index.html`. TypeScript type definitions SHALL be available for both packages.
 
@@ -153,12 +124,12 @@ The rendering pipeline SHALL import `marked` and `dompurify` as npm package depe
 - **THEN** `DOMPurify` SHALL be imported via `import DOMPurify from 'dompurify'` (or equivalent) and no `window.DOMPurify` global SHALL be referenced
 
 ### Requirement: Rendering output as RenderToken array
-The rendering pipeline SHALL return a `RenderToken[]` array instead of a single HTML string. The pipeline SHALL NOT perform direct DOM manipulation (no `innerHTML` assignment). HTML prose segments SHALL be rendered via `v-html` on individual `<div>` elements, while custom block tokens SHALL be rendered as real Vue components with bound props and emits. This hybrid approach ensures prose content is efficiently rendered as HTML while custom blocks retain full Vue reactivity (event handling, props binding, scoped slots).
+The rendering pipeline SHALL return a `RenderToken[]` array instead of a single HTML string. The pipeline SHALL NOT perform direct DOM manipulation (no `innerHTML` assignment). HTML prose segments (including plugin-rendered HTML after placeholder reinsertion) SHALL be rendered via `v-html` on individual `<div>` elements. Vento-error tokens SHALL be rendered as real Vue components with bound props. Plugin-specific blocks (status, options, variable) are rendered as HTML strings by plugins during `frontend-render` hook dispatch and embedded within `html` tokens — the core renderer does not instantiate Vue components for plugin content.
 
 #### Scenario: Component renders token array
 - **WHEN** a chapter is rendered by the pipeline
-- **THEN** the Vue component SHALL iterate over the `RenderToken[]` array using `v-for`, rendering `{ type: 'html' }` tokens with `<div v-html="token.content"></div>` and custom block tokens as their corresponding Vue components (e.g., `<StatusBar>`, `<OptionsPanel>`)
+- **THEN** the Vue component SHALL iterate over the `RenderToken[]` array using `v-for`, rendering `{ type: 'html' }` tokens with `<div v-html="token.content"></div>` and `{ type: 'vento-error' }` tokens as `<VentoErrorCard>` components
 
-#### Scenario: Vue events work on custom block components
-- **WHEN** an `<OptionsPanel>` component is rendered from a `{ type: 'options' }` token
-- **THEN** the parent component SHALL be able to listen for `@optionSelected` events emitted by the component, which would be impossible if the panel were injected as an HTML string via `v-html`
+#### Scenario: Plugin-rendered HTML is within html tokens
+- **WHEN** a plugin's `frontend-render` handler produces a rendered options panel as HTML
+- **THEN** that HTML SHALL appear within an `html` token's `content` string after placeholder reinsertion, not as a separate typed token
