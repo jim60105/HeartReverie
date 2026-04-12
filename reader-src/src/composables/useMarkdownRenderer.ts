@@ -1,8 +1,6 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { normalizeQuotes, doubleNewlines, reinjectPlaceholders } from "@/lib/markdown-pipeline";
-import { extractOptionsBlocks } from "@/lib/parsers/options-parser";
-import { extractVariableBlocks } from "@/lib/parsers/variable-parser";
 import { extractVentoErrors } from "@/lib/parsers/vento-error-parser";
 import { frontendHooks } from "@/lib/plugin-hooks";
 import { usePlugins } from "@/composables/usePlugins";
@@ -10,15 +8,13 @@ import type {
   UseMarkdownRendererReturn,
   RenderOptions,
   RenderToken,
-  OptionItem,
-  VariableDisplayProps,
   VentoErrorCardProps,
   FrontendRenderContext,
 } from "@/types";
 
 interface TokenData {
-  type: "options" | "variable" | "vento-error";
-  data: OptionItem[] | VariableDisplayProps | VentoErrorCardProps;
+  type: "vento-error";
+  data: VentoErrorCardProps;
 }
 
 function sanitizeHtml(html: string): string {
@@ -36,24 +32,11 @@ function renderChapter(
   const placeholderMap = new Map<string, string>();
   const tokenDataMap = new Map<string, TokenData>();
 
-  // 1. Extract structured blocks from custom XML tags (native Vue parsers)
-  //    Note: <status> blocks are handled by the status plugin's frontend-render hook,
-  //    which extracts them and injects rendered HTML via placeholderMap.
-  const optionsResult = extractOptionsBlocks(text);
-  text = optionsResult.text;
-  for (const block of optionsResult.blocks) {
-    placeholderMap.set(block.placeholder, block.placeholder);
-    tokenDataMap.set(block.placeholder, { type: "options", data: block.data });
-  }
+  // 1. Extract structured blocks from custom XML tags.
+  //    <status>, <options>, and <UpdateVariable> blocks are handled by their
+  //    respective plugins' frontend-render hooks, not by native extraction.
 
-  const variableResult = extractVariableBlocks(text);
-  text = variableResult.text;
-  for (const block of variableResult.blocks) {
-    placeholderMap.set(block.placeholder, block.placeholder);
-    tokenDataMap.set(block.placeholder, { type: "variable", data: block.data });
-  }
-
-  // Vento errors extracted from text content
+  // Vento errors are a native feature (no plugin), only in the last chapter
   if (options.isLastChapter) {
     const ventoErrorResult = extractVentoErrors(text);
     text = ventoErrorResult.text;
@@ -113,18 +96,6 @@ function renderChapter(
     const tokenData = tokenDataMap.get(part);
     if (tokenData) {
       switch (tokenData.type) {
-        case "options":
-          tokens.push({
-            type: "options",
-            data: tokenData.data as OptionItem[],
-          });
-          break;
-        case "variable":
-          tokens.push({
-            type: "variable",
-            data: tokenData.data as VariableDisplayProps,
-          });
-          break;
         case "vento-error":
           tokens.push({
             type: "vento-error",

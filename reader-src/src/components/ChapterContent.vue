@@ -2,23 +2,15 @@
 import { computed } from "vue";
 import type { ChapterContentProps } from "@/types";
 import { useMarkdownRenderer } from "@/composables/useMarkdownRenderer";
-import OptionsPanel from "./OptionsPanel.vue";
-import VariableDisplay from "./VariableDisplay.vue";
 import VentoErrorCard from "./VentoErrorCard.vue";
 
 const props = defineProps<ChapterContentProps>();
-
-const emit = defineEmits<{ "option-select": [text: string] }>();
 
 const { renderChapter } = useMarkdownRenderer();
 
 const tokens = computed(() =>
   renderChapter(props.rawMarkdown, { isLastChapter: props.isLastChapter }),
 );
-
-function handleOptionSelect(text: string) {
-  emit("option-select", text);
-}
 </script>
 
 <template>
@@ -26,12 +18,6 @@ function handleOptionSelect(text: string) {
     <template v-for="(token, idx) in tokens" :key="idx">
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div v-if="token.type === 'html'" v-html="token.content"></div>
-      <OptionsPanel
-        v-else-if="token.type === 'options'"
-        :items="token.data"
-        @select="handleOptionSelect"
-      />
-      <VariableDisplay v-else-if="token.type === 'variable'" v-bind="token.data" />
       <VentoErrorCard v-else-if="token.type === 'vento-error'" v-bind="token.data" />
     </template>
   </div>

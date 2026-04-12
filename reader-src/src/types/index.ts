@@ -249,23 +249,11 @@ export interface RenderOptions {
 
 export type RenderToken =
   | HtmlToken
-  | OptionsToken
-  | VariableToken
   | VentoErrorToken;
 
 export interface HtmlToken {
   type: "html";
   content: string;
-}
-
-export interface OptionsToken {
-  type: "options";
-  data: OptionItem[];
-}
-
-export interface VariableToken {
-  type: "variable";
-  data: VariableDisplayProps;
 }
 
 export interface VentoErrorToken {

@@ -66,24 +66,22 @@ describe("useMarkdownRenderer", () => {
     expect(types.has("status" as never)).toBe(false);
   });
 
-  it("extracts options blocks into options tokens", async () => {
+  it("does not extract options blocks natively (handled by plugin)", async () => {
     const { renderChapter } = await getRenderer();
     const tokens = renderChapter(
       "text <options>1: 前進\n2: 後退</options> more",
     );
-    const optionsTokens = tokens.filter((t) => t.type === "options");
-    expect(optionsTokens.length).toBe(1);
-    expect(optionsTokens[0]!.data).toHaveLength(2);
+    const types = new Set(tokens.map((t) => t.type));
+    expect(types.has("options" as never)).toBe(false);
   });
 
-  it("extracts variable blocks into variable tokens", async () => {
+  it("does not extract variable blocks natively (handled by plugin)", async () => {
     const { renderChapter } = await getRenderer();
     const tokens = renderChapter(
       "text <UpdateVariable>data</UpdateVariable> more",
     );
-    const varTokens = tokens.filter((t) => t.type === "variable");
-    expect(varTokens.length).toBe(1);
-    expect(varTokens[0]!.data.isComplete).toBe(true);
+    const types = new Set(tokens.map((t) => t.type));
+    expect(types.has("variable" as never)).toBe(false);
   });
 
   it("handles empty input", async () => {
@@ -116,9 +114,9 @@ describe("useMarkdownRenderer", () => {
     const tokens = renderChapter(input);
     const types = tokens.map((t) => t.type);
     expect(types).toContain("html");
-    // Status is handled by plugin, not native extraction
+    // All plugin-handled blocks are NOT natively extracted
     expect(types).not.toContain("status");
-    expect(types).toContain("options");
+    expect(types).not.toContain("options");
   });
 
   it("normalizes curly quotes in markdown text", async () => {
