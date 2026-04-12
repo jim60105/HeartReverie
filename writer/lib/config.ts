@@ -18,7 +18,7 @@ import { join, resolve } from "@std/path";
 const ROOT_DIR: string = resolve(import.meta.dirname!, "../..");
 const PLAYGROUND_DIR: string =
   Deno.env.get("PLAYGROUND_DIR") || join(ROOT_DIR, "playground");
-const READER_DIR: string = Deno.env.get("READER_DIR") || join(ROOT_DIR, "reader");
+const READER_DIR: string = Deno.env.get("READER_DIR") || join(ROOT_DIR, "reader-dist");
 const PLUGINS_DIR: string = join(ROOT_DIR, "plugins");
 const PORT: number = parseInt(Deno.env.get("PORT") || "8443", 10);
 const CERT_FILE: string | undefined = Deno.env.get("CERT_FILE");

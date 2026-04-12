@@ -1,0 +1,31 @@
+{
+  "name": "heartreverie-reader",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build --outDir ../reader-dist",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "dompurify": "^3.3.3",
+    "marked": "^15.0.12",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.2.0",
+    "@vitejs/plugin-vue": "^5.2.3",
+    "@vue/test-utils": "^2.4.6",
+    "autoprefixer": "^10.4.21",
+    "happy-dom": "^18.0.1",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.2",
+    "vitest": "^3.1.2",
+    "vue-tsc": "^2.2.8"
+  }
+}

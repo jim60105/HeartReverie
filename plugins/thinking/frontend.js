@@ -1,5 +1,10 @@
 // Plugin: thinking — Fold <thinking> and <think> tags into collapsible details
-import { escapeHtml } from '/js/utils.js';
+
+/** @param {string} str */
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
 
 export function register(hooks) {
   hooks.register('frontend-render', (context) => {
