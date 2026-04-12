@@ -68,6 +68,7 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
       getPlugins: () => [],
       getParameters: () => [],
       getPluginDir: () => null,
+        getBuiltinDir: () => "/nonexistent-plugins",
       getPromptVariables: async () => ({ variables: {}, fragments: [] }),
       getStripTagPatterns: () => null,
     } as unknown as PluginManager,
