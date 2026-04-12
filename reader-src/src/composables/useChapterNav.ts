@@ -1,4 +1,4 @@
-import { ref, computed, watch, onUnmounted } from "vue";
+import { ref, computed, watch } from "vue";
 import type { UseChapterNavReturn, ChapterData } from "@/types";
 import { useAuth } from "@/composables/useAuth";
 import { useFileReader } from "@/composables/useFileReader";
@@ -21,6 +21,7 @@ let currentStory: string | null = null;
 let pollIntervalId: ReturnType<typeof setInterval> | null = null;
 let currentPollInterval = POLL_INTERVAL_BASE;
 let initialized = false;
+let isPolling = false;
 
 const totalChapters = computed(() => chapters.value.length);
 const isFirst = computed(() => currentIndex.value <= 0);
@@ -75,6 +76,8 @@ async function pollDirectory(): Promise<void> {
 
 async function pollBackend(): Promise<void> {
   if (!currentSeries || !currentStory) return;
+  if (isPolling) return;
+  isPolling = true;
   const { getAuthHeaders } = useAuth();
 
   try {
@@ -124,6 +127,8 @@ async function pollBackend(): Promise<void> {
     }
   } catch {
     // Ignore polling errors silently
+  } finally {
+    isPolling = false;
   }
 }
 
@@ -309,10 +314,6 @@ function initHashSync(): void {
 
 export function useChapterNav(): UseChapterNavReturn {
   initHashSync();
-
-  onUnmounted(() => {
-    clearPolling();
-  });
 
   return {
     currentIndex,

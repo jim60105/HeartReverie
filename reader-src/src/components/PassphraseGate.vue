@@ -4,7 +4,7 @@ import { useAuth } from "@/composables/useAuth";
 
 const emit = defineEmits<{ unlocked: [] }>();
 
-const { passphrase, isAuthenticated, verify } = useAuth();
+const { isAuthenticated, verify } = useAuth();
 
 const inputValue = ref("");
 const errorText = ref("");
@@ -29,7 +29,6 @@ async function handleSubmit() {
 
   const valid = await verify(value);
   if (valid) {
-    passphrase.value = value;
     emit("unlocked");
   } else {
     errorText.value = "通行密語錯誤";

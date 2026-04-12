@@ -124,10 +124,10 @@ export interface PassphraseGateEmits {
 
 // ── Composable Return Types ──
 
-import type { Ref, ComputedRef, ShallowRef } from "vue";
+import type { Ref, ComputedRef, ShallowRef, DeepReadonly } from "vue";
 
 export interface UseAuthReturn {
-  passphrase: Ref<string>;
+  passphrase: DeepReadonly<Ref<string>>;
   isAuthenticated: Ref<boolean>;
   verify: (value?: string) => Promise<boolean>;
   getAuthHeaders: () => AuthHeaders;
