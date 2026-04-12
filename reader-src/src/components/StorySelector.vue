@@ -8,7 +8,6 @@ const {
   selectedSeries,
   selectedStory,
   fetchSeries,
-  fetchStories,
   createStory,
   navigateToStory,
 } = useStorySelector();
