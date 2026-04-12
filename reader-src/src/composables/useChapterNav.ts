@@ -1,4 +1,6 @@
 import { ref, computed, watch } from "vue";
+import { useRoute } from "vue-router";
+import router from "@/router";
 import type { UseChapterNavReturn, ChapterData } from "@/types";
 import { useAuth } from "@/composables/useAuth";
 import { useFileReader } from "@/composables/useFileReader";
@@ -22,6 +24,7 @@ let pollIntervalId: ReturnType<typeof setInterval> | null = null;
 let currentPollInterval = POLL_INTERVAL_BASE;
 let initialized = false;
 let isPolling = false;
+let loadToken = 0;
 
 const totalChapters = computed(() => chapters.value.length);
 const isFirst = computed(() => currentIndex.value <= 0);
@@ -78,13 +81,18 @@ async function pollBackend(): Promise<void> {
   if (!currentSeries || !currentStory) return;
   if (isPolling) return;
   isPolling = true;
+  const series = currentSeries;
+  const story = currentStory;
   const { getAuthHeaders } = useAuth();
 
   try {
     const res = await fetch(
-      `/api/stories/${encodeURIComponent(currentSeries)}/${encodeURIComponent(currentStory)}/chapters`,
+      `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters`,
       { headers: { ...getAuthHeaders() } },
     );
+
+    // Discard if story changed during fetch
+    if (series !== currentSeries || story !== currentStory) return;
 
     if (res.status === 429) {
       const backoff = Math.min(currentPollInterval * 2, POLL_INTERVAL_MAX);
@@ -101,7 +109,8 @@ async function pollBackend(): Promise<void> {
 
     if (nums.length !== cachedLen) {
       // New chapters detected — reload all and navigate to last
-      await loadFromBackendInternal(currentSeries, currentStory);
+      await loadFromBackendInternal(series, story);
+      if (series !== currentSeries || story !== currentStory) return;
       if (chapters.value.length > 0) {
         navigateTo(chapters.value.length - 1);
       }
@@ -112,9 +121,10 @@ async function pollBackend(): Promise<void> {
     if (nums.length > 0 && chapters.value.length > 0) {
       const lastNum = nums[nums.length - 1]!;
       const chRes = await fetch(
-        `/api/stories/${encodeURIComponent(currentSeries)}/${encodeURIComponent(currentStory)}/chapters/${lastNum}`,
+        `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/${lastNum}`,
         { headers: { ...getAuthHeaders() } },
       );
+      if (series !== currentSeries || story !== currentStory) return;
       if (!chRes.ok) return;
       const { content } = (await chRes.json()) as { content: string };
       const lastIdx = chapters.value.length - 1;
@@ -130,6 +140,20 @@ async function pollBackend(): Promise<void> {
   } finally {
     isPolling = false;
   }
+}
+
+/** Push the current chapter to the URL in backend mode. */
+function syncRoute(): void {
+  if (mode.value !== "backend" || !currentSeries || !currentStory) return;
+  if (chapters.value.length === 0) return;
+  router.replace({
+    name: "chapter",
+    params: {
+      series: currentSeries,
+      story: currentStory,
+      chapter: String(currentIndex.value + 1),
+    },
+  });
 }
 
 function navigateTo(index: number): void {
@@ -171,6 +195,7 @@ async function loadFromFSA(handle: FileSystemDirectoryHandle): Promise<void> {
   currentSeries = null;
   currentStory = null;
   folderName.value = handle.name;
+  router.replace({ name: "home" }).catch(() => {});
 
   const fileHandles = await listChapterFiles(handle);
   fsaFiles.value = fileHandles;
@@ -191,13 +216,7 @@ async function loadFromFSA(handle: FileSystemDirectoryHandle): Promise<void> {
   }
   chapters.value = chapterData;
 
-  // Check URL hash for starting chapter
-  const hashMatch = window.location.hash.match(/chapter=(\d+)/);
-  const startIndex = hashMatch
-    ? Math.min(parseInt(hashMatch[1]!, 10) - 1, fileHandles.length - 1)
-    : 0;
-
-  currentIndex.value = Math.max(0, startIndex);
+  currentIndex.value = 0;
   currentContent.value = chapters.value[currentIndex.value]?.content ?? "";
 
   // Start FSA polling (1s interval)
@@ -231,8 +250,13 @@ async function loadFromBackendInternal(
   chapters.value = loaded;
 }
 
-async function loadFromBackend(series: string, story: string): Promise<void> {
+async function loadFromBackend(
+  series: string,
+  story: string,
+  startChapter?: number,
+): Promise<void> {
   clearPolling();
+  const token = ++loadToken;
   mode.value = "backend";
   fsaFiles.value = [];
   currentSeries = series;
@@ -240,26 +264,33 @@ async function loadFromBackend(series: string, story: string): Promise<void> {
   folderName.value = `${series} / ${story}`;
 
   await loadFromBackendInternal(series, story);
+  // Discard stale result if a newer load was triggered
+  if (token !== loadToken) return;
 
   if (chapters.value.length === 0) {
     currentContent.value = "";
     currentIndex.value = 0;
-    // Keep polling so new chapters are detected after send/resend
     pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
     return;
   }
 
-  currentIndex.value = 0;
-  currentContent.value = chapters.value[0]?.content ?? "";
+  const startIdx = startChapter
+    ? Math.max(0, Math.min(startChapter - 1, chapters.value.length - 1))
+    : 0;
+  currentIndex.value = startIdx;
+  currentContent.value = chapters.value[startIdx]?.content ?? "";
 
+  syncRoute();
   pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
 }
 
 async function reloadToLast(): Promise<void> {
   if (!currentSeries || !currentStory) return;
   clearPolling();
+  const token = ++loadToken;
 
   await loadFromBackendInternal(currentSeries, currentStory);
+  if (token !== loadToken) return;
 
   if (chapters.value.length === 0) {
     pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
@@ -270,6 +301,7 @@ async function reloadToLast(): Promise<void> {
   currentIndex.value = lastIdx;
   currentContent.value = chapters.value[lastIdx]?.content ?? "";
 
+  syncRoute();
   pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
 }
 
@@ -285,35 +317,49 @@ function getBackendContext(): {
   };
 }
 
-function initHashSync(): void {
+function initRouteSync(): void {
   if (initialized) return;
   initialized = true;
 
-  // Sync URL hash on chapter change
-  watch(currentIndex, (idx) => {
-    if (chapters.value.length > 0) {
-      history.replaceState(null, "", `#chapter=${idx + 1}`);
-    }
+  const route = useRoute();
+
+  // Sync URL when chapter changes in backend mode
+  watch(currentIndex, () => {
+    syncRoute();
   });
 
-  // Listen for hash changes
-  window.addEventListener("hashchange", () => {
-    if (chapters.value.length === 0) return;
-    const match = window.location.hash.match(/chapter=(\d+)/);
-    if (!match) return;
-    const idx = parseInt(match[1]!, 10) - 1;
-    if (idx >= 0 && idx < chapters.value.length && idx !== currentIndex.value) {
-      if (mode.value === "fsa") {
-        loadFSAChapter(idx);
-      } else {
-        navigateTo(idx);
+  // Handle external route changes — chapter (browser back/forward)
+  watch(
+    () => route.params.chapter,
+    (newChapter) => {
+      if (!newChapter || mode.value !== "backend") return;
+      const idx = parseInt(newChapter as string, 10) - 1;
+      if (idx >= 0 && idx < chapters.value.length && idx !== currentIndex.value) {
+        currentIndex.value = idx;
+        currentContent.value = chapters.value[idx]?.content ?? "";
       }
-    }
-  });
+    },
+  );
+
+  // Handle external route changes — different story (browser back/forward)
+  watch(
+    () => [route.params.series, route.params.story] as const,
+    async ([newSeries, newStory]) => {
+      if (!newSeries || !newStory) return;
+      const s = newSeries as string;
+      const st = newStory as string;
+      if (s === currentSeries && st === currentStory) return;
+      const chapterParam = route.params.chapter;
+      const startChapter = chapterParam
+        ? parseInt(chapterParam as string, 10)
+        : undefined;
+      await loadFromBackend(s, st, startChapter);
+    },
+  );
 }
 
 export function useChapterNav(): UseChapterNavReturn {
-  initHashSync();
+  initRouteSync();
 
   return {
     currentIndex,

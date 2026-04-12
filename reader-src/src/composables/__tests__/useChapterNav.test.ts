@@ -1,9 +1,27 @@
 import { stubSessionStorage } from "@/__tests__/setup";
+import { ref } from "vue";
+
+// Mock vue-router's useRoute to return a reactive route-like object
+const mockRouteParams = ref<Record<string, string | undefined>>({});
+vi.mock("vue-router", () => ({
+  useRoute: () => ({
+    params: mockRouteParams.value,
+  }),
+}));
+
+// Mock the router module
+vi.mock("@/router", () => ({
+  default: {
+    push: vi.fn(),
+    replace: vi.fn(),
+  },
+}));
 
 describe("useChapterNav", () => {
   beforeEach(() => {
     vi.resetModules();
     stubSessionStorage();
+    mockRouteParams.value = {};
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>

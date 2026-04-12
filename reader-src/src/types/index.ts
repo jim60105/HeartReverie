@@ -121,7 +121,7 @@ export interface UseChapterNavReturn {
   next: () => void;
   previous: () => void;
   loadFromFSA: (handle: FileSystemDirectoryHandle) => Promise<void>;
-  loadFromBackend: (series: string, story: string) => Promise<void>;
+  loadFromBackend: (series: string, story: string, startChapter?: number) => Promise<void>;
   reloadToLast: () => Promise<void>;
   getBackendContext: () => {
     series: string | null;
@@ -145,6 +145,7 @@ export interface UseStorySelectorReturn {
   fetchSeries: () => Promise<void>;
   fetchStories: (series: string) => Promise<void>;
   createStory: (series: string, name: string) => Promise<void>;
+  navigateToStory: (series: string, story: string) => void;
 }
 
 export interface UsePromptEditorReturn {

@@ -16,7 +16,6 @@ const {
   next,
   previous,
   loadFromFSA,
-  loadFromBackend,
   reloadToLast,
   getBackendContext,
 } = useChapterNav();
@@ -38,10 +37,6 @@ async function handleFolderSelect() {
   if (directoryHandle.value) {
     await loadFromFSA(directoryHandle.value);
   }
-}
-
-async function handleStoryLoad(series: string, story: string) {
-  await loadFromBackend(series, story);
 }
 
 function handleEditorClose() {
@@ -85,7 +80,7 @@ const previewContext = computed(() => {
         📂 選擇資料夾
       </button>
 
-      <StorySelector @load="handleStoryLoad" />
+      <StorySelector />
 
       <span class="folder-name">{{ folderName || '尚未選擇資料夾' }}</span>
 

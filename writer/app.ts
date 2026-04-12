@@ -139,5 +139,26 @@ export function createApp(deps: AppDeps): Hono {
     serveStatic({ root: readerRelative })
   );
 
+  // SPA fallback: serve index.html for unmatched GET requests (HTML5 history mode)
+  app.get("*", async (c) => {
+    const path = new URL(c.req.url).pathname;
+    // Don't fallback for API, plugin, asset, or JS routes
+    if (
+      path.startsWith("/api/") ||
+      path.startsWith("/plugins/") ||
+      path.startsWith("/assets/") ||
+      path.startsWith("/js/")
+    ) {
+      return c.json(problemJson("Not Found", 404, "Resource not found"), 404);
+    }
+    const indexPath = join(deps.config.READER_DIR, "index.html");
+    try {
+      const content = await Deno.readTextFile(indexPath);
+      return c.html(content);
+    } catch {
+      return c.json(problemJson("Not Found", 404, "index.html not found"), 404);
+    }
+  });
+
   return app;
 }
