@@ -1,10 +1,4 @@
-# Options Panel
-
-## Purpose
-
-Detects, parses, and renders `<options>` blocks from chapter content into a 2×2 interactive button grid, supporting numbered option extraction, styled display, clipboard copy on click, and graceful handling of malformed input.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Options block detection and extraction
 The renderer SHALL detect `<options>...</options>` blocks in the chapter content. The detection and extraction logic SHALL reside within the options plugin's `frontend.js` module, invoked during `frontend-render` hook dispatch. The main project SHALL NOT contain a separate options parser or extractor in `reader-src/`. Options blocks SHALL only be rendered on the last chapter: the plugin handler SHALL check `context.options.isLastChapter` — when true, the extracted block SHALL be rendered as HTML; when false, the block SHALL be extracted but replaced with an empty placeholder (no visible output).
@@ -21,34 +15,12 @@ The renderer SHALL detect `<options>...</options>` blocks in the chapter content
 - **WHEN** the chapter content does not contain an `<options>` block
 - **THEN** the plugin handler SHALL make no changes to `context.text` or `context.placeholderMap` for options
 
-### Requirement: Parsing numbered option items
-The options parser SHALL be implemented as a pure TypeScript utility function that extracts exactly 4 numbered items from the block. Each item follows the format `N:【text】` or `N: 【text】` where N is 1 through 4. The parser SHALL strip the `【` and `】` bracket characters and return a typed array (e.g., `ParsedOption[]` with `number` and `text` fields).
-
-#### Scenario: Standard four options are parsed
-- **WHEN** the options block contains lines `1:【Option A】`, `2:【Option B】`, `3:【Option C】`, `4:【Option D】`
-- **THEN** the parser SHALL return a typed array of four items with text `Option A`, `Option B`, `Option C`, `Option D`
-
-#### Scenario: Options with varied whitespace
-- **WHEN** the options block contains `1: 【Option A】` (with extra space after colon)
-- **THEN** the parser SHALL still correctly extract the option text `Option A`
-
 ### Requirement: 2×2 button grid layout
 The options plugin's `frontend.js` SHALL render the four parsed options as a 2×2 grid of styled buttons using CSS Grid classes defined in the main project's `base.css`. Options 1 and 2 SHALL appear in the first row, and options 3 and 4 in the second row. The main project SHALL NOT contain an `OptionsPanel.vue` component — all rendering logic resides within `plugins/options/frontend.js`.
 
 #### Scenario: Four options render as 2×2 grid
 - **WHEN** four options are parsed by the plugin
 - **THEN** the rendered HTML SHALL display them in a 2-column, 2-row grid layout where option 1 is top-left, option 2 is top-right, option 3 is bottom-left, and option 4 is bottom-right
-
-### Requirement: Option button styling
-Each option button within `OptionsPanel.vue` SHALL be visually styled as a clickable button with clear borders, padding, and readable text via scoped component styles. The option number SHALL be displayed alongside or within the button. The buttons SHALL have hover and active visual states.
-
-#### Scenario: Buttons show option numbers
-- **WHEN** the `OptionsPanel.vue` component is rendered
-- **THEN** each button SHALL display its option number (1–4) along with the option text
-
-#### Scenario: Buttons have interactive states
-- **WHEN** the user hovers over an option button
-- **THEN** the button SHALL visually indicate it is interactive (e.g., change background color or border)
 
 ### Requirement: Option button click behavior
 
@@ -61,37 +33,6 @@ Clicking an option button SHALL copy the option text to the clipboard AND dispat
 #### Scenario: Chat input receives option text via CustomEvent
 - **WHEN** the `option-selected` custom event is dispatched on `document`
 - **THEN** the main project's chat input listener SHALL append the option text to the chat textarea
-
-### Requirement: Option button click uses scoped event handling
-
-The options plugin's `frontend.js` SHALL use global DOM event delegation (attaching a click listener to `document` for `[data-option-text]` elements). Since plugin-rendered HTML is injected via `v-html`, Vue component-level `@click` bindings are not available. The plugin SHALL NOT use inline `onclick` attributes. CSP compliance is maintained because event delegation uses `addEventListener`, not inline handlers.
-
-#### Scenario: Click on option button handled via event delegation
-- **WHEN** the user clicks on an option button inside the plugin-rendered HTML
-- **THEN** the document-level click handler SHALL detect the `[data-option-text]` attribute and execute the clipboard copy and event dispatch
-
-#### Scenario: No inline onclick in rendered HTML
-- **WHEN** the options panel HTML is rendered
-- **THEN** the output SHALL NOT contain any `onclick` attributes on button elements
-
-### Requirement: Shared escapeHtml utility
-
-The options panel SHALL import `escapeHtml()` from a shared TypeScript utility module instead of defining its own local copy. The shared `escapeHtml()` function SHALL escape `&`, `<`, `>`, `"`, and `'` (single-quote → `&#39;`) to prevent attribute breakout XSS. The function SHALL have a TypeScript signature `escapeHtml(str: string): string`.
-
-#### Scenario: Single-quote is escaped
-- **WHEN** option text contains a single quote (e.g., `it's a test`)
-- **THEN** `escapeHtml()` SHALL return `it&#39;s a test`
-
-#### Scenario: All HTML special characters are escaped
-- **WHEN** option text contains `<script>alert("xss")&'`
-- **THEN** `escapeHtml()` SHALL return `&lt;script&gt;alert(&quot;xss&quot;)&amp;&#39;`
-
-### Requirement: Handling malformed options blocks
-The `OptionsPanel.vue` component SHALL gracefully handle options data with fewer than 4 items. Available items SHALL still be rendered in the grid. The component SHALL accept a typed prop (e.g., `options: ParsedOption[]`) and render only the items present.
-
-#### Scenario: Options block with only 3 items
-- **WHEN** the component receives only 3 parsed options
-- **THEN** the component SHALL display the 3 available options and leave the fourth grid cell empty or hidden without causing errors
 
 ### Requirement: Plugin manifest and registration
 
@@ -113,10 +54,6 @@ During plugin initialization, the `options` plugin SHALL:
 #### Scenario: Options tag rendered via plugin system
 - **WHEN** the `frontend-render` hook is dispatched and `context.text` contains `<options>` blocks
 - **THEN** the options plugin's handler SHALL extract the blocks, replace them with placeholder comments in `context.text`, and add `placeholder → renderedHTML` entries to `context.placeholderMap`
-
-#### Scenario: Options tag stripped from previous context
-- **WHEN** chapter content is processed for `previous_context` and contains `<options>...</options>` blocks
-- **THEN** those blocks SHALL be stripped because the `options` plugin declares `options` in its `promptStripTags` manifest field
 
 ### Requirement: Typed parser interface
 The options parser SHALL define its data structures (option number and text) within the plugin's code (`plugins/options/frontend.js`). The main project's `reader-src/src/types/index.ts` SHALL NOT contain plugin-specific type interfaces such as `ParsedOption`, `OptionItem`, `OptionsPanelProps`, or `OptionsPanelEmits`.

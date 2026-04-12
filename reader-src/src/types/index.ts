@@ -39,38 +39,6 @@ export interface PluginManifest {
 
 // ── Component Props ──
 
-export interface StatusBarProps {
-  name: string;
-  title: string;
-  scene: string;
-  thought: string;
-  items: string;
-  clothes: string;
-  shoes: string;
-  socks: string;
-  accessories: string;
-  closeUps: CloseUpEntry[];
-}
-
-export interface CloseUpEntry {
-  part: string;
-  description: string;
-}
-
-export interface OptionItem {
-  number: number;
-  text: string;
-}
-
-export interface OptionsPanelProps {
-  items: OptionItem[];
-}
-
-export interface VariableDisplayProps {
-  content: string;
-  isComplete: boolean;
-}
-
 export interface VentoErrorCardProps {
   message: string;
   source?: string;
@@ -112,10 +80,6 @@ export interface ChatInputEmits {
 
 export interface StorySelectorEmits {
   (e: "load", series: string, story: string): void;
-}
-
-export interface OptionsPanelEmits {
-  (e: "select", text: string): void;
 }
 
 export interface PassphraseGateEmits {
@@ -276,15 +240,4 @@ export interface ParameterPill {
   type: string;
 }
 
-// ── Tag Handler Registry ──
 
-export interface TagHandler {
-  extract: (
-    text: string,
-  ) => { text: string; blocks: ExtractedBlock[] };
-}
-
-export interface ExtractedBlock {
-  placeholder: string;
-  html: string;
-}

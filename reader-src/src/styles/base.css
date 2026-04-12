@@ -178,7 +178,12 @@ details[open] summary::before {
   width: 100%;
 }
 
-/* ── Character Header ── */
+/* ── Character Header (plugin: status) ──
+   Styles for the status plugin's rendered HTML output.
+   The status plugin (plugins/status/frontend.js) produces HTML with these
+   classes during frontend-render hook dispatch. These styles must remain
+   in base.css because plugins inject HTML via v-html and cannot bundle
+   their own scoped CSS. */
 
 .char-header {
   display: flex;
@@ -234,7 +239,9 @@ details[open] summary::before {
   right: 0;
 }
 
-/* ── Stats / Info Grid ── */
+/* ── Stats / Info Grid (plugin: status) ──
+   Grid layout for status panel info rows. Used by the status plugin's
+   rendered HTML output. */
 
 .stats-container {
   margin-bottom: 10px;
@@ -315,7 +322,9 @@ details[open] summary::before {
   font-size: 0.9em;
 }
 
-/* ── Fold / Collapsible Sections ── */
+/* ── Fold / Collapsible Sections (plugin: status) ──
+   Collapsible section styles used by the status plugin's rendered HTML
+   output for outfit and close-up detail sections. */
 
 .fold-section {
   margin-top: 8px;
@@ -386,7 +395,10 @@ details:not([open]) > .fold-content {
   display: none;
 }
 
-/* ── Options Panel ── */
+/* ── Options Panel (plugin: options) ──
+   Styles for the options plugin's rendered HTML output.
+   The options plugin (plugins/options/frontend.js) produces a 2×2 button
+   grid with these classes during frontend-render hook dispatch. */
 
 .era-actions-container {
   animation:
@@ -493,7 +505,10 @@ select option {
   color: var(--text-main);
 }
 
-/* ── Variable Display ── */
+/* ── Variable Display (plugin: state-patches) ──
+   Styles for the state-patches plugin's rendered HTML output.
+   The state-patches plugin (plugins/state-patches/frontend.js) renders
+   <UpdateVariable> blocks as collapsible <details> with <pre> content. */
 
 .variable-content {
   margin: 0;
@@ -508,7 +523,8 @@ select option {
   word-break: break-word;
 }
 
-/* ── Thinking Display ── */
+/* ── Thinking Display (plugin: thinking) ──
+   Styles for the thinking plugin's rendered HTML output. */
 
 .thinking-content {
   margin: 0;

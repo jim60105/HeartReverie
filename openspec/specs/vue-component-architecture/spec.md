@@ -8,7 +8,7 @@ Vue 3 component hierarchy, Single File Component structure, composables for shar
 
 ### Requirement: Component hierarchy
 
-The Vue application SHALL follow a single root hierarchy: `App.vue` → `PassphraseGate` → `MainLayout` → (`Header`, `ContentArea`, `Sidebar`, `ChatInput`, `PromptEditor`, `PromptPreview`, `StorySelector`). `App.vue` SHALL be the mount point registered via `createApp()`. `PassphraseGate` SHALL gate all content behind authentication. `MainLayout` SHALL orchestrate the grid layout and conditionally render child components based on application state.
+The Vue application SHALL follow a single root hierarchy: `App.vue` → `PassphraseGate` → `MainLayout` → (`AppHeader`, `ContentArea`, `Sidebar`, `ChatInput`, `PromptEditor`, `PromptPreview`, `StorySelector`, `ChapterContent`, `VentoErrorCard`). The component hierarchy SHALL NOT include plugin-specific components such as `StatusBar`, `OptionsPanel`, or `VariableDisplay` — these are rendered as HTML strings by their respective plugins' `frontend.js` modules and injected via `v-html` in `html` tokens. `App.vue` SHALL be the mount point registered via `createApp()`. `PassphraseGate` SHALL gate all content behind authentication. `MainLayout` SHALL orchestrate the grid layout and conditionally render child components based on application state.
 
 #### Scenario: App mounts root component
 - **WHEN** the application entry point (`main.ts`) is executed
@@ -20,11 +20,11 @@ The Vue application SHALL follow a single root hierarchy: `App.vue` → `Passphr
 
 #### Scenario: MainLayout renders after authentication
 - **WHEN** the user successfully authenticates via `PassphraseGate`
-- **THEN** `MainLayout` SHALL render and display `Header`, `ContentArea`, `Sidebar`, `ChatInput`, and other child components according to current application state
+- **THEN** `MainLayout` SHALL render and display `AppHeader`, `ContentArea`, `Sidebar`, `ChatInput`, and other child components according to current application state
 
-#### Scenario: ChatInput visibility controlled by MainLayout
-- **WHEN** the user is viewing the last chapter in backend mode
-- **THEN** `MainLayout` SHALL render the `ChatInput` component; when viewing a non-last chapter, `ChatInput` SHALL NOT be rendered
+#### Scenario: No plugin-specific Vue components in reader-src
+- **WHEN** listing Vue component files in `reader-src/src/components/`
+- **THEN** no `StatusBar.vue`, `OptionsPanel.vue`, or `VariableDisplay.vue` SHALL exist — plugin rendering is done by plugin `frontend.js` modules producing HTML strings
 
 ### Requirement: Single File Component structure
 
@@ -96,7 +96,7 @@ All mutable UI state SHALL use Vue reactivity primitives: `ref()` for scalar val
 
 ### Requirement: TypeScript strict mode with interface definitions
 
-All frontend TypeScript code SHALL compile under `strict: true` with `noImplicitAny`, `strictNullChecks`, and `noUncheckedIndexedAccess` enabled (matching the project's existing `deno.json` compiler options). All component props SHALL be defined using `defineProps<T>()` with an explicit TypeScript interface. All component emits SHALL be defined using `defineEmits<T>()` with typed event signatures. All composable return types SHALL have explicit interface definitions exported from the composable file.
+All frontend TypeScript code SHALL compile under `strict: true` with `noImplicitAny`, `strictNullChecks`, and `noUncheckedIndexedAccess` enabled. All component props SHALL be defined using `defineProps<T>()` with an explicit TypeScript interface. All component emits SHALL be defined using `defineEmits<T>()` with typed event signatures. All composable return types SHALL have explicit interface definitions exported from the composable file. The shared types module (`reader-src/src/types/index.ts`) SHALL NOT contain plugin-specific interfaces such as `StatusBarProps`, `CloseUpEntry`, `OptionItem`, `OptionsPanelProps`, `VariableDisplayProps`, or `OptionsPanelEmits` — these types belong within their respective plugins.
 
 #### Scenario: Props defined with TypeScript interface
 - **WHEN** a component accepts props (e.g., `ContentArea` receiving chapter content)
@@ -106,9 +106,9 @@ All frontend TypeScript code SHALL compile under `strict: true` with `noImplicit
 - **WHEN** a component emits events (e.g., `ChatInput` emitting a message submission)
 - **THEN** it SHALL use `defineEmits<{ submit: [message: string] }>()` with typed event payloads
 
-#### Scenario: Composable return type is explicit
-- **WHEN** a composable function is exported
-- **THEN** its return type SHALL be an explicitly defined interface (e.g., `UseAuthReturn`) exported from the same file
+#### Scenario: No plugin-specific types in shared types module
+- **WHEN** inspecting `reader-src/src/types/index.ts`
+- **THEN** no plugin-specific interfaces (such as `StatusBarProps`, `OptionItem`, `VariableDisplayProps`) SHALL be defined — only core application types
 
 #### Scenario: Strict compilation passes
 - **WHEN** `deno task build:reader` is executed
@@ -208,41 +208,49 @@ The frontend type system SHALL define a discriminated union type `RenderToken` r
 
 ```typescript
 type RenderToken =
-  | { type: 'html'; content: string }
-  | { type: 'status'; data: StatusData }
-  | { type: 'options'; data: OptionItem[] }
-  | { type: 'variable'; data: { content: string; isComplete: boolean } }
-  | { type: 'vento-error'; data: VentoErrorData };
+  | HtmlToken
+  | VentoErrorToken;
+
+interface HtmlToken {
+  type: 'html';
+  content: string;
+}
+
+interface VentoErrorToken {
+  type: 'vento-error';
+  data: VentoErrorCardProps;
+}
 ```
 
-Where `StatusData` maps to `ParsedStatus`, `OptionItem` maps to `ParsedOption`, and `VentoErrorData` contains the `message`, `source?`, `line?`, and `suggestion?` fields from the vento-error-handling spec. The `RenderToken` type SHALL be exported from a shared types module (e.g., `reader-src/src/types.ts`) and used by the markdown renderer composable, the `ChapterContent.vue` component, and any other component that consumes render output.
+Where `VentoErrorCardProps` contains the `message`, `source?`, `line?`, and `suggestion?` fields from the vento-error-handling spec. The `RenderToken` type SHALL NOT include plugin-specific variants (such as `status`, `options`, or `variable`) — plugin-rendered content is embedded as HTML strings within `html` tokens after `frontend-render` hook dispatch and placeholder reinsertion. The `RenderToken` type SHALL be exported from a shared types module (e.g., `reader-src/src/types/index.ts`) and used by the markdown renderer composable and the content display component.
 
 #### Scenario: RenderToken discriminated union enables type narrowing
 - **WHEN** a component iterates over a `RenderToken[]` array
-- **THEN** TypeScript SHALL allow narrowing via `token.type` to access the correct data shape (e.g., `token.data` is `StatusData` when `token.type === 'status'`)
+- **THEN** TypeScript SHALL allow narrowing via `token.type` to access the correct data shape (`content: string` when `token.type === 'html'`, `data: VentoErrorCardProps` when `token.type === 'vento-error'`)
 
 #### Scenario: RenderToken type used by markdown renderer
 - **WHEN** the `useMarkdownRenderer()` composable returns rendered output
 - **THEN** the return type SHALL be `RenderToken[]` (or a `Ref<RenderToken[]>`), not a single HTML string
 
+#### Scenario: No plugin-specific token types in RenderToken
+- **WHEN** the `RenderToken` type definition is inspected
+- **THEN** it SHALL contain only `html` and `vento-error` variants — no `status`, `options`, `variable`, or other plugin-specific types SHALL exist in the union
+
 ### Requirement: ChapterContent token-based rendering
 
 The `ChapterContent.vue` component (or equivalent content display component within `ContentArea`) SHALL receive a `RenderToken[]` array from the `useMarkdownRenderer()` composable and render it using `v-for` iteration. For each token:
-- `{ type: 'html' }` tokens SHALL be rendered as `<div v-html="token.content"></div>`
-- `{ type: 'status' }` tokens SHALL be rendered as `<StatusBar :data="token.data" />`
-- `{ type: 'options' }` tokens SHALL be rendered as `<OptionsPanel :items="token.data" @optionSelected="..." />`
-- `{ type: 'variable' }` tokens SHALL be rendered as `<VariableDisplay :content="token.data.content" :isComplete="token.data.isComplete" />`
+- `{ type: 'html' }` tokens SHALL be rendered as `<div v-html="token.content"></div>` — this includes plugin-rendered HTML (status bars, options panels, variable displays) that was embedded via placeholder reinsertion during `frontend-render` hook processing
 - `{ type: 'vento-error' }` tokens SHALL be rendered as `<VentoErrorCard v-bind="token.data" />`
 
-This pattern resolves the architectural conflict between `v-html` (which cannot instantiate Vue components or bind events) and Vue component features (props, emits, scoped events) needed by custom blocks.
+The component SHALL NOT import or branch on plugin-specific Vue components (such as `StatusBar`, `OptionsPanel`, `VariableDisplay`). Plugin rendering is fully delegated to `frontend-render` hooks that produce HTML strings, keeping the core content component plugin-agnostic.
 
-#### Scenario: Mixed prose and custom blocks render correctly
-- **WHEN** the markdown renderer returns `[{ type: 'html', content: '<p>Prose</p>' }, { type: 'status', data: statusData }, { type: 'html', content: '<p>More prose</p>' }, { type: 'options', data: optionItems }]`
-- **THEN** `ChapterContent.vue` SHALL render a `<div>` with prose HTML, then a live `<StatusBar>` component, then another `<div>` with prose HTML, then a live `<OptionsPanel>` component — all in document order
+#### Scenario: Mixed prose and plugin-rendered blocks render correctly
+- **WHEN** the markdown renderer returns tokens containing prose HTML and plugin-rendered HTML (from `frontend-render` hooks that extracted and rendered `<status>` and `<options>` blocks)
+- **THEN** `ChapterContent.vue` SHALL render all content in document order using `v-html` for `html` tokens, with plugin-rendered HTML appearing at the correct positions within the prose
 
-#### Scenario: OptionsPanel emits events when rendered as token
-- **WHEN** an `{ type: 'options' }` token is rendered as `<OptionsPanel>` by `ChapterContent.vue`
-- **THEN** the component SHALL emit `optionSelected` events that the parent can handle via `@optionSelected`, proving that Vue component features work correctly (unlike `v-html` injection)
+#### Scenario: Only two token type branches exist
+- **WHEN** inspecting the `ChapterContent.vue` template
+- **THEN** the `v-for` loop SHALL branch on exactly two token types: `html` (rendered via `v-html`) and `vento-error` (rendered as `<VentoErrorCard>`)
 
 #### Scenario: Empty token array renders nothing
 - **WHEN** the markdown renderer returns an empty `RenderToken[]` array
