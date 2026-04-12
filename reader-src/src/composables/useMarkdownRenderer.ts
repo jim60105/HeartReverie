@@ -1,7 +1,6 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { normalizeQuotes, doubleNewlines, reinjectPlaceholders } from "@/lib/markdown-pipeline";
-import { extractStatusBlocks } from "@/lib/parsers/status-parser";
 import { extractOptionsBlocks } from "@/lib/parsers/options-parser";
 import { extractVariableBlocks } from "@/lib/parsers/variable-parser";
 import { extractVentoErrors } from "@/lib/parsers/vento-error-parser";
@@ -11,7 +10,6 @@ import type {
   UseMarkdownRendererReturn,
   RenderOptions,
   RenderToken,
-  StatusBarProps,
   OptionItem,
   VariableDisplayProps,
   VentoErrorCardProps,
@@ -19,8 +17,8 @@ import type {
 } from "@/types";
 
 interface TokenData {
-  type: "status" | "options" | "variable" | "vento-error";
-  data: StatusBarProps | OptionItem[] | VariableDisplayProps | VentoErrorCardProps;
+  type: "options" | "variable" | "vento-error";
+  data: OptionItem[] | VariableDisplayProps | VentoErrorCardProps;
 }
 
 function sanitizeHtml(html: string): string {
@@ -38,14 +36,9 @@ function renderChapter(
   const placeholderMap = new Map<string, string>();
   const tokenDataMap = new Map<string, TokenData>();
 
-  // 1. Extract structured blocks from custom XML tags (native Vue parsers first)
-  const statusResult = extractStatusBlocks(text);
-  text = statusResult.text;
-  for (const block of statusResult.blocks) {
-    placeholderMap.set(block.placeholder, block.placeholder);
-    tokenDataMap.set(block.placeholder, { type: "status", data: block.data });
-  }
-
+  // 1. Extract structured blocks from custom XML tags (native Vue parsers)
+  //    Note: <status> blocks are handled by the status plugin's frontend-render hook,
+  //    which extracts them and injects rendered HTML via placeholderMap.
   const optionsResult = extractOptionsBlocks(text);
   text = optionsResult.text;
   for (const block of optionsResult.blocks) {
@@ -120,12 +113,6 @@ function renderChapter(
     const tokenData = tokenDataMap.get(part);
     if (tokenData) {
       switch (tokenData.type) {
-        case "status":
-          tokens.push({
-            type: "status",
-            data: tokenData.data as StatusBarProps,
-          });
-          break;
         case "options":
           tokens.push({
             type: "options",

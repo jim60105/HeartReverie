@@ -2,7 +2,6 @@
 import { computed } from "vue";
 import type { ChapterContentProps } from "@/types";
 import { useMarkdownRenderer } from "@/composables/useMarkdownRenderer";
-import StatusBar from "./StatusBar.vue";
 import OptionsPanel from "./OptionsPanel.vue";
 import VariableDisplay from "./VariableDisplay.vue";
 import VentoErrorCard from "./VentoErrorCard.vue";
@@ -27,7 +26,6 @@ function handleOptionSelect(text: string) {
     <template v-for="(token, idx) in tokens" :key="idx">
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div v-if="token.type === 'html'" v-html="token.content"></div>
-      <StatusBar v-else-if="token.type === 'status'" v-bind="token.data" />
       <OptionsPanel
         v-else-if="token.type === 'options'"
         :items="token.data"

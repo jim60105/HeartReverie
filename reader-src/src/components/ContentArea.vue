@@ -1,46 +1,43 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import type { StatusBarProps } from "@/types";
+import { ref, watchPostEffect } from "vue";
 import { useChapterNav } from "@/composables/useChapterNav";
-import { useMarkdownRenderer } from "@/composables/useMarkdownRenderer";
 import ChapterContent from "./ChapterContent.vue";
 import Sidebar from "./Sidebar.vue";
-import StatusBar from "./StatusBar.vue";
 
 const {
   currentContent,
   isLastChapter,
 } = useChapterNav();
 
-const { renderChapter } = useMarkdownRenderer();
-
-const statusPanels = ref<StatusBarProps[]>([]);
-
-// Extract status tokens from the render to display in sidebar
-watch(
-  [currentContent, isLastChapter],
-  ([content, isLast]) => {
-    if (!content) {
-      statusPanels.value = [];
-      return;
-    }
-    const tokens = renderChapter(content, { isLastChapter: isLast });
-    statusPanels.value = tokens
-      .filter((t): t is { type: "status"; data: StatusBarProps } => t.type === "status")
-      .map((t) => t.data);
-  },
-  { immediate: true },
-);
+const contentRef = ref<HTMLElement | null>(null);
 
 function handleOptionSelect(text: string) {
   emit("option-select", text);
 }
 
 const emit = defineEmits<{ "option-select": [text: string] }>();
+
+// Relocate plugin-rendered .status-float elements from content to sidebar.
+// This mirrors the original moveStatusToSidebar() in the vanilla JS app.
+watchPostEffect(() => {
+  // Track reactive deps so the effect re-runs on chapter changes
+  currentContent.value;
+  isLastChapter.value;
+
+  const wrapper = contentRef.value;
+  if (!wrapper) return;
+
+  const sidebar = wrapper.querySelector(".sidebar");
+  if (!sidebar) return;
+
+  sidebar.innerHTML = "";
+  const panels = wrapper.querySelectorAll(".status-float");
+  panels.forEach((panel) => sidebar.appendChild(panel));
+});
 </script>
 
 <template>
-  <div class="content-wrapper">
+  <div ref="contentRef" class="content-wrapper">
     <ChapterContent
       v-if="currentContent"
       :raw-markdown="currentContent"
@@ -57,13 +54,7 @@ const emit = defineEmits<{ "option-select": [text: string] }>();
       </section>
     </div>
 
-    <Sidebar>
-      <StatusBar
-        v-for="(panel, idx) in statusPanels"
-        :key="idx"
-        v-bind="panel"
-      />
-    </Sidebar>
+    <Sidebar />
   </div>
 </template>
 

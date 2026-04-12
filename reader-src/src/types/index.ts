@@ -249,7 +249,6 @@ export interface RenderOptions {
 
 export type RenderToken =
   | HtmlToken
-  | StatusToken
   | OptionsToken
   | VariableToken
   | VentoErrorToken;
@@ -257,11 +256,6 @@ export type RenderToken =
 export interface HtmlToken {
   type: "html";
   content: string;
-}
-
-export interface StatusToken {
-  type: "status";
-  data: StatusBarProps;
 }
 
 export interface OptionsToken {

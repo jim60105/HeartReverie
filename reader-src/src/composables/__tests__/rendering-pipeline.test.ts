@@ -39,18 +39,14 @@ describe("rendering pipeline integration", () => {
     return mod.useMarkdownRenderer();
   }
 
-  it("status block produces status token", async () => {
+  it("status blocks are not natively extracted (plugin handles them)", async () => {
     const { renderChapter } = await getRenderer();
     const tokens = renderChapter(
       "before <status>基礎: [Alice|勇者|森林|好奇|長劍]</status> after",
     );
-    const statusTokens = tokens.filter((t) => t.type === "status");
-    expect(statusTokens).toHaveLength(1);
-    expect(statusTokens[0]!.data).toMatchObject({
-      name: "Alice",
-      title: "勇者",
-      scene: "森林",
-    });
+    // Without the plugin loaded, status blocks pass through to HTML
+    const types = new Set(tokens.map((t) => t.type));
+    expect(types.has("status" as never)).toBe(false);
   });
 
   it("options block produces options token", async () => {
@@ -88,7 +84,8 @@ describe("rendering pipeline integration", () => {
     const tokens = renderChapter(input);
     const types = tokens.map((t) => t.type);
     expect(types).toContain("html");
-    expect(types).toContain("status");
+    // Status is handled by plugin, not native extraction
+    expect(types).not.toContain("status");
     expect(types).toContain("options");
     expect(types).toContain("variable");
   });
@@ -115,12 +112,12 @@ describe("rendering pipeline integration", () => {
     expect(varTokens[0]!.data.isComplete).toBe(false);
   });
 
-  it("multiple status blocks produce multiple tokens", async () => {
+  it("multiple status blocks are not natively extracted", async () => {
     const { renderChapter } = await getRenderer();
     const input =
       "<status>基礎: [A||||]</status> mid <status>基礎: [B||||]</status>";
     const tokens = renderChapter(input);
-    const statusTokens = tokens.filter((t) => t.type === "status");
-    expect(statusTokens).toHaveLength(2);
+    const types = new Set(tokens.map((t) => t.type));
+    expect(types.has("status" as never)).toBe(false);
   });
 });
