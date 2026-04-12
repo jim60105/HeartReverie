@@ -1,9 +1,4 @@
 <script setup lang="ts">
-import type { StatusBarProps } from "@/types";
-
-defineProps<{
-  statusData?: StatusBarProps | null;
-}>();
 </script>
 
 <template>

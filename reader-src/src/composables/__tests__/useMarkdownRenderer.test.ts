@@ -54,14 +54,16 @@ describe("useMarkdownRenderer", () => {
     expect(htmlTokens[0]!.content).toBeDefined();
   });
 
-  it("extracts status blocks into status tokens", async () => {
+  it("does not extract status blocks natively (handled by plugin)", async () => {
     const { renderChapter } = await getRenderer();
     const tokens = renderChapter(
       "text <status>基礎: [Alice|勇者|森林|好奇|長劍]</status> more",
     );
-    const statusTokens = tokens.filter((t) => t.type === "status");
-    expect(statusTokens.length).toBe(1);
-    expect(statusTokens[0]!.data.name).toBe("Alice");
+    // Status blocks are handled by the plugin's frontend-render hook,
+    // not by native extraction. Without the plugin loaded, <status> tags
+    // pass through to markdown and end up in html tokens.
+    const types = new Set(tokens.map((t) => t.type));
+    expect(types.has("status" as never)).toBe(false);
   });
 
   it("extracts options blocks into options tokens", async () => {
@@ -114,7 +116,8 @@ describe("useMarkdownRenderer", () => {
     const tokens = renderChapter(input);
     const types = tokens.map((t) => t.type);
     expect(types).toContain("html");
-    expect(types).toContain("status");
+    // Status is handled by plugin, not native extraction
+    expect(types).not.toContain("status");
     expect(types).toContain("options");
   });
 
