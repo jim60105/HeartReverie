@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { usePromptEditor } from "@/composables/usePromptEditor";
 
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; preview: [] }>();
 
 const {
   templateContent,
@@ -60,7 +60,7 @@ function insertAtCursor(text: string) {
 }
 
 function handlePreview() {
-  emit("close");
+  emit("preview");
 }
 
 function handleClose() {

@@ -7,7 +7,7 @@ import ContentArea from "./ContentArea.vue";
 import ChatInput from "./ChatInput.vue";
 import { useChatApi } from "@/composables/useChatApi";
 
-const { isLastChapter, getBackendContext, reloadToLast } = useChapterNav();
+const { isLastChapter, chapters, getBackendContext, reloadToLast } = useChapterNav();
 const { savedTemplate } = usePromptEditor();
 const { sendMessage, resendMessage } = useChatApi();
 
@@ -15,7 +15,7 @@ const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 
 const showChatInput = computed(() => {
   const ctx = getBackendContext();
-  return ctx.isBackendMode && isLastChapter.value;
+  return ctx.isBackendMode && (isLastChapter.value || chapters.value.length === 0);
 });
 
 async function handleSend(message: string) {

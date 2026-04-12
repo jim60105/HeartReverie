@@ -11,11 +11,13 @@ const {
   totalChapters,
   isFirst,
   isLast,
+  mode,
   folderName,
   next,
   previous,
   loadFromFSA,
   loadFromBackend,
+  reloadToLast,
   getBackendContext,
 } = useChapterNav();
 
@@ -46,8 +48,21 @@ function handleEditorClose() {
   showEditor.value = false;
 }
 
+function handlePreviewOpen() {
+  showEditor.value = false;
+  showPreview.value = true;
+}
+
 function handlePreviewClose() {
   showPreview.value = false;
+}
+
+async function handleReload() {
+  if (mode.value === "fsa" && directoryHandle.value) {
+    await loadFromFSA(directoryHandle.value);
+  } else if (mode.value === "backend") {
+    await reloadToLast();
+  }
 }
 
 const previewContext = computed(() => {
@@ -78,11 +93,21 @@ const previewContext = computed(() => {
         v-if="hasChapters"
         class="themed-btn header-btn header-btn--reload"
         title="重新載入資料夾"
+        @click="handleReload"
       >
         🔄
       </button>
 
       <span class="header-spacer"></span>
+
+      <template v-if="getBackendContext().isBackendMode">
+        <button
+          class="themed-btn header-btn"
+          @click="showEditor = true"
+        >
+          ⚙️ Prompt
+        </button>
+      </template>
 
       <template v-if="hasChapters">
         <button
@@ -124,6 +149,7 @@ const previewContext = computed(() => {
       <PromptEditor
         v-if="showEditor"
         @close="handleEditorClose"
+        @preview="handlePreviewOpen"
       />
     </Teleport>
   </header>

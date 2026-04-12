@@ -31,12 +31,7 @@ function renderChapter(
   const placeholderMap = new Map<string, string>();
   const tokenDataMap = new Map<string, TokenData>();
 
-  // 1. Plugin-driven tag extraction and rendering
-  const renderContext: FrontendRenderContext = { text, placeholderMap, options };
-  frontendHooks.dispatch("frontend-render", renderContext);
-  text = renderContext.text;
-
-  // Extract structured blocks from custom XML tags
+  // 1. Extract structured blocks from custom XML tags (native Vue parsers first)
   const statusResult = extractStatusBlocks(text);
   text = statusResult.text;
   for (const block of statusResult.blocks) {
@@ -58,10 +53,11 @@ function renderChapter(
     tokenDataMap.set(block.placeholder, { type: "variable", data: block.data });
   }
 
-  // Vento errors come from options if present
+  // Vento errors extracted from text content
   if (options.isLastChapter) {
-    const ventoErrors = extractVentoErrors([]);
-    for (const block of ventoErrors) {
+    const ventoErrorResult = extractVentoErrors(text);
+    text = ventoErrorResult.text;
+    for (const block of ventoErrorResult.blocks) {
       placeholderMap.set(block.placeholder, block.placeholder);
       tokenDataMap.set(block.placeholder, {
         type: "vento-error",
@@ -69,6 +65,11 @@ function renderChapter(
       });
     }
   }
+
+  // 2. Plugin-driven tag extraction and rendering (third-party plugins)
+  const renderContext: FrontendRenderContext = { text, placeholderMap, options };
+  frontendHooks.dispatch("frontend-render", renderContext);
+  text = renderContext.text;
 
   // 2. Apply declarative displayStripTags
   const { applyDisplayStrip } = usePlugins();
