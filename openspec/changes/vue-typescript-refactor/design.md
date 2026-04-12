@@ -198,12 +198,12 @@ App.vue
     │       ├── StatusBar.vue         ← from <status> blocks
     │       ├── OptionsPanel.vue      ← from <options> blocks
     │       ├── VariableDisplay.vue   ← from <UpdateVariable> blocks
-    │       └── VentoErrorDisplay.vue ← from Vento template errors
+    │       └── VentoErrorCard.vue    ← from Vento template errors
     ├── Sidebar.vue            ← chapter list, navigation
     └── ChatInput.vue          ← message input + send
 ```
 
-**Rationale**: Maps directly to the existing module responsibilities. Leaf components (`StatusBar`, `OptionsPanel`, `VariableDisplay`, `VentoErrorDisplay`) are pure renderers that receive parsed data as props — their extraction/parsing logic lives in utility functions, not in the components. This separation preserves testability of parsers independently from rendering.
+**Rationale**: Maps directly to the existing module responsibilities. Leaf components (`StatusBar`, `OptionsPanel`, `VariableDisplay`, `VentoErrorCard`) are pure renderers that receive parsed data as props — their extraction/parsing logic lives in utility functions, not in the components. This separation preserves testability of parsers independently from rendering.
 
 **Parser utilities** (non-component TypeScript modules):
 - `lib/parsers/status-parser.ts` — `extractStatusBlocks()`, `parseStatus()`
@@ -319,7 +319,8 @@ Convert module-scoped state to reactive composables:
 - `story-selector.js` state → `composables/useStorySelector.ts`
 - `prompt-editor.js` state → `composables/usePromptEditor.ts`
 - `md-renderer.js` pipeline → `composables/useMarkdownRenderer.ts`
-- `chat-input.js` state → `composables/useChatInput.ts`
+- `chat-input.js` state → `composables/useChatApi.ts`
+- Background image config → `composables/useBackground.ts`
 
 Each composable is unit-testable without mounting components.
 
@@ -327,7 +328,7 @@ Each composable is unit-testable without mounting components.
 
 ### Phase 4: Build Vue components bottom-up
 Start with leaf components that have no child components:
-1. `StatusBar.vue`, `OptionsPanel.vue`, `VariableDisplay.vue`, `VentoErrorDisplay.vue` — pure rendering from props
+1. `StatusBar.vue`, `OptionsPanel.vue`, `VariableDisplay.vue`, `VentoErrorCard.vue` — pure rendering from props
 2. `ChatInput.vue`, `StorySelector.vue`, `PromptEditor.vue` — form components using composables
 3. `PassphraseGate.vue` — auth overlay using `useAuth`
 4. `ChapterContent.vue`, `ContentArea.vue`, `Sidebar.vue` — layout components
