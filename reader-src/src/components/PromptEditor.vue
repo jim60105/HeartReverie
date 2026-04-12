@@ -7,7 +7,7 @@ const emit = defineEmits<{ close: []; preview: [] }>();
 const {
   templateContent,
   parameters,
-  savedTemplate,
+  saveTemplate,
   loadTemplate,
   resetTemplate,
 } = usePromptEditor();
@@ -26,17 +26,8 @@ onUnmounted(() => {
 function handleInput() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    persistToStorage();
+    saveTemplate();
   }, 500);
-}
-
-function persistToStorage() {
-  const STORAGE_KEY = "story-editor-template";
-  const current = templateContent.value;
-  if (savedTemplate.value !== undefined && current === savedTemplate.value) {
-    return;
-  }
-  localStorage.setItem(STORAGE_KEY, current);
 }
 
 function handleReset() {
@@ -56,7 +47,7 @@ function insertAtCursor(text: string) {
   requestAnimationFrame(() => {
     ta.setSelectionRange(newPos, newPos);
   });
-  handleInput();
+  saveTemplate();
 }
 
 function handlePreview() {
