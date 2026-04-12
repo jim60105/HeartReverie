@@ -7,6 +7,7 @@ import PromptPreview from "./PromptPreview.vue";
 const { getBackendContext } = useChapterNav();
 
 const showPreview = ref(false);
+const previewRef = ref<InstanceType<typeof PromptPreview> | null>(null);
 
 const previewContext = computed(() => {
   const ctx = getBackendContext();
@@ -19,15 +20,22 @@ const previewContext = computed(() => {
 function togglePreview() {
   showPreview.value = !showPreview.value;
 }
+
+function handleSaved() {
+  if (showPreview.value) {
+    previewRef.value?.fetchPreview();
+  }
+}
 </script>
 
 <template>
   <div class="editor-page">
     <div class="editor-page-main">
-      <PromptEditor @preview="togglePreview" />
+      <PromptEditor @preview="togglePreview" @saved="handleSaved" />
     </div>
     <div v-if="showPreview" class="editor-page-preview">
       <PromptPreview
+        ref="previewRef"
         :series="previewContext.series"
         :story="previewContext.story"
         message="(preview)"

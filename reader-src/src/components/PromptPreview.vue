@@ -21,6 +21,8 @@ onMounted(() => {
   }
 });
 
+defineExpose({ fetchPreview });
+
 async function fetchPreview() {
   loading.value = true;
   errorText.value = "";

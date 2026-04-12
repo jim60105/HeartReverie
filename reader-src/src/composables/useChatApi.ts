@@ -9,7 +9,6 @@ async function sendMessage(
   series: string,
   story: string,
   message: string,
-  template?: string,
 ): Promise<boolean> {
   const { getAuthHeaders } = useAuth();
   isLoading.value = true;
@@ -17,7 +16,6 @@ async function sendMessage(
 
   try {
     const body: Record<string, string> = { message };
-    if (template) body["template"] = template;
 
     const res = await fetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chat`,
@@ -46,7 +44,6 @@ async function resendMessage(
   series: string,
   story: string,
   message: string,
-  template?: string,
 ): Promise<boolean> {
   const { getAuthHeaders } = useAuth();
   isLoading.value = true;
@@ -66,7 +63,6 @@ async function resendMessage(
 
     // Re-send the message
     const body: Record<string, string> = { message };
-    if (template) body["template"] = template;
 
     const res = await fetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chat`,

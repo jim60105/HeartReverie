@@ -115,6 +115,7 @@ The script auto-generates self-signed TLS certs in `.certs/` on first run. HTTPS
 | `PLAYGROUND_DIR` | No | `./playground` | Story data root |
 | `READER_DIR` | No | `./reader` | Frontend static files root |
 | `BACKGROUND_IMAGE` | No | `/assets/heart.webp` | Background image URL path for the web reader |
+| `PROMPT_FILE` | No | `playground/prompts/system.md` | Custom prompt template file path |
 
 The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_API_KEY` and `PASSPHRASE`.
 

@@ -46,6 +46,12 @@ const LLM_MIN_P: number = numEnv("LLM_MIN_P", 0);
 const LLM_TOP_A: number = numEnv("LLM_TOP_A", 1);
 const BACKGROUND_IMAGE: string =
   Deno.env.get("BACKGROUND_IMAGE") || "/assets/heart.webp";
+const PROMPT_FILE: string = (() => {
+  const raw = Deno.env.get("PROMPT_FILE");
+  if (!raw) return join(PLAYGROUND_DIR, "prompts", "system.md");
+  // Resolve relative paths against ROOT_DIR
+  return raw.startsWith("/") ? raw : resolve(ROOT_DIR, raw);
+})();
 
 export {
   ROOT_DIR,
@@ -66,4 +72,5 @@ export {
   LLM_MIN_P,
   LLM_TOP_A,
   BACKGROUND_IMAGE,
+  PROMPT_FILE,
 };

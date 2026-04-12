@@ -1,37 +1,33 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted } from "vue";
 import { usePromptEditor } from "@/composables/usePromptEditor";
 
-const emit = defineEmits<{ preview: [] }>();
+const emit = defineEmits<{ preview: []; saved: [] }>();
 
 const {
   templateContent,
   parameters,
-  saveTemplate,
+  isDirty,
+  isCustom,
+  isSaving,
+  save,
   loadTemplate,
   resetTemplate,
 } = usePromptEditor();
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
 onMounted(async () => {
   await loadTemplate();
 });
 
-onUnmounted(() => {
-  if (saveTimer) clearTimeout(saveTimer);
-});
-
-function handleInput() {
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveTemplate();
-  }, 500);
+async function handleSave() {
+  await save();
+  emit("saved");
 }
 
-function handleReset() {
-  resetTemplate();
+async function handleReset() {
+  await resetTemplate();
 }
 
 function insertAtCursor(text: string) {
@@ -47,7 +43,6 @@ function insertAtCursor(text: string) {
   requestAnimationFrame(() => {
     ta.setSelectionRange(newPos, newPos);
   });
-  saveTemplate();
 }
 
 function handlePreview() {
@@ -74,8 +69,21 @@ function handlePreview() {
         </div>
       </div>
       <div class="toolbar-actions">
-        <button class="toolbar-btn" title="重設為伺服器版本" @click="handleReset">
-          ↻ 重設
+        <button
+          class="toolbar-btn"
+          title="回復預設 (system.md)"
+          :disabled="!isCustom"
+          @click="handleReset"
+        >
+          ↻ 回復預設
+        </button>
+        <button
+          class="toolbar-btn toolbar-btn--save"
+          :disabled="!isDirty || isSaving"
+          @click="handleSave"
+        >
+          <span v-if="isSaving" class="save-spinner">⏳</span>
+          {{ isSaving ? '儲存中…' : '儲存' }}
         </button>
         <button class="toolbar-btn toolbar-btn--primary" @click="handlePreview">
           預覽 Prompt
@@ -90,7 +98,6 @@ function handlePreview() {
         class="editor-textarea"
         spellcheck="false"
         placeholder="載入中..."
-        @input="handleInput"
       ></textarea>
     </div>
   </div>
@@ -189,6 +196,24 @@ function handlePreview() {
 
 .toolbar-btn:hover {
   background: var(--btn-hover-bg);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbar-btn:disabled:hover {
+  background: var(--btn-bg);
+}
+
+.toolbar-btn--save {
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.toolbar-btn--save:not(:disabled):hover {
+  background: rgba(74, 222, 128, 0.15);
 }
 
 .toolbar-btn--primary {

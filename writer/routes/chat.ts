@@ -16,6 +16,7 @@
 import { join } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
+import { readTemplate } from "./prompt.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps, LLMStreamChunk } from "../types.ts";
 import type { ContentfulStatusCode } from "@hono/hono/utils/http-status";
@@ -52,6 +53,21 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       }
 
       try {
+        // Resolve template: body override > custom file > system.md
+        let templateOverride: string | undefined;
+        if (typeof template === "string") {
+          templateOverride = template;
+        } else {
+          try {
+            const tpl = await readTemplate(config);
+            if (tpl.source === "custom") {
+              templateOverride = tpl.content;
+            }
+          } catch {
+            // No custom file and no system.md readable — proceed with default rendering
+          }
+        }
+
         const {
           prompt: systemPrompt,
           ventoError,
@@ -62,7 +78,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           name,
           storyDir,
           message,
-          typeof template === "string" ? template : undefined
+          templateOverride
         );
 
         if (ventoError) {

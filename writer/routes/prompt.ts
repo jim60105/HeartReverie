@@ -13,23 +13,79 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { join } from "@std/path";
+import { join, dirname } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
+import { validateTemplate } from "../lib/template.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
+
+/** Read the custom prompt file; fall back to system.md only when the custom file does not exist. */
+export async function readTemplate(config: { PROMPT_FILE: string; ROOT_DIR: string }): Promise<{ content: string; source: "custom" | "default" }> {
+  try {
+    const content = await Deno.readTextFile(config.PROMPT_FILE);
+    return { content, source: "custom" };
+  } catch (err: unknown) {
+    if (!(err instanceof Deno.errors.NotFound)) throw err;
+    const content = await Deno.readTextFile(join(config.ROOT_DIR, "system.md"));
+    return { content, source: "default" };
+  }
+}
 
 export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "pluginManager" | "buildPromptFromStory" | "config">): void {
   const { safePath, pluginManager, buildPromptFromStory, config } = deps;
 
   app.get("/api/template", async (c) => {
     try {
-      const templatePath = join(config.ROOT_DIR, "system.md");
-      const content = await Deno.readTextFile(templatePath);
-      return c.json({ content });
+      const result = await readTemplate(config);
+      return c.json(result);
     } catch {
       return c.json(problemJson("Internal Server Error", 500, "Failed to read template"), 500);
     }
+  });
+
+  app.put("/api/template", async (c) => {
+    try {
+      const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+      const content: unknown = body.content;
+      if (typeof content !== "string" || content.trim().length === 0) {
+        return c.json(problemJson("Bad Request", 400, "Content required"), 400);
+      }
+
+      if (content.length > 500_000) {
+        return c.json(problemJson("Bad Request", 400, "Template exceeds maximum length"), 400);
+      }
+
+      const errors = validateTemplate(content);
+      if (errors.length > 0) {
+        return c.json({
+          type: "https://heartreverie.invalid/template-validation",
+          title: "Template Validation Error",
+          status: 422,
+          detail: "Template contains unsafe expressions that cannot be executed",
+          expressions: errors,
+        }, 422);
+      }
+
+      await Deno.mkdir(dirname(config.PROMPT_FILE), { recursive: true });
+      await Deno.writeTextFile(config.PROMPT_FILE, content);
+      return c.json({ ok: true });
+    } catch (err: unknown) {
+      console.error("PUT /api/template error:", err instanceof Error ? err.message : String(err));
+      return c.json(problemJson("Internal Server Error", 500, "Failed to save template"), 500);
+    }
+  });
+
+  app.delete("/api/template", async (c) => {
+    try {
+      await Deno.remove(config.PROMPT_FILE);
+    } catch (err: unknown) {
+      if (!(err instanceof Deno.errors.NotFound)) {
+        console.error("DELETE /api/template error:", err instanceof Error ? err.message : String(err));
+        return c.json(problemJson("Internal Server Error", 500, "Failed to delete template"), 500);
+      }
+    }
+    return c.json({ ok: true });
   });
 
   app.post(
@@ -51,6 +107,21 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
       }
 
       try {
+        // Resolve template: body override > custom file > system.md
+        let templateOverride: string | undefined;
+        if (typeof template === "string") {
+          templateOverride = template;
+        } else {
+          try {
+            const tpl = await readTemplate(config);
+            if (tpl.source === "custom") {
+              templateOverride = tpl.content;
+            }
+          } catch {
+            // No custom file readable — proceed with default rendering
+          }
+        }
+
         const {
           prompt,
           previousContext,
@@ -62,7 +133,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
           name,
           storyDir,
           message,
-          typeof template === "string" ? template : undefined
+          templateOverride
         );
 
         if (ventoError) {
