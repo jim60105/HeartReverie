@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { usePromptEditor } from "@/composables/usePromptEditor";
 import AppHeader from "./AppHeader.vue";
@@ -45,19 +45,12 @@ function handleOptionSelect(text: string) {
 }
 
 // Listen for plugin-dispatched option-selected custom DOM events
-function handlePluginOptionSelect(e: Event) {
-  const detail = (e as CustomEvent<{ text: string }>).detail;
-  if (detail?.text) {
-    chatInputRef.value?.appendText(detail.text);
-  }
-}
-
 onMounted(() => {
-  document.addEventListener("option-selected", handlePluginOptionSelect);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("option-selected", handlePluginOptionSelect);
+  document.addEventListener("option-selected", ((e: CustomEvent<{ text: string }>) => {
+    if (e.detail?.text) {
+      handleOptionSelect(e.detail.text);
+    }
+  }) as EventListener);
 });
 </script>
 
@@ -65,7 +58,7 @@ onUnmounted(() => {
   <div class="main-layout">
     <AppHeader />
     <main class="main-content">
-      <ContentArea @option-select="handleOptionSelect" />
+      <ContentArea />
       <ChatInput
         v-if="showChatInput"
         ref="chatInputRef"

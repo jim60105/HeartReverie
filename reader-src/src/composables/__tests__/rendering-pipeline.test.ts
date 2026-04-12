@@ -49,27 +49,22 @@ describe("rendering pipeline integration", () => {
     expect(types.has("status" as never)).toBe(false);
   });
 
-  it("options block produces options token", async () => {
+  it("options blocks are not natively extracted (plugin handles them)", async () => {
     const { renderChapter } = await getRenderer();
     const tokens = renderChapter(
       "text <options>1: 前進\n2: 後退\n3: 觀察\n4: 休息</options>",
     );
-    const optTokens = tokens.filter((t) => t.type === "options");
-    expect(optTokens).toHaveLength(1);
-    expect(optTokens[0]!.data).toHaveLength(4);
+    const types = new Set(tokens.map((t) => t.type));
+    expect(types.has("options" as never)).toBe(false);
   });
 
-  it("variable block produces variable token", async () => {
+  it("variable blocks are not natively extracted (plugin handles them)", async () => {
     const { renderChapter } = await getRenderer();
     const tokens = renderChapter(
       "<UpdateVariable>some data</UpdateVariable>",
     );
-    const varTokens = tokens.filter((t) => t.type === "variable");
-    expect(varTokens).toHaveLength(1);
-    expect(varTokens[0]!.data).toMatchObject({
-      content: "some data",
-      isComplete: true,
-    });
+    const types = new Set(tokens.map((t) => t.type));
+    expect(types.has("variable" as never)).toBe(false);
   });
 
   it("mixed content produces correct token types in order", async () => {
@@ -84,10 +79,10 @@ describe("rendering pipeline integration", () => {
     const tokens = renderChapter(input);
     const types = tokens.map((t) => t.type);
     expect(types).toContain("html");
-    // Status is handled by plugin, not native extraction
+    // All plugin-handled blocks are NOT natively extracted
     expect(types).not.toContain("status");
-    expect(types).toContain("options");
-    expect(types).toContain("variable");
+    expect(types).not.toContain("options");
+    expect(types).not.toContain("variable");
   });
 
   it("plain text produces single html token", async () => {
@@ -104,12 +99,11 @@ describe("rendering pipeline integration", () => {
     expect(tokens[0]!.type).toBe("html");
   });
 
-  it("incomplete variable block is marked as incomplete", async () => {
+  it("incomplete variable block is not natively extracted", async () => {
     const { renderChapter } = await getRenderer();
     const tokens = renderChapter("text <UpdateVariable>streaming data");
-    const varTokens = tokens.filter((t) => t.type === "variable");
-    expect(varTokens).toHaveLength(1);
-    expect(varTokens[0]!.data.isComplete).toBe(false);
+    const types = new Set(tokens.map((t) => t.type));
+    expect(types.has("variable" as never)).toBe(false);
   });
 
   it("multiple status blocks are not natively extracted", async () => {

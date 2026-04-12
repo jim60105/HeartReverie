@@ -11,12 +11,6 @@ const {
 
 const contentRef = ref<HTMLElement | null>(null);
 
-function handleOptionSelect(text: string) {
-  emit("option-select", text);
-}
-
-const emit = defineEmits<{ "option-select": [text: string] }>();
-
 // Relocate plugin-rendered .status-float elements from content to sidebar.
 // This mirrors the original moveStatusToSidebar() in the vanilla JS app.
 watchPostEffect(() => {
@@ -42,7 +36,6 @@ watchPostEffect(() => {
       v-if="currentContent"
       :raw-markdown="currentContent"
       :is-last-chapter="isLastChapter"
-      @option-select="handleOptionSelect"
     />
     <div v-else class="welcome-content">
       <section class="welcome-section">
