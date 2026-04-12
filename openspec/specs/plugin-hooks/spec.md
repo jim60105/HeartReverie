@@ -110,9 +110,38 @@ Plugins SHALL register hook handlers via `hooks.on(stage, handler, priority?)` w
 - **WHEN** a plugin registers a handler that returns a Promise
 - **THEN** the hook system SHALL await the handler's completion before proceeding to the next handler in the stage
 
+The frontend `FrontendHookDispatcher` SHALL use `hooks.register(stage, handler, priority?)` where `stage` is a valid frontend hook stage name, `handler` is a synchronous function, and `priority` is an optional numeric value defaulting to `100`. The `FrontendHookDispatcher` only supports the `frontend-render` stage; `register()` SHALL validate that the stage name is `frontend-render` and SHALL log a warning and skip registration for unknown stage names. The `FrontendHookDispatcher` class SHALL be preserved as a TypeScript class (NOT converted to a Vue composable) for backward compatibility with existing plugin `frontend.js` modules that call `register(frontendHooks)`. The class API (`register`, `dispatch`) SHALL remain identical in signature and behavior.
+
+#### Scenario: Frontend register a handler with explicit priority
+- **WHEN** a plugin calls `hooks.register('frontend-render', myHandler, 50)`
+- **THEN** the hook system SHALL register `myHandler` for the `frontend-render` stage with priority 50
+
+#### Scenario: Frontend register a handler with default priority
+- **WHEN** a plugin calls `hooks.register('frontend-render', myHandler)`
+- **THEN** the hook system SHALL register `myHandler` for the `frontend-render` stage with the default priority of 100
+
+#### Scenario: Frontend register handler for invalid stage
+- **WHEN** a plugin calls `hooks.register('invalid-stage', myHandler)`
+- **THEN** the hook system SHALL log a warning identifying the invalid stage name and SHALL NOT register the handler
+
+#### Scenario: Handler is called synchronously
+- **WHEN** `dispatch('frontend-render', context)` invokes registered handlers
+- **THEN** each handler SHALL be called synchronously in priority order; handlers are NOT awaited
+
+#### Scenario: Existing plugin frontend.js modules remain compatible
+- **WHEN** an existing plugin's `frontend.js` module calls `register(frontendHooks)` where `frontendHooks` is a `FrontendHookDispatcher` instance
+- **THEN** the call SHALL succeed with the same API surface as the vanilla JS implementation, because the class is preserved as-is (not converted to a composable)
+
 ### Requirement: Handler execution
 
-For each hook stage invocation, the hook system SHALL execute all registered handlers in priority order. `prompt-assembly` handlers SHALL receive a mutable context object containing `templateVariables` and `promptFragments`, and MAY modify these to contribute prompt content or adjust template data. `response-stream` handlers SHALL receive the current chunk and MAY return a transformed chunk. `post-response` handlers SHALL receive the completed response content and story metadata for side effects. `frontend-render` handlers SHALL receive a registration API to declare tag extractors and renderers. `strip-tags` handlers SHALL receive a registration API to declare tag names for server-side stripping.
+For each hook stage invocation, the hook system SHALL execute all registered handlers in priority order. `prompt-assembly` handlers SHALL receive a mutable context object containing `templateVariables` and `promptFragments`, and MAY modify these to contribute prompt content or adjust template data. `response-stream` handlers SHALL receive the current chunk and MAY return a transformed chunk. `post-response` handlers SHALL receive the completed response content and story metadata for side effects. `strip-tags` handlers SHALL receive a registration API to declare tag names for server-side stripping.
+
+For each `dispatch(stage, context)` invocation, the `FrontendHookDispatcher` SHALL execute all registered `frontend-render` handlers synchronously in priority order. `frontend-render` handlers SHALL receive a mutable context object with the following exact shape:
+- `context.text` (`string`, mutable) — the raw markdown text being processed; handlers replace extracted blocks with placeholder comments and write the modified text back to this property
+- `context.placeholderMap` (`Map<string, string>`, mutable) — a map from placeholder comment strings (e.g., `<!--STATUS_BLOCK_0-->`) to rendered HTML strings; handlers add entries to this map for each extracted block
+- `context.options` (`object`) — rendering options passed from the caller (e.g., `{ isLastChapter: boolean }`)
+
+Handlers mutate `context.text` and `context.placeholderMap` directly — the dispatcher does NOT create copies or merge return values. If a handler throws, the error SHALL be caught and logged, and execution SHALL continue with the next handler. The `dispatch()` method SHALL return the context object. All handler signatures and context object shapes SHALL have TypeScript type definitions.
 
 #### Scenario: Prompt-assembly handler contributes a prompt fragment
 - **WHEN** a `prompt-assembly` handler pushes a string into `context.promptFragments`
@@ -126,13 +155,17 @@ For each hook stage invocation, the hook system SHALL execute all registered han
 - **WHEN** a `post-response` handler executes the `state-patches` binary
 - **THEN** the side effect SHALL complete before the server sends the HTTP response to the client
 
-#### Scenario: Frontend-render handler registers tag extractor
-- **WHEN** a `frontend-render` handler registers an extractor for the `<options>` tag
-- **THEN** the `md-renderer` SHALL use that extractor to extract and render `<options>` content from chapter markdown
+#### Scenario: Frontend-render handler extracts and renders a tag
+- **WHEN** a `frontend-render` handler (e.g., the `options` plugin at priority 50) is invoked with a context containing `<options>` blocks in `context.text`
+- **THEN** the handler SHALL replace each `<options>` block in `context.text` with a placeholder comment and add a corresponding `placeholder → renderedHTML` entry to `context.placeholderMap`
 
 #### Scenario: Strip-tags handler adds custom tag for stripping
 - **WHEN** a `strip-tags` handler registers the tag name `imgthink`
 - **THEN** the server SHALL strip `<imgthink>...</imgthink>` from chapter content when building `previous_context`
+
+#### Scenario: Frontend handler error does not halt dispatch
+- **WHEN** handler A (priority 50) throws an error and handler B (priority 100) is also registered for `frontend-render`
+- **THEN** the dispatcher SHALL log the error from handler A and proceed to execute handler B
 
 ### Requirement: Error isolation
 
@@ -149,3 +182,25 @@ If a hook handler throws an error during execution, the hook system SHALL catch 
 #### Scenario: Request completes despite handler error
 - **WHEN** a `post-response` handler throws an error
 - **THEN** the server SHALL still return the HTTP response with the chapter content successfully
+
+
+### Requirement: TypeScript type definitions for hooks
+
+The `FrontendHookDispatcher` class SHALL have TypeScript type definitions for all handler signatures and context shapes. A `FrontendHookHandler<T>` generic type SHALL define the handler function signature as `(context: T) => void`. A `FrontendRenderContext` interface SHALL be defined with the following properties matching the current runtime contract:
+- `text: string` — the raw markdown text (mutable by handlers)
+- `placeholderMap: Map<string, string>` — placeholder to rendered HTML mapping (mutable by handlers)
+- `options: Record<string, unknown>` — rendering options from the caller
+
+The interface SHALL NOT introduce new methods such as `registerExtractor` or `registerRenderer` — handlers mutate context properties directly, preserving the existing plugin contract. These types SHALL be exported so plugin authors can use them for type-safe handler implementations.
+
+#### Scenario: Handler type definitions are available
+- **WHEN** a TypeScript plugin module imports hook types from the frontend hook system
+- **THEN** it SHALL have access to `FrontendHookHandler<T>`, `FrontendRenderContext`, and related interfaces for compile-time type checking
+
+#### Scenario: FrontendRenderContext matches runtime contract
+- **WHEN** an existing plugin's `frontend-render` handler mutates `context.text` and `context.placeholderMap`
+- **THEN** the `FrontendRenderContext` type SHALL accept these mutations without type errors, because both properties are typed as mutable (not `readonly`)
+
+#### Scenario: FrontendHookDispatcher typed methods
+- **WHEN** the `FrontendHookDispatcher` class is used in TypeScript code
+- **THEN** `register(stage, handler, priority?)` SHALL be typed to accept only valid stage names and correctly-typed handler functions, and `dispatch(stage, context)` SHALL be typed to require the correct context shape for each stage

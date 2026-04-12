@@ -40,7 +40,8 @@ The server SHALL expose a `GET /api/config` endpoint that returns a JSON object 
 - **THEN** the server SHALL respond with status 200 (not 401)
 
 ### Requirement: Fixed viewport-covering background image
-The `body` element SHALL display the configured background image as a fixed, viewport-covering background using `background: url(...) center/cover no-repeat fixed`. The existing `background-color: #0f0a0c` SHALL remain as a fallback beneath the image.
+
+The `body` element SHALL display the configured background image as a fixed, viewport-covering background using `background: url(...) center/cover no-repeat fixed`. The existing `background-color: #0f0a0c` SHALL remain as a fallback beneath the image. The CSS rules for the body background and `body::before` overlay SHALL be defined in the shared theme CSS file or base styles, not in an inline `<style>` block in `index.html`.
 
 #### Scenario: Background image covers viewport
 - **WHEN** the page is rendered with a valid background image
@@ -62,12 +63,17 @@ A `body::before` pseudo-element SHALL render a semi-transparent black overlay (`
 - **THEN** the overlay SHALL NOT intercept pointer events (via `pointer-events: none` or equivalent `z-index` layering)
 
 ### Requirement: Frontend config fetching
-The frontend SHALL fetch `/api/config` on page load and apply the `backgroundImage` value to `document.body.style.backgroundImage`. The fetch SHALL be non-blocking — if it fails, the page SHALL render normally with the fallback background colour.
 
-#### Scenario: Background applied on page load
-- **WHEN** the page loads and `/api/config` returns successfully
-- **THEN** the frontend SHALL set `document.body.style.backgroundImage` to `url(<backgroundImage value>)`
+The frontend SHALL fetch `/api/config` on application mount via a `useBackground()` composable or within `App.vue`'s `<script setup>` block, and apply the `backgroundImage` value to `document.body.style.backgroundImage`. The fetch SHALL be non-blocking — if it fails, the page SHALL render normally with the fallback background colour. The composable SHALL use Vue's `onMounted()` lifecycle hook instead of an inline `<script>` tag in `index.html`.
+
+#### Scenario: Background applied on application mount
+- **WHEN** the Vue application mounts and `/api/config` returns successfully
+- **THEN** the `useBackground()` composable (or `App.vue` setup) SHALL set `document.body.style.backgroundImage` to `url(<backgroundImage value>)`
 
 #### Scenario: Graceful degradation on fetch failure
-- **WHEN** the page loads and `/api/config` fails (network error, server down)
+- **WHEN** the Vue application mounts and `/api/config` fails (network error, server down)
 - **THEN** the page SHALL render normally with the `#0f0a0c` fallback background and no errors thrown to the console
+
+#### Scenario: No inline script for background fetching
+- **WHEN** the `index.html` file is inspected
+- **THEN** it SHALL NOT contain any inline `<script>` block that fetches `/api/config` — the logic SHALL reside in a Vue composable or component setup function
