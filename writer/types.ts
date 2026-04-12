@@ -37,6 +37,7 @@ export interface AppConfig {
   readonly LLM_MIN_P: number;
   readonly LLM_TOP_A: number;
   readonly BACKGROUND_IMAGE: string;
+  readonly PROMPT_FILE: string;
 }
 
 /** Function that resolves path segments under the playground directory, returning null on traversal. */

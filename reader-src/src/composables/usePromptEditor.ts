@@ -6,61 +6,64 @@ import type {
 } from "@/types";
 import { useAuth } from "@/composables/useAuth";
 
-const STORAGE_KEY = "story-editor-template";
-
 const templateContent = ref("");
-const originalTemplate = ref("");
+const lastSaved = ref("");
 const parameters = ref<ParameterPill[]>([]);
+const isCustom = ref(false);
+const isSaving = ref(false);
 
-// Restore from localStorage on module load
-const stored = localStorage.getItem(STORAGE_KEY);
-if (stored) {
-  templateContent.value = stored;
-}
-
-const savedTemplate = computed<string | undefined>(() => {
-  if (
-    templateContent.value &&
-    templateContent.value !== originalTemplate.value
-  ) {
-    return templateContent.value;
-  }
-  return undefined;
+const isDirty = computed(() => {
+  return templateContent.value !== lastSaved.value;
 });
-
-function saveTemplate(): void {
-  if (!originalTemplate.value) return;
-  if (templateContent.value === originalTemplate.value) {
-    localStorage.removeItem(STORAGE_KEY);
-  } else {
-    localStorage.setItem(STORAGE_KEY, templateContent.value);
-  }
-}
 
 async function loadTemplate(): Promise<void> {
   const { getAuthHeaders } = useAuth();
   try {
     const res = await fetch("/api/template", { headers: { ...getAuthHeaders() } });
     if (!res.ok) return;
-    const data: { content: string } = await res.json();
-    originalTemplate.value = data.content;
-
-    // If no localStorage override or it matches server, use server version
-    const localStored = localStorage.getItem(STORAGE_KEY);
-    if (!localStored || localStored === data.content) {
-      templateContent.value = data.content;
-    } else {
-      templateContent.value = localStored;
-    }
+    const data: { content: string; source: "custom" | "default" } = await res.json();
+    templateContent.value = data.content;
+    lastSaved.value = data.content;
+    isCustom.value = data.source === "custom";
   } catch {
     // Ignore fetch errors
   }
 }
 
-function resetTemplate(): void {
-  if (!originalTemplate.value) return;
-  templateContent.value = originalTemplate.value;
-  localStorage.removeItem(STORAGE_KEY);
+async function save(): Promise<void> {
+  if (!isDirty.value || isSaving.value) return;
+  const { getAuthHeaders } = useAuth();
+  isSaving.value = true;
+  try {
+    const res = await fetch("/api/template", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify({ content: templateContent.value }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        (err as { detail?: string }).detail ?? "Failed to save template",
+      );
+    }
+    lastSaved.value = templateContent.value;
+    isCustom.value = true;
+  } finally {
+    isSaving.value = false;
+  }
+}
+
+async function resetTemplate(): Promise<void> {
+  const { getAuthHeaders } = useAuth();
+  try {
+    await fetch("/api/template", {
+      method: "DELETE",
+      headers: { ...getAuthHeaders() },
+    });
+  } catch {
+    // Ignore delete errors
+  }
+  await loadTemplate();
 }
 
 async function loadParameters(): Promise<void> {
@@ -94,8 +97,10 @@ async function previewTemplate(
 ): Promise<PromptPreviewResult> {
   const { getAuthHeaders } = useAuth();
   const body: Record<string, string> = { message: message || "(preview)" };
-  if (savedTemplate.value) {
-    body["template"] = savedTemplate.value;
+
+  // Send current editor content for preview if it differs from saved
+  if (isDirty.value) {
+    body["template"] = templateContent.value;
   }
 
   const res = await fetch(
@@ -124,10 +129,12 @@ export function usePromptEditor(): UsePromptEditorReturn {
 
   return {
     templateContent,
-    originalTemplate,
+    lastSaved,
     parameters,
-    savedTemplate,
-    saveTemplate,
+    isDirty,
+    isCustom,
+    isSaving,
+    save,
     loadTemplate,
     resetTemplate,
     previewTemplate,

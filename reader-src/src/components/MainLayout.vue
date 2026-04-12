@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { useChapterNav } from "@/composables/useChapterNav";
-import { usePromptEditor } from "@/composables/usePromptEditor";
 import AppHeader from "./AppHeader.vue";
 import ContentArea from "./ContentArea.vue";
 import ChatInput from "./ChatInput.vue";
 import { useChatApi } from "@/composables/useChatApi";
 
 const { isLastChapter, chapters, getBackendContext, reloadToLast } = useChapterNav();
-const { savedTemplate } = usePromptEditor();
 const { sendMessage, resendMessage } = useChatApi();
 
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
@@ -22,8 +20,7 @@ async function handleSend(message: string) {
   const ctx = getBackendContext();
   if (!ctx.series || !ctx.story) return;
 
-  const tpl = savedTemplate.value;
-  const success = await sendMessage(ctx.series, ctx.story, message, tpl);
+  const success = await sendMessage(ctx.series, ctx.story, message);
   if (success) {
     await reloadToLast();
   }
@@ -33,8 +30,7 @@ async function handleResend(message: string) {
   const ctx = getBackendContext();
   if (!ctx.series || !ctx.story) return;
 
-  const tpl = savedTemplate.value;
-  const success = await resendMessage(ctx.series, ctx.story, message, tpl);
+  const success = await resendMessage(ctx.series, ctx.story, message);
   if (success) {
     await reloadToLast();
   }

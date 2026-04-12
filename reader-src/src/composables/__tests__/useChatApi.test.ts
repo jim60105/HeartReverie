@@ -118,14 +118,14 @@ describe("useChatApi", () => {
     expect(result).toBe(false);
   });
 
-  it("sendMessage includes template when provided", async () => {
+  it("sendMessage does not include template in body", async () => {
     mockFetch({}, 200);
     const api = await getChatApi();
-    await api.sendMessage("s", "t", "msg", "custom template");
+    await api.sendMessage("s", "t", "msg");
     const body = JSON.parse(
       (fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1].body as string,
     );
-    expect(body.template).toBe("custom template");
+    expect(body).not.toHaveProperty("template");
   });
 
   it("sendMessage catches network errors", async () => {

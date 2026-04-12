@@ -150,12 +150,14 @@ export interface UseStorySelectorReturn {
 
 export interface UsePromptEditorReturn {
   templateContent: Ref<string>;
-  originalTemplate: Ref<string>;
+  lastSaved: Ref<string>;
   parameters: Ref<ParameterPill[]>;
-  savedTemplate: ComputedRef<string | undefined>;
-  saveTemplate: () => void;
+  isDirty: ComputedRef<boolean>;
+  isCustom: Ref<boolean>;
+  isSaving: Ref<boolean>;
+  save: () => Promise<void>;
   loadTemplate: () => Promise<void>;
-  resetTemplate: () => void;
+  resetTemplate: () => Promise<void>;
   previewTemplate: (
     series: string,
     story: string,
@@ -177,13 +179,11 @@ export interface UseChatApiReturn {
     series: string,
     story: string,
     message: string,
-    template?: string,
   ) => Promise<boolean>;
   resendMessage: (
     series: string,
     story: string,
     message: string,
-    template?: string,
   ) => Promise<boolean>;
 }
 

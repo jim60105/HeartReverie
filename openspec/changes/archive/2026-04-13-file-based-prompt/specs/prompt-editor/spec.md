@@ -1,10 +1,32 @@
-# Prompt Editor
+## MODIFIED Requirements
 
-## Purpose
+### Requirement: localStorage sync via composable
 
-Frontend system prompt template editor (編排器) for directly editing the Vento template text with variable insertion pills and live preview integration.
+The `usePromptEditor` composable SHALL persist the template through the backend `PUT /api/template` endpoint instead of `localStorage`. The composable SHALL track dirty state by comparing the current editor content against the last-saved version. The composable SHALL expose an `isDirty` computed ref and an async `save()` method that calls `PUT /api/template`. The composable SHALL expose an `isSaving` ref for loading state. On load, the composable SHALL fetch the template via `GET /api/template` and use the `source` field to determine whether a custom prompt is active. The `savedTemplate` computed SHALL be removed — the chat route reads from the server-side file directly, so the frontend no longer sends the template in the chat request body. The `localStorage` key `story-editor-template` SHALL no longer be read or written.
 
-## Requirements
+#### Scenario: Save via API
+- **WHEN** the user clicks the "儲存" (Save) button in the editor
+- **THEN** the composable SHALL call `PUT /api/template` with the current textarea content and update the last-saved snapshot on success
+
+#### Scenario: Dirty state tracking
+- **WHEN** the user modifies the textarea content so it differs from the last-saved version
+- **THEN** the `isDirty` computed ref SHALL be `true` and the save button SHALL be enabled
+
+#### Scenario: Clean state after save
+- **WHEN** a save completes successfully
+- **THEN** `isDirty` SHALL be `false` and `isSaving` SHALL be `false`
+
+#### Scenario: Load detects custom vs default
+- **WHEN** the composable fetches the template on mount
+- **THEN** it SHALL use the `source` field from `GET /api/template` to set an `isCustom` ref indicating whether a custom prompt file exists
+
+#### Scenario: Reset calls DELETE
+- **WHEN** the user clicks "回復預設" (Reset to default)
+- **THEN** the composable SHALL call `DELETE /api/template`, then re-fetch via `GET /api/template` to load `system.md` content
+
+#### Scenario: No localStorage usage
+- **WHEN** the composable code is inspected
+- **THEN** it SHALL contain no references to `localStorage`, `STORAGE_KEY`, or `sessionStorage`
 
 ### Requirement: Editor UI
 
@@ -50,58 +72,6 @@ The frontend SHALL provide a `PromptEditor.vue` Single File Component as the mai
 - **WHEN** the user clicks the "儲存" (Save) button while the preview panel is open
 - **THEN** the `PromptEditorPage.vue` component SHALL trigger `PromptPreview` to re-fetch the rendered prompt from the server, reflecting the newly saved template content
 
-### Requirement: Variable insertion pills
-
-The editor SHALL display clickable pills above the textarea showing all available Vento template variables. Clicking a pill SHALL insert the `{{ variable_name }}` reference at the current cursor position in the textarea via a component method. Pills SHALL be color-coded: blue for core variables, green for plugin-contributed variables.
-
-#### Scenario: Display variable pills
-- **WHEN** the `PromptEditor.vue` component loads
-- **THEN** it SHALL fetch variables from `GET /api/plugins/parameters` and render them as clickable pill buttons with color coding by source
-
-#### Scenario: Insert variable from pill
-- **WHEN** the user clicks a variable pill
-- **THEN** the component method SHALL insert `{{ variable_name }}` at the textarea cursor position and update the `v-model` ref accordingly
-
-### Requirement: Live preview integration
-
-Changes made in the prompt editor SHALL be previewable using the prompt preview endpoint. The editor SHALL provide a "Preview" action that sends the current `v-model` template text to `POST /api/stories/:series/:name/preview-prompt` (via the `template` body field) and displays the rendered result in the preview panel.
-
-#### Scenario: Preview edited template
-- **WHEN** the user clicks "Preview" in the editor
-- **THEN** the component SHALL send the current `v-model` textarea content as `template` to the preview endpoint and display the rendered prompt in the preview panel
-
-#### Scenario: Preview with custom message
-- **WHEN** the user has typed a message in the chat input and triggers preview from the editor
-- **THEN** the preview SHALL render the prompt using that message as `user_input`
-
-### Requirement: localStorage sync via composable
-
-The `usePromptEditor` composable SHALL persist the template through the backend `PUT /api/template` endpoint instead of `localStorage`. The composable SHALL track dirty state by comparing the current editor content against the last-saved version. The composable SHALL expose an `isDirty` computed ref and an async `save()` method that calls `PUT /api/template`. The composable SHALL expose an `isSaving` ref for loading state. On load, the composable SHALL fetch the template via `GET /api/template` and use the `source` field to determine whether a custom prompt is active. The `savedTemplate` computed SHALL be removed — the chat route reads from the server-side file directly, so the frontend no longer sends the template in the chat request body. The `localStorage` key `story-editor-template` SHALL no longer be read or written.
-
-#### Scenario: Save via API
-- **WHEN** the user clicks the "儲存" (Save) button in the editor
-- **THEN** the composable SHALL call `PUT /api/template` with the current textarea content and update the last-saved snapshot on success
-
-#### Scenario: Dirty state tracking
-- **WHEN** the user modifies the textarea content so it differs from the last-saved version
-- **THEN** the `isDirty` computed ref SHALL be `true` and the save button SHALL be enabled
-
-#### Scenario: Clean state after save
-- **WHEN** a save completes successfully
-- **THEN** `isDirty` SHALL be `false` and `isSaving` SHALL be `false`
-
-#### Scenario: Load detects custom vs default
-- **WHEN** the composable fetches the template on mount
-- **THEN** it SHALL use the `source` field from `GET /api/template` to set an `isCustom` ref indicating whether a custom prompt file exists
-
-#### Scenario: Reset calls DELETE
-- **WHEN** the user clicks "回復預設" (Reset to default)
-- **THEN** the composable SHALL call `DELETE /api/template`, then re-fetch via `GET /api/template` to load `system.md` content
-
-#### Scenario: No localStorage usage
-- **WHEN** the composable code is inspected
-- **THEN** it SHALL contain no references to `localStorage`, `STORAGE_KEY`, or `sessionStorage`
-
 ### Requirement: PromptEditor component events
 
 The `PromptEditor.vue` component SHALL NOT use `defineEmits` to declare a `close` event. The component SHALL NOT emit `close` — navigation is handled by router and settings sidebar. The component SHALL emit a `saved` event after a successful save operation to allow parent components (e.g., `PromptEditorPage.vue`) to react — such as reloading the preview panel.
@@ -113,3 +83,11 @@ The `PromptEditor.vue` component SHALL NOT use `defineEmits` to declare a `close
 #### Scenario: Saved event emitted after save
 - **WHEN** the `save()` method completes successfully
 - **THEN** the component SHALL emit a `saved` event
+
+## REMOVED Requirements
+
+### Requirement: Panel layout and backdrop
+
+**Reason**: The prompt editor is now rendered within `SettingsLayout` as a routed page, not as a sliding panel with backdrop. Panel positioning (`left: 0`, `right: 0`, `width: 33vw`), backdrop, and close-on-click-outside are no longer applicable.
+
+**Migration**: The editor is accessed via `/settings/prompt-editor` route. No panel or backdrop behavior exists.

@@ -1,10 +1,4 @@
-# Environment Example
-
-## Purpose
-
-Documents all environment variables recognized by the application via a `.env.example` file at the repository root, enabling new contributors to quickly set up their local environment.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Environment variable documentation file
 

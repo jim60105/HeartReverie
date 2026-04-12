@@ -56,11 +56,14 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
   // Write a system.md template for GET /api/template
   await Deno.writeTextFile(join(tmpDir, "system.md"), "You are a storyteller.");
 
+  const promptFile = join(tmpDir, "prompts", "custom.md");
+
   const app = createApp({
     config: {
       READER_DIR: "/nonexistent-reader",
       PLAYGROUND_DIR: tmpDir,
       ROOT_DIR: tmpDir,
+      PROMPT_FILE: promptFile,
     } as unknown as AppConfig,
     safePath,
     pluginManager: {
@@ -83,10 +86,24 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
   } as AppDeps);
 
   try {
-    await t.step("GET /api/template returns template content", async () => {
+    await t.step("GET /api/template falls back to system.md with source default", async () => {
       const res = await makeRequest(app, "GET", "/api/template");
       assertEquals(res.status, 200);
       assertEquals(res.body.content, "You are a storyteller.");
+      assertEquals(res.body.source, "default");
+    });
+
+    await t.step("GET /api/template returns custom file with source custom", async () => {
+      await Deno.mkdir(join(tmpDir, "prompts"), { recursive: true });
+      await Deno.writeTextFile(promptFile, "Custom template content");
+      try {
+        const res = await makeRequest(app, "GET", "/api/template");
+        assertEquals(res.status, 200);
+        assertEquals(res.body.content, "Custom template content");
+        assertEquals(res.body.source, "custom");
+      } finally {
+        await Deno.remove(promptFile);
+      }
     });
 
     await t.step("GET /api/template returns 500 when template missing", async () => {
@@ -95,6 +112,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
           READER_DIR: "/nonexistent-reader",
           PLAYGROUND_DIR: tmpDir,
           ROOT_DIR: "/nonexistent-root",
+          PROMPT_FILE: "/nonexistent-prompt",
         } as unknown as AppConfig,
         safePath,
         pluginManager: {
@@ -112,6 +130,139 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
       const res = await makeRequest(appNoTemplate, "GET", "/api/template");
       assertEquals(res.status, 500);
       assertEquals(res.body.detail, "Failed to read template");
+    });
+
+    await t.step("PUT /api/template writes file and returns ok", async () => {
+      const putFile = join(tmpDir, "put-test", "system.md");
+      const appPut = createApp({
+        config: {
+          READER_DIR: "/nonexistent-reader",
+          PLAYGROUND_DIR: tmpDir,
+          ROOT_DIR: tmpDir,
+          PROMPT_FILE: putFile,
+        } as unknown as AppConfig,
+        safePath,
+        pluginManager: {
+          getPlugins: () => [],
+          getParameters: () => [],
+          getPluginDir: () => null,
+          getBuiltinDir: () => "/nonexistent-plugins",
+          getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+          getStripTagPatterns: () => null,
+        } as unknown as PluginManager,
+        hookDispatcher: new HookDispatcher(),
+        buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        verifyPassphrase,
+      } as AppDeps);
+
+      const res = await makeRequest(appPut, "PUT", "/api/template", { content: "Hello {{ user_input }}" });
+      assertEquals(res.status, 200);
+      assertEquals(res.body.ok, true);
+      const written = await Deno.readTextFile(putFile);
+      assertEquals(written, "Hello {{ user_input }}");
+    });
+
+    await t.step("PUT /api/template rejects unsafe template with 422", async () => {
+      const res = await makeRequest(app, "PUT", "/api/template", { content: "{{ process.env.SECRET }}" });
+      assertEquals(res.status, 422);
+      assert(Array.isArray(res.body.expressions));
+      assert(res.body.expressions.length > 0);
+    });
+
+    await t.step("PUT /api/template rejects empty content with 400", async () => {
+      const res = await makeRequest(app, "PUT", "/api/template", { content: "" });
+      assertEquals(res.status, 400);
+    });
+
+    await t.step("PUT /api/template creates parent directories", async () => {
+      const nestedFile = join(tmpDir, "deep", "nested", "dir", "system.md");
+      const appNested = createApp({
+        config: {
+          READER_DIR: "/nonexistent-reader",
+          PLAYGROUND_DIR: tmpDir,
+          ROOT_DIR: tmpDir,
+          PROMPT_FILE: nestedFile,
+        } as unknown as AppConfig,
+        safePath,
+        pluginManager: {
+          getPlugins: () => [],
+          getParameters: () => [],
+          getPluginDir: () => null,
+          getBuiltinDir: () => "/nonexistent-plugins",
+          getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+          getStripTagPatterns: () => null,
+        } as unknown as PluginManager,
+        hookDispatcher: new HookDispatcher(),
+        buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        verifyPassphrase,
+      } as AppDeps);
+
+      const res = await makeRequest(appNested, "PUT", "/api/template", { content: "nested template" });
+      assertEquals(res.status, 200);
+      assertEquals(res.body.ok, true);
+      const written = await Deno.readTextFile(nestedFile);
+      assertEquals(written, "nested template");
+    });
+
+    await t.step("DELETE /api/template removes file and returns ok", async () => {
+      const delFile = join(tmpDir, "del-test", "system.md");
+      await Deno.mkdir(join(tmpDir, "del-test"), { recursive: true });
+      await Deno.writeTextFile(delFile, "to be deleted");
+      const appDel = createApp({
+        config: {
+          READER_DIR: "/nonexistent-reader",
+          PLAYGROUND_DIR: tmpDir,
+          ROOT_DIR: tmpDir,
+          PROMPT_FILE: delFile,
+        } as unknown as AppConfig,
+        safePath,
+        pluginManager: {
+          getPlugins: () => [],
+          getParameters: () => [],
+          getPluginDir: () => null,
+          getBuiltinDir: () => "/nonexistent-plugins",
+          getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+          getStripTagPatterns: () => null,
+        } as unknown as PluginManager,
+        hookDispatcher: new HookDispatcher(),
+        buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        verifyPassphrase,
+      } as AppDeps);
+
+      const res = await makeRequest(appDel, "DELETE", "/api/template");
+      assertEquals(res.status, 200);
+      assertEquals(res.body.ok, true);
+      let exists = true;
+      try { await Deno.stat(delFile); } catch { exists = false; }
+      assertEquals(exists, false);
+    });
+
+    await t.step("DELETE /api/template is idempotent when file missing", async () => {
+      const missingFile = join(tmpDir, "no-such-file.md");
+      const appMissing = createApp({
+        config: {
+          READER_DIR: "/nonexistent-reader",
+          PLAYGROUND_DIR: tmpDir,
+          ROOT_DIR: tmpDir,
+          PROMPT_FILE: missingFile,
+        } as unknown as AppConfig,
+        safePath,
+        pluginManager: {
+          getPlugins: () => [],
+          getParameters: () => [],
+          getPluginDir: () => null,
+          getBuiltinDir: () => "/nonexistent-plugins",
+          getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+          getStripTagPatterns: () => null,
+        } as unknown as PluginManager,
+        hookDispatcher: new HookDispatcher(),
+        buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        verifyPassphrase,
+      } as AppDeps);
+
+      const res = await makeRequest(appMissing, "DELETE", "/api/template");
+      assertEquals(res.status, 200);
+      assertEquals(res.body.ok, true);
     });
 
     await t.step("POST preview-prompt returns rendered prompt", async () => {
@@ -158,6 +309,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
           READER_DIR: "/nonexistent-reader",
           PLAYGROUND_DIR: tmpDir,
           ROOT_DIR: tmpDir,
+          PROMPT_FILE: promptFile,
         } as unknown as AppConfig,
         safePath,
         pluginManager: {
