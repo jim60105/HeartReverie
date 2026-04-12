@@ -3,19 +3,30 @@ import { usePlugins } from "@/composables/usePlugins";
 import { useBackground } from "@/composables/useBackground";
 import { useFileReader } from "@/composables/useFileReader";
 import { useChapterNav } from "@/composables/useChapterNav";
+import { useRoute } from "vue-router";
 import PassphraseGate from "@/components/PassphraseGate.vue";
-import MainLayout from "@/components/MainLayout.vue";
 import "@/styles/base.css";
 
+const route = useRoute();
 const { initPlugins } = usePlugins();
 const { applyBackground } = useBackground();
 const { restoreHandle } = useFileReader();
-const { loadFromFSA } = useChapterNav();
+const { loadFromFSA, loadFromBackend } = useChapterNav();
 
 async function handleUnlocked() {
   await Promise.all([initPlugins(), applyBackground()]);
 
-  // Restore previously saved FSA directory handle
+  // If the route has series/story params, load from backend
+  const series = route.params.series as string | undefined;
+  const story = route.params.story as string | undefined;
+  if (series && story) {
+    const chapterParam = route.params.chapter as string | undefined;
+    const startChapter = chapterParam ? parseInt(chapterParam, 10) : undefined;
+    await loadFromBackend(series, story, startChapter);
+    return;
+  }
+
+  // Otherwise, restore previously saved FSA directory handle
   const restored = await restoreHandle();
   if (restored) {
     const { directoryHandle } = useFileReader();
@@ -28,6 +39,6 @@ async function handleUnlocked() {
 
 <template>
   <PassphraseGate @unlocked="handleUnlocked">
-    <MainLayout />
+    <router-view />
   </PassphraseGate>
 </template>

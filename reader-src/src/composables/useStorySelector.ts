@@ -1,4 +1,6 @@
-import { ref } from "vue";
+import { ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import router from "@/router";
 import type { UseStorySelectorReturn } from "@/types";
 import { useAuth } from "@/composables/useAuth";
 
@@ -6,6 +8,7 @@ const seriesList = ref<string[]>([]);
 const storyList = ref<string[]>([]);
 const selectedSeries = ref("");
 const selectedStory = ref("");
+let initialized = false;
 
 async function fetchSeries(): Promise<void> {
   const { getAuthHeaders } = useAuth();
@@ -35,7 +38,48 @@ async function createStory(series: string, name: string): Promise<void> {
   await res.json();
 }
 
+function navigateToStory(series: string, story: string): void {
+  router.push({ name: "story", params: { series, story } });
+}
+
+function initRouteSync(): void {
+  if (initialized) return;
+  initialized = true;
+
+  const route = useRoute();
+
+  // Handle user-initiated series changes (from dropdown v-model)
+  watch(selectedSeries, (series) => {
+    // If route already has this series, the route watcher handles fetch
+    if (route.params.series === series) return;
+    selectedStory.value = "";
+    if (series) {
+      fetchStories(series);
+    }
+  });
+
+  // Sync from route params — immediate to handle direct URL loads
+  watch(
+    () => [route.params.series, route.params.story] as const,
+    async ([newSeries, newStory]) => {
+      if (newSeries) {
+        const s = newSeries as string;
+        if (s !== selectedSeries.value) {
+          selectedSeries.value = s;
+          await fetchStories(s);
+        }
+      }
+      if (newStory) {
+        selectedStory.value = newStory as string;
+      }
+    },
+    { immediate: true },
+  );
+}
+
 export function useStorySelector(): UseStorySelectorReturn {
+  initRouteSync();
+
   return {
     seriesList,
     storyList,
@@ -44,5 +88,6 @@ export function useStorySelector(): UseStorySelectorReturn {
     fetchSeries,
     fetchStories,
     createStory,
+    navigateToStory,
   };
 }

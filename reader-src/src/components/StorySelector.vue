@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import { useStorySelector } from "@/composables/useStorySelector";
-
-const emit = defineEmits<{ load: [series: string, story: string] }>();
 
 const {
   seriesList,
@@ -12,6 +10,7 @@ const {
   fetchSeries,
   fetchStories,
   createStory,
+  navigateToStory,
 } = useStorySelector();
 
 const newStoryName = ref("");
@@ -19,13 +18,6 @@ const isOpen = ref(false);
 
 onMounted(() => {
   fetchSeries();
-});
-
-watch(selectedSeries, (series) => {
-  selectedStory.value = "";
-  if (series) {
-    fetchStories(series);
-  }
 });
 
 async function handleCreate() {
@@ -36,7 +28,7 @@ async function handleCreate() {
   await createStory(series, name);
   selectedStory.value = name;
   newStoryName.value = "";
-  emit("load", series, name);
+  navigateToStory(series, name);
   isOpen.value = false;
 }
 
@@ -44,7 +36,7 @@ function handleLoad() {
   const series = selectedSeries.value;
   const story = selectedStory.value;
   if (!series || !story) return;
-  emit("load", series, story);
+  navigateToStory(series, story);
   isOpen.value = false;
 }
 </script>

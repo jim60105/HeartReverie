@@ -1,46 +1,4 @@
-# Story Selector
-
-## Purpose
-
-Frontend story browser panel for selecting and creating stories via the backend API.
-
-## Requirements
-
-### Requirement: Series selection
-
-The frontend SHALL display a `StorySelector.vue` component containing a dropdown populated from `GET /api/stories` that allows the user to select a story series. The series list and selected series SHALL be managed as reactive state within the `useStorySelector()` composable. When a series is selected, the story selection dropdown SHALL be updated reactively to show stories within that series. All fetch requests SHALL include the `X-Passphrase` header via the `getAuthHeaders()` function from the `useAuth()` composable.
-
-#### Scenario: Series dropdown population
-- **WHEN** the `StorySelector.vue` component is mounted
-- **THEN** the `useStorySelector()` composable SHALL fetch the list of series from `GET /api/stories` with the `X-Passphrase` header and populate the reactive `seriesList` ref, which the component renders as dropdown options
-
-#### Scenario: Series selection triggers story list update
-- **WHEN** the user selects a series from the dropdown (bound via `v-model` to the reactive `selectedSeries` ref)
-- **THEN** the `useStorySelector()` composable SHALL call `GET /api/stories/:series` with the `X-Passphrase` header and update the reactive `storyList` ref, which the component renders as story dropdown options
-
-### Requirement: Story selection
-
-The `StorySelector.vue` component SHALL display a dropdown or input for selecting a story name within the currently selected series, bound to the reactive `selectedStory` ref from the `useStorySelector()` composable. The dropdown SHALL be populated reactively from the composable's `storyList` ref. The user SHALL also be able to type a new story name that does not yet exist.
-
-#### Scenario: Story dropdown population
-- **WHEN** a series is selected and the `storyList` ref updates
-- **THEN** the story dropdown SHALL reactively display the available story names for that series
-
-#### Scenario: Custom story name input
-- **WHEN** the user types a story name that does not appear in the dropdown
-- **THEN** the input SHALL accept the custom name for use with new story creation
-
-### Requirement: New story creation
-
-The `StorySelector.vue` component SHALL allow the user to create a new story by entering a story name and triggering `POST /api/stories/:series/:name/init`. All fetch requests SHALL include the `X-Passphrase` header via the `getAuthHeaders()` function from the `useAuth()` composable. This SHALL create the story directory and an empty `001.md` file. After creation, the story SHALL be automatically selected and loaded — the auto-load after create behavior SHALL be preserved.
-
-#### Scenario: Create a new story
-- **WHEN** the user enters a new story name and triggers creation
-- **THEN** the composable SHALL POST to `/api/stories/:series/:name/init` with the `X-Passphrase` header, and upon success, auto-select and load the newly created story
-
-#### Scenario: Create story that already exists
-- **WHEN** the user triggers creation for a story name that already exists
-- **THEN** the frontend SHALL load the existing story without error (the backend returns HTTP 200 without modifying existing files)
+## MODIFIED Requirements
 
 ### Requirement: Story loading
 
