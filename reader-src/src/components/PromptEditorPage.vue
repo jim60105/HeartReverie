@@ -1,0 +1,74 @@
+<script setup lang="ts">
+import { ref, computed } from "vue";
+import { useChapterNav } from "@/composables/useChapterNav";
+import PromptEditor from "./PromptEditor.vue";
+import PromptPreview from "./PromptPreview.vue";
+
+const { getBackendContext } = useChapterNav();
+
+const showPreview = ref(false);
+
+const previewContext = computed(() => {
+  const ctx = getBackendContext();
+  return {
+    series: ctx.series ?? "",
+    story: ctx.story ?? "",
+  };
+});
+
+function togglePreview() {
+  showPreview.value = !showPreview.value;
+}
+</script>
+
+<template>
+  <div class="editor-page">
+    <div class="editor-page-main">
+      <PromptEditor @preview="togglePreview" />
+    </div>
+    <div v-if="showPreview" class="editor-page-preview">
+      <PromptPreview
+        :series="previewContext.series"
+        :story="previewContext.story"
+        message="(preview)"
+      />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.editor-page {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-page-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-page-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border-color);
+}
+
+@media (max-width: 767px) {
+  .editor-page {
+    flex-direction: column;
+  }
+
+  .editor-page-preview {
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+  }
+}
+</style>

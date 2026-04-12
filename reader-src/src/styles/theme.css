@@ -51,6 +51,13 @@
   /* Reading overlay */
   --reading-tint: rgba(29, 33, 40, 0.9);
 
+  /* Settings */
+  --settings-sidebar-width: 200px;
+  --settings-sidebar-bg: linear-gradient(180deg, #2a0d18 0%, #1a0810 100%);
+  --settings-sidebar-active-bg: rgba(180, 30, 60, 0.22);
+  --settings-sidebar-active-border: var(--text-title);
+  --settings-content-padding: 24px;
+
   /* Typography */
   --font-base: clamp(0.8rem, 2.5vw, 0.95rem);
   --font-system-ui: Noto Sans TC, Noto Sans JP, Noto Sans SC, Noto Sans,

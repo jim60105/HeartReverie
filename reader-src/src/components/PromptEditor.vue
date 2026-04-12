@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { usePromptEditor } from "@/composables/usePromptEditor";
 
-const emit = defineEmits<{ close: []; preview: [] }>();
+const emit = defineEmits<{ preview: [] }>();
 
 const {
   templateContent,
@@ -53,38 +53,32 @@ function insertAtCursor(text: string) {
 function handlePreview() {
   emit("preview");
 }
-
-function handleClose() {
-  emit("close");
-}
 </script>
 
 <template>
-  <div class="prompt-editor-panel">
-    <div class="editor-header">
-      <h3>🎛️ 編排器</h3>
-      <div class="editor-header-actions">
-        <button class="editor-btn-sm" title="重設為伺服器版本" @click="handleReset">
+  <div class="editor-root">
+    <div class="editor-toolbar">
+      <div class="toolbar-left">
+        <span class="toolbar-label">變數</span>
+        <div class="variable-pills">
+          <button
+            v-for="p in parameters"
+            :key="p.name"
+            class="variable-pill"
+            :class="p.source === 'core' ? 'pill-core' : 'pill-plugin'"
+            :title="`${p.source}: ${p.type} — 點擊插入`"
+            @click="insertAtCursor(`{{ ${p.name} }}`)"
+          >
+            {{ p.name }}
+          </button>
+        </div>
+      </div>
+      <div class="toolbar-actions">
+        <button class="toolbar-btn" title="重設為伺服器版本" @click="handleReset">
           ↻ 重設
         </button>
-        <button class="editor-close-btn" @click="handleClose">✕</button>
-      </div>
-    </div>
-
-    <div class="editor-variables">
-      <div class="editor-variables-label">
-        變數 <span class="editor-hint">(點擊插入)</span>
-      </div>
-      <div class="variable-pills">
-        <button
-          v-for="p in parameters"
-          :key="p.name"
-          class="variable-pill"
-          :class="p.source === 'core' ? 'pill-core' : 'pill-plugin'"
-          :title="`${p.source}: ${p.type}`"
-          @click="insertAtCursor(`{{ ${p.name} }}`)"
-        >
-          {{ p.name }}
+        <button class="toolbar-btn toolbar-btn--primary" @click="handlePreview">
+          預覽 Prompt
         </button>
       </div>
     </div>
@@ -99,84 +93,42 @@ function handleClose() {
         @input="handleInput"
       ></textarea>
     </div>
-
-    <div class="editor-actions">
-      <button class="editor-btn" @click="handlePreview">預覽 Prompt</button>
-    </div>
   </div>
 </template>
 
 <style scoped>
-.prompt-editor-panel {
+.editor-root {
   display: flex;
-  position: fixed;
-  top: 0;
-  right: 0;
   flex-direction: column;
-  z-index: 1000;
-  border-left: 1px solid var(--border-color);
-  background: linear-gradient(145deg, #1a0810, #220c16);
-  padding: 16px;
-  width: 33vw;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
 }
 
-@media (max-width: 767px) {
-  .prompt-editor-panel {
-    width: 100vw;
-  }
-}
-
-.editor-header {
+.editor-toolbar {
   display: flex;
   flex-shrink: 0;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
 }
 
-.editor-header-actions {
+.toolbar-left {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
-.editor-close-btn {
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: inherit;
-  font-size: 1.2em;
-}
-
-.editor-btn-sm {
-  cursor: pointer;
-  border: 1px solid var(--btn-border);
-  border-radius: 4px;
-  background: var(--btn-bg);
-  padding: 4px 10px;
+.toolbar-label {
   color: var(--text-label);
-  font-size: 0.85em;
-}
-
-.editor-btn-sm:hover {
-  background: var(--btn-hover-bg);
-}
-
-.editor-variables {
-  flex-shrink: 0;
-  margin-bottom: 10px;
-}
-
-.editor-variables-label {
-  margin-bottom: 6px;
-  color: var(--text-label);
-  font-size: 0.85em;
-}
-
-.editor-hint {
-  color: rgba(255, 122, 150, 0.5);
-  font-size: 0.85em;
+  font-size: 0.8em;
+  font-family: var(--font-antique), var(--font-system-ui);
+  white-space: nowrap;
 }
 
 .variable-pills {
@@ -216,9 +168,36 @@ function handleClose() {
   background: rgba(180, 30, 60, 0.25);
 }
 
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.toolbar-btn {
+  cursor: pointer;
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  background: var(--btn-bg);
+  padding: 6px 14px;
+  color: var(--text-label);
+  font-size: 0.85em;
+  font-family: var(--font-antique), var(--font-system-ui);
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+  background: var(--btn-hover-bg);
+}
+
+.toolbar-btn--primary {
+  border-color: var(--text-title);
+  color: var(--text-name);
+}
+
 .editor-textarea-wrap {
   flex: 1;
-  margin-bottom: 10px;
   min-height: 0;
 }
 
@@ -226,7 +205,7 @@ function handleClose() {
   border: 1px solid var(--item-border);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.3);
-  padding: 10px;
+  padding: 12px;
   width: 100%;
   height: 100%;
   resize: none;
@@ -241,23 +220,5 @@ function handleClose() {
 .editor-textarea:focus {
   outline: none;
   border-color: var(--text-title);
-}
-
-.editor-actions {
-  flex-shrink: 0;
-}
-
-.editor-btn {
-  cursor: pointer;
-  border: 1px solid var(--btn-border);
-  border-radius: 4px;
-  background: var(--btn-bg);
-  padding: 8px 16px;
-  width: 100%;
-  color: inherit;
-}
-
-.editor-btn:hover {
-  background: var(--btn-hover-bg);
 }
 </style>

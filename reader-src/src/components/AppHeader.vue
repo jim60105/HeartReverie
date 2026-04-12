@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import { useRouter } from "vue-router";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useFileReader } from "@/composables/useFileReader";
 import StorySelector from "./StorySelector.vue";
-import PromptEditor from "./PromptEditor.vue";
-import PromptPreview from "./PromptPreview.vue";
+
+const router = useRouter();
 
 const {
   currentIndex,
@@ -22,8 +23,6 @@ const {
 
 const { isSupported, openDirectory, directoryHandle } = useFileReader();
 
-const showEditor = ref(false);
-const showPreview = ref(false);
 const mobileMenuOpen = ref(false);
 
 const hasChapters = computed(() => totalChapters.value > 0);
@@ -39,19 +38,6 @@ async function handleFolderSelect() {
   }
 }
 
-function handleEditorClose() {
-  showEditor.value = false;
-}
-
-function handlePreviewOpen() {
-  showEditor.value = false;
-  showPreview.value = true;
-}
-
-function handlePreviewClose() {
-  showPreview.value = false;
-}
-
 async function handleReload() {
   if (mode.value === "fsa" && directoryHandle.value) {
     await loadFromFSA(directoryHandle.value);
@@ -60,13 +46,9 @@ async function handleReload() {
   }
 }
 
-const previewContext = computed(() => {
-  const ctx = getBackendContext();
-  return {
-    series: ctx.series ?? "",
-    story: ctx.story ?? "",
-  };
-});
+function openSettings() {
+  router.push({ name: "settings-prompt-editor" });
+}
 </script>
 
 <template>
@@ -97,10 +79,11 @@ const previewContext = computed(() => {
 
       <template v-if="getBackendContext().isBackendMode">
         <button
-          class="themed-btn header-btn"
-          @click="showEditor = true"
+          class="themed-btn header-btn header-btn--icon"
+          title="設定"
+          @click="openSettings"
         >
-          ⚙️ Prompt
+          ⚙️
         </button>
       </template>
 
@@ -130,23 +113,6 @@ const previewContext = computed(() => {
         ☰
       </button>
     </div>
-
-    <!-- Panels -->
-    <Teleport to="body">
-      <div v-if="showPreview" class="panel-backdrop" @click="handlePreviewClose"></div>
-      <PromptPreview
-        v-if="showPreview"
-        :series="previewContext.series"
-        :story="previewContext.story"
-        message="(preview)"
-        @close="handlePreviewClose"
-      />
-      <PromptEditor
-        v-if="showEditor"
-        @close="handleEditorClose"
-        @preview="handlePreviewOpen"
-      />
-    </Teleport>
   </header>
 </template>
 
@@ -188,6 +154,11 @@ const previewContext = computed(() => {
   padding: 4px 8px;
 }
 
+.header-btn--icon {
+  padding: 4px 8px;
+  font-size: 1rem;
+}
+
 .folder-name {
   color: var(--text-label);
   font-size: 0.875rem;
@@ -215,13 +186,6 @@ const previewContext = computed(() => {
   border-radius: 4px;
   cursor: pointer;
   font-size: 1.2rem;
-}
-
-.panel-backdrop {
-  position: fixed;
-  z-index: 999;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
 }
 
 @media (max-width: 767px) {

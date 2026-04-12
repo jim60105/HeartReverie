@@ -5,8 +5,6 @@ import { useAuth } from "@/composables/useAuth";
 
 const props = defineProps<PromptPreviewProps>();
 
-const emit = defineEmits<{ close: [] }>();
-
 const { getAuthHeaders } = useAuth();
 
 const loading = ref(false);
@@ -15,7 +13,12 @@ const metaInfo = ref("");
 const errorText = ref("");
 
 onMounted(() => {
-  fetchPreview();
+  if (props.series && props.story) {
+    fetchPreview();
+  } else {
+    previewContent.value = "";
+    errorText.value = "尚未選擇故事，無法預覽";
+  }
 });
 
 async function fetchPreview() {
@@ -42,9 +45,15 @@ async function fetchPreview() {
     );
 
     if (!res.ok) {
-      const err = await res.json();
+      let detail = `HTTP ${res.status}`;
+      try {
+        const err = await res.json();
+        detail = err.message || err.detail || detail;
+      } catch {
+        /* non-JSON error response */
+      }
       previewContent.value = "";
-      errorText.value = `Error: ${err.message || err.detail || "Unknown error"}`;
+      errorText.value = `Error: ${detail}`;
       return;
     }
 
@@ -65,10 +74,9 @@ async function fetchPreview() {
 </script>
 
 <template>
-  <div class="prompt-preview-panel">
+  <div class="preview-root">
     <div class="preview-header">
       <h3>📝 Prompt Preview</h3>
-      <button class="preview-close-btn" @click="emit('close')">✕</button>
     </div>
     <div v-if="metaInfo" class="preview-meta">{{ metaInfo }}</div>
     <div v-if="errorText" class="preview-error">{{ errorText }}</div>
@@ -77,24 +85,12 @@ async function fetchPreview() {
 </template>
 
 <style scoped>
-.prompt-preview-panel {
+.preview-root {
   display: flex;
-  position: fixed;
-  top: 0;
-  left: 0;
   flex-direction: column;
-  z-index: 1000;
-  border-right: 1px solid var(--border-color);
-  background: linear-gradient(145deg, #1a0810, #220c16);
-  width: 33vw;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
-}
-
-@media (max-width: 767px) {
-  .prompt-preview-panel {
-    width: 100vw;
-  }
 }
 
 .preview-header {
@@ -103,14 +99,6 @@ async function fetchPreview() {
   align-items: center;
   border-bottom: 1px solid var(--border-color);
   padding: 12px 16px;
-}
-
-.preview-close-btn {
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: inherit;
-  font-size: 1.2em;
 }
 
 .preview-meta {
