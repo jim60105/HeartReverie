@@ -33,7 +33,7 @@ describe("settings route configuration", () => {
 
   it("/settings redirects to settings-prompt-editor", async () => {
     const { createRouter } = await import("vue-router");
-    const { default: router } = await import("@/router");
+    const { default: _router } = await import("@/router");
 
     // createRouter was called with a config containing the /settings redirect
     expect(createRouter).toHaveBeenCalledWith(
