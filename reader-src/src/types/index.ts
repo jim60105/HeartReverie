@@ -175,6 +175,7 @@ export interface UseMarkdownRendererReturn {
 export interface UseChatApiReturn {
   isLoading: Ref<boolean>;
   errorMessage: Ref<string>;
+  streamingContent: Ref<string>;
   sendMessage: (
     series: string,
     story: string,
@@ -239,6 +240,125 @@ export interface ParameterPill {
   name: string;
   source: string;
   type: string;
+}
+
+// ── WebSocket Message Types ──
+
+/** Client-to-server: authentication handshake. */
+export interface WsAuthMessage {
+  type: "auth";
+  passphrase: string;
+}
+
+/** Client-to-server: send a chat message. */
+export interface WsChatSendMessage {
+  type: "chat:send";
+  id: string;
+  series: string;
+  story: string;
+  message: string;
+}
+
+/** Client-to-server: resend (delete last chapter + re-send). */
+export interface WsChatResendMessage {
+  type: "chat:resend";
+  id: string;
+  series: string;
+  story: string;
+  message: string;
+}
+
+/** Client-to-server: subscribe to chapter updates for a story. */
+export interface WsSubscribeMessage {
+  type: "subscribe";
+  series: string;
+  story: string;
+}
+
+/** All client-to-server message types. */
+export type WsClientMessage =
+  | WsAuthMessage
+  | WsChatSendMessage
+  | WsChatResendMessage
+  | WsSubscribeMessage;
+
+/** Server-to-client: authentication successful. */
+export interface WsAuthOkMessage {
+  type: "auth:ok";
+}
+
+/** Server-to-client: authentication failed. */
+export interface WsAuthErrorMessage {
+  type: "auth:error";
+  detail: string;
+}
+
+/** Server-to-client: streaming LLM delta chunk. */
+export interface WsChatDeltaMessage {
+  type: "chat:delta";
+  id: string;
+  content: string;
+}
+
+/** Server-to-client: generation complete. */
+export interface WsChatDoneMessage {
+  type: "chat:done";
+  id: string;
+}
+
+/** Server-to-client: chat error. */
+export interface WsChatErrorMessage {
+  type: "chat:error";
+  id: string;
+  detail: string;
+}
+
+/** Server-to-client: chapter count changed. */
+export interface WsChaptersUpdatedMessage {
+  type: "chapters:updated";
+  series: string;
+  story: string;
+  count: number;
+}
+
+/** Server-to-client: chapter content changed. */
+export interface WsChaptersContentMessage {
+  type: "chapters:content";
+  series: string;
+  story: string;
+  chapter: number;
+  content: string;
+}
+
+/** Server-to-client: generic protocol error. */
+export interface WsErrorMessage {
+  type: "error";
+  detail: string;
+}
+
+/** All server-to-client message types. */
+export type WsServerMessage =
+  | WsAuthOkMessage
+  | WsAuthErrorMessage
+  | WsChatDeltaMessage
+  | WsChatDoneMessage
+  | WsChatErrorMessage
+  | WsChaptersUpdatedMessage
+  | WsChaptersContentMessage
+  | WsErrorMessage;
+
+// ── WebSocket Composable Return ──
+
+export interface UseWebSocketReturn {
+  isConnected: import("vue").Ref<boolean>;
+  isAuthenticated: import("vue").Ref<boolean>;
+  send: (message: WsClientMessage) => void;
+  onMessage: <T extends WsServerMessage["type"]>(
+    type: T,
+    handler: (msg: Extract<WsServerMessage, { type: T }>) => void,
+  ) => () => void;
+  connect: (url: string, passphrase: string) => void;
+  disconnect: () => void;
 }
 
 

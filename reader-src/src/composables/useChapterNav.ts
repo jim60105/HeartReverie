@@ -4,6 +4,7 @@ import router from "@/router";
 import type { UseChapterNavReturn, ChapterData } from "@/types";
 import { useAuth } from "@/composables/useAuth";
 import { useFileReader } from "@/composables/useFileReader";
+import { useWebSocket } from "@/composables/useWebSocket";
 import { isNumericMdFile, numericSort } from "@/lib/file-utils";
 
 const POLL_INTERVAL_BASE = 3000;
@@ -270,7 +271,7 @@ async function loadFromBackend(
   if (chapters.value.length === 0) {
     currentContent.value = "";
     currentIndex.value = 0;
-    pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
+    startPollingIfNeeded();
     return;
   }
 
@@ -281,7 +282,8 @@ async function loadFromBackend(
   currentContent.value = chapters.value[startIdx]?.content ?? "";
 
   syncRoute();
-  pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
+  sendSubscribeIfConnected();
+  startPollingIfNeeded();
 }
 
 async function reloadToLast(): Promise<void> {
@@ -293,7 +295,7 @@ async function reloadToLast(): Promise<void> {
   if (token !== loadToken) return;
 
   if (chapters.value.length === 0) {
-    pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
+    startPollingIfNeeded();
     return;
   }
 
@@ -302,7 +304,7 @@ async function reloadToLast(): Promise<void> {
   currentContent.value = chapters.value[lastIdx]?.content ?? "";
 
   syncRoute();
-  pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
+  startPollingIfNeeded();
 }
 
 function getBackendContext(): {
@@ -315,6 +317,24 @@ function getBackendContext(): {
     story: currentStory,
     isBackendMode: mode.value === "backend",
   };
+}
+
+/** Send a subscribe message if WebSocket is connected and authenticated. */
+function sendSubscribeIfConnected(): void {
+  if (!currentSeries || !currentStory) return;
+  const { isConnected, isAuthenticated, send } = useWebSocket();
+  if (isConnected.value && isAuthenticated.value) {
+    send({ type: 'subscribe', series: currentSeries, story: currentStory });
+  }
+}
+
+/** Start polling only when WebSocket is not connected. */
+function startPollingIfNeeded(): void {
+  if (mode.value !== 'backend') return;
+  const { isConnected } = useWebSocket();
+  if (!isConnected.value) {
+    pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
+  }
 }
 
 function initRouteSync(): void {
@@ -356,6 +376,52 @@ function initRouteSync(): void {
       await loadFromBackend(s, st, startChapter);
     },
   );
+
+  // ── WebSocket integration ──
+
+  const { isConnected, onMessage: wsOnMessage } = useWebSocket();
+
+  // Task 7.1: chapters:updated — reload chapters when count changes
+  wsOnMessage('chapters:updated', async (msg) => {
+    if (mode.value !== 'backend') return;
+    if (msg.series !== currentSeries || msg.story !== currentStory) return;
+    const prevLen = chapters.value.length;
+    await loadFromBackendInternal(msg.series, msg.story);
+    if (chapters.value.length > prevLen) {
+      navigateTo(chapters.value.length - 1);
+    }
+  });
+
+  // Task 7.2: chapters:content — update chapter content in-place
+  wsOnMessage('chapters:content', (msg) => {
+    if (mode.value !== 'backend') return;
+    if (msg.series !== currentSeries || msg.story !== currentStory) return;
+    const lastIdx = chapters.value.length - 1;
+    if (lastIdx < 0) return;
+    if (msg.chapter !== chapters.value[lastIdx]!.number) return;
+    chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, content: msg.content };
+    if (currentIndex.value === lastIdx) {
+      currentContent.value = msg.content;
+    }
+  });
+
+  // Task 7.5: Re-subscribe on reconnect
+  wsOnMessage('auth:ok', () => {
+    sendSubscribeIfConnected();
+  });
+
+  // Task 7.4: Toggle polling based on WebSocket connection state
+  watch(isConnected, (connected) => {
+    if (mode.value !== 'backend') return;
+    if (connected) {
+      clearPolling();
+      sendSubscribeIfConnected();
+    } else {
+      if (!pollIntervalId && currentSeries && currentStory) {
+        pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
+      }
+    }
+  });
 }
 
 export function useChapterNav(): UseChapterNavReturn {

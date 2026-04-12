@@ -184,3 +184,108 @@ export interface LLMStreamChunk {
     };
   }>;
 }
+
+// ── WebSocket Message Types ──
+
+/** Client-to-server: authentication handshake. */
+export interface WsAuthMessage {
+  readonly type: "auth";
+  readonly passphrase: string;
+}
+
+/** Client-to-server: send a chat message. */
+export interface WsChatSendMessage {
+  readonly type: "chat:send";
+  readonly id: string;
+  readonly series: string;
+  readonly story: string;
+  readonly message: string;
+}
+
+/** Client-to-server: resend (delete last chapter + re-send). */
+export interface WsChatResendMessage {
+  readonly type: "chat:resend";
+  readonly id: string;
+  readonly series: string;
+  readonly story: string;
+  readonly message: string;
+}
+
+/** Client-to-server: subscribe to chapter updates for a story. */
+export interface WsSubscribeMessage {
+  readonly type: "subscribe";
+  readonly series: string;
+  readonly story: string;
+}
+
+/** All client-to-server message types. */
+export type WsClientMessage =
+  | WsAuthMessage
+  | WsChatSendMessage
+  | WsChatResendMessage
+  | WsSubscribeMessage;
+
+/** Server-to-client: authentication successful. */
+export interface WsAuthOkMessage {
+  readonly type: "auth:ok";
+}
+
+/** Server-to-client: authentication failed. */
+export interface WsAuthErrorMessage {
+  readonly type: "auth:error";
+  readonly detail: string;
+}
+
+/** Server-to-client: streaming LLM delta chunk. */
+export interface WsChatDeltaMessage {
+  readonly type: "chat:delta";
+  readonly id: string;
+  readonly content: string;
+}
+
+/** Server-to-client: generation complete. */
+export interface WsChatDoneMessage {
+  readonly type: "chat:done";
+  readonly id: string;
+}
+
+/** Server-to-client: chat error. */
+export interface WsChatErrorMessage {
+  readonly type: "chat:error";
+  readonly id: string;
+  readonly detail: string;
+}
+
+/** Server-to-client: chapter count changed. */
+export interface WsChaptersUpdatedMessage {
+  readonly type: "chapters:updated";
+  readonly series: string;
+  readonly story: string;
+  readonly count: number;
+}
+
+/** Server-to-client: chapter content changed. */
+export interface WsChaptersContentMessage {
+  readonly type: "chapters:content";
+  readonly series: string;
+  readonly story: string;
+  readonly chapter: number;
+  readonly content: string;
+}
+
+/** Server-to-client: generic protocol error. */
+export interface WsErrorMessage {
+  readonly type: "error";
+  readonly detail: string;
+}
+
+/** All server-to-client message types. */
+export type WsServerMessage =
+  | WsAuthOkMessage
+  | WsAuthErrorMessage
+  | WsChatDeltaMessage
+  | WsChatDoneMessage
+  | WsChatErrorMessage
+  | WsChaptersUpdatedMessage
+  | WsChaptersContentMessage
+  | WsErrorMessage;

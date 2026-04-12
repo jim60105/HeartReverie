@@ -4,11 +4,13 @@ import ChatInput from "@/components/ChatInput.vue";
 
 const isLoadingRef = ref(false);
 const errorMessageRef = ref("");
+const streamingContentRef = ref("");
 
 vi.mock("@/composables/useChatApi", () => ({
   useChatApi: () => ({
     isLoading: isLoadingRef,
     errorMessage: errorMessageRef,
+    streamingContent: streamingContentRef,
     sendMessage: vi.fn(),
     resendMessage: vi.fn(),
   }),
@@ -18,6 +20,7 @@ describe("ChatInput", () => {
   beforeEach(() => {
     isLoadingRef.value = false;
     errorMessageRef.value = "";
+    streamingContentRef.value = "";
   });
 
   it("renders textarea and buttons", () => {
@@ -95,5 +98,23 @@ describe("ChatInput", () => {
     expect(
       (wrapper.find("textarea").element as HTMLTextAreaElement).disabled,
     ).toBe(true);
+  });
+
+  it("streaming preview appears when isLoading and streamingContent has content", async () => {
+    isLoadingRef.value = true;
+    streamingContentRef.value = "Generating response...";
+    const wrapper = mount(ChatInput);
+    await wrapper.vm.$nextTick();
+    const preview = wrapper.find(".streaming-preview");
+    expect(preview.exists()).toBe(true);
+    expect(preview.text()).toBe("Generating response...");
+  });
+
+  it("no streaming preview when not loading", async () => {
+    isLoadingRef.value = false;
+    streamingContentRef.value = "Some leftover content";
+    const wrapper = mount(ChatInput);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".streaming-preview").exists()).toBe(false);
   });
 });

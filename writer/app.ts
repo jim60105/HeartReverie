@@ -26,6 +26,7 @@ import { registerChatRoutes } from "./routes/chat.ts";
 import { registerPluginRoutes } from "./routes/plugins.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
 import { registerConfigRoutes } from "./routes/config.ts";
+import { registerWebSocketRoutes } from "./routes/ws.ts";
 import type { Context, Next } from "@hono/hono";
 import type { AppDeps } from "./types.ts";
 
@@ -86,6 +87,9 @@ export function createApp(deps: AppDeps): Hono {
     crossOriginOpenerPolicy: false,
   }));
 
+  // WebSocket route — registered before bodyLimit/rateLimiter/auth middleware to bypass them
+  registerWebSocketRoutes(app, deps);
+
   // Body size limit (replaces Express express.json({ limit: "1mb" }))
   app.use("/api/*", bodyLimit({ maxSize: 1024 * 1024 }));
 
@@ -95,9 +99,10 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/stories/:series/:name/chat", rateLimiter({ windowMs: 60_000, limit: 10 }));
   app.use("/api/stories/:series/:name/preview-prompt", rateLimiter({ windowMs: 60_000, limit: 10 }));
 
-  // Auth middleware for API routes (skip public endpoints)
+  // Auth middleware for API routes (skip public endpoints and WebSocket upgrade)
   app.use("/api/*", async (c, next) => {
-    if (new URL(c.req.url).pathname === "/api/config") return next();
+    const pathname = new URL(c.req.url).pathname;
+    if (pathname === "/api/config" || pathname === "/api/ws") return next();
     return deps.verifyPassphrase(c, next);
   });
 

@@ -1,4 +1,21 @@
+import { ref } from "vue";
 import { stubSessionStorage } from "@/__tests__/setup";
+
+const mockWsIsConnected = ref(false);
+const mockWsIsAuthenticated = ref(false);
+const mockWsSendFn = vi.fn();
+const mockWsOnMessageFn = vi.fn(() => vi.fn());
+
+vi.mock("@/composables/useWebSocket", () => ({
+  useWebSocket: () => ({
+    isConnected: mockWsIsConnected,
+    isAuthenticated: mockWsIsAuthenticated,
+    send: mockWsSendFn,
+    onMessage: mockWsOnMessageFn,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  }),
+}));
 
 function mockFetch(body: unknown, status = 200) {
   vi.stubGlobal(
@@ -19,6 +36,11 @@ describe("useChatApi", () => {
     vi.resetModules();
     stubSessionStorage();
     mockFetch({});
+    mockWsIsConnected.value = false;
+    mockWsIsAuthenticated.value = false;
+    mockWsSendFn.mockClear();
+    mockWsOnMessageFn.mockClear();
+    mockWsOnMessageFn.mockImplementation(() => vi.fn());
   });
 
   afterEach(() => {
@@ -137,5 +159,107 @@ describe("useChatApi", () => {
     const result = await api.sendMessage("s", "t", "msg");
     expect(result).toBe(false);
     expect(api.errorMessage.value).toBeTruthy();
+  });
+
+  describe("WebSocket path", () => {
+    beforeEach(() => {
+      mockWsIsConnected.value = true;
+      mockWsIsAuthenticated.value = true;
+    });
+
+    it("sendMessage sends chat:send with UUID id via WebSocket", async () => {
+      // Make onMessage return an unsubscribe fn; capture the handlers
+      mockWsOnMessageFn.mockImplementation(() => vi.fn());
+      const api = await getChatApi();
+      // Don't await — promise won't resolve until chat:done handler fires
+      api.sendMessage("s", "t", "hello");
+
+      expect(mockWsSendFn).toHaveBeenCalledTimes(1);
+      const sentArg = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      expect(sentArg.type).toBe("chat:send");
+      expect(sentArg.series).toBe("s");
+      expect(sentArg.story).toBe("t");
+      expect(sentArg.message).toBe("hello");
+      expect(typeof sentArg.id).toBe("string");
+      expect((sentArg.id as string).length).toBeGreaterThan(0);
+    });
+
+    it("resendMessage sends chat:resend via WebSocket", async () => {
+      mockWsOnMessageFn.mockImplementation(() => vi.fn());
+      const api = await getChatApi();
+      api.resendMessage("s", "t", "retry");
+
+      expect(mockWsSendFn).toHaveBeenCalledTimes(1);
+      const sentArg = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      expect(sentArg.type).toBe("chat:resend");
+      expect(sentArg.series).toBe("s");
+      expect(sentArg.story).toBe("t");
+      expect(sentArg.message).toBe("retry");
+    });
+
+    it("HTTP fallback is used when WebSocket is disconnected", async () => {
+      mockWsIsConnected.value = false;
+      mockFetch({}, 200);
+      const api = await getChatApi();
+      await api.sendMessage("s", "t", "msg");
+
+      expect(fetch).toHaveBeenCalled();
+      expect(mockWsSendFn).not.toHaveBeenCalled();
+    });
+
+    it("streamingContent initial value is empty string", async () => {
+      const api = await getChatApi();
+      expect(api.streamingContent.value).toBe("");
+    });
+
+    it("streamingContent accumulates chat:delta messages", async () => {
+      // Capture the handler registered for chat:delta
+      const capturedHandlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation((type: string, handler: (msg: unknown) => void) => {
+        capturedHandlers[type] = handler;
+        return vi.fn();
+      });
+
+      const api = await getChatApi();
+      const promise = api.sendMessage("s", "t", "hello");
+
+      // Get the id from the send call
+      const sentArg = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      const id = sentArg.id as string;
+
+      // Simulate delta messages
+      capturedHandlers["chat:delta"]!({ type: "chat:delta", id, content: "Hello " });
+      expect(api.streamingContent.value).toBe("Hello ");
+
+      capturedHandlers["chat:delta"]!({ type: "chat:delta", id, content: "world" });
+      expect(api.streamingContent.value).toBe("Hello world");
+
+      // Complete the stream
+      capturedHandlers["chat:done"]!({ type: "chat:done", id });
+      const result = await promise;
+      expect(result).toBe(true);
+      expect(api.streamingContent.value).toBe("");
+      expect(api.isLoading.value).toBe(false);
+    });
+
+    it("chat:error resolves false and sets errorMessage", async () => {
+      const capturedHandlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation((type: string, handler: (msg: unknown) => void) => {
+        capturedHandlers[type] = handler;
+        return vi.fn();
+      });
+
+      const api = await getChatApi();
+      const promise = api.sendMessage("s", "t", "hello");
+
+      const sentArg = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      const id = sentArg.id as string;
+
+      capturedHandlers["chat:error"]!({ type: "chat:error", id, detail: "fail" });
+      const result = await promise;
+      expect(result).toBe(false);
+      expect(api.errorMessage.value).toBeTruthy();
+      expect(api.isLoading.value).toBe(false);
+    });
   });
 });

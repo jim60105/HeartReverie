@@ -10,7 +10,7 @@ const emit = defineEmits<{
   resend: [message: string];
 }>();
 
-const { isLoading, errorMessage } = useChatApi();
+const { isLoading, errorMessage, streamingContent } = useChatApi();
 
 const inputText = ref("");
 const isResending = ref(false);
@@ -83,6 +83,10 @@ defineExpose({ appendText });
         </button>
       </div>
     </div>
+    <div
+      v-if="isLoading && streamingContent"
+      class="streaming-preview"
+    >{{ streamingContent }}</div>
   </div>
 </template>
 
@@ -151,5 +155,20 @@ defineExpose({ appendText });
 .chat-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+.streaming-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--panel-bg) 80%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-main);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 12rem;
+  overflow-y: auto;
 }
 </style>
