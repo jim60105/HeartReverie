@@ -48,11 +48,11 @@ The preview endpoint SHALL return a JSON response with the following structure: 
 
 ### Requirement: Frontend panel
 
-The reader UI SHALL include a `PromptPreview.vue` Single File Component for displaying the prompt preview. The component SHALL be positioned at the left side of the viewport (`left: 0`) with `width: 33vw`. The component SHALL accept props for visibility state and SHALL use Vue's conditional rendering (`v-if` or `v-show`) instead of imperative lazy DOM creation. When triggered from the chat input, the current message SHALL be sent as the request body. When triggered from the editor, the current textarea content SHALL be sent as a `template` override in the request body. When either panel is open, a semi-transparent backdrop SHALL appear; clicking the backdrop SHALL close all panels. The component SHALL emit a `close` event (or dispatch a custom event) when dismissed, rather than using imperative DOM manipulation.
+The reader UI SHALL include a `PromptPreview.vue` Single File Component for displaying the prompt preview. The component SHALL be rendered inline within `PromptEditorPage.vue` as part of a flex layout, conditionally toggled via `v-if` or `v-show`. The component SHALL NOT use fixed positioning (`left: 0`, `width: 33vw`) or be Teleported to an overlay. When triggered from the chat input context, the current message SHALL be sent as the request body. When triggered from the editor, the current textarea content SHALL be sent as a `template` override in the request body. The component SHALL NOT emit a `close` event — visibility is controlled by the parent `PromptEditorPage.vue` via a reactive toggle. No semi-transparent backdrop SHALL be rendered for the preview within the settings page. Series/story context for preview requests SHALL be obtained from `useChapterNav().getBackendContext()`.
 
-#### Scenario: Open preview panel before sending
-- **WHEN** the user triggers the prompt preview action (e.g., clicks a preview button) with a message drafted in the chat input
-- **THEN** the `PromptPreview.vue` component SHALL send a `POST /api/stories/:series/:name/preview-prompt` request with the drafted message and display the result in the side panel with a backdrop
+#### Scenario: Preview rendered inline within editor page
+- **WHEN** the user toggles the preview on within the prompt editor page
+- **THEN** the `PromptPreview.vue` component SHALL render inline within `PromptEditorPage.vue`'s flex layout (e.g., side-by-side with or below the editor textarea), not as a fixed-position overlay
 
 #### Scenario: Preview panel displays rendered prompt
 - **WHEN** the preview component receives a successful response
@@ -62,13 +62,17 @@ The reader UI SHALL include a `PromptPreview.vue` Single File Component for disp
 - **WHEN** the preview endpoint returns a 422 response with `{ type: "vento-error", ... }` (structured Vento template error)
 - **THEN** the component SHALL detect the `vento-error` type, render the error details using the `VentoErrorCard.vue` component, and NOT display the prompt content area
 
-#### Scenario: Preview panel is dismissible
-- **WHEN** the user closes the preview panel via close button or backdrop click
-- **THEN** the component SHALL emit a `close` event, the panel SHALL close without affecting the chat input or message state, and the backdrop SHALL hide if no other panel is open
+#### Scenario: No fixed positioning or Teleport
+- **WHEN** the `PromptPreview.vue` component styles are inspected
+- **THEN** there SHALL be no `position: fixed`, no `left: 0`, no `width: 33vw`, and no use of Vue's `<Teleport>` directive
 
-#### Scenario: Vue conditional rendering replaces lazy DOM creation
-- **WHEN** the prompt preview panel has not been opened yet
-- **THEN** the component SHALL use Vue's `v-if` or `v-show` directive for visibility control instead of imperatively creating and appending DOM elements on first use
+#### Scenario: No close emit or backdrop
+- **WHEN** the `PromptPreview.vue` component is rendered within the settings page
+- **THEN** it SHALL NOT emit a `close` event and SHALL NOT render a semi-transparent backdrop — visibility is managed by the parent component's reactive toggle
+
+#### Scenario: Series/story context from composable
+- **WHEN** the preview component sends a request to `POST /api/stories/:series/:name/preview-prompt`
+- **THEN** the `:series` and `:name` path parameters SHALL be obtained from `useChapterNav().getBackendContext()` to ensure the preview uses the currently active story context
 
 ### Requirement: Plugin contribution visibility
 
