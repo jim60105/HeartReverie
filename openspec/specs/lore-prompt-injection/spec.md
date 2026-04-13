@@ -69,17 +69,6 @@ The lore retrieval engine in `writer/lib/lore.ts` SHALL be called directly by `r
 - **WHEN** the template is rendered with both existing template variables and lore variables
 - **THEN** lore variables SHALL be merged with other template variables without conflicts
 
-### Requirement: Scenario Migration Compatibility
-The lore system SHALL provide a `lore_scenario` variable that naturally emerges from passages tagged with "scenario". This replaces the former `{{ scenario }}` template variable — no backward compatibility alias is provided.
-
-#### Scenario: Scenario tag migration
-- **WHEN** lore passages are tagged with "scenario" effective tag and contain content "Story setup text"
-- **THEN** `lore_scenario` SHALL be "Story setup text" (template authors must update `{{ scenario }}` to `{{ lore_scenario }}`)
-
-#### Scenario: No scenario passages
-- **WHEN** no lore passages have "scenario" as an effective tag
-- **THEN** `lore_scenario` SHALL be an empty string "" (graceful degradation)
-
 ### Requirement: Empty Variable Safety
 All `lore_*` template variables for tags **discovered during the current scope scan** SHALL be present in the template context as empty strings if no passages match. Tags not discovered in any scope are NOT guaranteed to have variables — referencing an undiscovered tag in a Vento template may produce an undefined variable error.
 

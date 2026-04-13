@@ -73,19 +73,19 @@ The API SHALL validate all path parameters to prevent path traversal attacks and
 - **THEN** server returns 400 status with RFC 9457 Problem Details indicating only markdown files are allowed
 
 ### Requirement: Scope Parameter Encoding
-The API SHALL use explicit scope prefixes in route paths to unambiguously identify the target scope. Global scope routes SHALL use `/api/lore/global/...`, series scope routes SHALL use `/api/lore/series/:series/...`, and story scope routes SHALL use `/api/lore/story/:series/:story/...`.
+The API SHALL use explicit scope prefixes in route paths to unambiguously identify the target scope. Global scope routes SHALL use `/api/lore/global/...`, series scope routes SHALL use `/api/lore/series/:series/...`, and story scope routes SHALL use `/api/lore/story/:series/:story/...`. The backend SHALL resolve these route prefixes to co-located `_lore/` directories within the playground tree.
 
 #### Scenario: Global scope routing
 - **WHEN** client sends GET request to `/api/lore/global`
-- **THEN** server maps to directory `playground/lore/global/` and lists its passages
+- **THEN** server maps to directory `playground/_lore/` and lists its passages
 
 #### Scenario: Series scope routing
 - **WHEN** client sends GET request to `/api/lore/series/my-series`
-- **THEN** server maps to directory `playground/lore/series/my-series/` and lists its passages
+- **THEN** server maps to directory `playground/my-series/_lore/` and lists its passages
 
 #### Scenario: Story scope routing
 - **WHEN** client sends GET request to `/api/lore/story/my-series/my-story`
-- **THEN** server maps to directory `playground/lore/story/my-series/my-story/` and lists its passages
+- **THEN** server maps to directory `playground/my-series/my-story/_lore/` and lists its passages
 
 ### Requirement: Authentication Required
 All lore API endpoints SHALL require valid passphrase authentication using the same mechanism as existing API endpoints.
