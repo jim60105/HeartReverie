@@ -243,6 +243,61 @@ export interface ParameterPill {
   type: string;
 }
 
+// ── Lore Codex ──
+
+export interface LorePassageMetadata {
+  filename: string;
+  relativePath: string;
+  directory: string;
+  tags: string[];
+  priority: number;
+  enabled: boolean;
+  scope: "global" | "series" | "story";
+}
+
+export interface LorePassageData {
+  frontmatter: {
+    tags: string[];
+    priority: number;
+    enabled: boolean;
+  };
+  content: string;
+}
+
+export interface UseLoreApiReturn {
+  passages: import("vue").Ref<LorePassageMetadata[]>;
+  allTags: import("vue").Ref<string[]>;
+  loading: import("vue").Ref<boolean>;
+  error: import("vue").Ref<string | null>;
+  fetchPassages: (
+    scope: string,
+    series?: string,
+    story?: string,
+    tag?: string,
+  ) => Promise<void>;
+  fetchTags: () => Promise<void>;
+  readPassage: (
+    scope: string,
+    path: string,
+    series?: string,
+    story?: string,
+  ) => Promise<LorePassageData>;
+  writePassage: (
+    scope: string,
+    path: string,
+    frontmatter: LorePassageData["frontmatter"],
+    content: string,
+    series?: string,
+    story?: string,
+  ) => Promise<void>;
+  deletePassage: (
+    scope: string,
+    path: string,
+    series?: string,
+    story?: string,
+  ) => Promise<void>;
+}
+
 // ── WebSocket Message Types ──
 
 /** Client-to-server: authentication handshake. */

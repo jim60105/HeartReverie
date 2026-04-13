@@ -73,6 +73,17 @@ zsh ./serve.zsh
 
 內建外掛涵蓋角色狀態面板、選項按鈕、變數顯示、文風控制、去機器人化等。完整文件見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
+## 📖 典籍系統（Lore Codex）
+
+以檔案為基礎的世界觀知識庫，取代舊有的 `scenario.md`。受 SillyTavern World Info 啟發，專為檔案工作流程設計。
+
+- **三層作用域**：全域（所有故事）、系列（同系列故事）、故事（單一故事）
+- **Markdown 篇章**：`.md` 檔案 + YAML frontmatter（`tags`、`priority`、`enabled`）
+- **標籤系統**：frontmatter 標籤 + 目錄即標籤，自動注入為 Vento 模板變數（`{{ lore_<tag> }}`）
+- **REST API**：完整的篇章 CRUD 端點
+
+完整文件見 [`docs/lore-codex.md`](docs/lore-codex.md)。
+
 ### 撰寫自訂外掛
 
 建議使用 AI 代理搭配 `heartreverie-create-plugin` skill 來建立外掛。先安裝 skill：

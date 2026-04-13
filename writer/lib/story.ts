@@ -21,7 +21,7 @@ import type { HookDispatcher } from "./hooks.ts";
 export function createStoryEngine(
   pluginManager: PluginManager,
   safePath: SafePathFn,
-  renderSystemPrompt: (series: string, options?: RenderOptions) => Promise<RenderResult>,
+  renderSystemPrompt: (series: string, story?: string, options?: RenderOptions) => Promise<RenderResult>,
   hookDispatcher: HookDispatcher,
 ): StoryEngine {
   function stripPromptTags(content: string): string {
@@ -120,7 +120,7 @@ export function createStoryEngine(
     const statusContent: string = await loadStatus(series, name);
 
     const { content: prompt, error: ventoError } =
-      await renderSystemPrompt(series, {
+      await renderSystemPrompt(series, name, {
         previousContext: filteredContext,
         userInput: message,
         status: statusContent,

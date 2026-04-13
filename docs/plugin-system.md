@@ -140,7 +140,7 @@ Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不
 | `writestyle_reinforce` | writestyle | 800 | 寫作風格強化（高 priority，排在提示詞後段） |
 | `threshold_lord_end` | threshold-lord | 900 | 故事節奏控制（結尾指令） |
 
-這些變數之外，系統還提供五個核心變數：`scenario`、`previous_context`、`user_input`、`status_data`、`isFirstRound`。詳細說明參見 [Prompt 模板系統][prompt-template]。
+這些變數之外，系統還提供四個核心變數：`previous_context`、`user_input`、`status_data`、`isFirstRound`，以及典籍系統（Lore Codex）提供的 `lore_all`、`lore_<tag>`、`lore_tags` 等變數。詳細說明參見 [Prompt 模板系統][prompt-template] 及[典籍系統文件][lore-codex]。
 
 ## 標籤清除
 
@@ -388,3 +388,4 @@ export function register(hooks) {
 | writestyle | prompt-only | 寫作風格指令與強化（priority 100 + 800） |
 
 [prompt-template]: ./prompt-template.md
+[lore-codex]: ./lore-codex.md

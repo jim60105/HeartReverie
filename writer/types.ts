@@ -117,6 +117,7 @@ export interface StoryEngine {
 export interface TemplateEngine {
   renderSystemPrompt: (
     series: string,
+    story?: string,
     options?: RenderOptions
   ) => Promise<RenderResult>;
   validateTemplate: (templateStr: string) => string[];

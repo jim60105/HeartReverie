@@ -44,7 +44,7 @@ await pluginManager.init();
 
 // ── Build dependency graph ──────────────────────────────────────
 const safePath = createSafePath(config.PLAYGROUND_DIR);
-const { renderSystemPrompt } = createTemplateEngine(pluginManager, safePath);
+const { renderSystemPrompt } = createTemplateEngine(pluginManager);
 const { buildPromptFromStory } = createStoryEngine(pluginManager, safePath, renderSystemPrompt, hookDispatcher);
 
 const app = createApp({

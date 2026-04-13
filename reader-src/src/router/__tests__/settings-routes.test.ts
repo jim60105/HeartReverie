@@ -54,6 +54,22 @@ describe("settings route configuration", () => {
     );
   });
 
+  it("settingsChildren contains the settings-lore child route", () => {
+    const lore = settingsChildren.find((r) => r.name === "settings-lore");
+    expect(lore).toBeDefined();
+    expect(lore!.path).toBe("lore");
+  });
+
+  it("lore route has correct meta title", () => {
+    const lore = settingsChildren.find((r) => r.name === "settings-lore");
+    expect(lore!.meta?.title).toBe("典籍");
+  });
+
+  it("lore route has a component defined", () => {
+    const lore = settingsChildren.find((r) => r.name === "settings-lore");
+    expect(lore!.component).toBeDefined();
+  });
+
   it("settingsChildren entries all have name and meta.title", () => {
     for (const child of settingsChildren) {
       expect(child.name).toBeDefined();

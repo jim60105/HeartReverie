@@ -12,12 +12,14 @@
 
 | 變數名稱 | 型別 | 說明 |
 |---|---|---|
-| `scenario` | `string` | 系列情境描述，內容來自 `playground/:series/scenario.md` |
 | `previous_context` | `string[]` | 已存在的章節內容陣列，按章節編號順序排列。內容經 `stripPromptTags()` 移除外掛定義的 XML 標籤後傳入 |
 | `user_input` | `string` | 使用者在聊天請求中發送的原始訊息 |
 | `status_data` | `string` | 執行階段的狀態資料，來自 `current-status.yml` 或 `init-status.yml` 的 YAML 內容 |
 | `isFirstRound` | `boolean` | 當所有章節內容皆為空時為 `true`，表示這是故事的第一回合 |
 | `plugin_fragments` | `string[]` | 外掛透過 `promptFragments` 提供的內容片段陣列 |
+| `lore_all` | `string` | 所有啟用的典籍篇章，依 priority 降冪排列後串接（由典籍系統提供） |
+| `lore_<tag>` | `string` | 具有該有效標籤的啟用篇章（如 `lore_scenario`、`lore_characters`，由典籍系統提供） |
+| `lore_tags` | `string[]` | 所有已發現的標籤名稱陣列（由典籍系統提供） |
 
 除上述核心變數外，外掛亦可透過 `promptFragments` 提供額外的具名變數，一併傳入模板。
 
@@ -93,24 +95,23 @@
 2. **偵測第一回合** — 檢查是否所有章節內容皆為空
 3. **清理章節內容** — 對每個章節呼叫 `stripPromptTags()` 移除外掛定義的 XML 標籤，建構 `previousContext` 陣列
 4. **載入狀態資料** — 讀取 `current-status.yml`（若不存在則回退至 `init-status.yml`）
-5. **載入情境描述** — 讀取 `playground/:series/scenario.md`
 
 ### 3. 渲染模板
 
 呼叫 `renderSystemPrompt()`，此函式：
 
 1. 讀取主模板 `system.md`（或使用者提供的覆寫模板）
-2. 讀取系列情境檔案 `playground/:series/scenario.md`
+2. 解析典籍系統（Lore Codex）變數：呼叫 `resolveLoreVariables()` 掃描適用的 global / series / story 篇章
 3. 收集外掛提供的變數與內容片段
 4. 使用 Vento 引擎渲染模板，傳入所有變數：
 
 ```typescript
 const result = await ventoEnv.runString(systemTemplate, {
-  scenario: scenarioContent,
   previous_context: previousContext || [],
   user_input: userInput || "",
   status_data: status || "",
   isFirstRound: isFirstRound || false,
+  ...loreVars,
   ...pluginVars.variables,
   plugin_fragments: pluginVars.fragments || [],
 });

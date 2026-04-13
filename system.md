@@ -23,7 +23,7 @@ The narration has no styling.
 總是使用正體中文。
 Use full-width punctuation marks for chinese, and use single-width punctuation marks for other languages.
 
-{{ scenario }}
+{{ lore_scenario }}
 
 [Details of the fictional world the RP is set in:
 {{ de_robotization }}

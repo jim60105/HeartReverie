@@ -16,10 +16,11 @@
 import { join } from "@std/path";
 import vento from "ventojs";
 import type { Environment as VentoEnvironment } from "ventojs/core/environment";
-import type { TemplateEngine, RenderResult, RenderOptions, SafePathFn } from "../types.ts";
+import type { TemplateEngine, RenderResult, RenderOptions } from "../types.ts";
 import type { PluginManager } from "./plugin-manager.ts";
-import { ROOT_DIR } from "./config.ts";
+import { PLAYGROUND_DIR, ROOT_DIR } from "./config.ts";
 import { buildVentoError } from "./errors.ts";
+import { resolveLoreVariables } from "./lore.ts";
 
 /**
  * Validate a Vento template string — only safe expressions are allowed.
@@ -60,11 +61,12 @@ export function validateTemplate(templateStr: string): string[] {
   return errors;
 }
 
-export function createTemplateEngine(pluginManager: PluginManager, safePath: SafePathFn): TemplateEngine {
+export function createTemplateEngine(pluginManager: PluginManager): TemplateEngine {
   const ventoEnv: VentoEnvironment = vento();
 
   async function renderSystemPrompt(
     series: string,
+    story?: string,
     {
       previousContext,
       userInput,
@@ -74,7 +76,6 @@ export function createTemplateEngine(pluginManager: PluginManager, safePath: Saf
     }: RenderOptions = {},
   ): Promise<RenderResult> {
     const systemTemplatePath: string = join(ROOT_DIR, "system.md");
-    const scenarioPath = safePath(series, "scenario.md");
 
     // Validate user-provided templates to prevent SSTI
     if (templateOverride) {
@@ -107,25 +108,21 @@ export function createTemplateEngine(pluginManager: PluginManager, safePath: Saf
     const systemTemplate: string =
       templateOverride ||
       (await Deno.readTextFile(systemTemplatePath));
-    let scenarioContent: string = "";
-    if (scenarioPath) {
-      try {
-        scenarioContent = await Deno.readTextFile(scenarioPath);
-      } catch {
-        // Scenario file may not exist
-      }
-    }
+
+    // Resolve lore template variables
+    const loreRoot = join(PLAYGROUND_DIR, "lore");
+    const loreVars = await resolveLoreVariables(loreRoot, series, story);
 
     // Collect plugin prompt variables
     const pluginVars = await pluginManager.getPromptVariables();
 
     try {
       const result = await ventoEnv.runString(systemTemplate, {
-        scenario: scenarioContent,
         previous_context: previousContext || [],
         user_input: userInput || "",
         status_data: status || "",
         isFirstRound: isFirstRound || false,
+        ...loreVars,
         ...pluginVars.variables,
         plugin_fragments: pluginVars.fragments || [],
       });
