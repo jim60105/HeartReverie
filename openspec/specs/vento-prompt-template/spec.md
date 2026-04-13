@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the template variable contract and prompt structure requirements for the Vento-based system prompt template (`playground/prompts/system.md`). This spec governs what variables the server passes to the template and how the template uses them to construct the complete prompt output.
+Defines the template variable contract and prompt structure requirements for the Vento-based system prompt template (`playground/_prompts/system.md`). This spec governs what variables the server passes to the template and how the template uses them to construct the complete prompt output.
 
 ## Requirements
 
