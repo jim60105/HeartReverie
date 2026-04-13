@@ -77,10 +77,11 @@ zsh ./serve.zsh
 
 以檔案為基礎的世界觀知識庫，取代舊有的 `scenario.md`。受 SillyTavern World Info 啟發，專為檔案工作流程設計。
 
-- **三層作用域**：全域（所有故事）、系列（同系列故事）、故事（單一故事）
+- **三層作用域**：全域（`_lore/`）、系列（`<系列>/_lore/`）、故事（`<系列>/<故事>/_lore/`）——與故事資料並置
 - **Markdown 篇章**：`.md` 檔案 + YAML frontmatter（`tags`、`priority`、`enabled`）
-- **標籤系統**：frontmatter 標籤 + 目錄即標籤，自動注入為 Vento 模板變數（`{{ lore_<tag> }}`）
+- **標籤系統**：frontmatter 標籤 + 目錄即標籤 + 檔名即標籤，自動注入為 Vento 模板變數（`{{ lore_<tag> }}`）
 - **REST API**：完整的篇章 CRUD 端點
+- **底線命名慣例**：以 `_` 開頭的目錄（如 `_lore/`）為系統保留，不會出現在系列/故事列表中
 
 完整文件見 [`docs/lore-codex.md`](docs/lore-codex.md)。
 
