@@ -132,10 +132,9 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
       assertEquals(res.body.includes("characters"), true);
     });
 
-    await t.step("DELETE removes the global passage → 200", async () => {
+    await t.step("DELETE removes the global passage → 204", async () => {
       const res = await makeRequest(app, "DELETE", "/api/lore/global/hero.md");
-      assertEquals(res.status, 200);
-      assertEquals(res.body.message, "Passage deleted");
+      assertEquals(res.status, 204);
     });
 
     await t.step("GET after delete → 404", async () => {
@@ -166,10 +165,9 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
       assertEquals(res.body[0].scope, "series");
     });
 
-    await t.step("DELETE removes the series passage", async () => {
+    await t.step("DELETE removes the series passage → 204", async () => {
       const res = await makeRequest(app, "DELETE", "/api/lore/series/mySeries/world.md");
-      assertEquals(res.status, 200);
-      assertEquals(res.body.message, "Passage deleted");
+      assertEquals(res.status, 204);
     });
 
     await t.step("GET series passage after delete → 404", async () => {
@@ -200,10 +198,9 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
       assertEquals(res.body[0].scope, "story");
     });
 
-    await t.step("DELETE removes the story passage", async () => {
+    await t.step("DELETE removes the story passage → 204", async () => {
       const res = await makeRequest(app, "DELETE", "/api/lore/story/mySeries/myStory/npc.md");
-      assertEquals(res.status, 200);
-      assertEquals(res.body.message, "Passage deleted");
+      assertEquals(res.status, 204);
     });
 
     await t.step("GET story passage after delete → 404", async () => {
@@ -280,9 +277,9 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
       assertEquals(villain.tags.includes("evil"), true);
     });
 
-    await t.step("DELETE removes subdirectory passage", async () => {
+    await t.step("DELETE removes subdirectory passage → 204", async () => {
       const res = await makeRequest(app, "DELETE", "/api/lore/global/characters/villain.md");
-      assertEquals(res.status, 200);
+      assertEquals(res.status, 204);
     });
 
     // ── Validation & Error Cases ─────────────────────────────────────────

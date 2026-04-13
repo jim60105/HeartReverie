@@ -15,7 +15,7 @@ const emit = defineEmits<{
   deleted: [];
 }>();
 
-const { readPassage, writePassage, deletePassage } = useLoreApi();
+const { readPassage, writePassage, deletePassage, allTags } = useLoreApi();
 
 const filename = ref(props.path ?? "");
 const tagsInput = ref("");
@@ -26,8 +26,24 @@ const saving = ref(false);
 const deleting = ref(false);
 const errorMsg = ref<string | null>(null);
 const showDeleteConfirm = ref(false);
+const tagInputFocused = ref(false);
+const tagInputEl = ref<HTMLInputElement | null>(null);
 
 const isNew = computed(() => !props.path);
+
+const currentTagQuery = computed(() => {
+  const parts = tagsInput.value.split(",");
+  return (parts[parts.length - 1] || "").trim().toLowerCase();
+});
+
+const tagSuggestions = computed(() => {
+  const query = currentTagQuery.value;
+  if (!query) return [];
+  const existing = parseTags();
+  return allTags.value.filter(
+    (t) => t.toLowerCase().includes(query) && !existing.includes(t),
+  );
+});
 
 const filenameError = computed(() => {
   if (!filename.value.trim()) return "檔名不得為空";
@@ -63,6 +79,15 @@ function parseTags(): string[] {
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
+}
+
+function selectTagSuggestion(tag: string) {
+  const parts = tagsInput.value.split(",");
+  parts.pop();
+  parts.push(` ${tag}`);
+  tagsInput.value = parts.join(",") + ", ";
+  tagInputFocused.value = false;
+  tagInputEl.value?.focus();
 }
 
 async function handleSave() {
@@ -129,12 +154,30 @@ async function handleDelete() {
 
       <label class="field-label">
         標籤（以逗號分隔）
-        <input
-          v-model="tagsInput"
-          class="field-input"
-          type="text"
-          placeholder="角色, 世界觀, 設定"
-        />
+        <div class="tag-autocomplete-wrap">
+          <input
+            ref="tagInputEl"
+            v-model="tagsInput"
+            class="field-input"
+            type="text"
+            placeholder="角色, 世界觀, 設定"
+            @focus="tagInputFocused = true"
+            @blur="tagInputFocused = false"
+          />
+          <div
+            v-if="tagInputFocused && tagSuggestions.length"
+            class="tag-suggestions"
+          >
+            <button
+              v-for="suggestion in tagSuggestions"
+              :key="suggestion"
+              class="tag-suggestion"
+              @mousedown.prevent="selectTagSuggestion(suggestion)"
+            >
+              {{ suggestion }}
+            </button>
+          </div>
+        </div>
       </label>
 
       <div class="field-row">
@@ -340,6 +383,43 @@ async function handleDelete() {
 .field-textarea:focus {
   outline: none;
   border-color: var(--text-title);
+}
+
+/* Tag autocomplete */
+.tag-autocomplete-wrap {
+  position: relative;
+}
+
+.tag-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: linear-gradient(145deg, #1a0810, #220c16);
+  margin-top: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.tag-suggestion {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  color: var(--text-main);
+  font-size: 0.85em;
+  font-family: var(--font-antique), var(--font-system-ui);
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.tag-suggestion:hover {
+  background: rgba(180, 30, 60, 0.22);
 }
 
 .editor-actions {
