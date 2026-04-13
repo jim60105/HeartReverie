@@ -9,16 +9,18 @@ Defines the template variable contract and prompt structure requirements for the
 ### Requirement: Template variables
 
 The system prompt template (`system.md`) SHALL receive the following variables from the server:
-- `scenario` (string): Content of `playground/:series/scenario.md`.
 - `previous_context` (array of strings): Chapter context entries in numerical order. Each element is either full chapter text (for recent chapters, after tag stripping) or a formatted summary string (for older chapters processed by context compaction). When context compaction is active, the array MAY be prefixed with a global story summary element wrapped in `<story_summary>` tags containing all extracted chapter summaries concatenated in chronological order, followed by full text for chapters without summaries (fallback), and full chapter text for recent chapters. When context compaction is not active, each element is stripped chapter content identical to legacy behavior.
 - `user_input` (string): The raw user message.
 - `status_data` (string): The status file content (from `current-status.yml` or `init-status.yml`). Named `status_data` to avoid conflict with the template-local `status` variable set via `{{ set status }}{{ include "./status.md" }}{{ /set }}`.
 - `isFirstRound` (boolean): `true` when no chapters with non-empty content exist, `false` otherwise.
 - `plugin_prompts` (array of `{name, content}` objects): Prompt fragments contributed by plugins via the `prompt-assembly` hook. Each object contains the plugin `name` (string) and the prompt fragment `content` (string). The array is ordered by hook handler priority. After plugin consolidation, the `threshold-lord` plugin contributes prompt fragments under its own name (unchanged), absorbing the former `disclaimer` plugin's functionality.
+- `lore_all` (string): Concatenated content of all in-scope lore passages.
+- `lore_<tag>` (string): Concatenated content of passages matching a specific tag (dynamic — one per unique tag).
+- `lore_tags` (string[]): Array of all unique effective tags across in-scope passages.
 
 #### Scenario: All variables passed to template
 - **WHEN** the system prompt is rendered
-- **THEN** the Vento template SHALL receive all six variables: `scenario`, `previous_context`, `user_input`, `status_data`, `isFirstRound`, and `plugin_prompts`
+- **THEN** the Vento template SHALL receive all eight variable categories: `previous_context`, `user_input`, `status_data`, `isFirstRound`, `plugin_prompts`, `lore_all`, dynamic `lore_<tag>` variables, and `lore_tags`
 
 #### Scenario: previous_context is empty on first round
 - **WHEN** `isFirstRound` is `true`
@@ -44,9 +46,27 @@ The system prompt template (`system.md`) SHALL receive the following variables f
 - **WHEN** the consolidated `threshold-lord` plugin contributes prompt fragments
 - **THEN** the template variables `threshold_lord_start` and `threshold_lord_end` SHALL remain available with identical content as before the merger
 
+#### Scenario: lore_all contains all in-scope passages
+- **WHEN** lore passages exist within the current story scope
+- **THEN** `lore_all` SHALL contain the concatenated content of all in-scope lore passages
+
+#### Scenario: lore_<tag> variables for each unique tag
+- **WHEN** lore passages have various tags applied
+- **THEN** the template SHALL receive one `lore_<tag>` variable per unique effective tag, containing the concatenated content of passages matching that specific tag
+
+#### Scenario: lore_tags contains all unique tags
+- **WHEN** lore passages exist with tags
+- **THEN** `lore_tags` SHALL be an array containing all unique effective tags across in-scope passages
+
+#### Scenario: Empty lore variables when no lore exists
+- **WHEN** no lore passages exist within the current story scope
+- **THEN** `lore_all` SHALL be an empty string, no `lore_<tag>` variables SHALL exist, and `lore_tags` SHALL be an empty array
+
 ### Requirement: Template prompt structure
 
 The `system.md` template SHALL use Vento syntax to control all prompt structure. The template SHALL iterate over the `previous_context` array and wrap each entry in `<previous_context>` tags. The template SHALL conditionally render `<start_hints>` content when `isFirstRound` is `true`. The template SHALL include `status_data` content wrapped in `<status_current_variable>` tags. The template SHALL incorporate the content previously delivered by `after_user_message.md` directly within the template.
+
+The template SHALL use lore variables instead of a scenario variable for world-building content injection. The template MAY use `{{ lore_all }}` for comprehensive lore inclusion or selective `{{ lore_<tag> }}` variables for topic-specific injection based on the story's needs. The template MAY iterate over `{{ lore_tags }}` to dynamically process tag-specific content.
 
 The template SHALL gain a plugin prompt injection section where plugin-contributed prompt fragments are assembled. The template SHALL iterate over the `plugin_prompts` array and render each plugin's prompt fragment. Each plugin prompt fragment SHALL be clearly delimited in the rendered output (e.g., wrapped in a comment or section marker identifying the contributing plugin name). The plugin prompt injection section SHALL appear at a designated location in the template (after core prompt sections but before the final instructions).
 
@@ -81,3 +101,19 @@ The template SHALL gain a plugin prompt injection section where plugin-contribut
 #### Scenario: Plugin prompt ordering preserved
 - **WHEN** `plugin_prompts` contains multiple entries ordered by priority
 - **THEN** the rendered template SHALL include the plugin prompt fragments in the same order as they appear in the `plugin_prompts` array
+
+#### Scenario: Lore content injection using lore_all
+- **WHEN** the template uses `{{ lore_all }}` for world-building content
+- **THEN** the rendered template SHALL include all concatenated lore passage content at the specified location
+
+#### Scenario: Selective lore injection using tag-specific variables
+- **WHEN** the template uses `{{ lore_<tag> }}` variables for specific topics
+- **THEN** the rendered template SHALL include only the lore content matching those specific tags
+
+#### Scenario: Dynamic tag processing
+- **WHEN** the template iterates over `{{ lore_tags }}`
+- **THEN** the rendered template SHALL process each unique tag dynamically and MAY access corresponding `lore_<tag>` content
+
+#### Scenario: No lore content available
+- **WHEN** no lore passages exist within scope
+- **THEN** the template SHALL render normally without lore content, and lore variables SHALL be empty or omitted as appropriate

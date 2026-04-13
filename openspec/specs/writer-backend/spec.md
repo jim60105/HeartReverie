@@ -8,7 +8,7 @@ Deno application using Hono framework with TypeScript that serves the reader fro
 
 ### Requirement: Server initialization
 
-The writer backend SHALL be a Deno application using Hono framework with TypeScript ESM modules. Route handlers SHALL be organized into separate module files under `writer/routes/`. Middleware functions SHALL be extracted into `writer/lib/middleware.ts`. Configuration SHALL be centralized in `writer/lib/config.ts`. Error response construction SHALL use a shared `problemJson()` helper from `writer/lib/errors.ts`.
+The writer backend SHALL be a Deno application using Hono framework with TypeScript ESM modules. Route handlers SHALL be organized into separate module files under `writer/routes/`. Middleware functions SHALL be extracted into `writer/lib/middleware.ts`. Configuration SHALL be centralized in `writer/lib/config.ts`. Error response construction SHALL use a shared `problemJson()` helper from `writer/lib/errors.ts`. The server SHALL also register the lore CRUD routes from `writer/routes/lore.ts` alongside other core routes during initialization.
 
 #### Scenario: Server starts and serves static frontend
 - **WHEN** the server process is started with valid TLS certificates via `deno run`
@@ -16,11 +16,11 @@ The writer backend SHALL be a Deno application using Hono framework with TypeScr
 
 #### Scenario: API routes are mounted
 - **WHEN** the server starts
-- **THEN** all `/api/` routes SHALL be available as Hono route handlers, each imported from its respective route module
+- **THEN** all `/api/` routes SHALL be available as Hono route handlers, each imported from its respective route module, including the lore CRUD routes
 
 #### Scenario: Modular route structure
 - **WHEN** a developer inspects the `writer/routes/` directory
-- **THEN** each file contains handlers for a single API domain (auth, stories, chapters, chat, plugins, prompt)
+- **THEN** each file contains handlers for a single API domain (auth, stories, chapters, chat, plugins, prompt, lore)
 
 #### Scenario: TypeScript type checking passes
 - **WHEN** a developer runs `deno check` on the writer backend entry point
@@ -96,11 +96,11 @@ The server SHALL expose `GET /api/stories/:series/:name/status` to read the curr
 
 ### Requirement: Prompt construction pipeline
 
-The server SHALL construct the LLM messages array using a template-driven prompt rendering pipeline. The `renderSystemPrompt()` function SHALL accept the following parameters to pass as Vento template variables: `scenario` (string, content of `playground/:series/scenario.md`), `previous_context` (array of strings, each being a stripped chapter content), `user_input` (string, the raw user message), `status_data` (string, the status file content), `isFirstRound` (boolean, true when no chapters with content exist), and `plugin_prompts` (array of `{name, content}` objects contributed by plugins via the prompt-assembly hook). See the `vento-prompt-template` spec for template variable definitions and template-level rendering requirements.
+The server SHALL construct the LLM messages array using a template-driven prompt rendering pipeline. The `renderSystemPrompt()` function SHALL accept the following parameters to pass as Vento template variables: `previous_context` (array of strings, each being a stripped chapter content), `user_input` (string, the raw user message), `status_data` (string, the status file content), `isFirstRound` (boolean, true when no chapters with content exist), and `plugin_prompts` (array of `{name, content}` objects contributed by plugins via the prompt-assembly hook). Additionally, `renderSystemPrompt()` SHALL call the lore retrieval engine in `writer/lib/lore.ts` directly with the active series and story context, and spread the returned lore variables (`lore_all`, `lore_<tag>`, `lore_tags`) into the Vento template render context. See the `vento-prompt-template` spec for template variable definitions and template-level rendering requirements.
 
 Before rendering the template, the server SHALL invoke the `prompt-assembly` hook stage. Each registered plugin handler SHALL return a `{name, content}` object representing the plugin's prompt fragment. The server SHALL collect all returned prompt fragments into the `plugin_prompts` array, ordered by handler priority. The `plugin_prompts` array SHALL be passed to the Vento template alongside the existing variables.
 
-The Vento template rendering call SHALL pass all variables to the `system.md` template as `{ scenario, previous_context, user_input, status_data, isFirstRound, plugin_prompts }`.
+The Vento template rendering call SHALL pass all variables to the `system.md` template, including plugin variables collected from the prompt-assembly hook and lore variables computed directly by the lore retrieval engine.
 
 The content previously delivered via `after_user_message.md` as a separate system message SHALL be incorporated into the `system.md` template. The server SHALL NOT load or send `after_user_message.md` as a separate system message.
 
@@ -136,11 +136,27 @@ Before including chapter content in the `previous_context` array, the server SHA
 
 #### Scenario: Vento template rendering
 - **WHEN** the system prompt is constructed
-- **THEN** the server SHALL use the ventojs engine to render `system.md` with `{ scenario, previous_context, user_input, status_data, isFirstRound, plugin_prompts }` as the template data
+- **THEN** the server SHALL use the ventojs engine to render `system.md` with variables collected from the prompt-assembly hook and from the lore retrieval engine as the template data
 
 #### Scenario: after_user_message.md elimination
 - **WHEN** the messages array is constructed
 - **THEN** the server SHALL NOT load `after_user_message.md` as a separate file and SHALL NOT append it as a separate system message
+
+#### Scenario: Lore variables available in template
+- **WHEN** the lore system is active and lore passages exist for the current story context
+- **THEN** the template rendering SHALL include lore variables (`lore_all`, `lore_<tag>`, `lore_tags`) in the Vento template context alongside other variables
+
+### Requirement: Lore API route registration
+
+The server SHALL register lore CRUD routes as a core route module at `writer/routes/lore.ts`, mounted under the `/api/lore/` path prefix. These routes SHALL be subject to the same authentication middleware as other API routes and SHALL be registered during server initialization alongside other core routes.
+
+#### Scenario: Lore API routes are registered
+- **WHEN** the server starts
+- **THEN** the lore route handlers SHALL be mounted under `/api/lore/` path prefix and be accessible via HTTP requests
+
+#### Scenario: Lore API routes require authentication
+- **WHEN** a client sends a request to any `/api/lore/` endpoint without valid authentication
+- **THEN** the server SHALL return HTTP 401 Unauthorized
 
 ### Requirement: LLM API proxy
 
