@@ -21,6 +21,7 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     hooks.ts              # HookDispatcher: backend lifecycle hook system
     config.ts             # Environment variable loading and validation
     errors.ts             # RFC 9457 Problem Details helpers
+    lore.ts               # Lore codex library (passage storage, retrieval, tag system, template variable generation)
     middleware.ts         # Auth, rate limiting, secure headers
     story.ts              # Story/chapter file operations
     template.ts           # Vento template rendering engine
@@ -30,6 +31,7 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     chapters.ts           # GET/PUT chapters — read and write chapter content
     chat.ts               # POST chat — LLM streaming proxy (HTTP fallback)
     config.ts             # GET /api/config — public configuration (background image)
+    lore.ts               # Lore codex API routes (CRUD for passages)
     plugins.ts            # GET plugins — frontend module discovery
     prompt.ts             # GET/POST prompt — template preview and file persistence
     stories.ts            # GET stories — series/story listing
@@ -58,12 +60,17 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       PassphraseGate.vue  # Authentication gate
       SettingsLayout.vue  # Settings page with sidebar navigation
       VentoErrorCard.vue  # Vento template error display component
+    components/lore/
+      LoreCodexPage.vue   # Lore codex page wrapper
+      LoreBrowser.vue     # Lore passage browser and filter UI
+      LoreEditor.vue      # Lore passage editor (frontmatter + content)
     composables/
       useAuth.ts          # Authentication state management
       useBackground.ts    # Background image configuration
       useChapterNav.ts    # Chapter navigation and polling
       useChatApi.ts       # Chat API (WebSocket with HTTP fallback)
       useFileReader.ts    # File System Access API + IndexedDB
+      useLoreApi.ts       # Lore codex API client
       useMarkdownRenderer.ts  # Markdown rendering pipeline
       usePlugins.ts       # Plugin loading and hook management
       usePromptEditor.ts  # Prompt editor state
@@ -105,6 +112,8 @@ tests/                    # Backend tests (Deno)
     context-compaction/
     user-message/
 playground/               # Story data directory (series/stories/chapters)
+scripts/
+  migrate-scenario.ts    # Scenario.md → lore codex migration script
 openspec/                 # Spec-driven workflow: specs, changes, archives
 docs/                     # Documentation (Traditional Chinese)
 skills/                   # Copilot agent skills (e.g., heartreverie-create-plugin)
@@ -289,10 +298,25 @@ Plugin interaction layers:
 4. **Backend hooks** — `backendModule` registers handlers for 5 lifecycle stages: `prompt-assembly`, `response-stream`, `pre-write`, `post-response`, `strip-tags`
 5. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` hook
 
+### Lore Codex
+
+File-based world-building knowledge system with scoped passages (典籍). Replaces the old `scenario.md` approach. See `docs/lore-codex.md` for full user-facing documentation.
+
+- **Three scopes**: global (all stories), series (all stories in a series), story (single story)
+- **Passage format**: `.md` files with YAML frontmatter (`tags`, `priority`, `enabled`)
+- **Tag system**: frontmatter tags + directory-as-tag (immediate parent subdir name), normalized for template variable names (lowercase, hyphens/spaces → underscores)
+- **Template variable injection**: `lore_all` (all enabled passages), `lore_<tag>` (per-tag), `lore_tags` (tag name array)
+- **API**: CRUD routes under `/api/lore/` for managing passages
+
+Key files:
+- `writer/lib/lore.ts` — Core library: frontmatter parsing, tag normalization, scope collection, template variable generation
+- `writer/routes/lore.ts` — REST API routes for passage CRUD
+- `scripts/migrate-scenario.ts` — Migration script from `scenario.md` to lore codex
+
 ### Prompt Rendering Pipeline
 
 1. `buildPromptFromStory()` reads chapters, strips tags, loads status YAML, detects first-round
-2. `renderSystemPrompt()` collects plugin variables via `getPromptVariables()`, renders `system.md` through Vento engine
+2. `renderSystemPrompt()` resolves lore variables via `resolveLoreVariables()`, collects plugin variables via `getPromptVariables()`, renders `system.md` through Vento engine
 3. Result is sent as the system message to OpenRouter, user input as the user message
 4. LLM response is streamed from OpenRouter, written incrementally to chapter file, tags stripped, post-response hooks dispatched
 
@@ -344,5 +368,6 @@ The project uses a spec-driven development workflow managed by OpenSpec skills i
 - Run tests: `deno task test` (backend + frontend), `deno task test:backend`, `deno task test:frontend`; plugin tests separately: `deno test --allow-read --allow-write --allow-env --allow-net tests/plugins/`
 - The frontend **has a build step**: `deno task build:reader` — edit sources in `reader-src/`, built output goes to `reader-dist/`
 - `system.md` is a Vento template — treat it as code, not documentation
+- `system.md` uses `{{ lore_scenario }}` (from lore codex) instead of the old `{{ scenario }}` core variable
 - Plugin `name` in `plugin.json` must match its directory name exactly
 - The malformed-JSON fallback parser in state-patches exists intentionally — some source `.md` files contain unescaped quotes in string values

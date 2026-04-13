@@ -4,6 +4,7 @@ import type { RouteRecordRaw } from "vue-router";
 const MainLayout = () => import("@/components/MainLayout.vue");
 const SettingsLayout = () => import("@/components/SettingsLayout.vue");
 const PromptEditorPage = () => import("@/components/PromptEditorPage.vue");
+const LoreCodexPage = () => import("@/components/lore/LoreCodexPage.vue");
 
 export const settingsChildren: RouteRecordRaw[] = [
   {
@@ -11,6 +12,12 @@ export const settingsChildren: RouteRecordRaw[] = [
     name: "settings-prompt-editor",
     component: PromptEditorPage,
     meta: { title: "編排器" },
+  },
+  {
+    path: "lore",
+    name: "settings-lore",
+    component: LoreCodexPage,
+    meta: { title: "典籍" },
   },
 ];
 

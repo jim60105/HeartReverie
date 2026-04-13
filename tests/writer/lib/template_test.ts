@@ -14,10 +14,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals, assertExists, assertMatch } from "@std/assert";
-import { join } from "@std/path";
 import { createTemplateEngine, validateTemplate } from "../../../writer/lib/template.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
-import type { SafePathFn } from "../../../writer/types.ts";
 
 Deno.test("validateTemplate", async (t) => {
   await t.step("safe expressions accepted", async (t) => {
@@ -104,11 +102,10 @@ Deno.test("createTemplateEngine", async (t) => {
   const mockPluginManager = {
     getPromptVariables: async () => ({ variables: {}, fragments: [] }),
   } as unknown as PluginManager;
-  const nullSafePath: SafePathFn = () => null;
 
   await t.step("renderSystemPrompt with templateOverride renders correctly", async () => {
-    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
-    const result = await renderSystemPrompt("test-series", {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
+    const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "Hello {{ user_input }}!",
       userInput: "world",
     });
@@ -117,9 +114,9 @@ Deno.test("createTemplateEngine", async (t) => {
   });
 
   await t.step("templateOverride exceeding max length returns error", async () => {
-    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
     const longTemplate = "x".repeat(500_001);
-    const result = await renderSystemPrompt("test-series", {
+    const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: longTemplate,
     });
     assertEquals(result.content, null);
@@ -128,8 +125,8 @@ Deno.test("createTemplateEngine", async (t) => {
   });
 
   await t.step("templateOverride with unsafe expressions returns validation error", async () => {
-    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
-    const result = await renderSystemPrompt("test-series", {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
+    const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "{{ process.env.SECRET }}",
     });
     assertEquals(result.content, null);
@@ -141,36 +138,10 @@ Deno.test("createTemplateEngine", async (t) => {
     assertEquals(result.error!.expressions!.length, 1);
   });
 
-  await t.step("renderSystemPrompt reads scenario.md when it exists", async () => {
-    const tmpDir = await Deno.makeTempDir();
-    try {
-      await Deno.writeTextFile(join(tmpDir, "scenario.md"), "Test scenario content");
-      const safePath: SafePathFn = (_series, file) => join(tmpDir, file!);
-      const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, safePath);
-      const result = await renderSystemPrompt("test-series", {
-        templateOverride: "Scenario: {{ scenario }}",
-      });
-      assertEquals(result.error, null);
-      assertEquals(result.content, "Scenario: Test scenario content");
-    } finally {
-      await Deno.remove(tmpDir, { recursive: true });
-    }
-  });
-
-  await t.step("renderSystemPrompt handles missing scenario file gracefully", async () => {
-      const safePath: SafePathFn = () => "/nonexistent/path/scenario.md";
-    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, safePath);
-    const result = await renderSystemPrompt("test-series", {
-      templateOverride: "Scenario:[{{ scenario }}]",
-    });
-    assertEquals(result.error, null);
-    assertEquals(result.content, "Scenario:[]");
-  });
-
   await t.step("renderSystemPrompt returns error on Vento rendering failure", async () => {
-    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
     // Unclosed for-loop causes Vento to throw a parse/render error
-    const result = await renderSystemPrompt("test-series", {
+    const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "{{ for x of items }}no closing tag",
     });
     assertEquals(result.content, null);
@@ -179,7 +150,7 @@ Deno.test("createTemplateEngine", async (t) => {
   });
 
   await t.step("ventoEnv is returned from createTemplateEngine", () => {
-    const engine = createTemplateEngine(mockPluginManager, nullSafePath);
+    const engine = createTemplateEngine(mockPluginManager);
     assertExists(engine.ventoEnv);
     assertEquals(typeof engine.ventoEnv.runString, "function");
   });
@@ -191,8 +162,8 @@ Deno.test("createTemplateEngine", async (t) => {
         fragments: ["frag1"],
       }),
     } as unknown as PluginManager;
-    const { renderSystemPrompt } = createTemplateEngine(pluginMgr, nullSafePath);
-    const result = await renderSystemPrompt("test-series", {
+    const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
+    const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "{{ custom_var }}",
     });
     assertEquals(result.error, null);
@@ -200,8 +171,8 @@ Deno.test("createTemplateEngine", async (t) => {
   });
 
   await t.step("undefined variable renders as empty string in Vento", async () => {
-    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager, nullSafePath);
-    const result = await renderSystemPrompt("test-series", {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
+    const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "before[{{ nonexistent_var }}]after",
     });
     // Vento either outputs empty or throws — capture actual behavior
@@ -218,8 +189,8 @@ Deno.test("createTemplateEngine", async (t) => {
     const emptyPluginMgr = {
       getPromptVariables: async () => ({ variables: {}, fragments: [] }),
     } as unknown as PluginManager;
-    const { renderSystemPrompt } = createTemplateEngine(emptyPluginMgr, nullSafePath);
-    const result = await renderSystemPrompt("test-series", {
+    const { renderSystemPrompt } = createTemplateEngine(emptyPluginMgr);
+    const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "Fragments:[{{ for f of plugin_fragments }}{{ f }}{{ /for }}]",
     });
     assertEquals(result.error, null);
@@ -233,8 +204,8 @@ Deno.test("createTemplateEngine", async (t) => {
         fragments: ["AAA", "BBB", "CCC"],
       }),
     } as unknown as PluginManager;
-    const { renderSystemPrompt } = createTemplateEngine(orderedPluginMgr, nullSafePath);
-    const result = await renderSystemPrompt("test-series", {
+    const { renderSystemPrompt } = createTemplateEngine(orderedPluginMgr);
+    const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "{{ for f of plugin_fragments }}[{{ f }}]{{ /for }}",
     });
     assertEquals(result.error, null);

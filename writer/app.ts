@@ -26,6 +26,7 @@ import { registerChatRoutes } from "./routes/chat.ts";
 import { registerPluginRoutes } from "./routes/plugins.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
 import { registerConfigRoutes } from "./routes/config.ts";
+import { registerLoreRoutes } from "./routes/lore.ts";
 import { registerWebSocketRoutes } from "./routes/ws.ts";
 import type { Context, Next } from "@hono/hono";
 import type { AppDeps } from "./types.ts";
@@ -110,6 +111,7 @@ export function createApp(deps: AppDeps): Hono {
   registerAuthRoutes(app);
   registerConfigRoutes(app, deps);
   registerStoriesRoutes(app, deps);
+  registerLoreRoutes(app, deps);
   registerChapterRoutes(app, deps);
   registerChatRoutes(app, deps);
   registerPluginRoutes(app, deps);
