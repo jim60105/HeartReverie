@@ -8,7 +8,7 @@ Backend file-based persistence for custom prompt templates, providing PUT/DELETE
 
 ### Requirement: Custom prompt file persistence
 
-The backend SHALL persist the user's custom prompt template to a file at the path specified by the `PROMPT_FILE` environment variable. When `PROMPT_FILE` is not set, the default path SHALL be `playground/prompts/system.md` relative to `ROOT_DIR`. The file SHALL be created (including parent directories) on the first `PUT /api/template` request and deleted on `DELETE /api/template`.
+The backend SHALL persist the user's custom prompt template to a file at the path specified by the `PROMPT_FILE` environment variable. When `PROMPT_FILE` is not set, the default path SHALL be `playground/_prompts/system.md` relative to `ROOT_DIR`. The file SHALL be created (including parent directories) on the first `PUT /api/template` request and deleted on `DELETE /api/template`.
 
 #### Scenario: Write custom prompt via PUT
 - **WHEN** a client sends `PUT /api/template` with a JSON body `{ "content": "<template text>" }`

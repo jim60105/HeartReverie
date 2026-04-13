@@ -24,4 +24,4 @@ The project SHALL provide a `.env.example` file at the repository root that docu
 
 #### Scenario: PROMPT_FILE documented
 - **WHEN** a contributor inspects the `.env.example` file
-- **THEN** the `PROMPT_FILE` entry SHALL describe it as the path to the custom prompt template file, with the default value `playground/prompts/system.md` shown as a comment
+- **THEN** the `PROMPT_FILE` entry SHALL describe it as the path to the custom prompt template file, with the default value `playground/_prompts/system.md` shown as a comment
