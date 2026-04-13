@@ -57,6 +57,7 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
   await Deno.mkdir(join(tmpDir, "scifi", "_lore"), { recursive: true });
   await Deno.mkdir(join(tmpDir, ".hidden"), { recursive: true });
   await Deno.mkdir(join(tmpDir, "_lore"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "_prompts"), { recursive: true });
 
   const safePath = createSafePath(tmpDir);
   const app = createApp({
@@ -88,6 +89,7 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
       assert(res.body.includes("scifi"));
       assert(!res.body.includes(".hidden"));
       assert(!res.body.includes("_lore"));
+      assert(!res.body.includes("_prompts"));
     });
 
     await t.step("GET /api/stories/:series lists subdirectories excluding underscore-prefixed", async () => {

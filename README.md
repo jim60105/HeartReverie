@@ -56,7 +56,7 @@ zsh ./serve.zsh
 | `PLAYGROUND_DIR` | — | `./playground` | 故事資料根目錄 |
 | `READER_DIR` | — | `./reader-dist` | 前端靜態檔案根目錄 |
 | `BACKGROUND_IMAGE` | — | `/assets/heart.webp` | 背景圖片 URL 路徑 |
-| `PROMPT_FILE` | — | `playground/prompts/system.md` | 自訂提示詞模板檔案路徑 |
+| `PROMPT_FILE` | — | `playground/_prompts/system.md` | 自訂提示詞模板檔案路徑 |
 | `HTTP_ONLY` | — | — | 設為 `true` 關閉 TLS（反向代理部署） |
 | `CERT_FILE` | — | — | 自訂 TLS 憑證路徑 |
 | `KEY_FILE` | — | — | 自訂 TLS 金鑰路徑 |

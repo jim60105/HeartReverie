@@ -149,7 +149,7 @@ The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on 
 | `PLAYGROUND_DIR` | No | `./playground` | Story data root |
 | `READER_DIR` | No | `./reader-dist` | Frontend static files root |
 | `BACKGROUND_IMAGE` | No | `/assets/heart.webp` | Background image URL path for the web reader |
-| `PROMPT_FILE` | No | `playground/prompts/system.md` | Custom prompt template file path |
+| `PROMPT_FILE` | No | `playground/_prompts/system.md` | Custom prompt template file path |
 | `HTTP_ONLY` | No | — | Set to `true` to skip TLS (for reverse-proxy deployments) |
 | `CERT_FILE` | No | — | Custom TLS certificate file path |
 | `KEY_FILE` | No | — | Custom TLS private key file path |

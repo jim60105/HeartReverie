@@ -48,7 +48,7 @@ const BACKGROUND_IMAGE: string =
   Deno.env.get("BACKGROUND_IMAGE") || "/assets/heart.webp";
 const PROMPT_FILE: string = (() => {
   const raw = Deno.env.get("PROMPT_FILE");
-  if (!raw) return join(PLAYGROUND_DIR, "prompts", "system.md");
+  if (!raw) return join(PLAYGROUND_DIR, "_prompts", "system.md");
   // Resolve relative paths against ROOT_DIR
   return raw.startsWith("/") ? raw : resolve(ROOT_DIR, raw);
 })();
