@@ -363,7 +363,7 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
 
     try {
       await Deno.remove(filePath);
-      return c.json({ message: "Passage deleted" });
+      return c.body(null, 204);
     } catch (err: unknown) {
       if (err instanceof Deno.errors.NotFound) {
         return c.json(problemJson("Not Found", 404, "Passage not found"), 404);

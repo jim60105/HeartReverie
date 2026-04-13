@@ -22,6 +22,7 @@ const editingPassage = ref<{
   content: string;
 } | null>(null);
 const isCreating = ref(false);
+const showMobileNav = ref(false);
 
 const scopes = [
   { key: "global" as const, label: "全域" },
@@ -73,6 +74,10 @@ function toggleTag(tag: string) {
   activeTag.value = activeTag.value === tag ? "" : tag;
 }
 
+function clearFilters() {
+  activeTag.value = "";
+}
+
 function openPassage(passage: { relativePath: string }) {
   isCreating.value = false;
   editingPassage.value = {
@@ -116,7 +121,35 @@ function handleCancelled() {
         </button>
       </div>
 
-      <!-- Scope tabs -->
+      <!-- Mobile scope nav toggle -->
+      <div class="mobile-nav">
+        <button class="mobile-nav-toggle" @click="showMobileNav = !showMobileNav">
+          <span class="hamburger-icon">☰</span>
+          {{ scopes.find((s) => s.key === activeScope)?.label }}
+        </button>
+        <div v-if="showMobileNav" class="mobile-nav-dropdown">
+          <button
+            v-for="s in scopes"
+            :key="s.key"
+            class="scope-tab"
+            :class="{
+              'scope-tab--active': activeScope === s.key,
+              'scope-tab--disabled':
+                (s.key === 'series' && !canUseSeries) ||
+                (s.key === 'story' && !canUseStory),
+            }"
+            :disabled="
+              (s.key === 'series' && !canUseSeries) ||
+              (s.key === 'story' && !canUseStory)
+            "
+            @click="selectScope(s.key); showMobileNav = false"
+          >
+            {{ s.label }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Scope tabs (hidden on mobile) -->
       <div class="scope-tabs">
         <button
           v-for="s in scopes"
@@ -155,6 +188,13 @@ function handleCancelled() {
           @click="toggleTag(tag)"
         >
           {{ tag }}
+        </button>
+        <button
+          v-if="activeTag"
+          class="tag-chip tag-chip--clear"
+          @click="clearFilters"
+        >
+          ✕ 清除篩選
         </button>
       </div>
 
@@ -337,6 +377,16 @@ function handleCancelled() {
   color: var(--text-name);
 }
 
+.tag-chip--clear {
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.15);
+  color: #fca5a5;
+}
+
+.tag-chip--clear:hover {
+  background: rgba(220, 38, 38, 0.3);
+}
+
 /* Passage list */
 .passage-list {
   display: flex;
@@ -459,6 +509,51 @@ function handleCancelled() {
   color: var(--text-name);
 }
 
+/* Mobile navigation */
+.mobile-nav {
+  display: none;
+  position: relative;
+}
+
+.mobile-nav-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  background: var(--btn-bg);
+  padding: 6px 14px;
+  color: var(--text-label);
+  font-size: 0.85em;
+  font-family: var(--font-antique), var(--font-system-ui);
+  width: 100%;
+}
+
+.mobile-nav-toggle:hover {
+  background: var(--btn-hover-bg);
+}
+
+.hamburger-icon {
+  font-size: 1.1em;
+}
+
+.mobile-nav-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: linear-gradient(145deg, #1a0810, #220c16);
+  padding: 4px;
+  margin-top: 4px;
+}
+
 /* Responsive: stack on mobile */
 @media (max-width: 767px) {
   .lore-browser--split {
@@ -470,6 +565,14 @@ function handleCancelled() {
     border-top: 1px solid var(--border-color);
     padding-left: 0;
     padding-top: 16px;
+  }
+
+  .scope-tabs {
+    display: none;
+  }
+
+  .mobile-nav {
+    display: block;
   }
 }
 </style>
