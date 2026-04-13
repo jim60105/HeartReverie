@@ -8,9 +8,11 @@
 
 ```
 system.md                 # Main Vento prompt template (entry point for LLM system prompt)
-serve.zsh                 # Startup script: generates TLS certs, launches Deno server
+entrypoint.sh             # Unified startup script: generates TLS certs, launches Deno server
+serve.zsh                 # Dev startup script (calls entrypoint.sh)
 writer/                   # Backend server (Hono, TypeScript ESM, Deno)
-  server.ts               # Main server (~1030 lines): routes, prompt rendering, streaming
+  app.ts                  # Hono app setup: middleware, route registration, static serving
+  server.ts               # Server entry: TLS/HTTP listener startup
   types.ts                # Shared TypeScript interfaces and types
   vendor/
     ventojs.d.ts          # Ambient type declarations for ventojs
@@ -22,77 +24,101 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     middleware.ts         # Auth, rate limiting, secure headers
     story.ts              # Story/chapter file operations
     template.ts           # Vento template rendering engine
-    string-utils.ts       # Levenshtein distance, tag stripping, escaping
+    chat-shared.ts        # Shared chat execution logic (HTTP + WebSocket)
   routes/
     auth.ts               # POST /api/auth — passphrase verification
     chapters.ts           # GET/PUT chapters — read and write chapter content
-    chat.ts               # POST chat — OpenRouter streaming proxy
+    chat.ts               # POST chat — LLM streaming proxy (HTTP fallback)
+    config.ts             # GET /api/config — public configuration (background image)
     plugins.ts            # GET plugins — frontend module discovery
-    prompt.ts             # GET/POST prompt — template preview
+    prompt.ts             # GET/POST prompt — template preview and file persistence
     stories.ts            # GET stories — series/story listing
-reader/                   # Frontend app (vanilla ES modules, no build step)
-  index.html              # Single entry point — all CSS inline, Tailwind via CDN
-  js/
-    chapter-nav.js        # App orchestrator: navigation, state, sidebar relocation
-    file-reader.js        # File System Access API + IndexedDB persistence
-    md-renderer.js        # 9-step markdown rendering pipeline
-    status-bar.js         # <status> block parser → themed HTML card
-    options-panel.js      # <options> block parser → 2×2 button grid
-    variable-display.js   # <UpdateVariable> block parser → collapsible <pre>
-    vento-error-display.js # Vento template error display component
-    chat-input.js         # Chat message input and submission
-    story-selector.js     # Series/story selection UI
-    prompt-editor.js      # System prompt template editor
-    prompt-preview.js     # Rendered prompt preview
-    passphrase-gate.js    # Authentication gate
-    plugin-loader.js      # Frontend plugin module loader
-    plugin-hooks.js       # FrontendHookDispatcher for browser-side hooks
-    utils.js              # Shared utilities (escapeHtml, etc.)
-plugins/                  # 10 built-in plugins (manifest-driven)
-  state-patches/
-    plugin.json           # Plugin manifest
-    handler.js            # Post-response hook: invokes Rust binary
-    frontend.js           # UpdateVariable block extraction and rendering
+    ws.ts                 # WebSocket upgrade handler and message dispatching
+reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
+  package.json            # Dependencies: vue, vue-router, marked, dompurify
+  vite.config.ts          # Vite build configuration
+  tsconfig.json           # TypeScript configuration
+  tailwind.config.ts      # Tailwind CSS configuration
+  src/
+    main.ts               # Vue app entry point
+    App.vue               # Root component
+    router/
+      index.ts            # Vue Router with HTML5 history mode
+    components/
+      AppHeader.vue       # Navigation header
+      MainLayout.vue      # Main reading layout
+      ContentArea.vue     # Chapter content display area
+      ChapterContent.vue  # Chapter content rendering
+      Sidebar.vue         # Sidebar component
+      ChatInput.vue       # Chat message input and submission
+      StorySelector.vue   # Series/story selection UI
+      PromptEditor.vue    # System prompt template editor
+      PromptEditorPage.vue # Prompt editor page wrapper
+      PromptPreview.vue   # Rendered prompt preview
+      PassphraseGate.vue  # Authentication gate
+      SettingsLayout.vue  # Settings page with sidebar navigation
+      VentoErrorCard.vue  # Vento template error display component
+    composables/
+      useAuth.ts          # Authentication state management
+      useBackground.ts    # Background image configuration
+      useChapterNav.ts    # Chapter navigation and polling
+      useChatApi.ts       # Chat API (WebSocket with HTTP fallback)
+      useFileReader.ts    # File System Access API + IndexedDB
+      useMarkdownRenderer.ts  # Markdown rendering pipeline
+      usePlugins.ts       # Plugin loading and hook management
+      usePromptEditor.ts  # Prompt editor state
+      useStorySelector.ts # Story selector state
+      useWebSocket.ts     # WebSocket connection management
+    lib/
+      file-utils.ts       # File utility functions
+      markdown-pipeline.ts # Markdown processing pipeline
+      plugin-hooks.ts     # Frontend hook dispatcher
+      string-utils.ts     # String utilities (Levenshtein, escaping)
+      parsers/
+        vento-error-parser.ts  # Vento error parsing
+    types/
+      index.ts            # Frontend TypeScript type definitions
+    styles/
+      base.css            # Base styles
+      theme.css           # Theme styles
+reader-dist/              # Built frontend output (gitignored, run `deno task build:reader`)
+plugins/                  # 11 built-in plugins (manifest-driven) + shared utils
+  _shared/
+    utils.js              # Shared utilities (escapeHtml) used by frontend modules
+  context-compaction/     # Tiered context compaction via inline chapter summaries
+  de-robotization/        # De-robotization prompt fragment
+  imgthink/               # Strip imgthink tags from display
+  options/                # Options panel extraction, rendering, and prompt
+  state-patches/          # State patch lifecycle: Rust binary + frontend rendering
     rust/                 # Rust CLI for YAML state patch processing
-      Cargo.toml          # Rust 2024 edition
-      src/                # Rust source modules (main, pipeline, parser, patch_ops, yaml_nav, convert)
-      tests/              # Integration tests
-tests/                    # All test files (mirroring source structure)
+  status/                 # Status panel extraction, rendering, and prompt
+  thinking/               # Fold <thinking>/<think> tags into collapsible details
+  threshold-lord/         # Threshold Lord prompt fragments and disclaimer cleanup
+  t-task/                 # T-task prompt fragment with tag stripping
+  user-message/           # User message lifecycle: wrap, strip from context/display
+  writestyle/             # Writing style instructions
+tests/                    # Backend tests (Deno)
   writer/
     lib/                  # Backend library tests (*_test.ts)
     routes/               # Backend route handler tests (*_test.ts)
-  reader/
-    js/                   # Frontend tests (*_test.js)
+  plugins/                # Plugin tests
+    context-compaction/
+    user-message/
 playground/               # Story data directory (series/stories/chapters)
 openspec/                 # Spec-driven workflow: specs, changes, archives
 docs/                     # Documentation (Traditional Chinese)
-```
-
-### Frontend Module Dependency Graph
-
-```
-index.html
-  └── chapter-nav.js
-        ├── file-reader.js
-        ├── story-selector.js
-        ├── chat-input.js
-        ├── plugin-loader.js
-        │     └── plugin-hooks.js
-        └── md-renderer.js
-              ├── status-bar.js
-              ├── options-panel.js
-              ├── variable-display.js
-              ├── vento-error-display.js
-              └── utils.js
+skills/                   # Copilot agent skills (e.g., heartreverie-create-plugin)
+assets/                   # Static assets (images)
 ```
 
 ## Running the Server
 
 ```bash
-zsh ./serve.zsh           # Starts HTTPS server at https://localhost:8443
+zsh ./serve.zsh           # Dev: starts HTTPS server at https://localhost:8443
+./entrypoint.sh           # Production: unified startup (also used by container)
 ```
 
-The script auto-generates self-signed TLS certs in `.certs/` on first run. HTTPS is required for the File System Access API used by the frontend.
+The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on first run (unless `HTTP_ONLY=true` or custom certs are provided via `CERT_FILE`/`KEY_FILE`). HTTPS is required for the File System Access API used by the frontend.
 
 ### Environment Variables
 
@@ -113,9 +139,12 @@ The script auto-generates self-signed TLS certs in `.certs/` on first run. HTTPS
 | `LLM_TOP_A` | No | `1` | Top-A sampling |
 | `PLUGIN_DIR` | No | — | External plugin directory (absolute path) |
 | `PLAYGROUND_DIR` | No | `./playground` | Story data root |
-| `READER_DIR` | No | `./reader` | Frontend static files root |
+| `READER_DIR` | No | `./reader-dist` | Frontend static files root |
 | `BACKGROUND_IMAGE` | No | `/assets/heart.webp` | Background image URL path for the web reader |
 | `PROMPT_FILE` | No | `playground/prompts/system.md` | Custom prompt template file path |
+| `HTTP_ONLY` | No | — | Set to `true` to skip TLS (for reverse-proxy deployments) |
+| `CERT_FILE` | No | — | Custom TLS certificate file path |
+| `KEY_FILE` | No | — | Custom TLS private key file path |
 
 The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_API_KEY` and `PASSPHRASE`.
 
@@ -188,21 +217,28 @@ podman run -d --name heartreverie \
 - Error responses follow RFC 9457 Problem Details format (`type`, `title`, `status`, `detail`)
 - GPL-3.0 license header at the top of every source file
 
-### JavaScript — Frontend (`reader/js/`)
+### TypeScript/Vue — Frontend (`reader-src/`)
 
-- Vanilla ES modules, no TypeScript, no build step, no bundler, no framework
-- **Single quotes** for strings (differs from backend)
+- Vue 3 Single-File Components (`.vue`) with `<script setup lang="ts">`
+- TypeScript strict mode; shared types in `reader-src/src/types/index.ts`
+- **Double quotes** for strings (same as backend)
 - Semicolons always used
-- JSDoc `@param`/`@returns` on exported functions
+- Composition API with composables (`use*.ts`) for state and logic
 - Silent error handling — graceful degradation, no `console.error`
-- All inline CSS in `index.html` `<style>` block — no external stylesheet
+- Styles in component `<style scoped>` blocks and shared CSS files (`styles/base.css`, `styles/theme.css`)
 - UI text in Traditional Chinese (zh-TW); comments and code in English
+- Build with Vite: `deno task build:reader`
+- Test with Vitest: `deno task test:frontend`
 
 ### Frontend Technology Stack
 
-- **Tailwind CSS** — Via CDN (`cdn.tailwindcss.com`)
-- **marked.js** — Markdown parser via CDN
+- **Vue 3** — Composition API, `<script setup>` SFCs
+- **Vue Router** — HTML5 history mode routing
+- **Vite** — Build tool and dev server
+- **Tailwind CSS** — Build-time via PostCSS (not CDN)
+- **marked.js** — Markdown parser
 - **DOMPurify** — HTML sanitization
+- **Vitest** — Frontend unit testing
 - **Google Fonts** — Iansui, Noto Sans TC/JP/SC, Noto Color Emoji
 - **File System Access API** — For reading local `.md` files (requires HTTPS secure context)
 - **IndexedDB** — Persists directory handle for session restoration
@@ -240,7 +276,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 ### Plugin System
 
-The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. See `docs/plugin-system.md` for full documentation.
+The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 11 built-in plugins plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
 
 Key classes:
 - `PluginManager` (`writer/lib/plugin-manager.ts`) — scans `plugins/` and optional `PLUGIN_DIR`, validates manifests, loads modules
@@ -262,8 +298,8 @@ Plugin interaction layers:
 
 ### Frontend Rendering Pipeline
 
-Custom XML blocks from LLM output are processed using the **Extract → Placeholder → Reinsert** pattern:
-1. Extract XML blocks (e.g., `<status>`, `<options>`) before markdown parsing
+Custom XML blocks from LLM output are processed using the **Extract → Placeholder → Reinsert** pattern (implemented in `reader-src/src/lib/markdown-pipeline.ts` and the `useMarkdownRenderer` composable):
+1. Extract XML blocks (e.g., `<status>`, `<options>`) before markdown parsing — extraction is delegated to individual plugin frontend modules via the `frontend-render` hook
 2. Replace with HTML comment placeholders
 3. Run `marked.parse()` + DOMPurify sanitization
 4. Reinsert extracted blocks as rendered HTML components
@@ -305,8 +341,8 @@ The project uses a spec-driven development workflow managed by OpenSpec skills i
 
 - Do **NOT** read or modify files under `playground/` — they contain user story data
 - Do **NOT** commit `.env`, `.certs/`, or `current-status.yml` — they are gitignored
-- Run tests with `deno test --allow-read --allow-write --allow-env --allow-net tests/writer/ tests/reader/js/`
-- The frontend has **no build step** — edit files directly, refresh browser to see changes
+- Run tests: `deno task test` (backend + frontend), `deno task test:backend`, `deno task test:frontend`; plugin tests separately: `deno test --allow-read --allow-write --allow-env --allow-net tests/plugins/`
+- The frontend **has a build step**: `deno task build:reader` — edit sources in `reader-src/`, built output goes to `reader-dist/`
 - `system.md` is a Vento template — treat it as code, not documentation
 - Plugin `name` in `plugin.json` must match its directory name exactly
 - The malformed-JSON fallback parser in state-patches exists intentionally — some source `.md` files contain unescaped quotes in string values
