@@ -32,7 +32,7 @@
 使用雙大括號 `{{ }}` 輸出變數值：
 
 ```vento
-{{ scenario }}
+{{ lore_scenario }}
 {{ user_input }}
 {{ status_data }}
 ```

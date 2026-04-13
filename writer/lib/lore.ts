@@ -152,6 +152,7 @@ export function normalizeTag(tag: string): string | null {
 /**
  * Determine the scope of a passage from its path relative to the lore root.
  * Returns null if the path doesn't match a known scope structure.
+ * @deprecated Scope is now passed explicitly by the caller. Retained for backward compatibility.
  */
 export function identifyScope(relPath: string): { scope: LoreScope; series?: string; story?: string } | null {
   const parts = relPath.split("/").filter(Boolean);
@@ -173,41 +174,33 @@ export function identifyScope(relPath: string): { scope: LoreScope; series?: str
 // ── Directory-as-Tag Resolution ──
 
 /**
- * Compute the directory-implicit tag from a passage path.
+ * Compute the directory-implicit tag from a scope-relative passage path.
+ * The path must be relative to the `_lore/` directory (e.g., "characters/alice.md" or "rules.md").
  * Returns the immediate parent directory name if the passage is NOT at the scope root level.
- * Scope root varies: global/ for global, series/<S>/ for series, story/<S>/<T>/ for story.
  */
-export function resolveDirectoryTag(relPath: string, scope: LoreScope): string | null {
-  const parts = relPath.split("/").filter(Boolean);
+export function resolveDirectoryTag(scopeRelPath: string): string | null {
+  const parts = scopeRelPath.split("/").filter(Boolean);
 
-  // Determine the minimum depth for "scope root" (where no dir tag is assigned)
-  // global/file.md → parts = ["global", "file.md"] → depth 2, root level
-  // global/characters/file.md → parts = ["global", "characters", "file.md"] → depth 3, dir tag = "characters"
-  // series/S/file.md → depth 3, root level
-  // series/S/characters/file.md → depth 4, dir tag = "characters"
-  // story/S/T/file.md → depth 4, root level
-  // story/S/T/characters/file.md → depth 5, dir tag = "characters"
-
-  const rootDepth: Record<LoreScope, number> = {
-    global: 2,
-    series: 3,
-    story: 4,
-  };
-
-  const minForDirTag = rootDepth[scope] + 1;
-  if (parts.length < minForDirTag) return null;
+  // A scope-relative path with ≤1 part is at the scope root (e.g., "rules.md")
+  // A path with 2+ parts has a directory tag (e.g., "characters/alice.md" → "characters")
+  if (parts.length < 2) return null;
 
   // The immediate parent directory is parts[parts.length - 2]
   return parts[parts.length - 2]!;
 }
 
 /**
- * Compute effective tags: union of frontmatter tags + directory-implicit tag.
+ * Compute effective tags: union of frontmatter tags + directory-implicit tag + filename-implicit tag.
  * All tags are fully normalized (same transform as template variable names) and duplicates are removed.
  */
-export function computeEffectiveTags(frontmatterTags: string[], directoryTag: string | null): string[] {
+export function computeEffectiveTags(
+  frontmatterTags: string[],
+  directoryTag: string | null,
+  filenameTag: string | null = null,
+): string[] {
   const allTags = [...frontmatterTags];
   if (directoryTag) allTags.push(directoryTag);
+  if (filenameTag) allTags.push(filenameTag);
 
   const seen = new Set<string>();
   const result: string[] = [];
@@ -221,16 +214,26 @@ export function computeEffectiveTags(frontmatterTags: string[], directoryTag: st
   return result;
 }
 
+/**
+ * Resolve the filename-implicit tag from a passage filename.
+ * Strips the `.md` extension, passes the stem through `normalizeTag()`.
+ * Returns null if the stem normalizes to empty or a reserved name.
+ */
+export function resolveFilenameTag(filename: string): string | null {
+  const stem = filename.replace(/\.md$/i, "");
+  return normalizeTag(stem);
+}
+
 // ── Scope Collection (Retrieval Engine) ──
 
 /**
  * Scan a scope directory and collect all .md passages.
  * Scans root level and immediate tag subdirectories only (one level deep).
+ * The scope is passed explicitly by the caller.
  */
 export async function collectPassagesFromScope(
   scopeDir: string,
   scope: LoreScope,
-  loreRoot: string,
 ): Promise<LorePassage[]> {
   const passages: LorePassage[] = [];
 
@@ -244,7 +247,7 @@ export async function collectPassagesFromScope(
     for (const entry of entries) {
       if (entry.isFile && entry.name.endsWith(".md")) {
         const filepath = join(scopeDir, entry.name);
-        const passage = await readPassage(filepath, loreRoot, scope);
+        const passage = await readPassage(filepath, scopeDir, scope);
         if (passage) passages.push(passage);
       }
     }
@@ -257,7 +260,7 @@ export async function collectPassagesFromScope(
           for await (const subEntry of Deno.readDir(subDir)) {
             if (subEntry.isFile && subEntry.name.endsWith(".md")) {
               const filepath = join(subDir, subEntry.name);
-              const passage = await readPassage(filepath, loreRoot, scope);
+              const passage = await readPassage(filepath, scopeDir, scope);
               if (passage) passages.push(passage);
             }
           }
@@ -273,31 +276,28 @@ export async function collectPassagesFromScope(
   return passages;
 }
 
-/** Read and parse a single passage file. */
+/** Read and parse a single passage file. scopeDir is the _lore/ directory for this scope. */
 async function readPassage(
   filepath: string,
-  loreRoot: string,
+  scopeDir: string,
   scope: LoreScope,
 ): Promise<LorePassage | null> {
   try {
     const raw = await Deno.readTextFile(filepath);
     const { frontmatter, content } = parseFrontmatter(raw);
-    const relPath = relative(loreRoot, filepath);
-    const directoryTag = resolveDirectoryTag(relPath, scope);
-    const effectiveTags = computeEffectiveTags(frontmatter.tags, directoryTag);
-    const parts = relPath.split("/").filter(Boolean);
+    // Scope-relative path (relative to _lore/ directory): e.g. "characters/hero.md" or "rules.md"
+    const scopeRelPath = relative(scopeDir, filepath);
+    const directoryTag = resolveDirectoryTag(scopeRelPath);
+    const filenameTag = resolveFilenameTag(scopeRelPath.split("/").filter(Boolean).pop()!);
+    const effectiveTags = computeEffectiveTags(frontmatter.tags, directoryTag, filenameTag);
+    const parts = scopeRelPath.split("/").filter(Boolean);
     const filename = parts[parts.length - 1]!;
     const directory = parts.length > 1 ? parts.slice(0, -1).join("/") : "";
-
-    // Relative path from scope root (e.g. "characters/hero.md" or "setting.md")
-    const rootDepth: Record<LoreScope, number> = { global: 1, series: 2, story: 3 };
-    const scopeParts = parts.slice(rootDepth[scope]);
-    const relativePath = scopeParts.join("/");
 
     return {
       filename,
       filepath,
-      relativePath,
+      relativePath: scopeRelPath,
       scope,
       directory,
       frontmatter,
@@ -313,26 +313,26 @@ async function readPassage(
 
 /**
  * Collect all passages applicable to a given series/story context.
- * Scans global, series (if provided), and story (if both provided) scopes.
+ * Scans global (_lore/), series (<series>/_lore/), and story (<series>/<story>/_lore/) scopes.
  */
 export async function collectAllPassages(
-  loreRoot: string,
+  playgroundDir: string,
   series?: string,
   story?: string,
 ): Promise<LorePassage[]> {
   const tasks: Promise<LorePassage[]>[] = [];
 
   // Always include global
-  tasks.push(collectPassagesFromScope(join(loreRoot, "global"), "global", loreRoot));
+  tasks.push(collectPassagesFromScope(join(playgroundDir, "_lore"), "global"));
 
   // Series scope
   if (series) {
-    tasks.push(collectPassagesFromScope(join(loreRoot, "series", series), "series", loreRoot));
+    tasks.push(collectPassagesFromScope(join(playgroundDir, series, "_lore"), "series"));
   }
 
   // Story scope
   if (series && story) {
-    tasks.push(collectPassagesFromScope(join(loreRoot, "story", series, story), "story", loreRoot));
+    tasks.push(collectPassagesFromScope(join(playgroundDir, series, story, "_lore"), "story"));
   }
 
   const results = await Promise.all(tasks);
@@ -446,10 +446,10 @@ function deduplicatePassages(passages: LorePassage[]): LorePassage[] {
  * This is the main entry point called from template.ts.
  */
 export async function resolveLoreVariables(
-  loreRoot: string,
+  playgroundDir: string,
   series?: string,
   story?: string,
 ): Promise<LoreTemplateVars> {
-  const passages = await collectAllPassages(loreRoot, series, story);
+  const passages = await collectAllPassages(playgroundDir, series, story);
   return generateLoreVariables(passages);
 }

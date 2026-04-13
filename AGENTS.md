@@ -112,8 +112,7 @@ tests/                    # Backend tests (Deno)
     context-compaction/
     user-message/
 playground/               # Story data directory (series/stories/chapters)
-scripts/
-  migrate-scenario.ts    # Scenario.md → lore codex migration script
+                          # Underscore-prefixed dirs (_lore/) are system-reserved
 openspec/                 # Spec-driven workflow: specs, changes, archives
 docs/                     # Documentation (Traditional Chinese)
 skills/                   # Copilot agent skills (e.g., heartreverie-create-plugin)
@@ -302,16 +301,16 @@ Plugin interaction layers:
 
 File-based world-building knowledge system with scoped passages (典籍). Replaces the old `scenario.md` approach. See `docs/lore-codex.md` for full user-facing documentation.
 
-- **Three scopes**: global (all stories), series (all stories in a series), story (single story)
+- **Three scopes**: global (`_lore/`), series (`<series>/_lore/`), story (`<series>/<story>/_lore/`) — co-located with story data
 - **Passage format**: `.md` files with YAML frontmatter (`tags`, `priority`, `enabled`)
-- **Tag system**: frontmatter tags + directory-as-tag (immediate parent subdir name), normalized for template variable names (lowercase, hyphens/spaces → underscores)
+- **Tag system**: frontmatter tags + directory-as-tag + filename-as-tag, normalized for template variable names (lowercase, hyphens/spaces → underscores)
 - **Template variable injection**: `lore_all` (all enabled passages), `lore_<tag>` (per-tag), `lore_tags` (tag name array)
 - **API**: CRUD routes under `/api/lore/` for managing passages
+- **Underscore convention**: directories starting with `_` are system-reserved (e.g., `_lore/`) and excluded from series/story listings
 
 Key files:
 - `writer/lib/lore.ts` — Core library: frontmatter parsing, tag normalization, scope collection, template variable generation
 - `writer/routes/lore.ts` — REST API routes for passage CRUD
-- `scripts/migrate-scenario.ts` — Migration script from `scenario.md` to lore codex
 
 ### Prompt Rendering Pipeline
 

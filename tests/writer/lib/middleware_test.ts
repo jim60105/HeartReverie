@@ -186,4 +186,18 @@ Deno.test("validateParams", async (t) => {
 
     assertEquals(res.status, 400);
   });
+
+  await t.step("returns 400 for underscore-prefixed param", async () => {
+    const app = new Hono();
+    app.use("/:series", validateParams);
+    app.all("/:series", (c) => c.json({ ok: true }));
+
+    const res = await app.fetch(
+      new Request("http://localhost/_lore"),
+    );
+    const body = await res.json();
+
+    assertEquals(res.status, 400);
+    assertMatch(body.detail, /Invalid parameter/);
+  });
 });

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { dirname, join, resolve } from "@std/path";
+import { dirname, join } from "@std/path";
 import { isValidParam } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
 import {
@@ -27,7 +27,6 @@ import type { AppDeps } from "../types.ts";
 
 export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "config">): void {
   const { safePath, config } = deps;
-  const loreRoot = resolve(config.PLAYGROUND_DIR, "lore");
 
   /** Validate a wildcard passage path: must end with .md, contain no traversal, max 1 subdir. */
   function isValidPassagePath(path: string): boolean {
@@ -42,11 +41,11 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
   function scopeSegments(scope: LoreScope, series?: string, story?: string): string[] {
     switch (scope) {
       case "global":
-        return ["lore", "global"];
+        return ["_lore"];
       case "series":
-        return ["lore", "series", series!];
+        return [series!, "_lore"];
       case "story":
-        return ["lore", "story", series!, story!];
+        return [series!, story!, "_lore"];
     }
   }
 
@@ -117,42 +116,42 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
 
   app.get("/api/lore/tags", async (c) => {
     try {
+      const playgroundDir = config.PLAYGROUND_DIR;
       const allPassages: LorePassage[] = [];
 
       // Global scope
       allPassages.push(
-        ...await collectPassagesFromScope(join(loreRoot, "global"), "global", loreRoot),
+        ...await collectPassagesFromScope(join(playgroundDir, "_lore"), "global"),
       );
 
-      // All series scopes
+      // All series scopes — scan playground for series dirs, then check _lore/
       try {
-        for await (const entry of Deno.readDir(join(loreRoot, "series"))) {
-          if (entry.isDirectory && !entry.name.startsWith(".")) {
+        for await (const seriesEntry of Deno.readDir(playgroundDir)) {
+          if (
+            seriesEntry.isDirectory && !seriesEntry.name.startsWith(".")
+            && !seriesEntry.name.startsWith("_")
+          ) {
+            // Series-level lore
             allPassages.push(
               ...await collectPassagesFromScope(
-                join(loreRoot, "series", entry.name),
+                join(playgroundDir, seriesEntry.name, "_lore"),
                 "series",
-                loreRoot,
               ),
             );
-          }
-        }
-      } catch { /* series dir may not exist */ }
 
-      // All story scopes
-      try {
-        for await (const seriesEntry of Deno.readDir(join(loreRoot, "story"))) {
-          if (seriesEntry.isDirectory && !seriesEntry.name.startsWith(".")) {
+            // Story scopes within this series
             try {
               for await (
-                const storyEntry of Deno.readDir(join(loreRoot, "story", seriesEntry.name))
+                const storyEntry of Deno.readDir(join(playgroundDir, seriesEntry.name))
               ) {
-                if (storyEntry.isDirectory && !storyEntry.name.startsWith(".")) {
+                if (
+                  storyEntry.isDirectory && !storyEntry.name.startsWith(".")
+                  && !storyEntry.name.startsWith("_")
+                ) {
                   allPassages.push(
                     ...await collectPassagesFromScope(
-                      join(loreRoot, "story", seriesEntry.name, storyEntry.name),
+                      join(playgroundDir, seriesEntry.name, storyEntry.name, "_lore"),
                       "story",
-                      loreRoot,
                     ),
                   );
                 }
@@ -160,7 +159,7 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
             } catch { /* inner dir may not exist */ }
           }
         }
-      } catch { /* story dir may not exist */ }
+      } catch { /* playground dir read error */ }
 
       const tags = new Set<string>();
       for (const p of allPassages) {
@@ -189,7 +188,7 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
     }
 
     try {
-      let passages = await collectPassagesFromScope(scopeDir, scope, loreRoot);
+      let passages = await collectPassagesFromScope(scopeDir, scope);
 
       const tag = c.req.query("tag");
       if (tag) {

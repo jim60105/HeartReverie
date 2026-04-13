@@ -86,9 +86,7 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
   const app = createTestApp(tmpDir);
 
   // Create lore directory structure
-  await Deno.mkdir(join(tmpDir, "lore", "global"), { recursive: true });
-  await Deno.mkdir(join(tmpDir, "lore", "series"), { recursive: true });
-  await Deno.mkdir(join(tmpDir, "lore", "story"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "_lore"), { recursive: true });
 
   try {
     // ── CRUD Operations (global scope) ──────────────────────────────────
@@ -374,7 +372,7 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
     // ── Empty scope listing ──────────────────────────────────────────────
 
     await t.step("GET list on empty scope returns empty array", async () => {
-      await Deno.mkdir(join(tmpDir, "lore", "series", "emptySeries"), { recursive: true });
+      await Deno.mkdir(join(tmpDir, "emptySeries", "_lore"), { recursive: true });
       const res = await makeRequest(app, "GET", "/api/lore/series/emptySeries");
       assertEquals(res.status, 200);
       assertEquals(res.body, []);
@@ -383,9 +381,7 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
     await t.step("GET /api/lore/tags on empty lore returns empty array", async () => {
       // Ensure all lore is cleaned up first — create fresh temp for isolation
       const emptyTmp = await Deno.makeTempDir({ prefix: "lore-empty-" });
-      await Deno.mkdir(join(emptyTmp, "lore", "global"), { recursive: true });
-      await Deno.mkdir(join(emptyTmp, "lore", "series"), { recursive: true });
-      await Deno.mkdir(join(emptyTmp, "lore", "story"), { recursive: true });
+      await Deno.mkdir(join(emptyTmp, "_lore"), { recursive: true });
 
       const emptyApp = createTestApp(emptyTmp);
       const res = await makeRequest(emptyApp, "GET", "/api/lore/tags");

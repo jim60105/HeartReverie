@@ -4,31 +4,36 @@
 
 ## 目錄結構
 
-典籍資料存放在 `playground/lore/` 下，分為三個作用域（scope）：
+典籍資料以 `_lore/` 子目錄的形式與系列、故事資料共置（co-located），分為三個作用域（scope）：
 
 ```
-playground/lore/
-├── global/               # 全域篇章 — 套用於所有故事
+playground/
+├── _lore/                          # 全域篇章 — 套用於所有故事
 │   ├── world-rules.md
-│   └── characters/       # 子目錄即為隱式標籤
+│   └── characters/                 # 子目錄即為隱式標籤
 │       ├── hero.md
 │       └── villain.md
-├── series/
-│   └── <series>/         # 系列篇章 — 套用於該系列下所有故事
-│       └── scenario.md
-└── story/
-    └── <series>/
-        └── <story>/      # 故事篇章 — 僅套用於特定故事
-            └── chapter-context.md
+├── <series>/
+│   ├── _lore/                      # 系列篇章 — 套用於該系列下所有故事
+│   │   └── scenario.md
+│   └── <story>/
+│       ├── _lore/                  # 故事篇章 — 僅套用於特定故事
+│       │   └── chapter-context.md
+│       ├── 01.md
+│       └── 02.md
 ```
 
 | 作用域 | 目錄 | 套用範圍 |
 |--------|------|---------|
-| global | `playground/lore/global/` | 所有故事 |
-| series | `playground/lore/series/<series>/` | 同一系列下的所有故事 |
-| story | `playground/lore/story/<series>/<story>/` | 特定故事 |
+| global | `playground/_lore/` | 所有故事 |
+| series | `playground/<series>/_lore/` | 同一系列下的所有故事 |
+| story | `playground/<series>/<story>/_lore/` | 特定故事 |
 
 各作用域目錄下可建立一層子目錄，子目錄名稱會自動成為該目錄內所有篇章的隱式標籤（directory-as-tag）。
+
+### 底線前綴保留規則
+
+以底線（`_`）開頭的目錄名稱為系統保留名稱，不會被列為系列或故事。`_lore/` 即屬於此類保留目錄。故事列表 API 和典籍標籤掃描皆會自動排除底線前綴的目錄。
 
 ## 篇章格式
 
@@ -58,12 +63,15 @@ Frontmatter 為選填。若省略，篇章以預設值載入（無標籤、prior
 
 ### 有效標籤
 
-每個篇章的有效標籤（effective tags）由兩個來源聯集而成：
+每個篇章的有效標籤（effective tags）由三個來源聯集而成：
 
 1. **Frontmatter 標籤**：`tags` 欄位中宣告的標籤
 2. **目錄隱式標籤**：若篇章位於子目錄中，該子目錄名稱自動成為一個標籤
+3. **檔名隱式標籤**：篇章的檔名（去除 `.md` 副檔名後）經正規化處理，若結果非空則自動成為一個標籤
 
-例如：位於 `global/characters/hero.md` 的篇章，frontmatter 為 `tags: [protagonist]`，其有效標籤為 `[protagonist, characters]`。
+例如：位於 `_lore/characters/hero.md` 的篇章，frontmatter 為 `tags: [protagonist]`，其有效標籤為 `[protagonist, characters, hero]`。
+
+檔名隱式標籤的額外規則：純 CJK 字元的檔名正規化後為空字串，不會產生標籤。保留名稱（`all`、`tags`）同樣不會產生標籤。
 
 ### 標籤正規化
 
@@ -137,7 +145,7 @@ Frontmatter 為選填。若省略，篇章以預設值載入（無標籤、prior
 列表端點（GET scope）支援 `?tag=` 參數，以有效標籤過濾結果：
 
 ```
-GET /api/lore/global?tag=character
+GET /api/lore/global?tag=characters
 ```
 
 ### GET 列表回應格式
@@ -146,8 +154,8 @@ GET /api/lore/global?tag=character
 [
   {
     "filename": "hero.md",
-    "directory": "global/characters",
-    "tags": ["protagonist", "characters"],
+    "directory": "characters",
+    "tags": ["protagonist", "characters", "hero"],
     "priority": 100,
     "enabled": true,
     "scope": "global"
@@ -174,42 +182,3 @@ GET /api/lore/global?tag=character
 ```
 
 建立新篇章回傳 `201`，更新現有篇章回傳 `200`。刪除篇章回傳 `204`（無回應內容）。路徑中的 `*path` 必須以 `.md` 結尾。
-
-## 從 scenario.md 遷移
-
-### 變更摘要
-
-| 項目 | 舊方式 | 新方式 |
-|------|--------|--------|
-| 檔案位置 | `playground/<series>/scenario.md` | `playground/lore/series/<series>/scenario.md` |
-| 模板變數 | `{{ scenario }}` | `{{ lore_scenario }}` |
-
-### 遷移步驟
-
-1. **執行遷移腳本**：
-
-   ```bash
-   deno run --allow-read --allow-write scripts/migrate-scenario.ts
-   ```
-
-   腳本會掃描 `playground/` 下所有系列目錄，將找到的 `scenario.md` 複製到 `playground/lore/series/<series>/scenario.md`，並自動加上 frontmatter：
-
-   ```yaml
-   ---
-   tags: [scenario]
-   priority: 1000
-   enabled: true
-   ---
-   ```
-
-   若目標檔案已存在則跳過。可傳入自訂的 playground 目錄路徑：
-
-   ```bash
-   deno run --allow-read --allow-write scripts/migrate-scenario.ts /path/to/playground
-   ```
-
-2. **更新提示詞模板**：將 `system.md` 中的 `{{ scenario }}` 替換為 `{{ lore_scenario }}`
-
-3. **驗證**：啟動伺服器並使用提示詞預覽功能確認變數正確注入
-
-> ⚠️ **Breaking change**：`{{ scenario }}` 核心變數已移除。遷移後必須改用 `{{ lore_scenario }}`。
