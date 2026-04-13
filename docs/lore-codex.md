@@ -1,6 +1,6 @@
 # 典籍系統（Lore Codex）
 
-典籍系統是以檔案為基礎的世界觀知識庫，取代舊有的 `scenario.md` 做法。靈感來自 SillyTavern 的 World Info，但專為檔案工作流程設計——每一則知識以 Markdown 篇章（passage）的形式存放，透過標籤（tag）分類，最終注入為 Vento 模板變數供系統提示詞使用。
+典籍系統是以檔案為基礎的世界觀知識庫，取代舊有的 `scenario.md` 做法。設計靈感來自 SillyTavern 的 World Info，但採用檔案優先的工作流程。每一則知識以 Markdown 篇章（passage）的形式存放，透過標籤（tag）分類，再注入為 Vento 模板變數供系統提示詞引用。
 
 ## 目錄結構
 
@@ -28,11 +28,11 @@ playground/lore/
 | series | `playground/lore/series/<series>/` | 同一系列下的所有故事 |
 | story | `playground/lore/story/<series>/<story>/` | 特定故事 |
 
-各作用域目錄下可建立子目錄，子目錄名稱會自動成為該目錄內所有篇章的隱式標籤（directory-as-tag）。子目錄僅支援一層深度。
+各作用域目錄下可建立一層子目錄，子目錄名稱會自動成為該目錄內所有篇章的隱式標籤（directory-as-tag）。
 
 ## 篇章格式
 
-每個篇章是一個 `.md` 檔案，包含 YAML frontmatter 與 Markdown 內容：
+每個篇章是一個 `.md` 檔案，包含選填的 YAML 前言區塊（frontmatter）與 Markdown 內容：
 
 ```markdown
 ---
@@ -49,10 +49,10 @@ enabled: true
 | 欄位 | 型別 | 預設值 | 說明 |
 |------|------|--------|------|
 | `tags` | `string[]` | `[]` | 分類標籤 |
-| `priority` | `number` | `0` | 排序權重：數字越大越先出現 |
+| `priority` | `number` | `0` | 排序權重，數字越大越先出現 |
 | `enabled` | `boolean` | `true` | 設為 `false` 可排除此篇章，不注入提示詞 |
 
-Frontmatter 為選填。若省略，篇章將以預設值（無標籤、priority 0、啟用）載入。
+Frontmatter 為選填。若省略，篇章以預設值載入（無標籤、priority 0、啟用）。
 
 ## 標籤系統
 
@@ -67,13 +67,9 @@ Frontmatter 為選填。若省略，篇章將以預設值（無標籤、priority
 
 ### 標籤正規化
 
-標籤在產生模板變數名稱時會經過正規化處理：
+標籤在產生模板變數名稱時會經過正規化處理，依序執行三項轉換：先將所有字元轉為小寫，接著將連字號（`-`）和空格轉為底線（`_`），最後移除非英數字和底線的字元。
 
-- 轉為小寫
-- 連字號（`-`）和空格（` `）轉為底線（`_`）
-- 移除非英數字和底線的字元
-
-例如：`My Characters` → `my_characters`、`world-building` → `world_building`。
+以 `My Characters` 為例，正規化後為 `my_characters`；`world-building` 則成為 `world_building`。
 
 ### 保留標籤名稱
 
@@ -94,11 +90,11 @@ Frontmatter 為選填。若省略，篇章將以預設值（無標籤、priority
 
 ### 行為細節
 
-- 篇章依 priority 降冪排序；同 priority 則依檔名字母順序排列
-- 多個篇章以 `\n\n---\n\n` 分隔符串接
-- 標籤名稱經正規化後用於變數名稱（如標籤 `world-building` → 變數 `{{ lore_world_building }}`）
-- 未匹配到任何篇章的標籤變數為空字串（非 undefined），可安全在模板中引用
-- 停用的篇章（`enabled: false`）不會出現在任何變數的內容中，但其標籤仍會被發現並建立空變數
+篇章依 priority 降冪排序，同 priority 則依檔名字母順序排列。多個篇章串接時以 `\n\n---\n\n` 作為分隔符。
+
+標籤名稱經正規化後用於變數名稱，例如標籤 `world-building` 對應變數 `{{ lore_world_building }}`。若某個標籤未匹配到任何篇章，其變數值為空字串而非 undefined，因此可在模板中安全引用。
+
+停用的篇章（`enabled: false`）不會出現在任何變數的內容中，但其標籤仍會被發現並產生對應的空變數。
 
 ### 使用範例
 
@@ -177,7 +173,7 @@ GET /api/lore/global?tag=character
 }
 ```
 
-建立新篇章回傳 `201`，更新現有篇章回傳 `200`。路徑中的 `*path` 必須以 `.md` 結尾。
+建立新篇章回傳 `201`，更新現有篇章回傳 `200`。刪除篇章回傳 `204`（無回應內容）。路徑中的 `*path` 必須以 `.md` 結尾。
 
 ## 從 scenario.md 遷移
 
@@ -196,7 +192,7 @@ GET /api/lore/global?tag=character
    deno run --allow-read --allow-write scripts/migrate-scenario.ts
    ```
 
-   腳本會掃描 `playground/` 下所有系列目錄，將找到的 `scenario.md` 複製到 `playground/lore/series/<series>/scenario.md`，並自動添加 frontmatter：
+   腳本會掃描 `playground/` 下所有系列目錄，將找到的 `scenario.md` 複製到 `playground/lore/series/<series>/scenario.md`，並自動加上 frontmatter：
 
    ```yaml
    ---
@@ -206,7 +202,7 @@ GET /api/lore/global?tag=character
    ---
    ```
 
-   若目標檔案已存在則跳過。可選擇性傳入 playground 目錄路徑：
+   若目標檔案已存在則跳過。可傳入自訂的 playground 目錄路徑：
 
    ```bash
    deno run --allow-read --allow-write scripts/migrate-scenario.ts /path/to/playground
@@ -216,7 +212,4 @@ GET /api/lore/global?tag=character
 
 3. **驗證**：啟動伺服器並使用提示詞預覽功能確認變數正確注入
 
-> ⚠️ **Breaking change**：`{{ scenario }}` 核心變數已不再存在。遷移後必須改用 `{{ lore_scenario }}`。
-
-[plugin-system]: ./plugin-system.md
-[prompt-template]: ./prompt-template.md
+> ⚠️ **Breaking change**：`{{ scenario }}` 核心變數已移除。遷移後必須改用 `{{ lore_scenario }}`。
