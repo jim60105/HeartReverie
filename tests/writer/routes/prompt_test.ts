@@ -56,7 +56,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
   // Write a system.md template for GET /api/template
   await Deno.writeTextFile(join(tmpDir, "system.md"), "You are a storyteller.");
 
-  const promptFile = join(tmpDir, "prompts", "custom.md");
+  const promptFile = join(tmpDir, "_prompts", "custom.md");
 
   const app = createApp({
     config: {
@@ -94,7 +94,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
     });
 
     await t.step("GET /api/template returns custom file with source custom", async () => {
-      await Deno.mkdir(join(tmpDir, "prompts"), { recursive: true });
+      await Deno.mkdir(join(tmpDir, "_prompts"), { recursive: true });
       await Deno.writeTextFile(promptFile, "Custom template content");
       try {
         const res = await makeRequest(app, "GET", "/api/template");

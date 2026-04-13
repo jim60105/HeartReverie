@@ -33,8 +33,7 @@ export function registerStoriesRoutes(app: Hono, deps: Pick<AppDeps, "safePath" 
           (e) =>
             e.isDirectory &&
             !e.name.startsWith(".") &&
-            !e.name.startsWith("_") &&
-            e.name !== "prompts"
+            !e.name.startsWith("_")
         )
         .map((e) => e.name);
       return c.json(dirs);
