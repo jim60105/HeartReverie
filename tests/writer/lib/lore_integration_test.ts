@@ -45,19 +45,19 @@ const SEP = "\n\n---\n\n";
 Deno.test("lore integration 8.1: storage + retrieval across all scopes", async (t) => {
   const tmpDir = await Deno.makeTempDir();
   try {
-    // Set up three-scope hierarchy
+    // Set up three-scope hierarchy with _lore/ co-located dirs
     await writePassageFile(
-      join(tmpDir, "global"),
+      join(tmpDir, "_lore"),
       "world-setting.md",
       passage({ tags: ["world"], priority: 100, enabled: true }, "World setting"),
     );
     await writePassageFile(
-      join(tmpDir, "series", "testSeries", "characters"),
+      join(tmpDir, "testSeries", "_lore", "characters"),
       "hero.md",
       passage({ tags: ["protagonist"], priority: 200, enabled: true }, "Hero description"),
     );
     await writePassageFile(
-      join(tmpDir, "story", "testSeries", "testStory"),
+      join(tmpDir, "testSeries", "testStory", "_lore"),
       "quest.md",
       passage({ tags: ["plot"], priority: 50, enabled: true }, "Quest details"),
     );
@@ -81,13 +81,27 @@ Deno.test("lore integration 8.1: storage + retrieval across all scopes", async (
       assertEquals(vars["lore_characters"], "Hero description");
     });
 
+    await t.step("lore_hero (filename tag) contains Hero description", () => {
+      assertEquals(vars["lore_hero"], "Hero description");
+    });
+
     await t.step("lore_plot contains Quest details", () => {
       assertEquals(vars["lore_plot"], "Quest details");
     });
 
-    await t.step("lore_tags contains all discovered tags", () => {
+    await t.step("lore_quest (filename tag) contains Quest details", () => {
+      assertEquals(vars["lore_quest"], "Quest details");
+    });
+
+    await t.step("lore_tags contains all discovered tags including filename tags", () => {
       const tags = (vars.lore_tags as string[]).sort();
-      assertEquals(tags, ["characters", "plot", "protagonist", "world"]);
+      // world, world_setting (filename), protagonist, characters, hero (filename), plot, quest (filename)
+      assertEquals(tags.includes("world"), true);
+      assertEquals(tags.includes("protagonist"), true);
+      assertEquals(tags.includes("characters"), true);
+      assertEquals(tags.includes("hero"), true);
+      assertEquals(tags.includes("plot"), true);
+      assertEquals(tags.includes("quest"), true);
     });
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
@@ -100,17 +114,17 @@ Deno.test("lore integration 8.2: tag normalization in variable names", async (t)
   const tmpDir = await Deno.makeTempDir();
   try {
     await writePassageFile(
-      join(tmpDir, "global"),
+      join(tmpDir, "_lore"),
       "a.md",
       passage({ tags: ["my-tag"], priority: 0, enabled: true }, "Hyphen tag"),
     );
     await writePassageFile(
-      join(tmpDir, "global"),
+      join(tmpDir, "_lore"),
       "b.md",
       passage({ tags: ["UPPER Case"], priority: 0, enabled: true }, "Upper tag"),
     );
     await writePassageFile(
-      join(tmpDir, "global"),
+      join(tmpDir, "_lore"),
       "c.md",
       passage({ tags: ["tag!@#"], priority: 0, enabled: true }, "Special tag"),
     );
@@ -139,12 +153,12 @@ Deno.test("lore integration 8.3: disabled passages excluded from output", async 
   const tmpDir = await Deno.makeTempDir();
   try {
     await writePassageFile(
-      join(tmpDir, "global"),
+      join(tmpDir, "_lore"),
       "enabled.md",
       passage({ tags: ["test"], priority: 0, enabled: true }, "Visible"),
     );
     await writePassageFile(
-      join(tmpDir, "global"),
+      join(tmpDir, "_lore"),
       "disabled.md",
       passage({ tags: ["test"], priority: 0, enabled: false }, "Hidden"),
     );
@@ -171,12 +185,12 @@ Deno.test("lore integration 8.4: scope isolation and combination", async (t) => 
   const tmpDir = await Deno.makeTempDir();
   try {
     await writePassageFile(
-      join(tmpDir, "global"),
+      join(tmpDir, "_lore"),
       "setting.md",
       passage({ tags: ["lore"], priority: 10, enabled: true }, "Global lore"),
     );
     await writePassageFile(
-      join(tmpDir, "series", "S1"),
+      join(tmpDir, "S1", "_lore"),
       "setting.md",
       passage({ tags: ["lore"], priority: 5, enabled: true }, "Series lore"),
     );
@@ -218,9 +232,7 @@ Deno.test("lore integration 8.5: empty lore directory and edge cases", async (t)
   await t.step("empty directories with nonexistent series/story do not throw", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      await Deno.mkdir(join(tmpDir, "global"), { recursive: true });
-      await Deno.mkdir(join(tmpDir, "series"), { recursive: true });
-      await Deno.mkdir(join(tmpDir, "story"), { recursive: true });
+      await Deno.mkdir(join(tmpDir, "_lore"), { recursive: true });
 
       const vars = await resolveLoreVariables(tmpDir, "nonexistent", "nonexistent");
       assertEquals(vars.lore_all, "");
@@ -230,7 +242,7 @@ Deno.test("lore integration 8.5: empty lore directory and edge cases", async (t)
     }
   });
 
-  await t.step("completely missing lore root does not throw", async () => {
+  await t.step("completely missing playground dir does not throw", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
       const vars = await resolveLoreVariables(join(tmpDir, "no-such-dir"));
@@ -245,15 +257,15 @@ Deno.test("lore integration 8.5: empty lore directory and edge cases", async (t)
     const tmpDir = await Deno.makeTempDir();
     try {
       await writePassageFile(
-        join(tmpDir, "global"),
+        join(tmpDir, "_lore"),
         "bare.md",
         "Plain content with no frontmatter at all.",
       );
 
       const vars = await resolveLoreVariables(tmpDir);
       assertEquals(vars.lore_all, "Plain content with no frontmatter at all.");
-      // No tags → lore_tags is empty
-      assertEquals(vars.lore_tags, []);
+      // bare.md has filename tag "bare"
+      assertEquals((vars.lore_tags as string[]).includes("bare"), true);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }

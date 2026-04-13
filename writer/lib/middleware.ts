@@ -20,7 +20,7 @@ import type { SafePathFn } from "../types.ts";
 import { problemJson } from "./errors.ts";
 
 export function isValidParam(value: string): boolean {
-  return !/\.\.|\x00|[/\\]/.test(value);
+  return !/\.\.|\x00|[/\\]/.test(value) && !value.startsWith("_");
 }
 
 export function createSafePath(playgroundDir: string): SafePathFn {

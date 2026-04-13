@@ -110,8 +110,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       (await Deno.readTextFile(systemTemplatePath));
 
     // Resolve lore template variables
-    const loreRoot = join(PLAYGROUND_DIR, "lore");
-    const loreVars = await resolveLoreVariables(loreRoot, series, story);
+    const loreVars = await resolveLoreVariables(PLAYGROUND_DIR, series, story);
 
     // Collect plugin prompt variables
     const pluginVars = await pluginManager.getPromptVariables();

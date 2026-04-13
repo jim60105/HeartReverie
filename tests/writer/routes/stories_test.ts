@@ -54,7 +54,9 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
   // Create test directory structure
   await Deno.mkdir(join(tmpDir, "fantasy"), { recursive: true });
   await Deno.mkdir(join(tmpDir, "scifi", "story1"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "scifi", "_lore"), { recursive: true });
   await Deno.mkdir(join(tmpDir, ".hidden"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "_lore"), { recursive: true });
 
   const safePath = createSafePath(tmpDir);
   const app = createApp({
@@ -85,13 +87,15 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
       assert(res.body.includes("fantasy"));
       assert(res.body.includes("scifi"));
       assert(!res.body.includes(".hidden"));
+      assert(!res.body.includes("_lore"));
     });
 
-    await t.step("GET /api/stories/:series lists subdirectories", async () => {
+    await t.step("GET /api/stories/:series lists subdirectories excluding underscore-prefixed", async () => {
       const res = await makeRequest(app, "GET", "/api/stories/scifi");
       assertEquals(res.status, 200);
       assert(Array.isArray(res.body));
       assert(res.body.includes("story1"));
+      assert(!res.body.includes("_lore"));
     });
 
     await t.step("GET /api/stories/:series returns 404 for nonexistent series", async () => {

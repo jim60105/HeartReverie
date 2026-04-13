@@ -26,6 +26,7 @@ import {
   normalizeTag,
   parseFrontmatter,
   resolveDirectoryTag,
+  resolveFilenameTag,
   resolveLoreVariables,
   sortPassages,
 } from "../../../writer/lib/lore.ts";
@@ -178,6 +179,34 @@ Deno.test("normalizeTag", async (t) => {
   });
 });
 
+// ── resolveFilenameTag ──
+
+Deno.test("resolveFilenameTag", async (t) => {
+  await t.step("strips .md extension and normalizes", () => {
+    assertEquals(resolveFilenameTag("hero.md"), "hero");
+  });
+
+  await t.step("hyphenated filename → underscored tag", () => {
+    assertEquals(resolveFilenameTag("dark-knight.md"), "dark_knight");
+  });
+
+  await t.step("reserved name 'all.md' → null", () => {
+    assertEquals(resolveFilenameTag("all.md"), null);
+  });
+
+  await t.step("reserved name 'tags.md' → null", () => {
+    assertEquals(resolveFilenameTag("tags.md"), null);
+  });
+
+  await t.step("CJK filename normalizes to null", () => {
+    assertEquals(resolveFilenameTag("世界觀.md"), null);
+  });
+
+  await t.step("mixed CJK and ASCII → ASCII parts only", () => {
+    assertEquals(resolveFilenameTag("hero世界.md"), "hero");
+  });
+});
+
 // ── identifyScope ──
 
 Deno.test("identifyScope", async (t) => {
@@ -216,28 +245,24 @@ Deno.test("identifyScope", async (t) => {
 // ── resolveDirectoryTag ──
 
 Deno.test("resolveDirectoryTag", async (t) => {
-  await t.step("global scope root → null", () => {
-    assertEquals(resolveDirectoryTag("global/file.md", "global"), null);
+  await t.step("scope root file → null", () => {
+    assertEquals(resolveDirectoryTag("file.md"), null);
   });
 
-  await t.step("global subdir → directory name", () => {
-    assertEquals(resolveDirectoryTag("global/characters/alice.md", "global"), "characters");
+  await t.step("subdir file → directory name", () => {
+    assertEquals(resolveDirectoryTag("characters/alice.md"), "characters");
   });
 
-  await t.step("series scope root → null", () => {
-    assertEquals(resolveDirectoryTag("series/fantasy/file.md", "series"), null);
+  await t.step("deeply nested file → first parent dir name", () => {
+    assertEquals(resolveDirectoryTag("npcs/bob.md"), "npcs");
   });
 
-  await t.step("series subdir → directory name", () => {
-    assertEquals(resolveDirectoryTag("series/fantasy/npcs/bob.md", "series"), "npcs");
+  await t.step("single file with no directory → null", () => {
+    assertEquals(resolveDirectoryTag("rules.md"), null);
   });
 
-  await t.step("story scope root → null", () => {
-    assertEquals(resolveDirectoryTag("story/s/t/file.md", "story"), null);
-  });
-
-  await t.step("story subdir → directory name", () => {
-    assertEquals(resolveDirectoryTag("story/s/t/locations/tavern.md", "story"), "locations");
+  await t.step("subdirectory with nested path → parent directory tag", () => {
+    assertEquals(resolveDirectoryTag("locations/tavern.md"), "locations");
   });
 });
 
@@ -258,6 +283,22 @@ Deno.test("computeEffectiveTags", async (t) => {
 
   await t.step("duplicate between frontmatter and directory is deduplicated (case-insensitive)", () => {
     assertEquals(computeEffectiveTags(["Chars"], "chars"), ["chars"]);
+  });
+
+  await t.step("filename tag is included when provided", () => {
+    assertEquals(computeEffectiveTags(["a"], null, "hero"), ["a", "hero"]);
+  });
+
+  await t.step("filename tag deduplicated with frontmatter tag", () => {
+    assertEquals(computeEffectiveTags(["hero"], null, "hero"), ["hero"]);
+  });
+
+  await t.step("all three sources combined and deduplicated", () => {
+    assertEquals(computeEffectiveTags(["a"], "b", "c"), ["a", "b", "c"]);
+  });
+
+  await t.step("null filename tag is ignored", () => {
+    assertEquals(computeEffectiveTags(["x"], "y", null), ["x", "y"]);
   });
 });
 
@@ -389,8 +430,8 @@ Deno.test("collectPassagesFromScope", async (t) => {
   await t.step("collects .md files at scope root", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      const globalDir = join(tmpDir, "global");
-      await writePassageFile(globalDir, "hero.md", [
+      const loreDir = join(tmpDir, "_lore");
+      await writePassageFile(loreDir, "hero.md", [
         "---",
         "tags: [character]",
         "priority: 1",
@@ -399,7 +440,7 @@ Deno.test("collectPassagesFromScope", async (t) => {
         "The hero.",
       ].join("\n"));
 
-      const passages = await collectPassagesFromScope(globalDir, "global", tmpDir);
+      const passages = await collectPassagesFromScope(loreDir, "global");
       assertEquals(passages.length, 1);
       assertEquals(passages[0]!.filename, "hero.md");
       assertEquals(passages[0]!.content, "The hero.");
@@ -412,14 +453,15 @@ Deno.test("collectPassagesFromScope", async (t) => {
   await t.step("collects files from subdirectories", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      const globalDir = join(tmpDir, "global");
-      const subDir = join(globalDir, "npcs");
+      const loreDir = join(tmpDir, "_lore");
+      const subDir = join(loreDir, "npcs");
       await writePassageFile(subDir, "bob.md", "Bob the NPC.");
 
-      const passages = await collectPassagesFromScope(globalDir, "global", tmpDir);
+      const passages = await collectPassagesFromScope(loreDir, "global");
       assertEquals(passages.length, 1);
       assertEquals(passages[0]!.filename, "bob.md");
-      assertEquals(passages[0]!.effectiveTags, ["npcs"]);
+      assertEquals(passages[0]!.effectiveTags.includes("npcs"), true);
+      assertEquals(passages[0]!.effectiveTags.includes("bob"), true);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
@@ -428,7 +470,7 @@ Deno.test("collectPassagesFromScope", async (t) => {
   await t.step("nonexistent directory → empty array", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      const passages = await collectPassagesFromScope(join(tmpDir, "nope"), "global", tmpDir);
+      const passages = await collectPassagesFromScope(join(tmpDir, "nope"), "global");
       assertEquals(passages.length, 0);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
@@ -438,17 +480,46 @@ Deno.test("collectPassagesFromScope", async (t) => {
   await t.step("disabled passages are still collected", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      const globalDir = join(tmpDir, "global");
-      await writePassageFile(globalDir, "off.md", [
+      const loreDir = join(tmpDir, "_lore");
+      await writePassageFile(loreDir, "off.md", [
         "---",
         "enabled: false",
         "---",
         "Disabled.",
       ].join("\n"));
 
-      const passages = await collectPassagesFromScope(globalDir, "global", tmpDir);
+      const passages = await collectPassagesFromScope(loreDir, "global");
       assertEquals(passages.length, 1);
       assertEquals(passages[0]!.frontmatter.enabled, false);
+    } finally {
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("filename-as-tag: root file gets filename tag", async () => {
+    const tmpDir = await Deno.makeTempDir();
+    try {
+      const loreDir = join(tmpDir, "_lore");
+      await writePassageFile(loreDir, "hero.md", "The hero.");
+
+      const passages = await collectPassagesFromScope(loreDir, "global");
+      assertEquals(passages.length, 1);
+      assertEquals(passages[0]!.effectiveTags.includes("hero"), true);
+    } finally {
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("relativePath is scope-relative (not loreRoot-relative)", async () => {
+    const tmpDir = await Deno.makeTempDir();
+    try {
+      const loreDir = join(tmpDir, "_lore");
+      const subDir = join(loreDir, "characters");
+      await writePassageFile(subDir, "alice.md", "Alice.");
+
+      const passages = await collectPassagesFromScope(loreDir, "global");
+      assertEquals(passages.length, 1);
+      assertEquals(passages[0]!.relativePath, "characters/alice.md");
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
@@ -559,7 +630,7 @@ Deno.test("resolveLoreVariables", async (t) => {
   await t.step("multi-scope resolution: global + series + story", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      await writePassageFile(join(tmpDir, "global"), "world.md", [
+      await writePassageFile(join(tmpDir, "_lore"), "world.md", [
         "---",
         "tags: [world]",
         "priority: 10",
@@ -568,7 +639,7 @@ Deno.test("resolveLoreVariables", async (t) => {
         "World lore.",
       ].join("\n"));
 
-      await writePassageFile(join(tmpDir, "series", "fantasy"), "magic.md", [
+      await writePassageFile(join(tmpDir, "fantasy", "_lore"), "magic.md", [
         "---",
         "tags: [magic]",
         "priority: 5",
@@ -577,7 +648,7 @@ Deno.test("resolveLoreVariables", async (t) => {
         "Magic system.",
       ].join("\n"));
 
-      await writePassageFile(join(tmpDir, "story", "fantasy", "quest"), "quest.md", [
+      await writePassageFile(join(tmpDir, "fantasy", "quest", "_lore"), "quest.md", [
         "---",
         "tags: [quest]",
         "priority: 1",

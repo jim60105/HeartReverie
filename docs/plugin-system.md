@@ -261,7 +261,7 @@ export function register(hooks) {
 
 ```json
 [
-  { "name": "scenario", "type": "string", "source": "core", "description": "..." },
+  { "name": "lore_all", "type": "string", "source": "core", "description": "..." },
   { "name": "t_task", "type": "string", "source": "t-task", "description": "..." }
 ]
 ```
