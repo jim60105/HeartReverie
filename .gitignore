@@ -3,7 +3,6 @@ tmp/
 .certs/
 .env
 **/current-status.yml
-playground/
 
 # Deno
 .coverage/
