@@ -156,16 +156,6 @@ Deno.test({ name: "chapter routes – additional coverage", sanitizeOps: false, 
     verifyPassphrase,
   } as AppDeps);
 
-  /** Like makeRequest but returns raw text + headers (for non-JSON endpoints). */
-  async function makeRawRequest(app: Hono, method: string, urlPath: string) {
-    const res = await app.fetch(new Request(`http://localhost${urlPath}`, {
-      method,
-      headers: { "x-passphrase": "test-pass" },
-    }));
-    const text = await res.text();
-    return { status: res.status, text, headers: Object.fromEntries(res.headers) };
-  }
-
   try {
     // ── POST /init ──────────────────────────────────────────────────────
 
@@ -184,40 +174,6 @@ Deno.test({ name: "chapter routes – additional coverage", sanitizeOps: false, 
       const res = await makeRequest(app, "POST", "/api/stories/newseries/newstory/init");
       assertEquals(res.status, 200);
       assertEquals(res.body.message, "Story already exists");
-    });
-
-    // ── GET /status ─────────────────────────────────────────────────────
-
-    await t.step("GET status returns current-status.yml when it exists", async () => {
-      const storyDir = join(tmpDir, "s1", "n1");
-      await Deno.mkdir(storyDir, { recursive: true });
-      await Deno.writeTextFile(join(storyDir, "current-status.yml"), "status: current");
-
-      const res = await makeRawRequest(app, "GET", "/api/stories/s1/n1/status");
-      assertEquals(res.status, 200);
-      assertEquals(res.headers["content-type"], "text/yaml");
-      assertEquals(res.text, "status: current");
-    });
-
-    await t.step("GET status falls back to init-status.yml", async () => {
-      // Create series dir with init-status.yml but no current-status.yml in story
-      const seriesDir = join(tmpDir, "s2");
-      const storyDir = join(seriesDir, "n2");
-      await Deno.mkdir(storyDir, { recursive: true });
-      await Deno.writeTextFile(join(seriesDir, "init-status.yml"), "status: init");
-
-      const res = await makeRawRequest(app, "GET", "/api/stories/s2/n2/status");
-      assertEquals(res.status, 200);
-      assertEquals(res.headers["content-type"], "text/yaml");
-      assertEquals(res.text, "status: init");
-    });
-
-    await t.step("GET status returns 404 when no status files exist", async () => {
-      const storyDir = join(tmpDir, "s3", "n3");
-      await Deno.mkdir(storyDir, { recursive: true });
-
-      const res = await makeRequest(app, "GET", "/api/stories/s3/n3/status");
-      assertEquals(res.status, 404);
     });
 
     // ── GET /chapters edge cases ────────────────────────────────────────

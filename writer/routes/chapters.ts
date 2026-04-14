@@ -83,42 +83,6 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
     }
   );
 
-  // GET /api/stories/:series/:name/status — read status YAML
-  app.get(
-    "/api/stories/:series/:name/status",
-    validateParams,
-    async (c) => {
-      const currentPath = safePath(
-        c.req.param("series")!,
-        c.req.param("name")!,
-        "current-status.yml"
-      );
-      const initPath = safePath(c.req.param("series")!, "init-status.yml");
-
-      if (!currentPath || !initPath) {
-        return c.json(problemJson("Bad Request", 400, "Invalid path"), 400);
-      }
-
-      try {
-        const content = await Deno.readTextFile(currentPath);
-        return new Response(content, {
-          status: 200,
-          headers: { "Content-Type": "text/yaml" },
-        });
-      } catch {
-        try {
-          const content = await Deno.readTextFile(initPath);
-          return new Response(content, {
-            status: 200,
-            headers: { "Content-Type": "text/yaml" },
-          });
-        } catch {
-          return c.json(problemJson("Not Found", 404, "Status file not found"), 404);
-        }
-      }
-    }
-  );
-
   // DELETE /api/stories/:series/:name/chapters/last — delete last chapter
   app.delete(
     "/api/stories/:series/:name/chapters/last",

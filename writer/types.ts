@@ -94,10 +94,18 @@ export interface PluginParameter {
   readonly description?: string;
 }
 
+/** Context passed to plugin getDynamicVariables(). */
+export interface DynamicVariableContext {
+  readonly series: string;
+  readonly name: string;
+  readonly storyDir: string;
+}
+
 /** Interface for dynamically imported plugin backend modules. */
 export interface PluginModule {
   register?: (hookDispatcher: HookDispatcher) => void | Promise<void>;
   default?: (hookDispatcher: HookDispatcher) => void | Promise<void>;
+  getDynamicVariables?: (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>;
 }
 
 /** Valid hook lifecycle stages. */
@@ -109,7 +117,6 @@ export type HookHandler = (context: Record<string, unknown>) => Promise<void>;
 /** Return type of createStoryEngine(). */
 export interface StoryEngine {
   stripPromptTags: (content: string) => string;
-  loadStatus: (series: string, name: string) => Promise<string>;
   buildPromptFromStory: BuildPromptFn;
 }
 
@@ -128,9 +135,9 @@ export interface TemplateEngine {
 export interface RenderOptions {
   previousContext?: string[];
   userInput?: string;
-  status?: string;
   isFirstRound?: boolean;
   templateOverride?: string;
+  storyDir?: string;
 }
 
 /** Discriminated union for renderSystemPrompt return. */
@@ -142,7 +149,6 @@ export type RenderResult =
 export interface BuildPromptResult {
   prompt: string | null;
   previousContext: string[];
-  statusContent: string;
   isFirstRound: boolean;
   ventoError: VentoError | null;
   chapterFiles: string[];

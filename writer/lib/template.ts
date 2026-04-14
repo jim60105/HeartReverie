@@ -70,9 +70,9 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
     {
       previousContext,
       userInput,
-      status,
       isFirstRound,
       templateOverride,
+      storyDir,
     }: RenderOptions = {},
   ): Promise<RenderResult> {
     const systemTemplatePath: string = join(ROOT_DIR, "system.md");
@@ -144,11 +144,18 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
     // Collect plugin prompt variables
     const pluginVars = await pluginManager.getPromptVariables();
 
+    // Collect dynamic variables from plugins (e.g. status_data from state plugin)
+    const dynamicVars = await pluginManager.getDynamicVariables({
+      series: series || "",
+      name: story || "",
+      storyDir: storyDir || "",
+    });
+
     try {
       const result = await ventoEnv.runString(systemTemplate, {
+        ...dynamicVars,
         previous_context: previousContext || [],
         user_input: userInput || "",
-        status_data: status || "",
         isFirstRound: isFirstRound || false,
         series_name: series || "",
         story_name: story || "",
@@ -164,7 +171,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
           err instanceof Error ? err : new Error(String(err)),
           systemTemplatePath,
           pluginVars,
-          Object.keys(loreVars),
+          [...Object.keys(loreVars), ...Object.keys(dynamicVars)],
         ),
       };
     }

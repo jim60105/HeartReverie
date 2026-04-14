@@ -14,7 +14,6 @@
 |---|---|---|
 | `previous_context` | `string[]` | 已存在的章節內容陣列，按章節編號順序排列。內容經 `stripPromptTags()` 移除外掛定義的 XML 標籤後傳入 |
 | `user_input` | `string` | 使用者在聊天請求中發送的原始訊息 |
-| `status_data` | `string` | 執行階段的狀態資料，來自 `current-status.yml` 或 `init-status.yml` 的 YAML 內容 |
 | `isFirstRound` | `boolean` | 當所有章節內容皆為空時為 `true`，表示這是故事的第一回合 |
 | `series_name` | `string` | 目前所選系列的名稱（與系列目錄名稱相同） |
 | `story_name` | `string` | 目前所選故事的名稱（與故事目錄名稱相同） |
@@ -23,9 +22,9 @@
 | `lore_<tag>` | `string` | 具有該有效標籤的啟用篇章（如 `lore_scenario`、`lore_characters`，由典籍系統提供） |
 | `lore_tags` | `string[]` | 所有已發現的標籤名稱陣列（由典籍系統提供） |
 
-除上述核心變數外，外掛亦可透過 `promptFragments` 提供額外的具名變數，一併傳入模板。
+除上述核心變數外，外掛亦可透過 `promptFragments` 提供額外的具名變數。外掛後端模組也可匯出 `getDynamicVariables()` 提供動態變數（例如 state 外掛的 `status_data`），一併傳入模板。
 
-> **備註：** 變數名稱使用 `status_data` 而非 `status`，是因為模板內部以 `{{ set status }}{{ include "./status.md" }}{{ /set }}` 將 `status.md` 子模板的內容存入名為 `status` 的區域變數（該子模板提供的是狀態格式說明）。使用 `status_data` 可避免命名衝突。
+> **備註：** `status_data` 由 state 外掛透過 `getDynamicVariables()` 動態提供，來自 `current-status.yml` 或 `init-status.yml` 的 YAML 內容。變數名稱使用 `status_data` 而非 `status`，是因為模板內部以 `{{ set status }}{{ include "./status.md" }}{{ /set }}` 將 `status.md` 子模板的內容存入名為 `status` 的區域變數。使用 `status_data` 可避免命名衝突。
 
 ## Vento 語法
 
@@ -110,10 +109,17 @@
 6. 使用 Vento 引擎渲染主模板，傳入所有變數：
 
 ```typescript
+// 收集外掛動態變數（如 state 外掛的 status_data）
+const dynamicVars = await pluginManager.getDynamicVariables({
+  series: series || "",
+  name: story || "",
+  storyDir: storyDir || "",
+});
+
 const result = await ventoEnv.runString(systemTemplate, {
+  ...dynamicVars,
   previous_context: previousContext || [],
   user_input: userInput || "",
-  status_data: status || "",
   isFirstRound: isFirstRound || false,
   series_name: series || "",
   story_name: story || "",

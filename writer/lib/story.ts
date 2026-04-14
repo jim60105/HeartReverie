@@ -32,33 +32,10 @@ export function createStoryEngine(
     return content.trim();
   }
 
-  async function loadStatus(series: string, name: string): Promise<string> {
-    const currentPath = safePath(series, name, "current-status.yml");
-    const initPath = safePath(series, "init-status.yml");
-
-    if (currentPath) {
-      try {
-        return await Deno.readTextFile(currentPath);
-      } catch {
-        // Fall through to init
-      }
-    }
-
-    if (initPath) {
-      try {
-        return await Deno.readTextFile(initPath);
-      } catch {
-        // Neither exists
-      }
-    }
-
-    return "";
-  }
-
   /**
    * Shared prompt construction logic for chat and preview endpoints.
-   * Reads chapters, strips tags, detects first-round, loads status, renders prompt.
-   * @returns {{ prompt, previousContext, statusContent, isFirstRound, ventoError, chapterFiles, chapters }}
+   * Reads chapters, strips tags, detects first-round, renders prompt.
+   * @returns {{ prompt, previousContext, isFirstRound, ventoError, chapterFiles, chapters }}
    */
   async function buildPromptFromStory(
     series: string,
@@ -117,14 +94,12 @@ export function createStoryEngine(
     // may be empty if a chapter consisted only of stripped tags)
     const filteredContext = previousContext.filter((c) => c.length > 0);
 
-    const statusContent: string = await loadStatus(series, name);
-
     const { content: prompt, error: ventoError } =
       await renderSystemPrompt(series, name, {
         previousContext: filteredContext,
         userInput: message,
-        status: statusContent,
         isFirstRound,
+        storyDir,
         templateOverride:
           typeof template === "string" ? template : undefined,
       });
@@ -132,7 +107,6 @@ export function createStoryEngine(
     return {
       prompt,
       previousContext: filteredContext,
-      statusContent,
       isFirstRound,
       ventoError,
       chapterFiles,
@@ -140,5 +114,5 @@ export function createStoryEngine(
     };
   }
 
-  return { stripPromptTags, loadStatus, buildPromptFromStory };
+  return { stripPromptTags, buildPromptFromStory };
 }

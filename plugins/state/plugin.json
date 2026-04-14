@@ -9,5 +9,12 @@
   "promptStripTags": ["UpdateVariable"],
   "promptFragments": [
     { "file": "./state.md", "variable": "state", "priority": 100 }
+  ],
+  "parameters": [
+    {
+      "name": "status_data",
+      "type": "string",
+      "description": "Current status YAML content loaded from story or series init file"
+    }
   ]
 }

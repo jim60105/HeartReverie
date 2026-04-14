@@ -11,7 +11,6 @@ Defines the template variable contract and prompt structure requirements for the
 The system prompt template (`system.md`) SHALL receive the following variables from the server:
 - `previous_context` (array of strings): Chapter context entries in numerical order. Each element is either full chapter text (for recent chapters, after tag stripping) or a formatted summary string (for older chapters processed by context compaction). When context compaction is active, the array MAY be prefixed with a global story summary element wrapped in `<story_summary>` tags containing all extracted chapter summaries concatenated in chronological order, followed by full text for chapters without summaries (fallback), and full chapter text for recent chapters. When context compaction is not active, each element is stripped chapter content identical to legacy behavior.
 - `user_input` (string): The raw user message.
-- `status_data` (string): The status file content (from `current-status.yml` or `init-status.yml`). Named `status_data` to avoid conflict with the template-local `status` variable set via `{{ set status }}{{ include "./status.md" }}{{ /set }}`.
 - `isFirstRound` (boolean): `true` when no chapters with non-empty content exist, `false` otherwise.
 - `plugin_prompts` (array of `{name, content}` objects): Prompt fragments contributed by plugins via the `prompt-assembly` hook. Each object contains the plugin `name` (string) and the prompt fragment `content` (string). The array is ordered by hook handler priority. After plugin consolidation, the `threshold-lord` plugin contributes prompt fragments under its own name (unchanged), absorbing the former `disclaimer` plugin's functionality.
 - `series_name` (string): The display name of the current series (directory name of the series folder).
@@ -19,10 +18,22 @@ The system prompt template (`system.md`) SHALL receive the following variables f
 - `lore_all` (string): Concatenated content of all in-scope lore passages.
 - `lore_<tag>` (string): Concatenated content of passages matching a specific tag (dynamic — one per unique tag).
 - `lore_tags` (string[]): Array of all unique effective tags across in-scope passages.
+- Plugin-provided dynamic variables: Variables returned by plugins' `getDynamicVariables()` functions (e.g., `status_data` from the `state` plugin). These are spread into the template context alongside core variables.
 
 #### Scenario: All variables passed to template
 - **WHEN** the system prompt is rendered
-- **THEN** the Vento template SHALL receive all ten variable categories: `previous_context`, `user_input`, `status_data`, `isFirstRound`, `plugin_prompts`, `series_name`, `story_name`, `lore_all`, dynamic `lore_<tag>` variables, and `lore_tags`
+- **THEN** the Vento template SHALL receive all variable categories: `previous_context`, `user_input`, `isFirstRound`, `plugin_prompts`, `series_name`, `story_name`, `lore_all`, dynamic `lore_<tag>` variables, `lore_tags`, and plugin-provided dynamic variables (including `status_data` from the state plugin)
+- **AND** `status_data` SHALL NOT appear in the core variable enumeration
+
+#### Scenario: status_data provided by plugin
+- **WHEN** the system prompt is rendered and the `state` plugin is loaded
+- **THEN** `status_data` SHALL be present in the Vento template context with the same content as before (from `current-status.yml` or `init-status.yml`)
+- **AND** it SHALL be provided via the plugin's `getDynamicVariables` mechanism, NOT as a core variable
+
+#### Scenario: status_data absent when state plugin not loaded
+- **WHEN** the system prompt is rendered and the `state` plugin is NOT loaded
+- **THEN** `status_data` SHALL be undefined (or empty string) in the template context
+- **AND** the `{{ if status_data }}` conditional in `system.md` SHALL cause the `<status_current_variable>` block to be omitted from the rendered output
 
 #### Scenario: previous_context is empty on first round
 - **WHEN** `isFirstRound` is `true`
