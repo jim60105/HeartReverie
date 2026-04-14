@@ -60,7 +60,11 @@ function handlePreview() {
             v-for="p in parameters"
             :key="p.name"
             class="variable-pill"
-            :class="p.source === 'core' ? 'pill-core' : 'pill-plugin'"
+            :class="{
+              'pill-core': p.source === 'core',
+              'pill-lore': p.source === 'lore',
+              'pill-plugin': p.source !== 'core' && p.source !== 'lore',
+            }"
             :title="`${p.source}: ${p.type} — 點擊插入`"
             @click="insertAtCursor(`{{ ${p.name} }}`)"
           >
@@ -173,6 +177,16 @@ function handlePreview() {
 
 .variable-pill.pill-plugin:hover {
   background: rgba(180, 30, 60, 0.25);
+}
+
+.variable-pill.pill-lore {
+  border-color: rgba(217, 158, 46, 0.3);
+  background: rgba(217, 158, 46, 0.15);
+  color: #d4a017;
+}
+
+.variable-pill.pill-lore:hover {
+  background: rgba(217, 158, 46, 0.3);
 }
 
 .toolbar-actions {

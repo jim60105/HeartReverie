@@ -174,7 +174,7 @@ Deno.test("PluginManager", async (t) => {
 
         const params = pm.getParameters();
         assertTrue(params.length > 0);
-        assertTrue(params.some((p) => p.name === "scenario"));
+        assertTrue(params.some((p) => p.name === "series_name"));
       });
     });
     await t.step("external plugin directory", async (t) => {

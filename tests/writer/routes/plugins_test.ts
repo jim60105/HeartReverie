@@ -331,3 +331,63 @@ Deno.test({ name: "shared plugin utils routes", sanitizeOps: false, sanitizeReso
   // Cleanup
   await Deno.remove(tmpDir, { recursive: true });
 } });
+
+Deno.test({ name: "parameters endpoint with lore discovery", sanitizeOps: false, sanitizeResources: false, fn: async (t) => {
+  Deno.env.set("PASSPHRASE", "test-pass");
+
+  const tmpDir = await Deno.makeTempDir();
+  const loreDir = join(tmpDir, "_lore");
+  await Deno.mkdir(loreDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(loreDir, "setting.md"),
+    "---\ntags: [setting]\npriority: 10\nenabled: true\n---\nWorld setting content",
+  );
+
+  const app = createApp({
+    config: {
+      READER_DIR: "/nonexistent-reader",
+      PLAYGROUND_DIR: tmpDir,
+      ROOT_DIR: "/nonexistent-root",
+    } as unknown as AppConfig,
+    safePath: () => null,
+    pluginManager: {
+      getPlugins: () => [],
+      getParameters: () => [
+        { name: "previous_context", type: "array", description: "Previous chapters", source: "core" },
+      ],
+      getPluginDir: () => null,
+      getBuiltinDir: () => "/nonexistent-plugins",
+      getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+      getStripTagPatterns: () => null,
+    } as unknown as PluginManager,
+    hookDispatcher: new HookDispatcher(),
+    buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+    verifyPassphrase,
+  } as AppDeps);
+
+  await t.step("without series param returns base params only", async () => {
+    const res = await makeRequest(app, "GET", "/api/plugins/parameters");
+    assertEquals(res.status, 200);
+    assert(Array.isArray(res.body));
+    assert(!res.body.some((p: Record<string, unknown>) => p.source === "lore"));
+  });
+
+  await t.step("with series param returns base + lore params", async () => {
+    const res = await makeRequest(app, "GET", "/api/plugins/parameters?series=test");
+    assertEquals(res.status, 200);
+    assert(Array.isArray(res.body));
+    assert(res.body.some((p: Record<string, unknown>) => p.name === "lore_all" && p.source === "lore"));
+    assert(res.body.some((p: Record<string, unknown>) => p.name === "lore_tags" && p.source === "lore"));
+    assert(res.body.some((p: Record<string, unknown>) => p.name === "lore_setting" && p.source === "lore"));
+  });
+
+  await t.step("lore_all and lore_tags present even with no passages", async () => {
+    const res = await makeRequest(app, "GET", "/api/plugins/parameters?series=nonexistent");
+    assertEquals(res.status, 200);
+    assert(res.body.some((p: Record<string, unknown>) => p.name === "lore_all"));
+    assert(res.body.some((p: Record<string, unknown>) => p.name === "lore_tags"));
+  });
+
+  // Cleanup
+  await Deno.remove(tmpDir, { recursive: true });
+} });

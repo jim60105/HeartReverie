@@ -16,6 +16,8 @@
 | `user_input` | `string` | 使用者在聊天請求中發送的原始訊息 |
 | `status_data` | `string` | 執行階段的狀態資料，來自 `current-status.yml` 或 `init-status.yml` 的 YAML 內容 |
 | `isFirstRound` | `boolean` | 當所有章節內容皆為空時為 `true`，表示這是故事的第一回合 |
+| `series_name` | `string` | 目前所選系列的名稱（與系列目錄名稱相同） |
+| `story_name` | `string` | 目前所選故事的名稱（與故事目錄名稱相同） |
 | `plugin_fragments` | `string[]` | 外掛透過 `promptFragments` 提供的內容片段陣列 |
 | `lore_all` | `string` | 所有啟用的典籍篇章，依 priority 降冪排列後串接（由典籍系統提供） |
 | `lore_<tag>` | `string` | 具有該有效標籤的啟用篇章（如 `lore_scenario`、`lore_characters`，由典籍系統提供） |
@@ -101,9 +103,11 @@
 呼叫 `renderSystemPrompt()`，此函式：
 
 1. 讀取主模板 `system.md`（或使用者提供的覆寫模板）
-2. 解析典籍系統（Lore Codex）變數：呼叫 `resolveLoreVariables()` 掃描適用的 global / series / story 篇章
-3. 收集外掛提供的變數與內容片段
-4. 使用 Vento 引擎渲染模板，傳入所有變數：
+2. 解析典籍系統（Lore Codex）變數：呼叫 `resolveLoreVariables()` 掃描適用的 global / series / story 篇章，取得原始篇章與第一輪變數快照
+3. 逐篇渲染典籍內容：將每篇篇章本體透過 Vento 引擎渲染，傳入不可變的第一輪變數快照（包含所有 `lore_*` 變數、`series_name`、`story_name`）。若渲染失敗則回退為原始內容
+4. 重新產生典籍變數：以渲染後的篇章重新計算 `lore_all`、`lore_<tag>`、`lore_tags`
+5. 收集外掛提供的變數與內容片段
+6. 使用 Vento 引擎渲染主模板，傳入所有變數：
 
 ```typescript
 const result = await ventoEnv.runString(systemTemplate, {
@@ -111,6 +115,8 @@ const result = await ventoEnv.runString(systemTemplate, {
   user_input: userInput || "",
   status_data: status || "",
   isFirstRound: isFirstRound || false,
+  series_name: series || "",
+  story_name: story || "",
   ...loreVars,
   ...pluginVars.variables,
   plugin_fragments: pluginVars.fragments || [],
@@ -136,5 +142,32 @@ const messages = [
 ### 5. 發送至 LLM
 
 訊息陣列透過串流方式發送至 OpenRouter API，LLM 回應逐步寫入章節檔案。
+
+## 典籍篇章的 Vento 渲染
+
+典籍篇章的本體（Markdown 部分）支援使用 Vento 語法。這使得篇章可以引用其他篇章的內容或利用上下文變數（如 `series_name`、`story_name`）來動態產生內容。
+
+### 可用變數
+
+在典籍篇章內可使用以下變數：
+
+- 所有 `lore_*` 變數（第一輪快照，即渲染前的原始內容）
+- `series_name` — 目前系列名稱
+- `story_name` — 目前故事名稱
+
+### 範例
+
+```vento
+角色所在的世界：{{ lore_setting }}
+本系列：{{ series_name }}
+```
+
+### 循環參照
+
+若篇章 A 引用 `lore_b`（篇章 B 的標籤），而篇章 B 也引用 `lore_a`，雙方都會看到對方的**原始**（未渲染）內容。這是因為渲染使用不可變的第一輪快照，確保結果具有確定性。
+
+### 錯誤處理
+
+若某篇篇章的 Vento 語法有誤，該篇章會回退為原始內容，不會影響其他篇章或整體模板的渲染。
 
 [plugin-system]: ./plugin-system.md

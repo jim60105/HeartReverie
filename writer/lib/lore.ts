@@ -47,6 +47,12 @@ export interface LoreTemplateVars {
   readonly [key: string]: string | string[];
 }
 
+/** Result of resolving lore for a given context: raw passages + generated template variables. */
+export interface LoreResolution {
+  readonly passages: LorePassage[];
+  readonly variables: LoreTemplateVars;
+}
+
 // ── Constants ──
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
@@ -449,7 +455,8 @@ export async function resolveLoreVariables(
   playgroundDir: string,
   series?: string,
   story?: string,
-): Promise<LoreTemplateVars> {
+): Promise<LoreResolution> {
   const passages = await collectAllPassages(playgroundDir, series, story);
-  return generateLoreVariables(passages);
+  const variables = generateLoreVariables(passages);
+  return { passages, variables };
 }

@@ -15,10 +15,11 @@
 
 import { resolve, relative, SEPARATOR } from "@std/path";
 import { problemJson } from "../lib/errors.ts";
+import { resolveLoreVariables } from "../lib/lore.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
 
-export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManager">): void {
+export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManager" | "config">): void {
   const { pluginManager } = deps;
 
   app.get("/api/plugins", (c) => {
@@ -34,8 +35,38 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
     return c.json(plugins);
   });
 
-  app.get("/api/plugins/parameters", (c) => {
-    return c.json(pluginManager.getParameters());
+  app.get("/api/plugins/parameters", async (c) => {
+    const baseParams = pluginManager.getParameters();
+    const series = c.req.query("series");
+    const story = c.req.query("story");
+
+    // No story context → return base params only (no lore)
+    if (!series) {
+      return c.json(baseParams);
+    }
+
+    // Resolve lore variables for the given scope
+    const { variables: loreVars } = await resolveLoreVariables(
+      deps.config.PLAYGROUND_DIR,
+      series,
+      story || undefined,
+    );
+
+    // Convert lore variables to ParameterInfo entries
+    const loreParams = Object.keys(loreVars)
+      .filter((key) => key.startsWith("lore_"))
+      .map((key) => ({
+        name: key,
+        type: Array.isArray(loreVars[key]) ? "array" : "string",
+        description: key === "lore_all"
+          ? "All enabled lore passages concatenated"
+          : key === "lore_tags"
+            ? "Array of all lore tag names"
+            : `Lore passages tagged '${key.replace(/^lore_/, "")}'`,
+        source: "lore",
+      }));
+
+    return c.json([...baseParams, ...loreParams]);
   });
 
   // Serve shared plugin utility modules from plugins/_shared/

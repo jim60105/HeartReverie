@@ -1,10 +1,4 @@
-# Vento Prompt Template
-
-## Purpose
-
-Defines the template variable contract and prompt structure requirements for the Vento-based system prompt template (`playground/_prompts/system.md`). This spec governs what variables the server passes to the template and how the template uses them to construct the complete prompt output.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Template variables
 
@@ -76,6 +70,8 @@ The system prompt template (`system.md`) SHALL receive the following variables f
 - **WHEN** no lore passages exist within the current story scope
 - **THEN** `lore_all` SHALL be an empty string, no `lore_<tag>` variables SHALL exist, and `lore_tags` SHALL be an empty array
 
+## ADDED Requirements
+
 ### Requirement: Dynamic known-variables for error suggestions
 
 The Vento error handler (`buildVentoError()` in `errors.ts`) SHALL accept an optional set of extra known variable names so that dynamic lore variables are included in "Did you mean?" Levenshtein suggestions when a template references an undefined variable.
@@ -87,59 +83,3 @@ The Vento error handler (`buildVentoError()` in `errors.ts`) SHALL accept an opt
 #### Scenario: No lore context still works
 - **WHEN** a template references an undefined variable and no extra known variables are provided
 - **THEN** the error handler SHALL behave identically to its current behavior, using only the hardcoded known-variables list
-
-### Requirement: Template prompt structure
-
-The `system.md` template SHALL use Vento syntax to control all prompt structure. The template SHALL iterate over the `previous_context` array and wrap each entry in `<previous_context>` tags. The template SHALL conditionally render `<start_hints>` content when `isFirstRound` is `true`. The template SHALL include `status_data` content wrapped in `<status_current_variable>` tags. The template SHALL incorporate the content previously delivered by `after_user_message.md` directly within the template.
-
-The template SHALL use lore variables instead of a scenario variable for world-building content injection. The template MAY use `{{ lore_all }}` for comprehensive lore inclusion or selective `{{ lore_<tag> }}` variables for topic-specific injection based on the story's needs. The template MAY iterate over `{{ lore_tags }}` to dynamically process tag-specific content.
-
-The template SHALL gain a plugin prompt injection section where plugin-contributed prompt fragments are assembled. The template SHALL iterate over the `plugin_prompts` array and render each plugin's prompt fragment. Each plugin prompt fragment SHALL be clearly delimited in the rendered output (e.g., wrapped in a comment or section marker identifying the contributing plugin name). The plugin prompt injection section SHALL appear at a designated location in the template (after core prompt sections but before the final instructions).
-
-#### Scenario: Previous context rendering
-- **WHEN** `previous_context` contains chapter entries
-- **THEN** the rendered template SHALL contain each chapter wrapped in `<previous_context>` tags in order
-
-#### Scenario: First round start hints
-- **WHEN** `isFirstRound` is `true`
-- **THEN** the rendered template SHALL include `<start_hints>` content with writing guidance
-
-#### Scenario: Subsequent round without start hints
-- **WHEN** `isFirstRound` is `false`
-- **THEN** the rendered template SHALL NOT include `<start_hints>` content
-
-#### Scenario: Status variable rendering
-- **WHEN** the template is rendered
-- **THEN** the rendered output SHALL include the `status_data` content wrapped in `<status_current_variable>` tags
-
-#### Scenario: after_user_message content consolidated
-- **WHEN** the template is rendered
-- **THEN** the rendered output SHALL include the content that was previously in `after_user_message.md`, rendered within the same template
-
-#### Scenario: Plugin prompt fragments rendered
-- **WHEN** `plugin_prompts` contains entries (e.g., `[{name: 'options-panel', content: '...'}, {name: 'status-bar', content: '...'}]`)
-- **THEN** the rendered template SHALL include each plugin's content in the plugin prompt injection section, with each fragment clearly attributed to its plugin name
-
-#### Scenario: No plugin prompt fragments
-- **WHEN** `plugin_prompts` is an empty array
-- **THEN** the plugin prompt injection section SHALL be empty or omitted, and the rest of the template SHALL render normally
-
-#### Scenario: Plugin prompt ordering preserved
-- **WHEN** `plugin_prompts` contains multiple entries ordered by priority
-- **THEN** the rendered template SHALL include the plugin prompt fragments in the same order as they appear in the `plugin_prompts` array
-
-#### Scenario: Lore content injection using lore_all
-- **WHEN** the template uses `{{ lore_all }}` for world-building content
-- **THEN** the rendered template SHALL include all concatenated lore passage content at the specified location
-
-#### Scenario: Selective lore injection using tag-specific variables
-- **WHEN** the template uses `{{ lore_<tag> }}` variables for specific topics
-- **THEN** the rendered template SHALL include only the lore content matching those specific tags
-
-#### Scenario: Dynamic tag processing
-- **WHEN** the template iterates over `{{ lore_tags }}`
-- **THEN** the rendered template SHALL process each unique tag dynamically and MAY access corresponding `lore_<tag>` content
-
-#### Scenario: No lore content available
-- **WHEN** no lore passages exist within scope
-- **THEN** the template SHALL render normally without lore content, and lore variables SHALL be empty or omitted as appropriate

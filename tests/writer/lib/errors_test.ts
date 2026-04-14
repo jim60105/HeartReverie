@@ -55,11 +55,11 @@ Deno.test("buildVentoError", async (t) => {
   });
 
   await t.step("generates variable suggestion for undefined variable", () => {
-    const err = new Error("Variable 'scnario' is not defined");
+    const err = new Error("Variable 'series_nme' is not defined");
     const result = buildVentoError(err, "/path/to/system.md", {
       variables: {},
     });
-    assertEquals(result.suggestion, "Did you mean 'scenario'?");
+    assertEquals(result.suggestion, "Did you mean 'series_name'?");
   });
 
   await t.step("handles missing line info", () => {

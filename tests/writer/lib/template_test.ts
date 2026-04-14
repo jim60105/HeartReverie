@@ -14,8 +14,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals, assertExists, assertMatch } from "@std/assert";
+import { join } from "@std/path";
 import { createTemplateEngine, validateTemplate } from "../../../writer/lib/template.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
+import { PLAYGROUND_DIR } from "../../../writer/lib/config.ts";
 
 Deno.test("validateTemplate", async (t) => {
   await t.step("safe expressions accepted", async (t) => {
@@ -210,5 +212,103 @@ Deno.test("createTemplateEngine", async (t) => {
     });
     assertEquals(result.error, null);
     assertEquals(result.content, "[AAA][BBB][CCC]");
+  });
+
+  await t.step("series_name and story_name are available in template", async () => {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
+    const result = await renderSystemPrompt("my-series", "my-story", {
+      templateOverride: "Series:{{ series_name }} Story:{{ story_name }}",
+    });
+    assertEquals(result.error, null);
+    assertEquals(result.content, "Series:my-series Story:my-story");
+  });
+
+  await t.step("series_name defaults to empty when undefined", async () => {
+    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
+    const result = await renderSystemPrompt("", undefined, {
+      templateOverride: "[{{ series_name }}][{{ story_name }}]",
+    });
+    assertEquals(result.error, null);
+    assertEquals(result.content, "[][]");
+  });
+});
+
+Deno.test("lore Vento rendering", async (t) => {
+  const loreDir = join(PLAYGROUND_DIR, "_lore");
+  await Deno.mkdir(loreDir, { recursive: true });
+
+  const mockLorePluginManager = {
+    getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+  } as unknown as PluginManager;
+
+  await t.step("passage with Vento syntax is rendered", async () => {
+    await Deno.writeTextFile(
+      join(loreDir, "setting.md"),
+      "---\ntags: [setting]\npriority: 10\nenabled: true\n---\nWorld of {{ series_name }}",
+    );
+
+    const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
+    const result = await renderSystemPrompt("fantasy", undefined, {
+      templateOverride: "{{ lore_setting }}",
+    });
+    assertEquals(result.error, null);
+    assertEquals(result.content, "World of fantasy");
+
+    await Deno.remove(join(loreDir, "setting.md"));
+  });
+
+  await t.step("passage without Vento syntax is unchanged", async () => {
+    await Deno.writeTextFile(
+      join(loreDir, "plain.md"),
+      "---\ntags: [plain]\npriority: 10\nenabled: true\n---\nPlain content no templates",
+    );
+
+    const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
+    const result = await renderSystemPrompt("test", undefined, {
+      templateOverride: "{{ lore_plain }}",
+    });
+    assertEquals(result.error, null);
+    assertEquals(result.content, "Plain content no templates");
+
+    await Deno.remove(join(loreDir, "plain.md"));
+  });
+
+  await t.step("passage with Vento error falls back to raw content", async () => {
+    await Deno.writeTextFile(
+      join(loreDir, "broken.md"),
+      "---\ntags: [broken]\npriority: 10\nenabled: true\n---\n{{ for x of }}broken syntax",
+    );
+
+    const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
+    const result = await renderSystemPrompt("test", undefined, {
+      templateOverride: "{{ lore_broken }}",
+    });
+    assertEquals(result.error, null);
+    assertMatch(result.content!, /broken syntax/);
+
+    await Deno.remove(join(loreDir, "broken.md"));
+  });
+
+  await t.step("cross-reference sees raw first-pass content", async () => {
+    await Deno.writeTextFile(
+      join(loreDir, "a.md"),
+      "---\ntags: [ref_a]\npriority: 10\nenabled: true\n---\nA sees B={{ lore_ref_b }}",
+    );
+    await Deno.writeTextFile(
+      join(loreDir, "b.md"),
+      "---\ntags: [ref_b]\npriority: 10\nenabled: true\n---\nB sees A={{ lore_ref_a }}",
+    );
+
+    const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
+    const result = await renderSystemPrompt("test", undefined, {
+      templateOverride: "[{{ lore_ref_a }}][{{ lore_ref_b }}]",
+    });
+    assertEquals(result.error, null);
+    assertExists(result.content);
+    assertMatch(result.content!, /A sees B=/);
+    assertMatch(result.content!, /B sees A=/);
+
+    await Deno.remove(join(loreDir, "a.md"));
+    await Deno.remove(join(loreDir, "b.md"));
   });
 });

@@ -23,7 +23,11 @@ The narration has no styling.
 總是使用正體中文。
 Use full-width punctuation marks for chinese, and use single-width punctuation marks for other languages.
 
-{{ lore_scenario }}
+# STORY SERIES
+{{ series_name }}
+
+{{ lore_all }}
+
 {{ state }}
 
 [Details of the fictional world the RP is set in:
