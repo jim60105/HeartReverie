@@ -62,7 +62,7 @@ Deno.test("lore integration 8.1: storage + retrieval across all scopes", async (
       passage({ tags: ["plot"], priority: 50, enabled: true }, "Quest details"),
     );
 
-    const vars = await resolveLoreVariables(tmpDir, "testSeries", "testStory");
+    const { variables: vars } = await resolveLoreVariables(tmpDir, "testSeries", "testStory");
 
     await t.step("lore_all is sorted by priority descending (200 → 100 → 50)", () => {
       const expected = ["Hero description", "World setting", "Quest details"].join(SEP);
@@ -129,7 +129,7 @@ Deno.test("lore integration 8.2: tag normalization in variable names", async (t)
       passage({ tags: ["tag!@#"], priority: 0, enabled: true }, "Special tag"),
     );
 
-    const vars = await resolveLoreVariables(tmpDir);
+    const { variables: vars } = await resolveLoreVariables(tmpDir);
 
     await t.step("hyphen tag → lore_my_tag", () => {
       assertEquals(vars["lore_my_tag"], "Hyphen tag");
@@ -163,7 +163,7 @@ Deno.test("lore integration 8.3: disabled passages excluded from output", async 
       passage({ tags: ["test"], priority: 0, enabled: false }, "Hidden"),
     );
 
-    const vars = await resolveLoreVariables(tmpDir);
+    const { variables: vars } = await resolveLoreVariables(tmpDir);
 
     await t.step("lore_all contains Visible but not Hidden", () => {
       assertStringIncludes(vars.lore_all as string, "Visible");
@@ -196,14 +196,14 @@ Deno.test("lore integration 8.4: scope isolation and combination", async (t) => 
     );
 
     await t.step("with series: lore_lore contains both passages", async () => {
-      const vars = await resolveLoreVariables(tmpDir, "S1");
+      const { variables: vars } = await resolveLoreVariables(tmpDir, "S1");
       const loreLore = vars["lore_lore"] as string;
       assertStringIncludes(loreLore, "Global lore");
       assertStringIncludes(loreLore, "Series lore");
     });
 
     await t.step("with series: lore_all contains both exactly once", async () => {
-      const vars = await resolveLoreVariables(tmpDir, "S1");
+      const { variables: vars } = await resolveLoreVariables(tmpDir, "S1");
       const all = vars.lore_all as string;
       // Count occurrences: each should appear exactly once
       assertEquals(all.split("Global lore").length - 1, 1);
@@ -211,13 +211,13 @@ Deno.test("lore integration 8.4: scope isolation and combination", async (t) => 
     });
 
     await t.step("with series: lore_all is sorted by priority", async () => {
-      const vars = await resolveLoreVariables(tmpDir, "S1");
+      const { variables: vars } = await resolveLoreVariables(tmpDir, "S1");
       const expected = ["Global lore", "Series lore"].join(SEP);
       assertEquals(vars.lore_all, expected);
     });
 
     await t.step("without series: only global passages returned", async () => {
-      const vars = await resolveLoreVariables(tmpDir);
+      const { variables: vars } = await resolveLoreVariables(tmpDir);
       assertEquals(vars.lore_all, "Global lore");
       assertEquals(vars["lore_lore"], "Global lore");
     });
@@ -234,7 +234,7 @@ Deno.test("lore integration 8.5: empty lore directory and edge cases", async (t)
     try {
       await Deno.mkdir(join(tmpDir, "_lore"), { recursive: true });
 
-      const vars = await resolveLoreVariables(tmpDir, "nonexistent", "nonexistent");
+      const { variables: vars } = await resolveLoreVariables(tmpDir, "nonexistent", "nonexistent");
       assertEquals(vars.lore_all, "");
       assertEquals(vars.lore_tags, []);
     } finally {
@@ -245,7 +245,7 @@ Deno.test("lore integration 8.5: empty lore directory and edge cases", async (t)
   await t.step("completely missing playground dir does not throw", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      const vars = await resolveLoreVariables(join(tmpDir, "no-such-dir"));
+      const { variables: vars } = await resolveLoreVariables(join(tmpDir, "no-such-dir"));
       assertEquals(vars.lore_all, "");
       assertEquals(vars.lore_tags, []);
     } finally {
@@ -262,7 +262,7 @@ Deno.test("lore integration 8.5: empty lore directory and edge cases", async (t)
         "Plain content with no frontmatter at all.",
       );
 
-      const vars = await resolveLoreVariables(tmpDir);
+      const { variables: vars } = await resolveLoreVariables(tmpDir);
       assertEquals(vars.lore_all, "Plain content with no frontmatter at all.");
       // bare.md has filename tag "bare"
       assertEquals((vars.lore_tags as string[]).includes("bare"), true);

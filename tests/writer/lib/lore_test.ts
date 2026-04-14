@@ -657,7 +657,7 @@ Deno.test("resolveLoreVariables", async (t) => {
         "Quest details.",
       ].join("\n"));
 
-      const vars = await resolveLoreVariables(tmpDir, "fantasy", "quest");
+      const { variables: vars } = await resolveLoreVariables(tmpDir, "fantasy", "quest");
       // lore_all should contain all three, sorted by priority desc
       assertEquals(vars.lore_all.includes("World lore."), true);
       assertEquals(vars.lore_all.includes("Magic system."), true);
@@ -673,7 +673,7 @@ Deno.test("resolveLoreVariables", async (t) => {
   await t.step("no passages → empty variables", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      const vars = await resolveLoreVariables(tmpDir);
+      const { variables: vars } = await resolveLoreVariables(tmpDir);
       assertEquals(vars.lore_all, "");
       assertEquals(vars.lore_tags, []);
     } finally {

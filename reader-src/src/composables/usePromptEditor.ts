@@ -1,10 +1,11 @@
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import type {
   UsePromptEditorReturn,
   ParameterPill,
   PromptPreviewResult,
 } from "@/types";
 import { useAuth } from "@/composables/useAuth";
+import { useStorySelector } from "@/composables/useStorySelector";
 
 const templateContent = ref("");
 const lastSaved = ref("");
@@ -66,16 +67,29 @@ async function resetTemplate(): Promise<void> {
   await loadTemplate();
 }
 
-async function loadParameters(): Promise<void> {
+let parametersAbortController: AbortController | null = null;
+
+async function loadParameters(series?: string, story?: string): Promise<void> {
+  if (parametersAbortController) {
+    parametersAbortController.abort();
+  }
+  parametersAbortController = new AbortController();
+  const { signal } = parametersAbortController;
+
   const { getAuthHeaders } = useAuth();
   try {
-    const res = await fetch("/api/plugins/parameters", {
+    const url = new URL("/api/plugins/parameters", window.location.origin);
+    if (series) url.searchParams.set("series", series);
+    if (story) url.searchParams.set("story", story);
+
+    const res = await fetch(url.toString(), {
       headers: { ...getAuthHeaders() },
+      signal,
     });
     if (!res.ok) return;
     parameters.value = await res.json();
   } catch {
-    // Ignore
+    // Ignore (includes AbortError from cancelled requests)
   }
 }
 
@@ -124,8 +138,26 @@ async function previewTemplate(
   return res.json() as Promise<PromptPreviewResult>;
 }
 
+let watcherInitialized = false;
+
+function initStoryWatcher(): void {
+  if (watcherInitialized) return;
+  watcherInitialized = true;
+
+  const { selectedSeries, selectedStory } = useStorySelector();
+
+  watch(
+    [selectedSeries, selectedStory],
+    ([series, story]) => {
+      loadParameters(series || undefined, story || undefined);
+    },
+    { immediate: true },
+  );
+}
+
 export function usePromptEditor(): UsePromptEditorReturn {
   ensureInit();
+  initStoryWatcher();
 
   return {
     templateContent,

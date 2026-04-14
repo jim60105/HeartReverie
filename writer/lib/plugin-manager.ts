@@ -351,11 +351,12 @@ export class PluginManager {
    */
   getParameters(): ParameterInfo[] {
     const params: ParameterInfo[] = [
-      { name: "scenario", type: "string", description: "Scenario content from scenario.md", source: "core" },
       { name: "previous_context", type: "array", description: "Array of previous chapter contents (stripped)", source: "core" },
       { name: "user_input", type: "string", description: "Current user message", source: "core" },
       { name: "status_data", type: "string", description: "Current status YAML content", source: "core" },
       { name: "isFirstRound", type: "boolean", description: "Whether this is the first round (no non-empty chapters)", source: "core" },
+      { name: "series_name", type: "string", description: "Display name of the current series", source: "core" },
+      { name: "story_name", type: "string", description: "Display name of the current story", source: "core" },
       { name: "plugin_fragments", type: "array", description: "Array of plugin-contributed prompt fragments", source: "core" },
     ];
 

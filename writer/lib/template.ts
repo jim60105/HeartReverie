@@ -20,7 +20,7 @@ import type { TemplateEngine, RenderResult, RenderOptions } from "../types.ts";
 import type { PluginManager } from "./plugin-manager.ts";
 import { PLAYGROUND_DIR, ROOT_DIR } from "./config.ts";
 import { buildVentoError } from "./errors.ts";
-import { resolveLoreVariables } from "./lore.ts";
+import { resolveLoreVariables, generateLoreVariables } from "./lore.ts";
 
 /**
  * Validate a Vento template string — only safe expressions are allowed.
@@ -109,8 +109,37 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       templateOverride ||
       (await Deno.readTextFile(systemTemplatePath));
 
-    // Resolve lore template variables
-    const loreVars = await resolveLoreVariables(PLAYGROUND_DIR, series, story);
+    // Resolve lore: raw passages + first-pass variables (snapshot for rendering context)
+    const loreResolution = await resolveLoreVariables(PLAYGROUND_DIR, series, story);
+
+    // Second pass: render each passage body through Vento with immutable snapshot context
+    // Immutable snapshot: each passage render receives a fresh spread copy
+    const renderContext: Record<string, unknown> = {
+      ...loreResolution.variables,
+      series_name: series || "",
+      story_name: story || "",
+    };
+
+    const renderedPassages = await Promise.all(
+      loreResolution.passages.map(async (passage) => {
+        if (!passage.content || !passage.content.includes("{{")) {
+          return passage;
+        }
+        try {
+          const result = await ventoEnv.runString(passage.content, { ...renderContext });
+          return { ...passage, content: result.content };
+        } catch (renderErr: unknown) {
+          console.warn(
+            `⚠️  Lore passage '${passage.relativePath}' Vento render failed, using raw content:`,
+            renderErr instanceof Error ? renderErr.message : String(renderErr),
+          );
+          return passage;
+        }
+      }),
+    );
+
+    // Re-generate lore variables from rendered passage bodies
+    const loreVars = generateLoreVariables(renderedPassages);
 
     // Collect plugin prompt variables
     const pluginVars = await pluginManager.getPromptVariables();
@@ -121,6 +150,8 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
         user_input: userInput || "",
         status_data: status || "",
         isFirstRound: isFirstRound || false,
+        series_name: series || "",
+        story_name: story || "",
         ...loreVars,
         ...pluginVars.variables,
         plugin_fragments: pluginVars.fragments || [],
@@ -129,7 +160,12 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
     } catch (err: unknown) {
       return {
         content: null,
-        error: buildVentoError(err instanceof Error ? err : new Error(String(err)), systemTemplatePath, pluginVars),
+        error: buildVentoError(
+          err instanceof Error ? err : new Error(String(err)),
+          systemTemplatePath,
+          pluginVars,
+          Object.keys(loreVars),
+        ),
       };
     }
   }

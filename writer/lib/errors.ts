@@ -20,7 +20,7 @@ export function problemJson(title: string, status: number, detail: string, extra
   return { type: "about:blank", title, status, detail, ...extra };
 }
 
-export function buildVentoError(err: Error, templatePath: string, knownVariables: { variables?: Record<string, string> }): VentoError {
+export function buildVentoError(err: Error, templatePath: string, knownVariables: { variables?: Record<string, string> }, extraKnownVars?: string[]): VentoError {
   const error: VentoError = {
     type: "vento-error",
     stage: "prompt-assembly",
@@ -38,14 +38,18 @@ export function buildVentoError(err: Error, templatePath: string, knownVariables
   );
   if (varMatch) {
     const missing = varMatch[1]!;
-    const allVarNames = Object.keys(knownVariables.variables || {}).concat([
-      "scenario",
-      "previous_context",
-      "user_input",
-      "status_data",
-      "isFirstRound",
-      "plugin_fragments",
-    ]);
+    const allVarNames = Object.keys(knownVariables.variables || {}).concat(
+      [
+        "previous_context",
+        "user_input",
+        "status_data",
+        "isFirstRound",
+        "series_name",
+        "story_name",
+        "plugin_fragments",
+      ],
+      extraKnownVars || [],
+    );
     const closest = findClosestMatch(missing, allVarNames);
     if (closest) error.suggestion = `Did you mean '${closest}'?`;
   }

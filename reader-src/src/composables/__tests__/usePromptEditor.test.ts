@@ -1,4 +1,19 @@
 import { stubSessionStorage } from "@/__tests__/setup";
+import { ref } from "vue";
+
+const mockSelectedSeries = ref("");
+const mockSelectedStory = ref("");
+
+vi.mock("@/composables/useStorySelector", () => ({
+  useStorySelector: () => ({
+    selectedSeries: mockSelectedSeries,
+    selectedStory: mockSelectedStory,
+    seriesList: ref([]),
+    storyList: ref([]),
+    loadSeries: vi.fn(),
+    loadStories: vi.fn(),
+  }),
+}));
 
 /**
  * Routing fetch mock that handles template and parameter endpoints.
@@ -46,6 +61,8 @@ describe("usePromptEditor", () => {
     vi.resetModules();
     stubSessionStorage();
     installFetchMock();
+    mockSelectedSeries.value = "";
+    mockSelectedStory.value = "";
   });
 
   afterEach(() => {
@@ -145,6 +162,54 @@ describe("usePromptEditor", () => {
     expect(editor.isCustom.value).toBe(false);
   });
 
+  it("loadParameters includes series/story query params when provided", async () => {
+    const fetchMock = installFetchMock();
+    const editor = await getEditor();
+
+    // Trigger watcher by changing story context
+    mockSelectedSeries.value = "my-series";
+    mockSelectedStory.value = "my-story";
+
+    // Wait for watcher to trigger (nextTick + async)
+    await new Promise((r) => setTimeout(r, 50));
+
+    const paramsCalls = fetchMock.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" &&
+        (c[0] as string).includes("/api/plugins/parameters"),
+    );
+
+    // Should have at least one call with query params
+    const callWithParams = paramsCalls.find((c: unknown[]) =>
+      (c[0] as string).includes("series=my-series"),
+    );
+    expect(callWithParams).toBeDefined();
+    expect(callWithParams![0] as string).toContain("story=my-story");
+  });
+
+  it("re-fetches parameters when story context changes", async () => {
+    const fetchMock = installFetchMock();
+    await getEditor();
+
+    const initialCallCount = fetchMock.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" &&
+        (c[0] as string).includes("/api/plugins/parameters"),
+    ).length;
+
+    // Change story context
+    mockSelectedSeries.value = "series-a";
+    await new Promise((r) => setTimeout(r, 50));
+
+    const afterChangeCount = fetchMock.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" &&
+        (c[0] as string).includes("/api/plugins/parameters"),
+    ).length;
+
+    expect(afterChangeCount).toBeGreaterThan(initialCallCount);
+  });
+
   it("does not reference localStorage", async () => {
     const ls = {
       getItem: vi.fn(),
@@ -165,5 +230,32 @@ describe("usePromptEditor", () => {
     expect(ls.getItem).not.toHaveBeenCalled();
     expect(ls.setItem).not.toHaveBeenCalled();
     expect(ls.removeItem).not.toHaveBeenCalled();
+  });
+});
+
+describe("pill source categorization", () => {
+  it("parameters with each source are correctly categorized", () => {
+    // Mirrors the :class binding logic in PromptEditor.vue
+    const classify = (source: string) => ({
+      "pill-core": source === "core",
+      "pill-lore": source === "lore",
+      "pill-plugin": source !== "core" && source !== "lore",
+    });
+
+    expect(classify("core")).toEqual({
+      "pill-core": true,
+      "pill-lore": false,
+      "pill-plugin": false,
+    });
+    expect(classify("lore")).toEqual({
+      "pill-core": false,
+      "pill-lore": true,
+      "pill-plugin": false,
+    });
+    expect(classify("my-plugin")).toEqual({
+      "pill-core": false,
+      "pill-lore": false,
+      "pill-plugin": true,
+    });
   });
 });
