@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join, resolve, isAbsolute, SEPARATOR } from "@std/path";
-import type { PluginManifest } from "../types.ts";
+import type { PluginManifest, DynamicVariableContext } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 
 interface PluginEntry {
@@ -58,6 +58,7 @@ export class PluginManager {
   #externalDir: string | null;
   #hookDispatcher: HookDispatcher;
   #plugins: Map<string, PluginEntry> = new Map();
+  #dynamicVarProviders: Map<string, (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>> = new Map();
 
   /**
    * @param {string} builtinDir - Absolute path to built-in plugins (e.g. ROOT_DIR/plugins)
@@ -205,9 +206,19 @@ export class PluginManager {
       const registerFn = mod.register || mod.default;
       if (typeof registerFn === "function") {
         await (registerFn as (hd: HookDispatcher) => void | Promise<void>)(this.#hookDispatcher);
-      } else {
+      }
+
+      const hasDynVars = typeof mod.getDynamicVariables === "function";
+      if (!registerFn && !hasDynVars) {
         console.warn(
           `⚠️  Plugin '${name}' backend module has no register() or default export`
+        );
+      }
+
+      if (hasDynVars) {
+        this.#dynamicVarProviders.set(
+          name,
+          mod.getDynamicVariables as (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>,
         );
       }
     } catch (err: unknown) {
@@ -330,6 +341,46 @@ export class PluginManager {
     return { variables, fragments };
   }
 
+  /** Core template variable names that plugins must not override. */
+  static readonly #CORE_TEMPLATE_VARS = new Set([
+    "previous_context", "user_input", "isFirstRound",
+    "series_name", "story_name", "plugin_fragments",
+  ]);
+
+  /**
+   * Collect dynamic template variables from all plugins that export getDynamicVariables().
+   * Collision policy: core vars are rejected; first-loaded plugin wins for inter-plugin conflicts.
+   */
+  async getDynamicVariables(context: DynamicVariableContext): Promise<Record<string, unknown>> {
+    const result: Record<string, unknown> = {};
+
+    for (const [pluginName, provider] of this.#dynamicVarProviders) {
+      try {
+        const vars = await provider(context);
+        if (!vars || typeof vars !== "object") continue;
+
+        for (const [key, value] of Object.entries(vars)) {
+          if (PluginManager.#CORE_TEMPLATE_VARS.has(key)) {
+            console.warn(`⚠️  Plugin '${pluginName}' attempted to set core variable '${key}' — ignored`);
+            continue;
+          }
+          if (key in result) {
+            console.warn(`⚠️  Plugin '${pluginName}' dynamic variable '${key}' conflicts with earlier plugin — using first value`);
+            continue;
+          }
+          result[key] = value;
+        }
+      } catch (err: unknown) {
+        console.warn(
+          `⚠️  Plugin '${pluginName}' getDynamicVariables() failed:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
+    return result;
+  }
+
   /**
    * Returns the absolute path to a plugin's directory.
    * @param {string} name - Plugin name
@@ -353,7 +404,6 @@ export class PluginManager {
     const params: ParameterInfo[] = [
       { name: "previous_context", type: "array", description: "Array of previous chapter contents (stripped)", source: "core" },
       { name: "user_input", type: "string", description: "Current user message", source: "core" },
-      { name: "status_data", type: "string", description: "Current status YAML content", source: "core" },
       { name: "isFirstRound", type: "boolean", description: "Whether this is the first round (no non-empty chapters)", source: "core" },
       { name: "series_name", type: "string", description: "Display name of the current series", source: "core" },
       { name: "story_name", type: "string", description: "Display name of the current story", source: "core" },

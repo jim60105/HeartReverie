@@ -94,7 +94,6 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       chapterFiles: [],
       chapters: [],
       previousContext: [],
-      statusContent: "",
       isFirstRound: true,
     }) as unknown as BuildPromptResult,
     verifyPassphrase,

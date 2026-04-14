@@ -27,6 +27,7 @@ plugins/                       ← 內建 plugin 目錄
 Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不同欄位：
 
 - **提示詞注入**：透過 `promptFragments` 將 Markdown 片段載入為 Vento 模板變數
+- **動態變數**：透過 `backendModule` 匯出 `getDynamicVariables()` 函式，在渲染提示詞時動態提供模板變數
 - **提示詞標籤清除**：透過 `promptStripTags` 宣告需要從 previousContext（已儲存章節內容）中移除的 XML 標籤或正規表達式，在組建提示詞時生效
 - **顯示標籤清除**：透過 `displayStripTags` 宣告需要從前端顯示中移除的 XML 標籤或正規表達式，在瀏覽器渲染時生效
 - **後端 hook**：透過 `backendModule` 註冊伺服器端生命週期事件的處理函式
@@ -91,6 +92,36 @@ Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不
 
 模組路徑必須通過路徑包含檢查——解析後的絕對路徑必須位於 plugin 目錄內部，否則跳過載入。
 
+若模組同時匯出 `getDynamicVariables(context)` 函式，系統會在渲染提示詞時呼叫該函式，取得動態模板變數（見「動態變數」章節）。
+
+### 動態變數
+
+後端模組可匯出 `getDynamicVariables(context)` 函式，在每次渲染提示詞時動態提供模板變數。這適用於需要根據當前故事狀態產生值的情境（例如讀取狀態 YAML 檔案）。
+
+```javascript
+// handler.js — 動態變數匯出範例
+export async function getDynamicVariables({ series, name, storyDir }) {
+  // 根據故事目錄讀取資料並回傳鍵值對
+  return { status_data: await readStatusFile(storyDir) };
+}
+```
+
+**`context` 參數包含：**
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `series` | `string` | 系列名稱 |
+| `name` | `string` | 故事名稱 |
+| `storyDir` | `string` | 故事目錄的絕對路徑 |
+
+**衝突處理規則：**
+
+- 動態變數不得覆寫核心變數（`previous_context`、`user_input`、`isFirstRound`、`series_name`、`story_name`、`plugin_fragments`），否則記錄警告並忽略
+- 多個 plugin 提供相同鍵時，先載入的 plugin 優先（first-loaded wins），記錄警告
+- 動態變數的優先順序低於核心變數與典籍變數（spread 在最前方）
+
+若 plugin 透過 `getDynamicVariables()` 提供變數，建議同時在 `plugin.json` 的 `parameters` 陣列中宣告該變數，使 API 端點 `GET /api/plugins/parameters` 能正確列出。
+
 ## 提示詞片段
 
 提示詞片段是 plugin 向系統提示詞注入內容的主要機制。Plugin 在 manifest 的 `promptFragments` 陣列中宣告片段檔案，系統在渲染提示詞時將檔案內容載入為 Vento 模板變數。
@@ -140,7 +171,7 @@ Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不
 | `writestyle_reinforce` | writestyle | 800 | 寫作風格強化（高 priority，排在提示詞後段） |
 | `threshold_lord_end` | threshold-lord | 900 | 故事節奏控制（結尾指令） |
 
-這些變數之外，系統還提供七個核心變數：`previous_context`、`user_input`、`status_data`、`isFirstRound`、`series_name`、`story_name`、`plugin_fragments`，以及典籍系統（Lore Codex）提供的 `lore_all`、`lore_<tag>`、`lore_tags` 等變數。詳細說明參見 [Prompt 模板系統][prompt-template] 及[典籍系統文件][lore-codex]。
+這些變數之外，系統還提供六個核心變數：`previous_context`、`user_input`、`isFirstRound`、`series_name`、`story_name`、`plugin_fragments`，以及外掛透過 `getDynamicVariables()` 提供的動態變數（如 state 外掛的 `status_data`）和典籍系統（Lore Codex）提供的 `lore_all`、`lore_<tag>`、`lore_tags` 等變數。詳細說明參見 [Prompt 模板系統][prompt-template] 及[典籍系統文件][lore-codex]。
 
 ## 標籤清除
 

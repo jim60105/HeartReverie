@@ -103,6 +103,7 @@ Deno.test("validateTemplate", async (t) => {
 Deno.test("createTemplateEngine", async (t) => {
   const mockPluginManager = {
     getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+    getDynamicVariables: async () => ({}),
   } as unknown as PluginManager;
 
   await t.step("renderSystemPrompt with templateOverride renders correctly", async () => {
@@ -163,6 +164,7 @@ Deno.test("createTemplateEngine", async (t) => {
         variables: { custom_var: "plugin_value" },
         fragments: ["frag1"],
       }),
+      getDynamicVariables: async () => ({}),
     } as unknown as PluginManager;
     const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
     const result = await renderSystemPrompt("test-series", undefined, {
@@ -190,6 +192,7 @@ Deno.test("createTemplateEngine", async (t) => {
   await t.step("plugin_fragments empty when no plugins register prompts", async () => {
     const emptyPluginMgr = {
       getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+      getDynamicVariables: async () => ({}),
     } as unknown as PluginManager;
     const { renderSystemPrompt } = createTemplateEngine(emptyPluginMgr);
     const result = await renderSystemPrompt("test-series", undefined, {
@@ -205,6 +208,7 @@ Deno.test("createTemplateEngine", async (t) => {
         variables: {},
         fragments: ["AAA", "BBB", "CCC"],
       }),
+      getDynamicVariables: async () => ({}),
     } as unknown as PluginManager;
     const { renderSystemPrompt } = createTemplateEngine(orderedPluginMgr);
     const result = await renderSystemPrompt("test-series", undefined, {
@@ -239,6 +243,7 @@ Deno.test("lore Vento rendering", async (t) => {
 
   const mockLorePluginManager = {
     getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+    getDynamicVariables: async () => ({}),
   } as unknown as PluginManager;
 
   await t.step("passage with Vento syntax is rendered", async () => {

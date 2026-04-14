@@ -42,7 +42,6 @@ export function buildVentoError(err: Error, templatePath: string, knownVariables
       [
         "previous_context",
         "user_input",
-        "status_data",
         "isFirstRound",
         "series_name",
         "story_name",

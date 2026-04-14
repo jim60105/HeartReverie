@@ -89,25 +89,9 @@ The server SHALL expose endpoints to list, read, and create numbered `.md` chapt
 - **WHEN** a client sends `POST /api/stories/:series/:name/init` and `001.md` already exists
 - **THEN** the server SHALL return HTTP 200 without modifying the existing file
 
-### Requirement: Status file loading
-
-The server SHALL expose `GET /api/stories/:series/:name/status` to read the current status. The server SHALL look for `playground/:series/:name/current-status.yml` first; if it does not exist, the server SHALL fall back to `playground/:series/init-status.yml`.
-
-#### Scenario: Story has a current-status.yml
-- **WHEN** a client sends `GET /api/stories/:series/:name/status` and `current-status.yml` exists in the story directory
-- **THEN** the server SHALL return the content of `current-status.yml`
-
-#### Scenario: Story falls back to init-status.yml
-- **WHEN** a client sends `GET /api/stories/:series/:name/status` and `current-status.yml` does NOT exist but `init-status.yml` exists in the series directory
-- **THEN** the server SHALL return the content of `init-status.yml`
-
-#### Scenario: No status file found
-- **WHEN** neither `current-status.yml` nor `init-status.yml` exists
-- **THEN** the server SHALL return HTTP 404
-
 ### Requirement: Prompt construction pipeline
 
-The server SHALL construct the LLM messages array using a template-driven prompt rendering pipeline. The `renderSystemPrompt()` function SHALL accept the following parameters to pass as Vento template variables: `previous_context` (array of strings, each being a stripped chapter content), `user_input` (string, the raw user message), `status_data` (string, the status file content), `isFirstRound` (boolean, true when no chapters with content exist), and `plugin_prompts` (array of `{name, content}` objects contributed by plugins via the prompt-assembly hook). Additionally, `renderSystemPrompt()` SHALL call the lore retrieval engine in `writer/lib/lore.ts` directly with the active series and story context, and spread the returned lore variables (`lore_all`, `lore_<tag>`, `lore_tags`) into the Vento template render context. See the `vento-prompt-template` spec for template variable definitions and template-level rendering requirements.
+The server SHALL construct the LLM messages array using a template-driven prompt rendering pipeline. The `renderSystemPrompt()` function SHALL accept the following parameters to pass as Vento template variables: `previous_context` (array of strings, each being a stripped chapter content), `user_input` (string, the raw user message), `isFirstRound` (boolean, true when no chapters with content exist), and `plugin_prompts` (array of `{name, content}` objects contributed by plugins via the prompt-assembly hook). Additionally, `renderSystemPrompt()` SHALL call `pluginManager.getDynamicVariables({ series, name, storyDir })` and spread the returned variables into the Vento template context. It SHALL also call the lore retrieval engine in `writer/lib/lore.ts` directly with the active series and story context, and spread the returned lore variables (`lore_all`, `lore_<tag>`, `lore_tags`) into the Vento template render context. See the `vento-prompt-template` spec for template variable definitions and template-level rendering requirements.
 
 Before rendering the template, the server SHALL invoke the `prompt-assembly` hook stage. Each registered plugin handler SHALL return a `{name, content}` object representing the plugin's prompt fragment. The server SHALL collect all returned prompt fragments into the `plugin_prompts` array, ordered by handler priority. The `plugin_prompts` array SHALL be passed to the Vento template alongside the existing variables.
 
@@ -121,12 +105,12 @@ Before including chapter content in the `previous_context` array, the server SHA
 
 #### Scenario: First round prompt construction
 - **WHEN** a chat request is made and no chapters with content exist yet
-- **THEN** the server SHALL invoke the `prompt-assembly` hook to collect `plugin_prompts`, pass `previous_context` as an empty array, `user_input` as the raw user message, `status_data` as the status file content, `isFirstRound` as `true`, and `plugin_prompts` as the collected array to the template
+- **THEN** the server SHALL invoke the `prompt-assembly` hook to collect `plugin_prompts`, pass `previous_context` as an empty array, `user_input` as the raw user message, `isFirstRound` as `true`, and `plugin_prompts` as the collected array to the template
 - **AND** the messages array SHALL contain exactly two messages: a system message with the fully rendered template, and a user message with the raw user input
 
 #### Scenario: Subsequent round prompt construction
 - **WHEN** a chat request is made and chapters with content already exist
-- **THEN** the server SHALL invoke the `prompt-assembly` hook to collect `plugin_prompts`, pass `previous_context` as an array of stripped chapter contents in numerical order, `user_input` as the raw user message, `status_data` as the status file content, `isFirstRound` as `false`, and `plugin_prompts` as the collected array to the template
+- **THEN** the server SHALL invoke the `prompt-assembly` hook to collect `plugin_prompts`, pass `previous_context` as an array of stripped chapter contents in numerical order, `user_input` as the raw user message, `isFirstRound` as `false`, and `plugin_prompts` as the collected array to the template
 - **AND** the messages array SHALL contain exactly two messages: a system message with the fully rendered template, and a user message with the raw user input
 
 #### Scenario: Plugin-contributed prompt fragments assembled
@@ -350,9 +334,79 @@ The writer backend SHALL initialize the plugin loader at server startup, before 
 - **WHEN** a plugin's `init` lifecycle hook throws an error
 - **THEN** the server SHALL log the error, mark the plugin as failed, and continue loading remaining plugins
 
+### Requirement: Dynamic template variable collection from plugins
+
+The `PluginManager` SHALL support collecting dynamic template variables from plugin backend modules. Plugin modules MAY export a `getDynamicVariables(context)` function. During template rendering, the `PluginManager` SHALL call each module's `getDynamicVariables` with `{ series, name, storyDir }` and merge the returned `Record<string, unknown>` into the Vento template context.
+
+#### Scenario: Plugin provides dynamic variables
+- **WHEN** a plugin backend module exports `getDynamicVariables`
+- **AND** `renderSystemPrompt()` is called for series "fantasy" and story "quest"
+- **THEN** `PluginManager.getDynamicVariables({ series: "fantasy", name: "quest", storyDir })` SHALL call the module's `getDynamicVariables` and include its returned variables in the Vento template context
+
+#### Scenario: Plugin getDynamicVariables throws
+- **WHEN** a plugin's `getDynamicVariables` throws an error
+- **THEN** `PluginManager` SHALL log a warning and skip that plugin's variables without aborting the render
+
+#### Scenario: No plugins export getDynamicVariables
+- **WHEN** no loaded plugins export `getDynamicVariables`
+- **THEN** `PluginManager.getDynamicVariables()` SHALL return an empty object and template rendering SHALL proceed normally
+
+#### Scenario: Multiple plugins provide dynamic variables
+- **WHEN** two or more plugins export `getDynamicVariables` returning overlapping variable names
+- **THEN** the first-loaded plugin's value SHALL be kept for the conflicting key
+- **AND** a warning SHALL be logged for the conflict
+
+### Requirement: Core parameter declarations
+
+The `getParameters()` method in `PluginManager` SHALL no longer include `status_data` in the core parameters list. The `status_data` parameter is now declared by the `state` plugin's manifest and appears as a plugin-provided parameter.
+
+#### Scenario: Core parameters exclude status_data
+- **WHEN** `pluginManager.getParameters()` is called
+- **THEN** the returned array SHALL NOT contain an entry with `{ name: "status_data", source: "core" }`
+
+#### Scenario: status_data appears as plugin parameter
+- **WHEN** `pluginManager.getParameters()` is called and the state plugin is loaded
+- **THEN** the returned array SHALL contain an entry with `{ name: "status_data", source: "state" }`
+
+### Requirement: Dynamic known-variables for error suggestions (status_data removed from hardcoded list)
+
+The hardcoded known-variables array in `writer/lib/errors.ts` SHALL no longer include `"status_data"`. The variable is now discoverable via the plugin's `parameters` declaration and will be included in Levenshtein suggestions through the `extraKnownVars` mechanism when the state plugin is loaded.
+
+#### Scenario: Hardcoded known vars exclude status_data
+- **WHEN** `buildVentoError()` constructs the known-variables list
+- **THEN** the hardcoded array SHALL NOT contain `"status_data"`
+
+#### Scenario: status_data still gets suggestions when plugin loaded
+- **WHEN** the state plugin is loaded and a template references `{{ staus_data }}` (typo)
+- **THEN** the error handler SHALL still suggest `status_data` because it is included via plugin parameters in `extraKnownVars`
+
+### Requirement: StoryEngine interface update
+
+The `StoryEngine` interface in `writer/types.ts` SHALL no longer include the `loadStatus` method. The `BuildPromptResult` interface SHALL no longer include the `statusContent` field. The `RenderOptions` interface SHALL no longer include the `status` field.
+
+#### Scenario: StoryEngine without loadStatus
+- **WHEN** `writer/types.ts` is examined
+- **THEN** `StoryEngine` SHALL NOT have a `loadStatus` method
+
+#### Scenario: BuildPromptResult without statusContent
+- **WHEN** `writer/types.ts` is examined
+- **THEN** `BuildPromptResult` SHALL NOT have a `statusContent` field
+
+#### Scenario: RenderOptions without status
+- **WHEN** `writer/types.ts` is examined
+- **THEN** `RenderOptions` SHALL NOT have a `status` field
+
+### Requirement: PluginModule interface update
+
+The `PluginModule` interface in `writer/types.ts` SHALL add an optional `getDynamicVariables` field.
+
+#### Scenario: PluginModule with getDynamicVariables
+- **WHEN** `writer/types.ts` is examined
+- **THEN** `PluginModule` SHALL include `getDynamicVariables?: (context: { series: string; name: string; storyDir: string }) => Promise<Record<string, unknown>> | Record<string, unknown>`
+
 ### Requirement: Prompt preview endpoint
 
-The writer backend SHALL expose `GET /api/stories/:series/:name/preview-prompt` that returns the fully rendered system prompt without sending it to the LLM API. The endpoint SHALL execute the same prompt construction pipeline (including the `prompt-assembly` hook for plugin prompt fragments) and return the rendered prompt as plain text or JSON. This endpoint is protected by the same `verifyPassphrase` middleware as all other API routes.
+The writer backend SHALL expose `GET /api/stories/:series/:name/preview-prompt` that returns the fully rendered system prompt without sending it to the LLM API. The endpoint SHALL execute the same prompt construction pipeline (including the `prompt-assembly` hook for plugin prompt fragments and dynamic plugin variables) and return the rendered prompt as plain text or JSON. This endpoint is protected by the same `verifyPassphrase` middleware as all other API routes. The `variables` response field SHALL NOT contain `status_data` as a separate core variable; if the state plugin is loaded, `status_data` will be present in the rendered output via the plugin's dynamic variables.
 
 #### Scenario: Preview prompt for a story
 - **WHEN** a client sends `GET /api/stories/:series/:name/preview-prompt` with a valid passphrase
@@ -365,6 +419,10 @@ The writer backend SHALL expose `GET /api/stories/:series/:name/preview-prompt` 
 #### Scenario: Preview prompt with no chapters
 - **WHEN** the story has no chapters with content
 - **THEN** the preview SHALL render with `isFirstRound` as `true` and `previous_context` as an empty array
+
+#### Scenario: Preview response omits status_data from core variables
+- **WHEN** a client calls the preview endpoint
+- **THEN** the `variables` object in the response SHALL NOT contain a `status_data` field as a core variable
 
 ### Requirement: Plugin API endpoints
 

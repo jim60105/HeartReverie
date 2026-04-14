@@ -125,7 +125,6 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
         const {
           prompt,
           previousContext,
-          statusContent,
           isFirstRound,
           ventoError,
         } = await buildPromptFromStory(
@@ -148,7 +147,6 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
             scenario: "(loaded)",
             previous_context: `${previousContext.length} chapters`,
             user_input: message,
-            status_data: statusContent ? "(loaded)" : "(empty)",
             isFirstRound,
           },
           errors: [],
