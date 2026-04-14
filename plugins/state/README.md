@@ -1,6 +1,6 @@
-# state-patches
+# state
 
-完整的變數／狀態修補系統。LLM 輸出 `<UpdateVariable>` 區塊，內含 JSON Patch 操作指令；後端 Rust 二進位檔將修補套用至 YAML 狀態檔；前端將更新區塊渲染為可摺疊的詳情面板。
+完整的變數／狀態追蹤系統。LLM 輸出 `<UpdateVariable>` 區塊，內含 JSON Patch 操作指令；後端 Rust 二進位檔將修補套用至 YAML 狀態檔；前端將更新區塊渲染為可摺疊的詳情面板。
 
 ## 運作原理
 
@@ -37,17 +37,17 @@
 使用 Containerfile 建置（不需安裝 Rust 工具鏈）：
 
 ```bash
-cd plugins/state-patches
+cd plugins/state
 podman build --output=. --target=binary -f rust/Containerfile rust/
 ```
 
-產出路徑：`plugins/state-patches/state-patches`（外掛根目錄）
+產出路徑：`plugins/state/state-patches`（外掛根目錄）
 
 > [!TIP]
 > 若已安裝 [Rust](https://www.rust-lang.org/) 工具鏈，也可直接以 cargo 建置：
 >
 > ```bash
-> cd plugins/state-patches/rust
+> cd plugins/state/rust
 > cargo build --release
 > cp target/release/state-patches ../state-patches
 > ```
@@ -55,10 +55,11 @@ podman build --output=. --target=binary -f rust/Containerfile rust/
 ## 檔案結構
 
 ```
-plugins/state-patches/
+plugins/state/
 ├── plugin.json        # 外掛 manifest
 ├── handler.js         # post-response hook，執行 Rust 二進位檔
 ├── frontend.js        # 前端更新區塊渲染模組
+├── state.md           # 變數更新規則提示詞
 ├── state-patches      # 預建置 Rust 二進位檔（已提交至 git）
 ├── rust/              # Rust CLI 專案
 │   ├── Containerfile  # 多階段建置（cargo-chef 模式）

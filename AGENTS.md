@@ -96,7 +96,7 @@ plugins/                  # 11 built-in plugins (manifest-driven) + shared utils
   de-robotization/        # De-robotization prompt fragment
   imgthink/               # Strip imgthink tags from display
   options/                # Options panel extraction, rendering, and prompt
-  state-patches/          # State patch lifecycle: Rust binary + frontend rendering
+  state/          # State patch lifecycle: Rust binary + frontend rendering
     rust/                 # Rust CLI for YAML state patch processing
   status/                 # Status panel extraction, rendering, and prompt
   thinking/               # Fold <thinking>/<think> tags into collapsible details
@@ -159,27 +159,27 @@ The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_AP
 ## Building the Rust CLI
 
 ```bash
-cd plugins/state-patches/rust
+cd plugins/state/rust
 cargo build --release
 ```
 
-The resulting binary at `target/release/state-patches` is invoked by the `state-patches` plugin after each LLM response.
+The resulting binary at `target/release/state-patches` is invoked by the `state` plugin after each LLM response.
 
 ## Container Deployment
 
 The project uses a two-Containerfile architecture:
 
-1. **Rust binary builder** (`plugins/state-patches/rust/Containerfile`) — Builds the `state-patches` binary using cargo-chef pattern. The binary is committed to git so most users never need this.
+1. **Rust binary builder** (`plugins/state/rust/Containerfile`) — Builds the `state-patches` binary using cargo-chef pattern. The binary is committed to git so most users never need this.
 2. **Main application** (`Containerfile`) — Deno-only image that copies the pre-built binary and all application files.
 
 ### Rebuild Rust binary (only when Rust source changes)
 
 ```bash
-cd plugins/state-patches
+cd plugins/state
 podman build --output=. --target=binary -f rust/Containerfile rust/
 ```
 
-This outputs `plugins/state-patches/state-patches` which should be committed to git.
+This outputs `plugins/state/state-patches` which should be committed to git.
 
 ### Build and run the application container
 
@@ -251,7 +251,7 @@ podman run -d --name heartreverie \
 - **File System Access API** — For reading local `.md` files (requires HTTPS secure context)
 - **IndexedDB** — Persists directory handle for session restoration
 
-### Rust (`plugins/state-patches/rust/`)
+### Rust (`plugins/state/rust/`)
 
 - 2024 edition, modular architecture (main, pipeline, parser, patch_ops, yaml_nav, convert)
 - Standard `rustfmt` formatting

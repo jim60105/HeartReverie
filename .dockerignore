@@ -20,8 +20,8 @@ skills/
 serve.zsh
 AGENTS.md
 
-# Rust source (binary is at plugins/state-patches/state-patches)
-plugins/state-patches/rust/
+# Rust source (binary is at plugins/state/state-patches)
+plugins/state/rust/
 
 # Editor / OS
 .vscode/

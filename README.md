@@ -101,7 +101,7 @@ npx skills add https://codeberg.org/jim60105/HeartReverie -s heartreverie-create
 deno task test                                    # 全部
 deno task test:backend                            # 僅後端
 deno task test:frontend                           # 僅前端
-cd plugins/state-patches/rust && cargo test       # Rust 整合測試
+cd plugins/state/rust && cargo test       # Rust 整合測試
 ```
 
 ## 🐳 容器部署
@@ -122,7 +122,7 @@ podman run -d --name heartreverie \
 若需重建 Rust 二進位檔（通常不需要，倉庫已包含預建置版本）：
 
 ```bash
-cd plugins/state-patches
+cd plugins/state
 podman build --output=. --target=binary -f rust/Containerfile rust/
 ```
 

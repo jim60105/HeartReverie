@@ -12,11 +12,6 @@ writer/
     └── hooks.js               ← HookDispatcher 類別：後端 hook 註冊與分派
 
 plugins/                       ← 內建 plugin 目錄
-├── state-patches/
-│   ├── plugin.json
-│   ├── handler.js
-│   ├── frontend.js
-│   └── rust/
 ├── de-robotization/
 │   ├── plugin.json
 │   └── de-robotization.md
@@ -244,7 +239,7 @@ export function register(hooks) {
 ```json
 [
   {
-    "name": "state-patches",
+    "name": "state",
     "version": "1.0.0",
     "description": "Apply state patches and render variable updates",
     "type": "full-stack",
@@ -380,7 +375,7 @@ export function register(hooks) {
 | de-robotization | prompt-only | 去機械化寫作指令 |
 | imgthink | prompt-only | 圖像思考標籤處理 |
 | options | full-stack | 選項面板的提示詞說明、標籤清除、前端渲染 |
-| state-patches | full-stack | LLM 回應完成後執行 Rust 二進位檔處理狀態 patch，前端渲染變數更新區塊 |
+| state | full-stack | LLM 回應完成後執行 Rust 二進位檔處理狀態 patch，前端渲染變數更新區塊 |
 | status | full-stack | 狀態面板的提示詞說明、標籤清除、前端渲染 |
 | t-task | prompt-only | 親密場景質感任務指令，支援正規表達式標籤清除 |
 | threshold-lord | full-stack | 故事節奏控制（開場 priority 10、結尾 priority 900），免責聲明標籤前端清除 |
