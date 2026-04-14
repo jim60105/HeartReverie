@@ -1,0 +1,11 @@
+{
+  "name": "start-hints",
+  "version": "1.0.0",
+  "description": "First-round opening instructions for chapter start guidance",
+  "type": "prompt-only",
+  "promptFragments": [
+    { "file": "./start-hints.md", "variable": "start_hints", "priority": 100 }
+  ],
+  "promptStripTags": ["start_hints"],
+  "displayStripTags": ["start_hints"]
+}

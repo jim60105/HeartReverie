@@ -188,11 +188,16 @@ The Vite dev server proxy SHALL forward `/plugins/*` requests to the Deno backen
 
 ### Requirement: Plugin name identity preservation
 
-Plugin manifest `name` fields and directory names SHALL remain unchanged during this refactor. The actual plugin names are: `status`, `options`, `state`, `thinking`, `context-compaction`, `de-robotization`, `imgthink`, `threshold-lord`, `t-task`, `user-message`, `writestyle`. Delta specs and Vue components MAY use descriptive names (e.g., `StatusBar.vue`, `OptionsPanel.vue`, `VariableDisplay.vue`) for component file names, but plugin manifests, directory names, and any code referencing plugin names (e.g., `/plugins/{name}/frontend.js`) SHALL use the original names.
+Plugin manifest `name` fields and directory names SHALL remain unchanged during this refactor. The actual plugin names are: `status`, `options`, `state`, `thinking`, `context-compaction`, `de-robotization`, `imgthink`, `threshold-lord`, `t-task`, `user-message`, `writestyle`, `start-hints`. Delta specs and Vue components MAY use descriptive names (e.g., `StatusBar.vue`, `OptionsPanel.vue`, `VariableDisplay.vue`) for component file names, but plugin manifests, directory names, and any code referencing plugin names (e.g., `/plugins/{name}/frontend.js`) SHALL use the original names.
 
 #### Scenario: Plugin directory names unchanged
 - **WHEN** the Vue refactor is complete
 - **THEN** plugin directories SHALL remain `plugins/status/`, `plugins/options/`, `plugins/state/`, etc. — not renamed to `status-bar/`, `options-panel/`, or `variable-display/`
+
+#### Scenario: New plugin directory names
+- **WHEN** the prompt extraction is complete
+- **THEN** one new plugin directory SHALL exist: `plugins/start-hints/`
+- **AND** it SHALL contain a valid `plugin.json` with `name` matching the directory name
 
 ### Requirement: usePlugins composable
 

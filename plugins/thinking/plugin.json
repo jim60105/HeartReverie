@@ -1,9 +1,12 @@
 {
   "name": "thinking",
   "version": "1.0.0",
-  "description": "Fold <thinking> and <think> tags into collapsible details elements",
-  "type": "frontend-only",
+  "description": "Think-before-reply prompt instruction and collapsible thinking tag rendering",
+  "type": "full-stack",
   "frontendModule": "./frontend.js",
   "tags": ["thinking", "think"],
-  "displayStripTags": []
+  "displayStripTags": [],
+  "promptFragments": [
+    { "file": "./think-before-reply.md", "variable": "think_before_reply", "priority": 100 }
+  ]
 }
