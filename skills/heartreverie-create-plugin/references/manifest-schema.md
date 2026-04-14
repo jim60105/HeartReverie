@@ -223,18 +223,21 @@ The `/plugins/:name/:file` route only serves files declared as `frontendModule` 
 }
 ```
 
-### full-stack — Backend + Frontend + Tags (No Prompt)
+### full-stack — Backend + Frontend + Tags + Prompt
 
 ```json
 {
   "name": "state",
   "version": "1.0.0",
-  "description": "State patch lifecycle: run state-patches binary post-response and render UpdateVariable blocks on frontend",
+  "description": "A complete state tracking system.",
   "type": "full-stack",
   "backendModule": "./handler.js",
   "frontendModule": "./frontend.js",
   "tags": ["UpdateVariable", "update"],
-  "promptStripTags": ["UpdateVariable"]
+  "promptStripTags": ["UpdateVariable"],
+  "promptFragments": [
+    { "file": "./state.md", "variable": "state", "priority": 100 }
+  ]
 }
 ```
 

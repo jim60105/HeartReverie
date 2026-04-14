@@ -1,18 +1,6 @@
-# Gitignore Configuration
+# Delta Spec: gitignore-config
 
-## Purpose
-
-Ensures the project has comprehensive `.gitignore` coverage — a root-level gitignore with standard Deno patterns and a nested Rust-specific gitignore for the state plugin.
-
-## Requirements
-
-### Requirement: Stock Deno gitignore coverage
-
-The root `.gitignore` file SHALL include standard Deno ignore patterns in addition to existing project-specific entries. The standard patterns SHALL cover at minimum: Deno cache directories, lock file artifacts, IDE/editor files, and OS-generated files.
-
-#### Scenario: Merged gitignore content
-- **WHEN** the root `.gitignore` is updated
-- **THEN** it SHALL contain all existing project-specific entries (`.env`, `.certs/`, `playground/`, `**/current-status.yml`, `.coverage/`) plus standard Deno community ignore patterns
+## MODIFIED Requirements
 
 ### Requirement: Rust project gitignore
 

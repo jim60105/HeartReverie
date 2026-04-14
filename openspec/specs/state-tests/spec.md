@@ -1,7 +1,7 @@
-# state-patches-tests Specification
+# state-tests Specification
 
 ## Purpose
-TBD - created by archiving change apply-patches-test-refactor (now state-patches). Update Purpose after archive.
+TBD - created by archiving change apply-patches-test-refactor (now state). Update Purpose after archive.
 ## Requirements
 ### Requirement: Unit tests for patch operations
 The test suite SHALL include unit tests for all four patch operations (replace, delta, insert, remove) covering happy paths, edge cases, and error conditions.
@@ -86,7 +86,7 @@ The test suite SHALL include integration tests that verify the full pipeline fro
 - **THEN** the valid patches SHALL still be applied and `current-status.yml` SHALL reflect the successful operations
 
 ### Requirement: Test organization
-Tests SHALL be organized into module-specific `#[cfg(test)]` blocks within each source module, not concentrated in a single test file. The Rust crate SHALL reside at `plugins/state-patches/rust/`.
+Tests SHALL be organized into module-specific `#[cfg(test)]` blocks within each source module, not concentrated in a single test file. The Rust crate SHALL reside at `plugins/state/rust/`.
 
 #### Scenario: Tests distributed across modules
 - **WHEN** the source tree is examined
@@ -94,10 +94,10 @@ Tests SHALL be organized into module-specific `#[cfg(test)]` blocks within each 
 
 #### Scenario: Integration tests separate from unit tests
 - **WHEN** the source tree is examined
-- **THEN** integration tests SHALL reside in the `plugins/state-patches/rust/tests/` directory, separate from unit test modules
+- **THEN** integration tests SHALL reside in the `plugins/state/rust/tests/` directory, separate from unit test modules
 
 #### Scenario: Cargo test invocation
-- **WHEN** `cargo test` is run from `plugins/state-patches/rust/`
+- **WHEN** `cargo test` is run from `plugins/state/rust/`
 - **THEN** all unit and integration tests SHALL execute and pass
 
 ### Requirement: Test coverage threshold
