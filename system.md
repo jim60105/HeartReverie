@@ -24,6 +24,7 @@ The narration has no styling.
 Use full-width punctuation marks for chinese, and use single-width punctuation marks for other languages.
 
 {{ lore_scenario }}
+{{ state }}
 
 [Details of the fictional world the RP is set in:
 {{ de_robotization }}

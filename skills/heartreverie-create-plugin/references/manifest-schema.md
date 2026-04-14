@@ -227,7 +227,7 @@ The `/plugins/:name/:file` route only serves files declared as `frontendModule` 
 
 ```json
 {
-  "name": "state-patches",
+  "name": "state",
   "version": "1.0.0",
   "description": "State patch lifecycle: run state-patches binary post-response and render UpdateVariable blocks on frontend",
   "type": "full-stack",

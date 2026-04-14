@@ -1,4 +1,4 @@
-// Plugin: state-patches — UpdateVariable block extraction, parsing, and rendering
+// Plugin: state — UpdateVariable block extraction, parsing, and rendering
 
 import { escapeHtml } from '../_shared/utils.js';
 

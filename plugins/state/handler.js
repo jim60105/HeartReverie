@@ -1,4 +1,4 @@
-// Plugin: state-patches — Run state-patches binary after LLM response
+// Plugin: state — Run state-patches binary after LLM response
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile);
 
 export function register(hookDispatcher) {
   hookDispatcher.register('post-response', async (context) => {
-    const statePatchesBin = path.join(context.rootDir, 'plugins', 'state-patches', 'state-patches');
+    const statePatchesBin = path.join(context.rootDir, 'plugins', 'state', 'state-patches');
     try {
       await execFileAsync(statePatchesBin, ['playground'], { cwd: context.rootDir });
     } catch (err) {

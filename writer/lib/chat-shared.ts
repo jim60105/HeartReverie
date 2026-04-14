@@ -259,7 +259,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   const fullContent = preContent + aiContent;
 
-  // 8. Run post-response hooks (e.g., state-patches plugin)
+  // 8. Run post-response hooks
   await hookDispatcher.dispatch("post-response", {
     content: fullContent,
     storyDir,

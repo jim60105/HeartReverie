@@ -505,9 +505,9 @@ select option {
   color: var(--text-main);
 }
 
-/* ── Variable Display (plugin: state-patches) ──
-   Styles for the state-patches plugin's rendered HTML output.
-   The state-patches plugin (plugins/state-patches/frontend.js) renders
+/* ── Variable Display (plugin: state) ──
+   Styles for the state plugin's rendered HTML output.
+   The state plugin (plugins/state/frontend.js) renders
    <UpdateVariable> blocks as collapsible <details> with <pre> content. */
 
 .variable-content {
