@@ -6,7 +6,7 @@
 
 面向開發者的 AI 互動小說引擎，作為 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 的替代方案。
 
-提示詞的骨架是一個 [Vento](https://vento.js.org/) 模板（[`system.md`](system.md)），外掛透過 Markdown 片段注入自己的內容。後端透過任何 OpenAI 相容的 API 串接 LLM（預設使用 [OpenRouter](https://openrouter.ai/)），將回應逐步寫入章節檔案，前端透過 WebSocket 即時串流顯示（亦支援 HTTP 輪詢作為降級方案）。
+提示詞的骨架是一個 [Vento](https://vento.js.org/) 模板（[`system.md`](system.md)；[模板變數說明](docs/prompt-template.md)），外掛透過 Markdown 片段注入自己的內容。後端透過任何 OpenAI 相容的 API 串接 LLM（預設使用 [OpenRouter](https://openrouter.ai/)），將回應逐步寫入章節檔案，前端透過 WebSocket 即時串流顯示（亦支援 HTTP 輪詢作為降級方案）。
 
 所有客製化都透過外掛系統完成，撰寫外掛需要基本的程式能力。後端用 TypeScript + [Hono](https://hono.dev/)，前端是 Vue 3 + TypeScript SPA（以 [Vite](https://vite.dev/) 建置）。
 

@@ -223,7 +223,7 @@ podman run -d --name heartreverie \
 - Shared types in `writer/types.ts`; use `unknown` with type narrowing instead of `any`
 - JSDoc comments on functions
 - Error responses follow RFC 9457 Problem Details format (`type`, `title`, `status`, `detail`)
-- GPL-3.0 license header at the top of every source file
+- AGPL-3.0-or-later license header at the top of every source file
 
 ### TypeScript/Vue — Frontend (`reader-src/`)
 
@@ -318,6 +318,8 @@ Key files:
 2. `renderSystemPrompt()` resolves lore variables via `resolveLoreVariables()`, collects plugin variables via `getPromptVariables()`, renders `system.md` through Vento engine
 3. Result is sent as the system message to OpenRouter, user input as the user message
 4. LLM response is streamed from OpenRouter, written incrementally to chapter file, tags stripped, post-response hooks dispatched
+
+See `docs/prompt-template.md` for the full list of template variables and Vento syntax usage.
 
 ### Frontend Rendering Pipeline
 
