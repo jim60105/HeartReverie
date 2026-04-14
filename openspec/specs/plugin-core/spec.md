@@ -176,7 +176,7 @@ The Vite dev server proxy SHALL forward `/plugins/*` requests to the Deno backen
 
 #### Scenario: Built-in plugin `/js/*` imports removed
 - **WHEN** the Vue/TypeScript migration is complete
-- **THEN** all built-in plugin `frontend.js` modules (currently `status`, `options`, `state-patches`, `thinking`) SHALL NOT import from `/js/utils.js`, `/js/chat-input.js`, or any other `/js/*` path
+- **THEN** all built-in plugin `frontend.js` modules (currently `status`, `options`, `state`, `thinking`) SHALL NOT import from `/js/utils.js`, `/js/chat-input.js`, or any other `/js/*` path
 
 #### Scenario: Plugin frontend.js served at existing URL
 - **WHEN** the frontend requests `import('/plugins/{name}/frontend.js')` in production (serving from `reader-dist/`)
@@ -188,11 +188,11 @@ The Vite dev server proxy SHALL forward `/plugins/*` requests to the Deno backen
 
 ### Requirement: Plugin name identity preservation
 
-Plugin manifest `name` fields and directory names SHALL remain unchanged during this refactor. The actual plugin names are: `status`, `options`, `state-patches`, `thinking`, `context-compaction`, `de-robotization`, `imgthink`, `threshold-lord`, `t-task`, `user-message`, `writestyle`. Delta specs and Vue components MAY use descriptive names (e.g., `StatusBar.vue`, `OptionsPanel.vue`, `VariableDisplay.vue`) for component file names, but plugin manifests, directory names, and any code referencing plugin names (e.g., `/plugins/{name}/frontend.js`) SHALL use the original names.
+Plugin manifest `name` fields and directory names SHALL remain unchanged during this refactor. The actual plugin names are: `status`, `options`, `state`, `thinking`, `context-compaction`, `de-robotization`, `imgthink`, `threshold-lord`, `t-task`, `user-message`, `writestyle`. Delta specs and Vue components MAY use descriptive names (e.g., `StatusBar.vue`, `OptionsPanel.vue`, `VariableDisplay.vue`) for component file names, but plugin manifests, directory names, and any code referencing plugin names (e.g., `/plugins/{name}/frontend.js`) SHALL use the original names.
 
 #### Scenario: Plugin directory names unchanged
 - **WHEN** the Vue refactor is complete
-- **THEN** plugin directories SHALL remain `plugins/status/`, `plugins/options/`, `plugins/state-patches/`, etc. — not renamed to `status-bar/`, `options-panel/`, or `variable-display/`
+- **THEN** plugin directories SHALL remain `plugins/status/`, `plugins/options/`, `plugins/state/`, etc. — not renamed to `status-bar/`, `options-panel/`, or `variable-display/`
 
 ### Requirement: usePlugins composable
 

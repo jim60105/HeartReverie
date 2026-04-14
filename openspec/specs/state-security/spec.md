@@ -1,7 +1,7 @@
-# state-patches-security Specification
+# state-security Specification
 
 ## Purpose
-TBD - created by archiving change apply-patches-security-fixes (now state-patches). Update Purpose after archive.
+TBD - created by archiving change apply-patches-security-fixes (now state). Update Purpose after archive.
 ## Requirements
 ### Requirement: Symlink traversal prevention
 The tool SHALL reject symlinked directories during scenario and sub-directory discovery. When a directory entry is a symbolic link, the tool SHALL skip it and log a warning to stderr. All file paths processed by the tool SHALL remain under the root directory.

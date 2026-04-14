@@ -1,10 +1,6 @@
-# Variable Display
+# Delta Spec: variable-display
 
-## Purpose
-
-Detects and renders `<UpdateVariable>` blocks from chapter content as collapsible sections, handling both complete and incomplete blocks, displaying analysis and JSON patch data, and supporting multiple blocks per chapter.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Variable block rendering
 The `<UpdateVariable>` block extraction, parsing, and rendering SHALL be performed by the state plugin's `frontend.js` module during `frontend-render` hook dispatch. The plugin handler SHALL extract both complete (`<UpdateVariable>…</UpdateVariable>`) and incomplete (unclosed `<UpdateVariable>`) blocks from `context.text`, replace them with placeholder comments, render each as a collapsible `<details>` element with a `<pre>` preformatted content display, and store the rendered HTML in `context.placeholderMap`. The main project SHALL NOT contain a `VariableDisplay.vue` component — all extraction, parsing, and rendering logic resides within `plugins/state/frontend.js`.
@@ -23,20 +19,6 @@ Complete blocks SHALL use the summary text `變數更新詳情`. Incomplete bloc
 - **WHEN** inspecting `reader-src/src/components/`
 - **THEN** no `VariableDisplay.vue` component SHALL exist — all variable display rendering is done by `plugins/state/frontend.js`
 
-### Requirement: Multiple UpdateVariable blocks in a single chapter
-The plugin handler SHALL handle chapters that contain more than one `<UpdateVariable>` block. Each block SHALL result in an independent placeholder and rendered HTML entry in `context.placeholderMap`.
-
-#### Scenario: Two UpdateVariable blocks in one chapter
-- **WHEN** the chapter contains two separate `<UpdateVariable>...</UpdateVariable>` blocks
-- **THEN** the plugin SHALL produce two independent placeholder entries, each rendered as a collapsed `<details>` element with summary `變數更新詳情`, in the order they appear in the source
-
-### Requirement: Default collapsed state
-All rendered variable display blocks (both complete and incomplete) SHALL default to collapsed so they do not dominate the reading view. The `<details>` element SHALL NOT have the `open` attribute on initial render.
-
-#### Scenario: Variable sections are collapsed by default
-- **WHEN** a chapter with UpdateVariable blocks is rendered
-- **THEN** all rendered `<details>` elements SHALL NOT have the `open` attribute, appearing collapsed on initial render
-
 ### Requirement: Plugin manifest and registration
 
 The state plugin SHALL use the existing plugin directory `plugins/state/` and its manifest. The plugin SHALL register a `frontend-render` handler that extracts `<UpdateVariable>` and `<update>` blocks (case-insensitive) from `context.text`, parses them, renders HTML, and stores results in `context.placeholderMap`. All extraction and rendering logic SHALL reside within `plugins/state/frontend.js`.
@@ -48,11 +30,3 @@ The state plugin SHALL use the existing plugin directory `plugins/state/` and it
 #### Scenario: Variable tags rendered via plugin system
 - **WHEN** the `frontend-render` hook is dispatched and `context.text` contains `<UpdateVariable>` blocks
 - **THEN** the state plugin's handler SHALL extract the blocks, replace them with placeholder comments in `context.text`, and add `placeholder → renderedHTML` entries to `context.placeholderMap`
-
-### Requirement: Typed interfaces in main project
-
-The main project's `reader-src/src/types/index.ts` SHALL NOT contain plugin-specific type interfaces such as `VariableDisplayProps`. Variable display data structures reside within the plugin's code.
-
-#### Scenario: No plugin-specific variable types in main project
-- **WHEN** inspecting `reader-src/src/types/index.ts`
-- **THEN** no variable-display-specific interfaces (such as `VariableDisplayProps`) SHALL be defined

@@ -48,7 +48,7 @@ During LLM generation initiated via WebSocket, the server SHALL perform dual-wri
 
 #### Scenario: Post-response hooks still execute
 - **WHEN** LLM generation completes via WebSocket chat
-- **THEN** the server SHALL execute all post-response hooks (e.g., state-patches plugin) identically to HTTP-initiated chat
+- **THEN** the server SHALL execute all post-response hooks (e.g., state plugin) identically to HTTP-initiated chat
 
 ### Requirement: HTTP chat endpoint backward compatibility
 
@@ -80,4 +80,4 @@ An authenticated client SHALL send `{ type: "chat:abort", id: string }` to abort
 
 #### Scenario: Post-response hooks skipped on abort
 - **WHEN** LLM generation is aborted via `chat:abort`
-- **THEN** the server SHALL NOT execute post-response hooks (e.g., state-patches plugin) for the aborted generation
+- **THEN** the server SHALL NOT execute post-response hooks (e.g., state plugin) for the aborted generation

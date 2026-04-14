@@ -12,7 +12,7 @@ The hook system SHALL define the following ordered hook stages that plugins can 
 - `prompt-assembly`: Invoked during prompt construction — plugins can modify the `previousContext` array (e.g., replace full chapter text with summaries). The context object SHALL include a mutable `previousContext` (array of strings) field, a `rawChapters` (array of strings containing unstripped chapter content) field, `storyDir` (string), `series` (string), and `name` (string).
 - `response-stream`: Invoked during streaming — plugins can observe or transform stream chunks as they arrive from OpenRouter
 - `pre-write`: Invoked after OpenRouter response is confirmed but before chapter file writing — plugins can inject content to prepend to the chapter file (e.g., user message wrappers)
-- `post-response`: Invoked after the response stream completes — plugins can run side effects (e.g., state-patches status update)
+- `post-response`: Invoked after the response stream completes — plugins can run side effects (e.g., state status update)
 - `frontend-render`: Invoked during frontend rendering — plugins register tag extractors and custom renderers for LLM output tags
 - `strip-tags`: Invoked during server-side chapter content stripping — plugins register tag names to strip from `previous_context` before prompt assembly
 
