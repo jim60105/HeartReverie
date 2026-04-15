@@ -12,16 +12,17 @@ writer/
     └── hooks.ts               ← HookDispatcher 類別：後端 hook 註冊與分派
 
 plugins/                       ← 內建 plugin 目錄
-├── de-robotization/
+├── _shared/
+│   └── utils.js               ← 前端模組共用工具
+├── context-compaction/
 │   ├── plugin.json
-│   └── de-robotization.md
-├── t-task/
+│   └── handler.js
+├── thinking/
 │   ├── plugin.json
 │   ├── frontend.js
 │   └── prompt-fragments/
-│       ├── T-task.md
-│       └── T-task_think_format.md
-└── ...（共 12 個 plugin）
+│       └── think-before-reply.md
+└── ...（共 6 個 plugin）
 ```
 
 Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不同欄位：
@@ -57,9 +58,9 @@ Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不
 
 | 類型 | 說明 | 範例 |
 |------|------|------|
-| `prompt-only` | 僅提供提示詞片段，不包含後端或前端邏輯 | de-robotization、writestyle |
+| `prompt-only` | 僅提供提示詞片段，不包含後端或前端邏輯 | imgthink、start-hints |
 | `hook-only` | 僅透過後端 hook 參與生命週期，不提供提示詞 | — |
-| `full-stack` | 同時包含提示詞片段、後端模組、前端模組 | options、status |
+| `full-stack` | 同時包含提示詞片段、後端模組、前端模組 | context-compaction、thinking |
 | `frontend-only` | 僅提供前端模組 | — |
 
 類型宣告目前作為語意標註使用，系統不會依據類型限制 plugin 的實際能力。一個宣告為 `prompt-only` 的 plugin 若同時提供 `frontendModule`，系統仍會正常載入。
@@ -96,13 +97,13 @@ Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不
 
 ### 動態變數
 
-後端模組可匯出 `getDynamicVariables(context)` 函式，在每次渲染提示詞時動態提供模板變數。這適用於需要根據當前故事狀態產生值的情境（例如讀取狀態 YAML 檔案）。
+後端模組可匯出 `getDynamicVariables(context)` 函式，在每次渲染提示詞時動態提供模板變數。這適用於需要根據當前故事狀態產生值的情境。
 
 ```javascript
 // handler.js — 動態變數匯出範例
 export async function getDynamicVariables({ series, name, storyDir }) {
   // 根據故事目錄讀取資料並回傳鍵值對
-  return { status_data: await readStatusFile(storyDir) };
+  return { my_dynamic_var: await computeSomeValue(storyDir) };
 }
 ```
 
@@ -131,7 +132,7 @@ export async function getDynamicVariables({ series, name, storyDir }) {
 ```json
 {
   "promptFragments": [
-    { "file": "./de-robotization.md", "variable": "de_robotization", "priority": 100 }
+    { "file": "./instructions.md", "variable": "my_instructions", "priority": 100 }
   ]
 }
 ```
@@ -156,26 +157,15 @@ export async function getDynamicVariables({ series, name, storyDir }) {
 
 | 變數名稱 | 來源 plugin | Priority | 說明 |
 |----------|-------------|----------|------|
-| `threshold_lord_start` | threshold-lord | 10 | 故事節奏控制（開場指令） |
-| `content_freedom` | threshold-lord | 15 | 內容自由度指令（NSFW 解除限制） |
-| `de_robotization` | de-robotization | 100 | 去機械化寫作指令 |
-| `t_task` | t-task | 100 | 親密場景質感任務指令 |
-| `t_task_think_format` | t-task | 100 | 質感任務思考格式 |
 | `think_before_reply` | thinking | 100 | 回覆前思考指令（chain-of-thought） |
 | `start_hints` | start-hints | 100 | 首輪章節開場引導提示 |
-| `writestyle` | writestyle | 100 | 寫作風格指令 |
-| `options` | options | 100 | 選項格式說明 |
-| `status` | status | 100 | 狀態格式說明 |
-| `state` | state | 100 | 狀態 patch 處理格式說明 |
 | `context_compaction` | context-compaction | 800 | 長篇脈絡壓縮摘要 |
-| `writestyle_reinforce` | writestyle | 800 | 寫作風格強化（高 priority，排在提示詞後段） |
-| `threshold_lord_end` | threshold-lord | 900 | 故事節奏控制（結尾指令） |
 
-這些變數之外，系統還提供六個核心變數：`previous_context`、`user_input`、`isFirstRound`、`series_name`、`story_name`、`plugin_fragments`，以及外掛透過 `getDynamicVariables()` 提供的動態變數（如 state 外掛的 `status_data`）和典籍系統（Lore Codex）提供的 `lore_all`、`lore_<tag>`、`lore_tags` 等變數。詳細說明參見 [Prompt 模板系統][prompt-template] 及[典籍系統文件][lore-codex]。
+這些變數之外，系統還提供六個核心變數：`previous_context`、`user_input`、`isFirstRound`、`series_name`、`story_name`、`plugin_fragments`，以及外掛透過 `getDynamicVariables()` 提供的動態變數和典籍系統（Lore Codex）提供的 `lore_all`、`lore_<tag>`、`lore_tags` 等變數。詳細說明參見 [Prompt 模板系統][prompt-template] 及[典籍系統文件][lore-codex]。
 
 ## 標籤清除
 
-LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T-task>`），這些標籤會隨回應一同寫入章節檔案。系統提供兩種標籤清除機制：
+LLM 回應中包含 plugin 定義的 XML 標籤，這些標籤會隨回應一同寫入章節檔案。系統提供兩種標籤清除機制：
 
 - **`promptStripTags`**：在後端組建提示詞時生效。系統讀取已儲存的章節內容組建 `previousContext` 時，移除符合 pattern 的標籤，確保這些標籤不會出現在送往 LLM 的提示詞中。
 - **`displayStripTags`**：在前端瀏覽器渲染時生效。前端在顯示章節內容時移除符合 pattern 的標籤，確保讀者不會看到這些內部標記。
@@ -197,12 +187,12 @@ LLM 回應中經常包含 plugin 定義的 XML 標籤（例如 `<options>`、`<T
 
 ### 正規表達式模式
 
-當標籤可能帶有屬性（例如 `<T-task type="think">`），純文字模式無法匹配。此時可使用正規表達式語法，以 `/` 開頭標示：
+當標籤可能帶有屬性（例如 `<task type="think">`），純文字模式無法匹配。此時可使用正規表達式語法，以 `/` 開頭標示：
 
 ```json
 {
-  "promptStripTags": ["/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"],
-  "displayStripTags": ["/<T-task\\b[^>]+>[\\s\\S]*?<\\/T-task>/g"]
+  "promptStripTags": ["/<task\\b[^>]+>[\\s\\S]*?<\\/task>/g"],
+  "displayStripTags": ["/<task\\b[^>]+>[\\s\\S]*?<\\/task>/g"]
 }
 ```
 
@@ -279,11 +269,11 @@ export function register(hooks) {
 ```json
 [
   {
-    "name": "state",
+    "name": "thinking",
     "version": "1.0.0",
-    "description": "Apply state patches and render variable updates",
+    "description": "Think before reply and fold thinking tags",
     "type": "full-stack",
-    "tags": ["UpdateVariable"],
+    "tags": ["thinking", "think"],
     "displayStripTags": [],
     "hasFrontendModule": true
   }
@@ -297,7 +287,7 @@ export function register(hooks) {
 ```json
 [
   { "name": "lore_all", "type": "string", "source": "lore", "description": "..." },
-  { "name": "t_task", "type": "string", "source": "t-task", "description": "..." }
+  { "name": "think_before_reply", "type": "string", "source": "thinking", "description": "..." }
 ]
 ```
 
@@ -330,6 +320,36 @@ Plugin 系統在多個層面實施安全防護：
 ### 前端模組靜態服務
 
 `/plugins/:name/:file` 路由僅提供 manifest 中宣告的 `frontendModule` 檔案，不允許存取 plugin 目錄下的任意檔案。
+
+## 使用外部外掛
+
+本專案將部分選用外掛獨立維護於外部倉庫 [HeartReverie_Plugins](https://codeberg.org/jim60105/HeartReverie_Plugins.git)，提供更豐富的提示詞片段與功能擴充。以下說明如何啟用這些外掛。
+
+### 取得外部外掛
+
+```bash
+git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
+```
+
+### 設定環境變數
+
+將 `PLUGIN_DIR` 指向已 clone 的目錄絕對路徑，並將 `PROMPT_FILE` 指向該倉庫中的 `system.md`（其中引用了外部外掛提供的模板變數）：
+
+```bash
+# .env
+PLUGIN_DIR=/path/to/HeartReverie_Plugins
+PROMPT_FILE=/path/to/HeartReverie_Plugins/system.md
+```
+
+或以命令列方式啟動：
+
+```bash
+PLUGIN_DIR=/path/to/HeartReverie_Plugins \
+PROMPT_FILE=/path/to/HeartReverie_Plugins/system.md \
+zsh ./serve.zsh
+```
+
+> **注意：** 當外部 plugin 的名稱與內建 plugin 相同時，外部版本會覆蓋內建版本。系統會在 console 記錄覆蓋資訊。
 
 ## 撰寫自訂 Plugin
 
@@ -411,17 +431,10 @@ export function register(hooks) {
 | Plugin | 類型 | 功能 |
 |--------|------|------|
 | context-compaction | full-stack | 長篇脈絡壓縮，自動摘要早期章節 |
-| de-robotization | prompt-only | 去機械化寫作指令 |
 | imgthink | prompt-only | 圖像思考標籤處理 |
-| options | full-stack | 選項面板的提示詞說明、標籤清除、前端渲染 |
 | start-hints | prompt-only | 首輪章節開場引導提示，含提示詞與顯示標籤清除 |
-| state | full-stack | LLM 回應完成後執行 Rust 二進位檔處理狀態 patch，前端渲染變數更新區塊 |
-| status | full-stack | 狀態面板的提示詞說明、標籤清除、前端渲染 |
-| t-task | prompt-only | 親密場景質感任務指令，支援正規表達式標籤清除 |
-| threshold-lord | prompt-only | 故事節奏控制（開場 priority 10、結尾 priority 900）、內容自由度指令、免責聲明標籤前端清除 |
 | thinking | full-stack | 回覆前思考指令與折疊 `<thinking>`/`<think>` 標籤為可展開的 details 元素 |
 | user-message | full-stack | 使用者訊息標籤前端清除，pre-write hook 注入使用者訊息區塊 |
-| writestyle | prompt-only | 寫作風格指令與強化（priority 100 + 800） |
 
 [prompt-template]: ./prompt-template.md
 [lore-codex]: ./lore-codex.md
