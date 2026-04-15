@@ -37,16 +37,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-deno-
 
-      - name: Install frontend dependencies
-        run: cd reader-src && npm ci
-
-      - name: Cache node_modules
-        uses: actions/cache@v5
-        with:
-          path: reader-src/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('reader-src/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+      - name: Build frontend
+        run: deno task build:reader
 
       - name: Run tests
         run: deno task test

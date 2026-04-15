@@ -36,24 +36,35 @@ FROM docker.io/denoland/deno:debian AS deno-cache
 WORKDIR /app
 
 COPY deno.json deno.lock ./
+
+# Pre-cache all npm dependencies from import map
+RUN deno install --lock=deno.lock
+
 COPY writer/ ./writer/
 
-# Pre-cache dependencies
+# Pre-cache backend dependencies
 RUN deno cache --lock=deno.lock writer/server.ts
 
 ########################################
 # Frontend build stage
 # Build the Vue frontend with Vite
 ########################################
-FROM docker.io/library/node:22-slim AS frontend-build
+FROM docker.io/denoland/deno:debian AS frontend-build
+
+WORKDIR /app
+
+COPY --from=deno-cache /deno-dir/ /deno-dir/
+
+COPY deno.json deno.lock ./
+COPY reader-src/ ./reader-src/
+
+ENV DENO_DIR=/deno-dir
 
 WORKDIR /app/reader-src
 
-COPY reader-src/package.json reader-src/package-lock.json ./
-RUN npm ci --ignore-scripts
-
-COPY reader-src/ ./
-RUN npm run build
+# Type-check and build the frontend
+RUN deno run -A npm:vue-tsc@^2.2.8 --noEmit && \
+    deno run -A npm:vite@^6.3.2 build --outDir ../reader-dist
 
 ########################################
 # Final stage

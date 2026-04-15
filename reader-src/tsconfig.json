@@ -22,6 +22,5 @@
     },
     "baseUrl": "."
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "env.d.ts"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "env.d.ts"]
 }

@@ -35,8 +35,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-deno-
 
-      - name: Install frontend dependencies
-        run: cd reader-src && npm ci
+      - name: Build frontend
+        run: deno task build:reader
 
       - name: Run all tests
         run: deno task test

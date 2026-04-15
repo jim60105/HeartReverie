@@ -46,4 +46,4 @@ jobs:
       - name: Download and cache dependencies
         run: |
           deno cache writer/server.ts
-          cd reader-src && npm ci
+          deno install
