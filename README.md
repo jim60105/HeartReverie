@@ -4,15 +4,34 @@
   <img src="assets/heart.webp"/>
 </section>
 
-面向開發者的 AI 互動小說引擎，作為 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 的替代方案。
+面向開發者的 AI 互動小說引擎，以 Markdown 檔案與外掛系統為核心。
 
-提示詞的骨架是一個 [Vento](https://vento.js.org/) 模板（[`system.md`](system.md)；[模板變數說明](docs/prompt-template.md)），外掛透過 Markdown 片段注入自己的內容。後端透過任何 OpenAI 相容的 API 串接 LLM（預設使用 [OpenRouter](https://openrouter.ai/)），將回應逐步寫入章節檔案，前端透過 WebSocket 即時串流顯示（亦支援 HTTP 輪詢作為降級方案）。
+HeartReverie 以「發展故事」為主軸，有別於 [SillyTavern][sillytavern] 以「對話」為核心的設計。你的輸入作為引導故事走向的指示，本身不會寫入故事內容。
 
-所有客製化都透過外掛系統完成，撰寫外掛需要基本的程式能力。後端用 TypeScript + [Hono](https://hono.dev/)，前端是 Vue 3 + TypeScript SPA（以 [Vite](https://vite.dev/) 建置）。
+整個專案圍繞純文字檔案設計，故事內容、提示詞、典籍系統等全部以 `.md` 檔案儲存，適合習慣 VSCode 等編輯器的開發者。提示詞骨架是一個 [Vento][vento] 模板 [`system.md`](system.md)，可注入 Markdown 片段作為模板變數，所有客製化皆可透過外掛系統完成。提供 [Agent Skill](### 撰寫自訂外掛)，讓你用 AI 代理全自動產生外掛程式。
+
+前端是 Vue 3 + TypeScript SPA；後端使用 TypeScript + [Hono][hono]，串接 OpenAI 相容 API，將回應逐步寫入章節檔案。
+
+[sillytavern]: https://github.com/SillyTavern/SillyTavern
+[vento]: https://vento.js.org/
+[hono]: https://hono.dev/
 
 ## 🚀 快速開始
 
-需要 [Deno](https://deno.com/) ≥ 2.0 和 [Node.js](https://nodejs.org/)。預建置的 `state-patches` 二進位檔已包含在倉庫中。
+### 容器化部署（推薦）
+
+```bash
+podman run -d --name heartreverie \
+  -p 8443:8443 \
+  -e LLM_API_KEY=your-api-key \
+  -e PASSPHRASE=your-passphrase \
+  -v ./playground:/app/playground:z \
+  heartreverie:latest
+```
+
+### 本地部署
+
+需要 [Deno](https://deno.com/)。
 
 ```bash
 # 建立 .env（或複製 .env.example）
@@ -22,7 +41,7 @@ PASSPHRASE=your-passphrase-here
 EOF
 
 # 建置前端
-cd reader-src && npm install && cd ..
+deno install --lock=deno.lock
 deno task build:reader
 
 # 啟動
@@ -71,23 +90,11 @@ zsh ./serve.zsh
 4. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
 5. **前端模組**：`frontendModule` 在瀏覽器端透過 Vue composable 與 `frontend-render` 掛鉤處理自訂區塊渲染
 
-內建外掛涵蓋角色狀態面板、選項按鈕、變數顯示、文風控制、去機器人化等。完整文件見 [`docs/plugin-system.md`](docs/plugin-system.md)。
-
-## 📖 典籍系統（Lore Codex）
-
-以檔案為基礎的世界觀知識庫，取代舊有的 `scenario.md`。受 SillyTavern World Info 啟發，專為檔案工作流程設計。
-
-- **三層作用域**：全域（`_lore/`）、系列（`<系列>/_lore/`）、故事（`<系列>/<故事>/_lore/`）——與故事資料並置
-- **Markdown 篇章**：`.md` 檔案 + YAML frontmatter（`tags`、`priority`、`enabled`）
-- **標籤系統**：frontmatter 標籤 + 目錄即標籤 + 檔名即標籤，自動注入為 Vento 模板變數（`{{ lore_<tag> }}`）
-- **REST API**：完整的篇章 CRUD 端點
-- **底線命名慣例**：以 `_` 開頭的目錄（如 `_lore/`）為系統保留，不會出現在系列/故事列表中
-
-完整文件見 [`docs/lore-codex.md`](docs/lore-codex.md)。
+完整文件請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
 ### 撰寫自訂外掛
 
-建議使用 AI 代理搭配 `heartreverie-create-plugin` skill 來建立外掛。先安裝 skill：
+建議使用 AI 代理搭配 `heartreverie-create-plugin` skill 來建立外掛。使用以下指令安裝 skill：
 
 ```bash
 npx skills add https://codeberg.org/jim60105/HeartReverie -s heartreverie-create-plugin
@@ -95,13 +102,22 @@ npx skills add https://codeberg.org/jim60105/HeartReverie -s heartreverie-create
 
 安裝後，在 AI 代理中啟用 `heartreverie-create-plugin` skill，它會引導你完成類型選擇、manifest 建立、提示詞片段、後端/前端模組、標籤設定與 README 撰寫。
 
+## 📖 典籍系統（Lore Codex）
+
+以檔案為基礎的世界觀知識庫。受 SillyTavern 世界書啟發，專為檔案工作流程設計。
+
+- **三層作用域**：全域（`_lore/`）、系列（`<系列>/_lore/`）、故事（`<系列>/<故事>/_lore/`）與故事資料並置
+- **Markdown 篇章**：`.md` 檔案 + YAML frontmatter（`tags`、`priority`、`enabled`）
+- **標籤系統**：frontmatter 標籤 + 目錄即標籤 + 檔名即標籤，自動注入為 Vento 模板變數（`{{ lore_<tag> }}`）
+
+完整文件請見 [`docs/lore-codex.md`](docs/lore-codex.md)。
+
 ## 🧪 測試
 
 ```bash
 deno task test                                    # 全部
 deno task test:backend                            # 僅後端
 deno task test:frontend                           # 僅前端
-cd plugins/state/rust && cargo test       # Rust 整合測試
 ```
 
 ## 🐳 容器部署
@@ -119,16 +135,7 @@ podman run -d --name heartreverie \
   heartreverie:latest
 ```
 
-若需重建 Rust 二進位檔（通常不需要，倉庫已包含預建置版本）：
-
-```bash
-cd plugins/state
-podman build --output=. --target=binary -f rust/Containerfile rust/
-```
-
 ## 📄 授權
-
-## LICENSE
 
 <img src="assets/AGPLv3_Logo.svg" alt="agplv3" width="300" />
 
