@@ -37,7 +37,6 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     stories.ts            # GET stories — series/story listing
     ws.ts                 # WebSocket upgrade handler and message dispatching
 reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
-  package.json            # Dependencies: vue, vue-router, marked, dompurify
   vite.config.ts          # Vite build configuration
   tsconfig.json           # TypeScript configuration
   tailwind.config.ts      # Tailwind CSS configuration

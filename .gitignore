@@ -6,11 +6,11 @@ tmp/
 
 # Deno
 .coverage/
+node_modules/
 writer/node_modules/
 
 # Vue frontend build
 reader-dist/
-reader-src/node_modules/
 .vite/
 
 # Editor / OS

@@ -1,4 +1,5 @@
 {
+  "nodeModulesDir": "auto",
   "compilerOptions": {
     "strict": true,
     "noImplicitAny": true,
@@ -9,11 +10,11 @@
   },
   "tasks": {
     "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts",
-    "dev:reader": "cd reader-src && npx vite",
-    "build:reader": "cd reader-src && npx vite build --outDir ../reader-dist",
+    "dev:reader": "cd reader-src && deno run -A npm:vite@^6.3.2",
+    "build:reader": "cd reader-src && deno run -A npm:vue-tsc@^2.2.8 --noEmit && deno run -A npm:vite@^6.3.2 build --outDir ../reader-dist",
     "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/",
-    "test:frontend": "cd reader-src && npx vitest run",
-    "test": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/ && cd reader-src && npx vitest run"
+    "test:frontend": "cd reader-src && deno run -A npm:vitest@^3.1.2 run",
+    "test": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/ && cd reader-src && deno run -A npm:vitest@^3.1.2 run"
   },
   "imports": {
     "@hono/hono": "jsr:@hono/hono@^4",
@@ -23,6 +24,21 @@
     "@std/dotenv": "jsr:@std/dotenv@^0.225",
     "@std/testing": "jsr:@std/testing@^1",
     "@std/yaml": "jsr:@std/yaml@^1",
-    "ventojs": "npm:ventojs@^2.3.1"
+    "ventojs": "npm:ventojs@^2.3.1",
+    "vue": "npm:vue@^3.5.13",
+    "vue-router": "npm:vue-router@^5.0.4",
+    "marked": "npm:marked@^15.0.12",
+    "dompurify": "npm:dompurify@^3.3.3",
+    "@types/dompurify": "npm:@types/dompurify@^3.2.0",
+    "@vitejs/plugin-vue": "npm:@vitejs/plugin-vue@^5.2.3",
+    "@vue/test-utils": "npm:@vue/test-utils@^2.4.6",
+    "autoprefixer": "npm:autoprefixer@^10.4.21",
+    "happy-dom": "npm:happy-dom@^20.9.0",
+    "postcss": "npm:postcss@^8.5.3",
+    "tailwindcss": "npm:tailwindcss@^3.4.17",
+    "typescript": "npm:typescript@^5.8.3",
+    "vite": "npm:vite@^6.3.2",
+    "vitest": "npm:vitest@^3.1.2",
+    "vue-tsc": "npm:vue-tsc@^2.2.8"
   }
 }
