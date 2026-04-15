@@ -1,9 +1,0 @@
-{
-  "name": "de-robotization",
-  "version": "1.0.0",
-  "description": "De-robotization prompt fragment",
-  "type": "prompt-only",
-  "promptFragments": [
-    { "file": "./de-robotization.md", "variable": "de_robotization", "priority": 100 }
-  ]
-}
