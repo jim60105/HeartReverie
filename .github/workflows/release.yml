@@ -1,0 +1,224 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/deno
+            ~/.deno
+          key: ${{ runner.os }}-deno-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Install frontend dependencies
+        run: cd reader-src && npm ci
+
+      - name: Run all tests
+        run: deno task test
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Extract release notes
+        id: extract_notes
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION_NUM="${VERSION#v}"
+
+          echo "## Container Image" > release_notes.md
+          echo "" >> release_notes.md
+          echo "This release is published to multiple container registries: [GitHub Container Registry](https://github.com/jim60105/HeartReverie/pkgs/container/heartreverie), [Docker Hub](https://hub.docker.com/r/jim60105/heartreverie), [Quay.io](https://quay.io/repository/jim60105/heartreverie)" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "You can pull the image using Podman:" >> release_notes.md
+          echo "" >> release_notes.md
+          echo '```bash' >> release_notes.md
+          echo "podman pull ghcr.io/\${{ github.repository_owner }}/heartreverie:${VERSION_NUM}" >> release_notes.md
+          echo '```' >> release_notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          body_path: release_notes.md
+
+  docker-build:
+    name: Build Docker Image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Extract version from tag
+        id: extract_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Prepare platform variables
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
+      - name: Setup Docker
+        id: setup
+        uses: ./.github/workflows/docker-reused-setup-steps
+        with:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+          tag: ${{ steps.extract_version.outputs.VERSION }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Containerfile
+          push: true
+          target: final
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.setup.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.extract_version.outputs.VERSION }}
+            RELEASE=${{ github.run_number }}
+          cache-from: |
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/heartreverie:cache-${{ env.PLATFORM_PAIR }}
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/heartreverie:cache-${{ env.PLATFORM_PAIR }},mode=max
+          outputs: |
+            type=image,"name=ghcr.io/${{ github.repository_owner }}/heartreverie,${{ secrets.DOCKERHUB_USERNAME }}/heartreverie,quay.io/${{ github.repository_owner }}/heartreverie",push-by-digest=true,name-canonical=true,push=true
+          sbom: true
+          provenance: true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          echo "${digest#sha256:}" > /tmp/digests/${{ env.PLATFORM_PAIR }}
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ steps.extract_version.outputs.VERSION }}-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-merge:
+    name: Merge Docker Manifests
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Extract version from tag
+        id: extract_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ steps.extract_version.outputs.VERSION }}-*
+          merge-multiple: true
+
+      - name: Setup Docker
+        id: setup
+        uses: ./.github/workflows/docker-reused-setup-steps
+        with:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+          tag: ${{ steps.extract_version.outputs.VERSION }}
+
+      - name: Create manifest list and push to all registries
+        run: |
+          echo "Creating multi-arch manifest list..."
+          cd /tmp/digests
+          echo "Files in /tmp/digests:"
+          ls -la
+
+          digest_refs=""
+          for file in linux-*; do
+            if [[ -f "$file" ]]; then
+              digest=$(cat "$file")
+              echo "Processing $file with digest: $digest"
+              digest_refs+="ghcr.io/${{ github.repository_owner }}/heartreverie@sha256:$digest "
+            fi
+          done
+          echo "Final digest references: $digest_refs"
+
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<<"$DOCKER_METADATA_OUTPUT_JSON") \
+            $digest_refs
+
+      - name: Get final manifest digest
+        id: get_digest
+        run: |
+          IMAGE_TAG=$(jq -cr '.tags[] | select(startswith("ghcr.io/"))' <<<"$DOCKER_METADATA_OUTPUT_JSON" | head -n1)
+          echo "Using tag for digest lookup: $IMAGE_TAG"
+          DIGEST_RAW=$(docker buildx imagetools inspect "$IMAGE_TAG" --format "{{.Manifest.Digest}}")
+          echo "Raw digest output: $DIGEST_RAW"
+          DIGEST=$(echo "$DIGEST_RAW" | grep -oE 'sha256:[a-f0-9]{64}' | head -n1)
+          echo "Extracted digest: $DIGEST"
+          echo "manifest_digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Add attestations for GitHub Container Registry
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/heartreverie
+          subject-digest: ${{ steps.get_digest.outputs.manifest_digest }}
+
+      - name: Add attestations for DockerHub
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/heartreverie
+          subject-digest: ${{ steps.get_digest.outputs.manifest_digest }}
+
+      - name: Add attestations for Quay
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: quay.io/${{ github.repository_owner }}/heartreverie
+          subject-digest: ${{ steps.get_digest.outputs.manifest_digest }}
