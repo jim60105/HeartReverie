@@ -22,9 +22,7 @@
 | `lore_<tag>` | `string` | 具有該有效標籤的啟用篇章（如 `lore_scenario`、`lore_characters`，由典籍系統提供） |
 | `lore_tags` | `string[]` | 所有已發現的標籤名稱陣列（由典籍系統提供） |
 
-除上述核心變數外，外掛亦可透過 `promptFragments` 提供額外的具名變數。外掛後端模組也可匯出 `getDynamicVariables()` 提供動態變數（例如 state 外掛的 `status_data`），一併傳入模板。
-
-> **備註：** `status_data` 由 state 外掛透過 `getDynamicVariables()` 動態提供，來自 `current-status.yml` 或 `init-status.yml` 的 YAML 內容。變數名稱使用 `status_data` 而非 `status`，是因為模板內部以 `{{ set status }}{{ include "./status.md" }}{{ /set }}` 將 `status.md` 子模板的內容存入名為 `status` 的區域變數。使用 `status_data` 可避免命名衝突。
+除上述核心變數外，外掛亦可透過 `promptFragments` 提供額外的具名變數。外掛後端模組也可匯出 `getDynamicVariables()` 提供動態變數，一併傳入模板。
 
 ## Vento 語法
 
@@ -35,7 +33,6 @@
 ```vento
 {{ lore_scenario }}
 {{ user_input }}
-{{ status_data }}
 ```
 
 ### 陣列迭代
@@ -75,10 +72,10 @@
 使用 `set` 搭配 `include` 將子模板內容存入區域變數，並透過 `|> trim` 管道過濾器去除前後空白。`-` 符號用於消除標籤本身產生的多餘空行：
 
 ```vento
-{{- set writestyle |> trim -}}{{- include "./writestyle.md" -}}{{- /set -}}
+{{- set my_var |> trim -}}{{- include "./my-template.md" -}}{{- /set -}}
 ```
 
-之後可在模板中透過 `{{ writestyle }}` 引用該變數的內容。
+之後可在模板中透過 `{{ my_var }}` 引用該變數的內容。
 
 ## 提示詞建構流程
 
@@ -109,7 +106,7 @@
 6. 使用 Vento 引擎渲染主模板，傳入所有變數：
 
 ```typescript
-// 收集外掛動態變數（如 state 外掛的 status_data）
+// 收集外掛動態變數
 const dynamicVars = await pluginManager.getDynamicVariables({
   series: series || "",
   name: story || "",

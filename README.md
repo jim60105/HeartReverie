@@ -8,7 +8,7 @@
 
 HeartReverie 以「發展故事」為主軸，有別於 [SillyTavern][sillytavern] 以「對話」為核心的設計。你的輸入作為引導故事走向的指示，本身不會寫入故事內容。
 
-整個專案圍繞純文字檔案設計，故事內容、提示詞、典籍系統等全部以 `.md` 檔案儲存，適合習慣 VSCode 等編輯器的開發者。提示詞骨架是一個 [Vento][vento] 模板 [`system.md`](system.md)，可注入 Markdown 片段作為模板變數，所有客製化皆可透過外掛系統完成。提供 [Agent Skill](### 撰寫自訂外掛)，讓你用 AI 代理全自動產生外掛程式。
+整個專案圍繞純文字檔案設計，故事內容、提示詞、典籍系統等全部以 `.md` 檔案儲存，適合習慣 VSCode 等編輯器的開發者。提示詞骨架是一個 [Vento][vento] 模板 [`system.md`](system.md)，可注入 Markdown 片段作為模板變數，所有客製化皆可透過外掛系統完成。提供 [Agent Skill](#撰寫自訂外掛)，讓你用 AI 代理全自動產生外掛程式。
 
 前端是 Vue 3 + TypeScript SPA；後端使用 TypeScript + [Hono][hono]，串接 OpenAI 相容 API，將回應逐步寫入章節檔案。
 
@@ -91,6 +91,20 @@ zsh ./serve.zsh
 5. **前端模組**：`frontendModule` 在瀏覽器端透過 Vue composable 與 `frontend-render` 掛鉤處理自訂區塊渲染
 
 完整文件請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
+
+### 選用外掛
+
+專案另外提供一組選用外掛，包含寫作風格、去機械化、狀態追蹤等進階功能：
+
+```bash
+git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
+```
+
+克隆後設定環境變數即可啟用：
+- `PLUGIN_DIR`：指向克隆目錄的絕對路徑
+- `PROMPT_FILE`：指向克隆目錄中的 `system.md`
+
+詳細說明請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
 ### 撰寫自訂外掛
 

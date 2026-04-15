@@ -2,7 +2,7 @@
 
 ## Overview
 
-**HeartReverie 浮心夜夢** — An AI-driven interactive fiction engine built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via any OpenAI-compatible API, a Rust CLI for applying state patches, and a plugin system for extensible prompt assembly and tag processing. Licensed under AGPL-3.0-or-later.
+**HeartReverie 浮心夜夢** — An AI-driven interactive fiction engine built around [SillyTavern](https://github.com/SillyTavern/SillyTavern). The system consists of a web reader/writer frontend, a Hono backend running on Deno that drives LLM chat via any OpenAI-compatible API, and a plugin system for extensible prompt assembly and tag processing. Licensed under AGPL-3.0-or-later.
 
 ## Project Structure
 
@@ -89,21 +89,14 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       base.css            # Base styles
       theme.css           # Theme styles
 reader-dist/              # Built frontend output (gitignored, run `deno task build:reader`)
-plugins/                  # 11 built-in plugins (manifest-driven) + shared utils
+plugins/                  # Built-in plugins (manifest-driven) + shared utils
   _shared/
     utils.js              # Shared utilities (escapeHtml) used by frontend modules
   context-compaction/     # Tiered context compaction via inline chapter summaries
-  de-robotization/        # De-robotization prompt fragment
   imgthink/               # Strip imgthink tags from display
-  options/                # Options panel extraction, rendering, and prompt
-  state/          # State patch lifecycle: Rust binary + frontend rendering
-    rust/                 # Rust CLI for YAML state patch processing
-  status/                 # Status panel extraction, rendering, and prompt
+  start-hints/            # First-round chapter opening guidance
   thinking/               # Fold <thinking>/<think> tags into collapsible details
-  threshold-lord/         # Threshold Lord prompt fragments and disclaimer cleanup
-  t-task/                 # T-task prompt fragment with tag stripping
   user-message/           # User message lifecycle: wrap, strip from context/display
-  writestyle/             # Writing style instructions
 tests/                    # Backend tests (Deno)
   writer/
     lib/                  # Backend library tests (*_test.ts)
@@ -156,30 +149,9 @@ The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on 
 
 The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_API_KEY` and `PASSPHRASE`.
 
-## Building the Rust CLI
-
-```bash
-cd plugins/state/rust
-cargo build --release
-```
-
-The resulting binary at `target/release/state-patches` is invoked by the `state` plugin after each LLM response.
-
 ## Container Deployment
 
-The project uses a two-Containerfile architecture:
-
-1. **Rust binary builder** (`plugins/state/rust/Containerfile`) — Builds the `state-patches` binary using cargo-chef pattern. The binary is committed to git so most users never need this.
-2. **Main application** (`Containerfile`) — Deno-only image that copies the pre-built binary and all application files.
-
-### Rebuild Rust binary (only when Rust source changes)
-
-```bash
-cd plugins/state
-podman build --output=. --target=binary -f rust/Containerfile rust/
-```
-
-This outputs `plugins/state/state-patches` which should be committed to git.
+The project uses a single `Containerfile` — a Deno-only image that copies all application files.
 
 ### Build and run the application container
 
@@ -251,14 +223,6 @@ podman run -d --name heartreverie \
 - **File System Access API** — For reading local `.md` files (requires HTTPS secure context)
 - **IndexedDB** — Persists directory handle for session restoration
 
-### Rust (`plugins/state/rust/`)
-
-- 2024 edition, modular architecture (main, pipeline, parser, patch_ops, yaml_nav, convert)
-- Standard `rustfmt` formatting
-- `Result`-based error handling, errors logged to stderr
-- Custom JSONPatch format (not RFC 6902): supports `replace`, `delta`, `insert`, `remove` operations
-- Dependencies: `serde_yaml`, `serde_json`, `regex`
-
 ### Git Commits
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
@@ -284,7 +248,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 ### Plugin System
 
-The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 11 built-in plugins plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
+The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 5 built-in plugins plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
 
 Key classes:
 - `PluginManager` (`writer/lib/plugin-manager.ts`) — scans `plugins/` and optional `PLUGIN_DIR`, validates manifests, loads modules
@@ -324,7 +288,7 @@ See `docs/prompt-template.md` for the full list of template variables and Vento 
 ### Frontend Rendering Pipeline
 
 Custom XML blocks from LLM output are processed using the **Extract → Placeholder → Reinsert** pattern (implemented in `reader-src/src/lib/markdown-pipeline.ts` and the `useMarkdownRenderer` composable):
-1. Extract XML blocks (e.g., `<status>`, `<options>`) before markdown parsing — extraction is delegated to individual plugin frontend modules via the `frontend-render` hook
+1. Extract XML blocks (e.g., `<thinking>`, `<user_message>`) before markdown parsing — extraction is delegated to individual plugin frontend modules via the `frontend-render` hook
 2. Replace with HTML comment placeholders
 3. Run `marked.parse()` + DOMPurify sanitization
 4. Reinsert extracted blocks as rendered HTML components
@@ -366,10 +330,9 @@ The project uses a spec-driven development workflow managed by OpenSpec skills i
 ## Important Constraints
 
 - Do **NOT** read or modify files under `playground/` — they contain user story data
-- Do **NOT** commit `.env`, `.certs/`, or `current-status.yml` — they are gitignored
+- Do **NOT** commit `.env` or `.certs/` — they are gitignored
 - Run tests: `deno task test` (backend + frontend), `deno task test:backend`, `deno task test:frontend`; plugin tests separately: `deno test --allow-read --allow-write --allow-env --allow-net tests/plugins/`
 - The frontend **has a build step**: `deno task build:reader` — edit sources in `reader-src/`, built output goes to `reader-dist/`
 - `system.md` is a Vento template — treat it as code, not documentation
 - `system.md` uses `{{ lore_scenario }}` (from lore codex) instead of the old `{{ scenario }}` core variable
 - Plugin `name` in `plugin.json` must match its directory name exactly
-- The malformed-JSON fallback parser in state-patches exists intentionally — some source `.md` files contain unescaped quotes in string values
