@@ -11,9 +11,9 @@
     "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts",
     "dev:reader": "cd reader-src && npx vite",
     "build:reader": "cd reader-src && npx vite build --outDir ../reader-dist",
-    "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net tests/writer/",
+    "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/",
     "test:frontend": "cd reader-src && npx vitest run",
-    "test": "deno test --allow-read --allow-write --allow-env --allow-net tests/writer/ && cd reader-src && npx vitest run"
+    "test": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/ && cd reader-src && npx vitest run"
   },
   "imports": {
     "@hono/hono": "jsr:@hono/hono@^4",

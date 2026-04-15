@@ -164,7 +164,7 @@ describe("usePromptEditor", () => {
 
   it("loadParameters includes series/story query params when provided", async () => {
     const fetchMock = installFetchMock();
-    const editor = await getEditor();
+    await getEditor();
 
     // Trigger watcher by changing story context
     mockSelectedSeries.value = "my-series";
