@@ -111,7 +111,7 @@ git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
 建議使用 AI 代理搭配 `heartreverie-create-plugin` skill 來建立外掛。使用以下指令安裝 skill：
 
 ```bash
-npx skills add https://codeberg.org/jim60105/HeartReverie -s heartreverie-create-plugin
+npx skills add https://github.com/jim60105/HeartReverie -s heartreverie-create-plugin
 ```
 
 安裝後，在 AI 代理中啟用 `heartreverie-create-plugin` skill，它會引導你完成類型選擇、manifest 建立、提示詞片段、後端/前端模組、標籤設定與 README 撰寫。
