@@ -350,7 +350,7 @@ cp /path/to/HeartReverie_Plugins/system.md ./system.md
 
 ```bash
 PLUGIN_DIR=/path/to/HeartReverie_Plugins \
-zsh ./serve.zsh
+./serve.sh
 ```
 
 > [!WARNING]
