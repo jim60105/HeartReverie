@@ -100,9 +100,9 @@ zsh ./serve.zsh
 git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
 ```
 
-克隆後設定環境變數並複製提示詞模板即可啟用：
-- `PLUGIN_DIR`：指向克隆目錄的絕對路徑
-- 將克隆目錄中的 `system.md` 複製至本專案根目錄覆寫預設提示詞
+複製後設定環境變數並複製提示詞模板即可啟用：
+- `PLUGIN_DIR`：指向該目錄的絕對路徑
+- 將該目錄中的 `system.md` 複製至本專案根目錄覆寫預設提示詞
 
 詳細說明請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
