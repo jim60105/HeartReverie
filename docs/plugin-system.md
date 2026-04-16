@@ -333,7 +333,7 @@ git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
 
 ### 設定環境變數
 
-將 `PLUGIN_DIR` 指向已 clone 的目錄絕對路徑，並將外掛的 `system.md` 複製至專案根目錄覆寫預設提示詞模板（其中引用了外部外掛提供的模板變數）：
+將 `PLUGIN_DIR` 指向已複製的目錄絕對路徑，並將外掛的 `system.md` 複製至專案根目錄覆寫預設提示詞模板（其中引用了外部外掛提供的模板變數）：
 
 ```bash
 # .env
