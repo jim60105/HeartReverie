@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
 #
 # This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 # Thin wrapper around entrypoint.sh that sets project-relative paths.
 #
 # Usage:
-#   serve.zsh [port]
+#   serve.sh [port]
 #
 # Arguments:
 #   port  Port number to listen on (default: 8443)
@@ -29,28 +29,28 @@
 #   - deno     (for the backend server)
 #
 # Examples:
-#   ./serve.zsh          # Serve on https://localhost:8443
-#   ./serve.zsh 9000     # Serve on https://localhost:9000
+#   ./serve.sh          # Serve on https://localhost:8443
+#   ./serve.sh 9000     # Serve on https://localhost:9000
 
 set -euo pipefail
 
-readonly PROJECT_ROOT="${0:a:h}"
+readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Validate port number if provided
 if [[ -n "${1:-}" ]]; then
-    if [[ ! "$1" =~ ^[0-9]+$ ]] || (( $1 < 1 || $1 > 65535 )); then
+    if [[ ! "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
         echo "❌ Invalid port number: $1 (must be 1–65535)" >&2
         exit 1
     fi
 fi
 
 export PORT="${1:-8443}"
-export PLAYGROUND_DIR="${PROJECT_ROOT}/playground"
-export READER_DIR="${PROJECT_ROOT}/reader-dist"
-export CERT_DIR="${PROJECT_ROOT}/.certs"
+export PLAYGROUND_DIR="${SCRIPT_DIR}/playground"
+export READER_DIR="${SCRIPT_DIR}/reader-dist"
+export CERT_DIR="${SCRIPT_DIR}/.certs"
 
 echo "🚀 Story writer starting on https://localhost:${PORT}"
-echo "   Project: ${PROJECT_ROOT}"
+echo "   Project: ${SCRIPT_DIR}"
 echo "   Press Ctrl+C to stop"
 
-exec "${PROJECT_ROOT}/entrypoint.sh" "${PROJECT_ROOT}/writer/server.ts"
+exec "${SCRIPT_DIR}/entrypoint.sh" "${SCRIPT_DIR}/writer/server.ts"

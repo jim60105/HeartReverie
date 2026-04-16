@@ -17,7 +17,7 @@ docs/
 tests/
 skills/
 .github/
-serve.zsh
+serve.sh
 AGENTS.md
 
 # Rust source (binary is at plugins/state/state-patches)
