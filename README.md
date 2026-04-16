@@ -8,13 +8,9 @@
 
 HeartReverie 以「發展故事」為主軸，有別於 [SillyTavern][sillytavern] 以「對話」為核心的設計。你的輸入作為引導故事走向的指示，本身不會寫入故事內容。
 
-整個專案圍繞純文字檔案設計，故事內容、提示詞、典籍系統等全部以 `.md` 檔案儲存，適合習慣 VSCode 等編輯器的開發者。提示詞骨架是一個 [Vento][vento] 模板 [`system.md`](system.md)，可注入 Markdown 片段作為模板變數，所有客製化皆可透過外掛系統完成。提供 [Agent Skill](#撰寫自訂外掛)，讓你用 AI 代理全自動產生外掛程式。
+整個專案圍繞純文字檔案設計，故事內容、提示詞、典籍系統等全部以 `.md` 檔案儲存，適合習慣 VSCode 等編輯器的開發者。提示詞骨架是一個 [Vento][vento] 模板 [`system.md`][system-md]，可注入 Markdown 片段作為模板變數，所有客製化皆可透過外掛系統完成。提供 [Agent Skill](#撰寫自訂外掛)，讓你用 AI 代理全自動產生外掛程式。
 
-前端是 Vue 3 + TypeScript SPA；後端使用 TypeScript + [Hono][hono]，串接 OpenAI 相容 API，將回應逐步寫入章節檔案。
-
-[sillytavern]: https://github.com/SillyTavern/SillyTavern
-[vento]: https://vento.js.org/
-[hono]: https://hono.dev/
+前端是 [Vue 3][vue]；後端使用 [Hono][hono]，串接 OpenAI 相容 API，將回應逐步寫入章節檔案。
 
 ## 🚀 快速開始
 
@@ -36,7 +32,7 @@ podman run -d --name heartreverie \
 
 ### 本地部署
 
-需要 [Deno](https://deno.com/)。
+需要 [Deno][deno]。
 
 ```bash
 # 建立 .env（或複製 .env.example）
@@ -57,7 +53,7 @@ deno task build:reader
 設定 `HTTP_ONLY=true` 可關閉 TLS，適用於反向代理 / K8s 部署。
 
 > [!NOTE]
-> 前端使用 [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API) 讀取本機 `.md` 檔案，需要 HTTPS 安全環境
+> 前端使用 [File System Access API][fsa-api] 讀取本機 `.md` 檔案，需要 HTTPS 安全環境
 
 ### 環境變數
 
@@ -95,12 +91,13 @@ deno task build:reader
 4. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
 5. **前端模組**：`frontendModule` 在瀏覽器端透過 Vue composable 與 `frontend-render` 掛鉤處理自訂區塊渲染
 
-完整文件請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
+完整文件請見 [`docs/plugin-system.md`][plugin-system-doc]。
 
 ### 選用外掛（推薦）
 
 > [!TIP]
-> **強烈建議搭配 [HeartReverie_Plugins](https://codeberg.org/jim60105/HeartReverie_Plugins) 使用。** 這組選用外掛提供變數狀態追蹤、角色狀態面板、行動選項面板、破限等進階功能，能大幅提升互動體驗與故事品質。外掛獨立於主專案維護，使用者可依需求自由搭配。
+> **強烈建議搭配 [HeartReverie_Plugins][heartreverie-plugins] 使用。**  
+> 這組選用外掛提供變數狀態追蹤、角色狀態面板、行動選項面板、破限等進階功能，能大幅提升互動體驗與故事品質。外掛獨立於主專案維護，使用者可依需求自由搭配。
 
 ```bash
 git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
@@ -111,9 +108,9 @@ git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
 - `PLUGIN_DIR`：指向該目錄的絕對路徑
 - 將該目錄中的 `system.md` 複製至本專案根目錄覆寫預設提示詞
 
-使用容器部署者可直接建置含外掛的延伸映像檔，詳見 [HeartReverie_Plugins README](https://codeberg.org/jim60105/HeartReverie_Plugins)。
+使用容器部署者可直接建置含外掛的延伸映像檔，詳見 [HeartReverie_Plugins README][heartreverie-plugins]。
 
-完整外掛系統文件請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
+完整外掛系統文件請見 [`docs/plugin-system.md`][plugin-system-doc]。
 
 ### 撰寫自訂外掛
 
@@ -133,7 +130,7 @@ npx skills add https://github.com/jim60105/HeartReverie -s heartreverie-create-p
 - **Markdown 篇章**：`.md` 檔案 + YAML frontmatter（`tags`、`priority`、`enabled`）
 - **標籤系統**：frontmatter 標籤 + 目錄即標籤 + 檔名即標籤，自動注入為 Vento 模板變數（`{{ lore_<tag> }}`）
 
-完整文件請見 [`docs/lore-codex.md`](docs/lore-codex.md)。
+完整文件請見 [`docs/lore-codex.md`][lore-codex-doc]。
 
 ## 🧪 測試
 
@@ -166,7 +163,7 @@ podman build -t heartreverie:latest .
 
 <img src="assets/AGPLv3_Logo.svg" alt="agplv3" width="300" />
 
-[GNU AFFERO GENERAL PUBLIC LICENSE Version 3](/LICENSE)
+[GNU AFFERO GENERAL PUBLIC LICENSE Version 3][license]
 
 Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>.
 
@@ -175,3 +172,15 @@ This program is free software: you can redistribute it and/or modify it under th
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+[sillytavern]: https://github.com/SillyTavern/SillyTavern
+[vento]: https://vento.js.org/
+[hono]: https://hono.dev/
+[vue]: https://vuejs.org/
+[system-md]: system.md
+[deno]: https://deno.com/
+[fsa-api]: https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API
+[plugin-system-doc]: docs/plugin-system.md
+[heartreverie-plugins]: https://codeberg.org/jim60105/HeartReverie_Plugins
+[lore-codex-doc]: docs/lore-codex.md
+[license]: /LICENSE
