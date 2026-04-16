@@ -126,6 +126,7 @@ const result = await ventoEnv.runString(systemTemplate, {
 });
 ```
 
+> [!IMPORTANT]
 > 使用者提供的覆寫模板會經過 `validateTemplate()` 白名單驗證，阻擋函式呼叫、屬性存取等不安全的表達式，防止 SSTI 攻擊。
 
 ### 4. 建構訊息陣列
