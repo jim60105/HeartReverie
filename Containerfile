@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG UID=1001
+ARG UID=1000
 ARG VERSION=EDGE
 ARG RELEASE=0
 

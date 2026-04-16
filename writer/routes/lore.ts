@@ -308,9 +308,9 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
     const fileContent = serializePassage(validation.frontmatter, validation.content);
 
     try {
-      await Deno.mkdir(dirname(filePath), { recursive: true });
+      await Deno.mkdir(dirname(filePath), { recursive: true, mode: 0o775 });
       const isNew = await Deno.stat(filePath).then(() => false).catch(() => true);
-      await Deno.writeTextFile(filePath, fileContent);
+      await Deno.writeTextFile(filePath, fileContent, { mode: 0o664 });
       return c.json(
         { message: isNew ? "Passage created" : "Passage updated" },
         isNew ? 201 : 200,
