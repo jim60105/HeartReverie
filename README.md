@@ -18,13 +18,18 @@ HeartReverie 以「發展故事」為主軸，有別於 [SillyTavern][sillytaver
 
 ## 🚀 快速開始
 
-### 容器化部署（推薦）
+### 容器化部署
 
 ```bash
+# 建立 .env（或複製 .env.example）
+cat > .env << 'EOF'
+LLM_API_KEY=your-api-key-here
+PASSPHRASE=your-passphrase-here
+EOF
+
 podman run -d --name heartreverie \
   -p 8443:8443 \
-  -e LLM_API_KEY=your-api-key \
-  -e PASSPHRASE=your-passphrase \
+  --env-file .env \
   -v ./playground:/app/playground:z \
   ghcr.io/jim60105/heartreverie:latest
 ```
@@ -92,16 +97,17 @@ zsh ./serve.zsh
 
 完整文件請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
-### 選用外掛（強烈推薦）
+### 選用外掛（推薦）
 
 > [!TIP]
-> **強烈建議搭配 [HeartReverie_Plugins](https://codeberg.org/jim60105/HeartReverie_Plugins) 使用。** 這組選用外掛提供去機械化寫作指令、變數狀態追蹤、角色狀態面板、行動選項面板等進階功能，能大幅提升互動體驗與故事品質。外掛獨立於主專案維護，使用者可依需求自由搭配。
+> **強烈建議搭配 [HeartReverie_Plugins](https://codeberg.org/jim60105/HeartReverie_Plugins) 使用。** 這組選用外掛提供變數狀態追蹤、角色狀態面板、行動選項面板、破限等進階功能，能大幅提升互動體驗與故事品質。外掛獨立於主專案維護，使用者可依需求自由搭配。
 
 ```bash
 git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
 ```
 
 複製後設定環境變數並複製提示詞模板即可啟用：
+
 - `PLUGIN_DIR`：指向該目錄的絕對路徑
 - 將該目錄中的 `system.md` 複製至本專案根目錄覆寫預設提示詞
 
