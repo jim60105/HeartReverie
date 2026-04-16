@@ -94,6 +94,7 @@ zsh ./serve.zsh
 
 ### 選用外掛（強烈推薦）
 
+> [!TIP]
 > **強烈建議搭配 [HeartReverie_Plugins](https://codeberg.org/jim60105/HeartReverie_Plugins) 使用。** 這組選用外掛提供去機械化寫作指令、變數狀態追蹤、角色狀態面板、行動選項面板等進階功能，能大幅提升互動體驗與故事品質。外掛獨立於主專案維護，使用者可依需求自由搭配。
 
 ```bash
