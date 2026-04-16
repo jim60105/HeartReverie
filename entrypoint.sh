@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 002
 
 # When HTTP_ONLY is set, skip TLS certificate generation entirely
 # (useful for K8s where TLS is handled at the ingress/reverse-proxy level)
@@ -27,6 +28,8 @@ else
         -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0.0.0.0" \
         -keyout "$KEY_FILE" -out "$CERT_FILE" \
         2>/dev/null
+      chmod 664 "$CERT_FILE"
+      chmod 660 "$KEY_FILE"
       echo "✅ TLS certificate generated at $CERT_FILE"
     fi
     export CERT_FILE KEY_FILE

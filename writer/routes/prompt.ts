@@ -67,8 +67,8 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
         }, 422);
       }
 
-      await Deno.mkdir(dirname(config.PROMPT_FILE), { recursive: true });
-      await Deno.writeTextFile(config.PROMPT_FILE, content);
+      await Deno.mkdir(dirname(config.PROMPT_FILE), { recursive: true, mode: 0o775 });
+      await Deno.writeTextFile(config.PROMPT_FILE, content, { mode: 0o664 });
       return c.json({ ok: true });
     } catch (err: unknown) {
       console.error("PUT /api/template error:", err instanceof Error ? err.message : String(err));

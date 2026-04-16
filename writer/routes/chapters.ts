@@ -132,12 +132,12 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
       const filePath = join(dirPath, "001.md");
 
       try {
-        await Deno.mkdir(dirPath, { recursive: true });
+        await Deno.mkdir(dirPath, { recursive: true, mode: 0o775 });
         try {
           await Deno.stat(filePath);
           return c.json({ message: "Story already exists" }, 200);
         } catch {
-          await Deno.writeTextFile(filePath, "");
+          await Deno.writeTextFile(filePath, "", { mode: 0o664 });
           return c.json({ message: "Story initialized" }, 201);
         }
       } catch {

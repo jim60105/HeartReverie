@@ -158,7 +158,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   }
   const padded = String(targetNum).padStart(3, "0");
 
-  await Deno.mkdir(storyDir, { recursive: true });
+  await Deno.mkdir(storyDir, { recursive: true, mode: 0o775 });
 
   const chapterPath = join(storyDir, `${padded}.md`);
   const encoder = new TextEncoder();
@@ -175,7 +175,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   });
   const preContent = preWriteCtx.preContent as string;
 
-  const file = await Deno.open(chapterPath, { write: true, create: true, truncate: true });
+  const file = await Deno.open(chapterPath, { write: true, create: true, truncate: true, mode: 0o664 });
   if (preContent) {
     await file.write(encoder.encode(preContent));
   }
