@@ -92,9 +92,9 @@ zsh ./serve.zsh
 
 完整文件請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
-### 選用外掛
+### 選用外掛（強烈推薦）
 
-專案另外提供一組選用外掛，包含寫作風格、去機械化、狀態追蹤等進階功能：
+> **強烈建議搭配 [HeartReverie_Plugins](https://codeberg.org/jim60105/HeartReverie_Plugins) 使用。** 這組選用外掛提供去機械化寫作指令、變數狀態追蹤、角色狀態面板、行動選項面板等進階功能，能大幅提升互動體驗與故事品質。外掛獨立於主專案維護，使用者可依需求自由搭配。
 
 ```bash
 git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
@@ -104,7 +104,9 @@ git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
 - `PLUGIN_DIR`：指向該目錄的絕對路徑
 - 將該目錄中的 `system.md` 複製至本專案根目錄覆寫預設提示詞
 
-詳細說明請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
+使用容器部署者可直接建置含外掛的延伸映像檔，詳見 [HeartReverie_Plugins README](https://codeberg.org/jim60105/HeartReverie_Plugins)。
+
+完整外掛系統文件請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
 ### 撰寫自訂外掛
 
