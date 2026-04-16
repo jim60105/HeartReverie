@@ -26,7 +26,7 @@ podman run -d --name heartreverie \
   -e LLM_API_KEY=your-api-key \
   -e PASSPHRASE=your-passphrase \
   -v ./playground:/app/playground:z \
-  heartreverie:latest
+  ghcr.io/jim60105/heartreverie:latest
 ```
 
 ### 本地部署
@@ -100,9 +100,9 @@ zsh ./serve.zsh
 git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
 ```
 
-克隆後設定環境變數即可啟用：
+克隆後設定環境變數並複製提示詞模板即可啟用：
 - `PLUGIN_DIR`：指向克隆目錄的絕對路徑
-- `PROMPT_FILE`：指向克隆目錄中的 `system.md`
+- 將克隆目錄中的 `system.md` 複製至本專案根目錄覆寫預設提示詞
 
 詳細說明請見 [`docs/plugin-system.md`](docs/plugin-system.md)。
 
@@ -136,17 +136,21 @@ deno task test:frontend                           # 僅前端
 
 ## 🐳 容器部署
 
-```bash
-# 建置容器映像
-podman build -t heartreverie:latest .
+預建置映像檔發佈於 GitHub Container Registry：
 
-# 執行
+```bash
 podman run -d --name heartreverie \
   -p 8443:8443 \
   -e LLM_API_KEY=your-api-key \
   -e PASSPHRASE=your-passphrase \
   -v ./playground:/app/playground:z \
-  heartreverie:latest
+  ghcr.io/jim60105/heartreverie:latest
+```
+
+如需從原始碼自行建置：
+
+```bash
+podman build -t heartreverie:latest .
 ```
 
 ## 📄 授權
