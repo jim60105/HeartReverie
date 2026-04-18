@@ -40,6 +40,7 @@
 | `promptFragments` | `array` | Markdown files to inject as Vento template variables |
 | `backendModule` | `string` | Path to backend module (relative to plugin dir), e.g., `"./handler.js"` or `"./handler.ts"` |
 | `frontendModule` | `string` | Path to frontend module (relative to plugin dir). **Must be `"./frontend.js"`** — the runtime loader hardcodes this filename. |
+| `frontendStyles` | `array<string>` | Relative paths to CSS files injected into the frontend `<head>` as `<link rel="stylesheet">` elements. Each entry must end with `.css`, must not be absolute, and must not contain `..` segments. |
 | `tags` | `array<string>` | XML tag names managed by this plugin (used for metadata/API response) |
 | `promptStripTags` | `array` | Tags/regex to strip from `previousContext` when building prompts |
 | `displayStripTags` | `array` | Tags/regex to strip from frontend display |
@@ -66,12 +67,12 @@ Each entry in the `promptFragments` array:
 
 ### Priority Conventions
 
-| Priority | Purpose | Example |
-|----------|---------|---------|
-| 10 | Start of prompt — framing instructions | threshold-lord start fragment |
-| 100 | Normal — standard instructions | de-robotization, writestyle, options, status |
-| 800 | Reinforcement — re-emphasize at end of prompt | writestyle-reinforce, context-compaction |
-| 900 | End of prompt — final instructions | threshold-lord end fragment |
+| Priority | Purpose |
+|----------|---------|
+| 10 | Start of prompt — framing instructions |
+| 100 | Normal — standard instructions (default) |
+| 800 | Reinforcement — re-emphasize at end of prompt |
+| 900 | End of prompt — final instructions |
 
 ### Adding to system.md
 
@@ -118,6 +119,27 @@ Use when tags may have attributes (e.g., `<T-task type="think">`).
 |-------------|--------|---------|
 | `<mytag>content</mytag>` | Plain text: `"mytag"` | options, status, user_message |
 | `<mytag attr="val">content</mytag>` | Regex: `"/<mytag\\b[^>]+>...`  | T-task |
+
+## Frontend Styles
+
+The `frontendStyles` array lists CSS files to inject into the frontend `<head>` as `<link rel="stylesheet">` elements. Styles are loaded **before** JS modules so component rendering sees the correct styles on first paint.
+
+- **Format**: Array of paths relative to the plugin directory (e.g., `"./styles/panel.css"`)
+- **Serving**: Each file is served at `/plugins/<name>/<path>` and injected as a `<link>` tag
+- **Load order**: Injected before JS frontend modules
+- **Validation**:
+  - Each entry must end with `.css`
+  - Absolute paths are rejected
+  - `..` segments are rejected
+  - The resolved path must remain within the plugin directory
+
+Example:
+
+```json
+{
+  "frontendStyles": ["./styles/panel.css", "./styles/toast.css"]
+}
+```
 
 ## Parameters
 
@@ -253,6 +275,18 @@ The `/plugins/:name/:file` route only serves files declared as `frontendModule` 
   "displayStripTags": ["user_message"],
   "tags": ["user_message"],
   "promptStripTags": ["user_message"]
+}
+```
+
+### frontend-only
+
+```json
+{
+  "name": "response-notify",
+  "version": "1.0.0",
+  "description": "Browser notification when LLM response generation completes",
+  "type": "frontend-only",
+  "frontendModule": "./frontend.js"
 }
 ```
 

@@ -12,6 +12,7 @@
 - [Frontend Hooks](#frontend-hooks)
   - [Frontend Registration Pattern](#frontend-registration-pattern)
   - [The Placeholder Pattern](#the-placeholder-pattern)
+  - [Notification Hook](#notification-hook)
 - [Security Notes](#security-notes)
 - [Code Style](#code-style)
 
@@ -157,11 +158,12 @@ log.error("Execution failed", { exitCode: 1, stderr: "..." });
 
 Frontend modules are ES modules loaded by the browser. They register synchronous handlers via `FrontendHookDispatcher`.
 
-### Frontend Hook Stage
+### Frontend Hook Stages
 
 | Stage | Purpose | Context Parameters |
 |-------|---------|-------------------|
 | `frontend-render` | Custom tag extraction and rendering | `{ text, placeholderMap, options }` |
+| `notification` | Browser notification when events occur (e.g., `chat:done`) | `{ event, data, notify }` |
 
 - `text` (`string`): The raw LLM output text before Markdown parsing
 - `placeholderMap` (`Map<string, string>`): Map of placeholder strings → rendered HTML
@@ -218,15 +220,44 @@ function renderMyTag(content) {
 **Key points:**
 - Always use unique placeholder names (include plugin name to avoid collisions)
 - Use `escapeHtml()` from `/js/utils.js` for any user content in rendered HTML
-- Priority controls rendering order — lower priorities extract first (e.g., status at 40, options at 50)
+- Priority controls rendering order — lower priorities extract first
 
-### Frontend Priority Conventions
+### Notification Hook
 
-| Priority | Plugin | Purpose |
-|----------|--------|---------|
-| 40 | status | Status panel rendering |
-| 50 | options | Options panel rendering |
-| 100 | (default) | Standard rendering |
+The `notification` hook is dispatched by the system on events such as `chat:done`. Use it to surface browser or in-app notifications for lifecycle events.
+
+**When it fires:** dispatched by the system on events like `chat:done`.
+
+**Context parameters:**
+
+- `event` (`string`): Event name (e.g., `'chat:done'`)
+- `data` (`object`): Event-specific data
+- `notify` (`function`): Call to show a notification. Accepts an options object:
+  - `title` (`string`, required)
+  - `body` (`string`, optional)
+  - `level` (`'info' | 'success' | 'warning' | 'error'`, optional)
+  - `position` (`string`, optional)
+  - `channel` (`'in-app' | 'system' | 'auto'`, optional)
+  - `duration` (`number`, optional)
+
+Example (from the `response-notify` plugin):
+
+```javascript
+export function register(hooks) {
+  hooks.register('notification', (context) => {
+    if (context.event !== 'chat:done') return;
+    if (typeof context.notify !== 'function') return;
+
+    const channel = document.visibilityState === 'hidden' ? 'auto' : 'in-app';
+    context.notify({
+      title: '故事生成完成',
+      body: '新的章節已經寫入完成',
+      level: 'success',
+      channel,
+    });
+  }, 100);
+}
+```
 
 ---
 

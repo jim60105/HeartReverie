@@ -211,6 +211,33 @@ Key points:
 - Import `escapeHtml` from `'/js/utils.js'` for safe rendering
 - Frontend code style: ESM, **single quotes**, no build step, no framework
 
+### Notification Hook
+
+Frontend modules can also register a `notification` hook, dispatched by the system on events such as `chat:done`. The context is `{ event, data, notify }`:
+
+- `event` (string): Event name (e.g., `'chat:done'`)
+- `data` (object): Event-specific data
+- `notify` (function): Call to show a notification — accepts `{ title, body?, level?, position?, channel?, duration? }`
+
+Example (from the `response-notify` plugin):
+
+```javascript
+export function register(hooks) {
+  hooks.register('notification', (context) => {
+    if (context.event !== 'chat:done') return;
+    if (typeof context.notify !== 'function') return;
+
+    const channel = document.visibilityState === 'hidden' ? 'auto' : 'in-app';
+    context.notify({
+      title: '故事生成完成',
+      body: '新的章節已經寫入完成',
+      level: 'success',
+      channel,
+    });
+  }, 100);
+}
+```
+
 For the full frontend hook API, read `references/hook-api.md`.
 
 ## Step 8: Generate README.md
@@ -258,20 +285,3 @@ Run these checks before considering the plugin complete:
 4. **Path safety**: All file paths resolve within `plugins/<name>/` (no `../` traversal)
 5. **system.md integration**: If prompt fragments use named variables, confirm `{{ variable_name }}` exists in `system.md`
 6. **Run tests**: `deno test --allow-read --allow-write --allow-env --allow-net` to verify nothing is broken
-
----
-
-## Quick Reference: Existing Plugin Variables
-
-| Variable | Plugin | Priority |
-|----------|--------|----------|
-| `threshold_lord_start` | threshold-lord | 10 |
-| `de_robotization` | de-robotization | 100 |
-| `t_task` | t-task | 100 |
-| `t_task_think_format` | t-task | 100 |
-| `writestyle` | writestyle | 100 |
-| `options` | options | 100 |
-| `status` | status | 100 |
-| `context_compaction` | context-compaction | 800 |
-| `writestyle_reinforce` | writestyle | 800 |
-| `threshold_lord_end` | threshold-lord | 900 |
