@@ -19,6 +19,7 @@ skills/
 .github/
 serve.sh
 AGENTS.md
+scripts/
 
 # Rust source (binary is at plugins/state/state-patches)
 plugins/state/rust/
