@@ -17,6 +17,7 @@ import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
 import type { AppConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
+import { resolveTargetChapterNumber } from "./story.ts";
 import { createLogger, createLlmLogger } from "./logger.ts";
 
 const log = createLogger("llm");
@@ -224,16 +225,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   }
 
   // 6. Determine target chapter: reuse last empty file or create next
-  let targetNum: number;
-  const lastFile = chapterFiles[chapterFiles.length - 1];
-  if (lastFile && chapters[chapters.length - 1]?.content.trim() === "") {
-    targetNum = parseInt(lastFile, 10);
-  } else {
-    const maxNum = chapterFiles.length > 0
-      ? Math.max(...chapterFiles.map((f) => parseInt(f, 10)))
-      : 0;
-    targetNum = maxNum + 1;
-  }
+  const targetNum: number = resolveTargetChapterNumber(chapterFiles, chapters);
   const padded = String(targetNum).padStart(3, "0");
 
   await Deno.mkdir(storyDir, { recursive: true, mode: 0o775 });

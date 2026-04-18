@@ -792,6 +792,60 @@ Deno.test("PluginManager", async (t) => {
         assertEquals(pm.getPluginStyles("abs-plugin"), []);
       });
     });
+
+    await t.step("getDynamicVariables - enriched context", async (t) => {
+      await t.step("passes all rich fields to provider", async () => {
+        const pluginDir = join(tmpDir, "dynvars-rich");
+        const pDir = join(pluginDir, "rich-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "rich-plugin",
+            version: "1.0.0",
+            backendModule: "index.js",
+          }),
+        );
+        await Deno.writeTextFile(
+          join(pDir, "index.js"),
+          `
+            let captured = null;
+            export function getDynamicVariables(ctx) {
+              captured = ctx;
+              globalThis.__richPluginCapturedCtx = ctx;
+              return { echo_chapter: String(ctx.chapterNumber) };
+            }
+          `,
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const ctx = {
+          series: "fantasy",
+          name: "quest",
+          storyDir: "/tmp/quest",
+          userInput: "enter the cave",
+          chapterNumber: 3,
+          previousContent: "prior chapter body",
+          isFirstRound: false,
+          chapterCount: 3,
+        };
+        const vars = await pm.getDynamicVariables(ctx);
+        assertEquals(vars.echo_chapter, "3");
+
+        const captured = (globalThis as unknown as { __richPluginCapturedCtx?: typeof ctx }).__richPluginCapturedCtx;
+        assertEquals(captured?.series, "fantasy");
+        assertEquals(captured?.name, "quest");
+        assertEquals(captured?.storyDir, "/tmp/quest");
+        assertEquals(captured?.userInput, "enter the cave");
+        assertEquals(captured?.chapterNumber, 3);
+        assertEquals(captured?.previousContent, "prior chapter body");
+        assertEquals(captured?.isFirstRound, false);
+        assertEquals(captured?.chapterCount, 3);
+      });
+    });
   } finally {
     logStub.restore();
     warnStub.restore();

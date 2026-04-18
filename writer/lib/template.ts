@@ -76,6 +76,9 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       isFirstRound,
       templateOverride,
       storyDir,
+      chapterNumber,
+      previousContent,
+      chapterCount,
     }: RenderOptions = {},
   ): Promise<RenderResult> {
     const systemTemplatePath: string = join(ROOT_DIR, "system.md");
@@ -152,6 +155,11 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       series: series || "",
       name: story || "",
       storyDir: storyDir || "",
+      userInput: userInput || "",
+      chapterNumber: chapterNumber ?? 1,
+      previousContent: previousContent || "",
+      isFirstRound: isFirstRound || false,
+      chapterCount: chapterCount ?? 0,
     });
 
     try {
