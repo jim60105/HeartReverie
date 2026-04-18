@@ -81,9 +81,9 @@ The logger currently supports a single file target (the global audit log at `pla
 
 ### Decision 5: Token count extraction
 
-**Choice:** Extract token usage from the final SSE chunk's `usage` field if present. Log `null` for any field not provided by the API. Do NOT add provider-specific opt-in headers — simply record usage if the provider emits it.
+**Choice:** Extract token usage from the final SSE chunk's `usage` field if present. Log `null` for any field not provided by the API. Include `stream_options: { include_usage: true }` in the request body to opt-in to usage reporting on OpenAI-compatible APIs.
 
-**Rationale:** OpenRouter and some OpenAI-compatible APIs include a `usage` object in the final streaming chunk. However, many providers only emit this when explicitly requested (e.g., `stream_options: { include_usage: true }`). Rather than adding provider-specific logic, we take a best-effort approach: parse it if present, null otherwise. This can be enhanced later per-provider.
+**Rationale:** OpenRouter and OpenAI-compatible APIs include a `usage` object in the final streaming chunk when `stream_options.include_usage` is set to `true`. This is a standard OpenAI API parameter (not provider-specific), so we include it to maximize token reporting coverage. If a provider ignores this option, the fields remain `null` — graceful degradation.
 
 ### Decision 6: File-only logging for LLM entries
 
