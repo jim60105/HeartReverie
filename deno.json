@@ -11,11 +11,11 @@
   },
   "tasks": {
     "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts",
-    "dev:reader": "cd reader-src && deno run -A npm:vite@^6.3.2",
-    "build:reader": "cd reader-src && deno run -A npm:vue-tsc@^2.2.8 --noEmit && deno run -A npm:vite@^6.3.2 build --outDir ../reader-dist",
+    "dev:reader": "cd reader-src && deno run -A npm:vite@^8.0.0",
+    "build:reader": "cd reader-src && deno run -A npm:vue-tsc@^3.0.0 --noEmit && deno run -A npm:vite@^8.0.0 build --outDir ../reader-dist",
     "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/",
-    "test:frontend": "cd reader-src && deno run -A npm:vitest@^3.1.2 run",
-    "test": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/ && cd reader-src && deno run -A npm:vitest@^3.1.2 run"
+    "test:frontend": "cd reader-src && deno run -A npm:vitest@^4.0.0 run",
+    "test": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/ && cd reader-src && deno run -A npm:vitest@^4.0.0 run"
   },
   "imports": {
     "@hono/hono": "jsr:@hono/hono@^4.12.14",
@@ -28,17 +28,17 @@
     "ventojs": "npm:ventojs@^2.3.1",
     "vue": "npm:vue@^3.5.32",
     "vue-router": "npm:vue-router@^5.0.4",
-    "marked": "npm:marked@^15.0.12",
+    "marked": "npm:marked@^18.0.0",
     "dompurify": "npm:dompurify@^3.4.0",
-    "@vitejs/plugin-vue": "npm:@vitejs/plugin-vue@^5.2.4",
+    "@vitejs/plugin-vue": "npm:@vitejs/plugin-vue@^6.0.0",
     "@vue/test-utils": "npm:@vue/test-utils@^2.4.6",
-    "autoprefixer": "npm:autoprefixer@^10.5.0",
     "happy-dom": "npm:happy-dom@^20.9.0",
     "postcss": "npm:postcss@^8.5.10",
-    "tailwindcss": "npm:tailwindcss@^3.4.19",
-    "typescript": "npm:typescript@^5.9.3",
-    "vite": "npm:vite@^6.4.2",
-    "vitest": "npm:vitest@^3.2.4",
-    "vue-tsc": "npm:vue-tsc@^2.2.12"
+    "tailwindcss": "npm:tailwindcss@^4.0.0",
+    "@tailwindcss/postcss": "npm:@tailwindcss/postcss@^4.0.0",
+    "typescript": "npm:typescript@^6.0.0",
+    "vite": "npm:vite@^8.0.0",
+    "vitest": "npm:vitest@^4.0.0",
+    "vue-tsc": "npm:vue-tsc@^3.0.0"
   }
 }
