@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import { useRoute } from "vue-router";
 import { useChapterNav } from "@/composables/useChapterNav";
 import AppHeader from "./AppHeader.vue";
 import ContentArea from "./ContentArea.vue";
 import ChatInput from "./ChatInput.vue";
 import { useChatApi } from "@/composables/useChatApi";
 
+const route = useRoute();
 const { isLastChapter, chapters, getBackendContext, reloadToLast } = useChapterNav();
 const { sendMessage, resendMessage } = useChatApi();
+
+const chatInputKey = computed(() =>
+  `${route.params.series ?? ""}:${route.params.story ?? ""}`
+);
 
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 
@@ -57,6 +63,7 @@ onMounted(() => {
       <ContentArea />
       <ChatInput
         v-if="showChatInput"
+        :key="chatInputKey"
         ref="chatInputRef"
         @send="handleSend"
         @resend="handleResend"
