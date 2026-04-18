@@ -56,25 +56,11 @@ describe("router integration with useChapterNav", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: () => Promise.resolve([1, 2, 3]),
-        headers: new Headers(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ content: "ch1" }),
-        headers: new Headers(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ content: "ch2" }),
-        headers: new Headers(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ content: "ch3" }),
+        json: () => Promise.resolve([
+          { number: 1, content: "ch1" },
+          { number: 2, content: "ch2" },
+          { number: 3, content: "ch3" },
+        ]),
         headers: new Headers(),
       });
     vi.stubGlobal("fetch", fetchMock);
@@ -122,25 +108,11 @@ describe("router integration with useChapterNav", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: () => Promise.resolve([1, 2, 3]),
-        headers: new Headers(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ content: "ch1" }),
-        headers: new Headers(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ content: "ch2" }),
-        headers: new Headers(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ content: "ch3" }),
+        json: () => Promise.resolve([
+          { number: 1, content: "ch1" },
+          { number: 2, content: "ch2" },
+          { number: 3, content: "ch3" },
+        ]),
         headers: new Headers(),
       });
     vi.stubGlobal("fetch", fetchMock);

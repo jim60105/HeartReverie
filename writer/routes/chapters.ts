@@ -26,6 +26,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
   const { safePath } = deps;
 
   // GET /api/stories/:series/:name/chapters — list chapters
+  // Query params: ?include=content — returns [{number, content}] instead of [number]
   app.get(
     "/api/stories/:series/:name/chapters",
     validateParams,
@@ -35,16 +36,28 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         return c.json(problemJson("Bad Request", 400, "Invalid path"), 400);
       }
 
+      const includeContent = c.req.query("include") === "content";
+
       try {
         const entries = [];
         for await (const entry of Deno.readDir(dirPath)) {
           entries.push(entry.name);
         }
-        const chapters = entries
+        const chapterFiles = entries
           .filter((f) => /^\d+\.md$/.test(f))
-          .map((f) => parseInt(f, 10))
-          .sort((a, b) => a - b);
-        return c.json(chapters);
+          .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+        if (!includeContent) {
+          return c.json(chapterFiles.map((f) => parseInt(f, 10)));
+        }
+
+        // Batch mode: read all chapter contents in one response
+        const results: { number: number; content: string }[] = [];
+        for (const file of chapterFiles) {
+          const content = await Deno.readTextFile(join(dirPath, file));
+          results.push({ number: parseInt(file, 10), content });
+        }
+        return c.json(results);
       } catch (err: unknown) {
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);

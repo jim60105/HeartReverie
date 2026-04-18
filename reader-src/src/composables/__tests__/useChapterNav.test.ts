@@ -137,19 +137,13 @@ describe("useChapterNav", () => {
   });
 
   it("loadFromBackend calls fetch and sets mode", async () => {
-    // Mock fetch to return chapter list then chapter content
+    // Mock fetch to return batch chapter response
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: () => Promise.resolve([1]),
-        headers: new Headers(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ content: "chapter 1 text" }),
+        json: () => Promise.resolve([{ number: 1, content: "chapter 1 text" }]),
         headers: new Headers(),
       });
     vi.stubGlobal("fetch", fetchMock);
@@ -181,13 +175,7 @@ describe("useChapterNav", () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: () => Promise.resolve([1]),
-          headers: new Headers(),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({ content: "ch1" }),
+          json: () => Promise.resolve([{ number: 1, content: "ch1" }]),
           headers: new Headers(),
         });
       vi.stubGlobal("fetch", fetchMock);
@@ -211,13 +199,7 @@ describe("useChapterNav", () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: () => Promise.resolve([1]),
-          headers: new Headers(),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({ content: "ch1" }),
+          json: () => Promise.resolve([{ number: 1, content: "ch1" }]),
           headers: new Headers(),
         });
       vi.stubGlobal("fetch", fetchMock);
@@ -225,11 +207,11 @@ describe("useChapterNav", () => {
       const nav = await getNav();
       await nav.loadFromBackend("series1", "story1");
 
-      // After loadFromBackend, the fetch count should be 2 (list + content).
+      // After loadFromBackend, the fetch count should be 1 (batch request).
       // If polling started, additional fetches would be queued.
       // Wait a tick to ensure no immediate polling.
       await new Promise((r) => setTimeout(r, 0));
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
 });
