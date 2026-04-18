@@ -9,7 +9,8 @@
 ```
 system.md                 # Main Vento prompt template (entry point for LLM system prompt)
 entrypoint.sh             # Unified startup script: generates TLS certs, launches Deno server
-serve.sh                  # Dev startup script (calls entrypoint.sh)
+scripts/
+  serve.sh                # Dev startup script (calls entrypoint.sh)
 writer/                   # Backend server (Hono, TypeScript ESM, Deno)
   app.ts                  # Hono app setup: middleware, route registration, static serving
   server.ts               # Server entry: TLS/HTTP listener startup
@@ -115,7 +116,7 @@ assets/                   # Static assets (images)
 ## Running the Server
 
 ```bash
-./serve.sh                # Dev: starts HTTPS server at https://localhost:8443
+./scripts/serve.sh        # Dev: starts HTTPS server at https://localhost:8443
 ./entrypoint.sh           # Production: unified startup (also used by container)
 ```
 
