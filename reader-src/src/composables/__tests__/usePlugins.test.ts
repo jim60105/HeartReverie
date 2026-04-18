@@ -115,3 +115,112 @@ describe("usePlugins", () => {
     expect(p.plugins.value).toEqual([]);
   });
 });
+
+describe("usePlugins - CSS injection", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    stubSessionStorage();
+    document.head.querySelectorAll("link[data-plugin]").forEach((el) =>
+      el.remove()
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.head.querySelectorAll("link[data-plugin]").forEach((el) =>
+      el.remove()
+    );
+  });
+
+  async function getPlugins() {
+    const mod = await import("@/composables/usePlugins");
+    return mod.usePlugins();
+  }
+
+  it("injects link elements for plugins with frontendStyles", async () => {
+    mockFetch([
+      {
+        name: "styled",
+        hasFrontendModule: false,
+        frontendStyles: ["/plugins/styled/styles.css"],
+      },
+    ]);
+    const p = await getPlugins();
+    await p.initPlugins();
+    const link = document.head.querySelector<HTMLLinkElement>(
+      'link[href="/plugins/styled/styles.css"]',
+    );
+    expect(link).not.toBeNull();
+    expect(link?.rel).toBe("stylesheet");
+  });
+
+  it("sets data-plugin attribute on injected links", async () => {
+    mockFetch([
+      {
+        name: "my-plugin",
+        hasFrontendModule: false,
+        frontendStyles: ["/plugins/my-plugin/a.css"],
+      },
+    ]);
+    const p = await getPlugins();
+    await p.initPlugins();
+    const link = document.head.querySelector<HTMLLinkElement>(
+      'link[href="/plugins/my-plugin/a.css"]',
+    );
+    expect(link?.dataset.plugin).toBe("my-plugin");
+  });
+
+  it("deduplicates identical hrefs across plugins", async () => {
+    mockFetch([
+      {
+        name: "p1",
+        hasFrontendModule: false,
+        frontendStyles: ["/plugins/shared/s.css", "/plugins/shared/s.css"],
+      },
+      {
+        name: "p2",
+        hasFrontendModule: false,
+        frontendStyles: ["/plugins/shared/s.css"],
+      },
+    ]);
+    const p = await getPlugins();
+    await p.initPlugins();
+    const links = document.head.querySelectorAll(
+      'link[href="/plugins/shared/s.css"]',
+    );
+    expect(links.length).toBe(1);
+  });
+
+  it("onerror handler removes the link element", async () => {
+    mockFetch([
+      {
+        name: "broken",
+        hasFrontendModule: false,
+        frontendStyles: ["/plugins/broken/missing.css"],
+      },
+    ]);
+    const p = await getPlugins();
+    await p.initPlugins();
+    const link = document.head.querySelector<HTMLLinkElement>(
+      'link[href="/plugins/broken/missing.css"]',
+    );
+    expect(link).not.toBeNull();
+    link?.onerror?.(new Event("error"));
+    expect(
+      document.head.querySelector(
+        'link[href="/plugins/broken/missing.css"]',
+      ),
+    ).toBeNull();
+  });
+
+  it("skips plugins without frontendStyles", async () => {
+    mockFetch([
+      { name: "no-styles", hasFrontendModule: false },
+    ]);
+    const p = await getPlugins();
+    await p.initPlugins();
+    expect(
+      document.head.querySelectorAll('link[data-plugin="no-styles"]').length,
+    ).toBe(0);
+  });
+});

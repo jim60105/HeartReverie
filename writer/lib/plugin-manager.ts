@@ -21,6 +21,7 @@ interface PluginEntry {
   readonly manifest: PluginManifest;
   readonly dir: string;
   readonly source: string;
+  readonly validatedStyles: string[];
 }
 
 interface PromptVariables {
@@ -181,8 +182,114 @@ export class PluginManager {
         );
       }
 
-      this.#plugins.set(manifest.name, { manifest, dir: pluginDir, source });
+      // Validate and normalize frontendStyles
+      const validatedStyles = await this.#validateFrontendStyles(manifest, pluginDir);
+
+      this.#plugins.set(manifest.name, { manifest, dir: pluginDir, source, validatedStyles });
     }
+  }
+
+  /**
+   * Validate, normalize, and deduplicate a plugin's frontendStyles entries.
+   * Returns an array of normalized relative paths (forward-slash, no leading "./")
+   * whose resolved targets exist on disk and are contained within the plugin directory.
+   */
+  async #validateFrontendStyles(manifest: PluginManifest, pluginDir: string): Promise<string[]> {
+    const raw: unknown = manifest.frontendStyles;
+    if (raw === undefined) return [];
+    if (!Array.isArray(raw)) {
+      console.warn(
+        `⚠️  Plugin '${manifest.name}' has non-array frontendStyles — ignoring`
+      );
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const validated: string[] = [];
+
+    for (const entry of raw) {
+      if (typeof entry !== "string" || entry.length === 0) {
+        console.warn(
+          `⚠️  Plugin '${manifest.name}' has invalid frontendStyles entry (must be non-empty string) — skipping`
+        );
+        continue;
+      }
+      if (!entry.toLowerCase().endsWith(".css")) {
+        console.warn(
+          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' does not end with .css — skipping`
+        );
+        continue;
+      }
+      if (isAbsolute(entry)) {
+        console.warn(
+          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' is an absolute path — skipping`
+        );
+        continue;
+      }
+      // Reject path traversal segments
+      const segments = entry.split(/[\\/]/);
+      if (segments.some((s) => s === "..")) {
+        console.warn(
+          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' contains '..' — skipping`
+        );
+        continue;
+      }
+      // Reject backslashes and URL-hostile characters
+      if (/[\\#?%]/.test(entry)) {
+        console.warn(
+          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' contains invalid characters — skipping`
+        );
+        continue;
+      }
+
+      // Normalize: strip leading "./" (possibly repeated)
+      let normalized = entry;
+      while (normalized.startsWith("./")) {
+        normalized = normalized.slice(2);
+      }
+
+      const resolved = resolve(pluginDir, normalized);
+      if (!isPathContained(pluginDir, resolved)) {
+        console.warn(
+          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' escapes plugin directory — skipping`
+        );
+        continue;
+      }
+
+      // Deduplicate by resolved path
+      if (seen.has(resolved)) continue;
+      seen.add(resolved);
+
+      // Verify file exists; log warning and skip if missing (consistent with promptFragments)
+      try {
+        const stat = await Deno.stat(resolved);
+        if (!stat.isFile) {
+          console.warn(
+            `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' is not a file — skipping`
+          );
+          continue;
+        }
+        // Symlink-safe: verify real path is still within plugin directory
+        const realFile = await Deno.realPath(resolved);
+        const realPluginDir = await Deno.realPath(pluginDir);
+        if (!realFile.startsWith(realPluginDir + SEPARATOR) && realFile !== realPluginDir) {
+          console.warn(
+            `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' resolves outside plugin directory — skipping`
+          );
+          continue;
+        }
+      } catch (err: unknown) {
+        console.warn(
+          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' not found:`,
+          err instanceof Error ? err.message : String(err)
+        );
+        continue;
+      }
+
+      validated.push(normalized);
+    }
+
+    return validated;
   }
 
   /**
@@ -389,6 +496,16 @@ export class PluginManager {
   getPluginDir(name: string): string | null {
     const entry = this.#plugins.get(name);
     return entry ? entry.dir : null;
+  }
+
+  /**
+   * Returns the validated, normalized list of relative CSS paths declared in
+   * a plugin's frontendStyles manifest field. Returns an empty array if the
+   * plugin is unknown or has no valid styles.
+   */
+  getPluginStyles(name: string): string[] {
+    const entry = this.#plugins.get(name);
+    return entry ? [...entry.validatedStyles] : [];
   }
 
   /** Returns the absolute path to the built-in plugins directory. */

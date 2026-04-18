@@ -25,6 +25,7 @@ export interface PluginDescriptor {
   name: string;
   hasFrontendModule: boolean;
   displayStripTags?: string[];
+  frontendStyles?: string[];
 }
 
 export interface PluginManifest {

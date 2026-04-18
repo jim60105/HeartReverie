@@ -78,6 +78,14 @@ export interface PluginManifest {
   readonly displayStripTags?: readonly string[];
   readonly promptFragments?: readonly PromptFragment[];
   readonly parameters?: readonly PluginParameter[];
+  /**
+   * Array of relative paths (from the plugin directory) to CSS files to inject
+   * into the frontend via `<link rel="stylesheet">`. Each entry must end with
+   * `.css`, must not be an absolute path, and must not contain `..` segments
+   * (no path traversal). Paths are resolved and contained within the plugin's
+   * directory at load time.
+   */
+  readonly frontendStyles?: readonly string[];
 }
 
 /** A prompt fragment declaration in a plugin manifest. */

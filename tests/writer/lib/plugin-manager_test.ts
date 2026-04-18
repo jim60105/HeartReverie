@@ -624,6 +624,174 @@ Deno.test("PluginManager", async (t) => {
       assertEquals(plugins[0]!.name, "data-plugin");
       assertEquals(plugins[0]!.description, "data only");
     });
+
+    await t.step("frontendStyles", async (t) => {
+      await t.step("valid array of CSS paths is parsed and exposed via getPluginStyles", async () => {
+        const pluginDir = join(tmpDir, "styles-valid");
+        const pDir = join(pluginDir, "style-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "a.css"), "/* a */");
+        await Deno.writeTextFile(join(pDir, "b.css"), "/* b */");
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "style-plugin",
+            version: "1.0.0",
+            frontendStyles: ["a.css", "b.css"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginStyles("style-plugin"), ["a.css", "b.css"]);
+      });
+
+      await t.step("missing CSS file is skipped with a warning", async () => {
+        const pluginDir = join(tmpDir, "styles-missing");
+        const pDir = join(pluginDir, "miss-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "exists.css"), "/* x */");
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "miss-plugin",
+            version: "1.0.0",
+            frontendStyles: ["exists.css", "missing.css"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginStyles("miss-plugin"), ["exists.css"]);
+        assertTrue(
+          warnStub.calls.some((c) =>
+            String(c.args[0]).includes("missing.css") &&
+            String(c.args[0]).includes("not found")
+          ),
+        );
+      });
+
+      await t.step("path traversal entry is rejected", async () => {
+        const pluginDir = join(tmpDir, "styles-traversal");
+        const pDir = join(pluginDir, "trav-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "trav-plugin",
+            version: "1.0.0",
+            frontendStyles: ["../escape.css"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginStyles("trav-plugin"), []);
+      });
+
+      await t.step("non-array frontendStyles is ignored with warning", async () => {
+        const pluginDir = join(tmpDir, "styles-nonarray");
+        const pDir = join(pluginDir, "na-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "na-plugin",
+            version: "1.0.0",
+            frontendStyles: "not-an-array.css",
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginStyles("na-plugin"), []);
+      });
+
+      await t.step("non-.css extension is rejected", async () => {
+        const pluginDir = join(tmpDir, "styles-badext");
+        const pDir = join(pluginDir, "ext-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "style.js"), "/* not css */");
+        await Deno.writeTextFile(join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "ext-plugin",
+            version: "1.0.0",
+            frontendStyles: ["style.js"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginStyles("ext-plugin"), []);
+      });
+
+      await t.step("leading ./ prefix is normalized", async () => {
+        const pluginDir = join(tmpDir, "styles-prefix");
+        const pDir = join(pluginDir, "pref-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "main.css"), "/* m */");
+        await Deno.writeTextFile(join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "pref-plugin",
+            version: "1.0.0",
+            frontendStyles: ["./main.css"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginStyles("pref-plugin"), ["main.css"]);
+      });
+
+      await t.step("duplicate entries are deduplicated", async () => {
+        const pluginDir = join(tmpDir, "styles-dup");
+        const pDir = join(pluginDir, "dup-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "s.css"), "/* s */");
+        await Deno.writeTextFile(join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "dup-plugin",
+            version: "1.0.0",
+            frontendStyles: ["s.css", "./s.css", "s.css"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginStyles("dup-plugin"), ["s.css"]);
+      });
+
+      await t.step("absolute path is rejected", async () => {
+        const pluginDir = join(tmpDir, "styles-abs");
+        const pDir = join(pluginDir, "abs-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "abs-plugin",
+            version: "1.0.0",
+            frontendStyles: ["/etc/passwd.css"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginStyles("abs-plugin"), []);
+      });
+    });
   } finally {
     logStub.restore();
     warnStub.restore();

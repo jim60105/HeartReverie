@@ -31,6 +31,9 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       tags: p.tags || [],
       hasFrontendModule: !!p.frontendModule,
       displayStripTags: p.displayStripTags || [],
+      frontendStyles: pluginManager.getPluginStyles(p.name).map(
+        (cssPath) => `/plugins/${p.name}/${cssPath}`,
+      ),
     }));
     return c.json(plugins);
   });
@@ -120,6 +123,41 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
           const content = await Deno.readTextFile(modulePath);
           return new Response(content, {
             headers: { "Content-Type": "application/javascript" },
+          });
+        } catch {
+          return c.json(problemJson("Not Found", 404, "Not found"), 404);
+        }
+      });
+    }
+  }
+
+  // Serve plugin CSS files declared in manifest.frontendStyles
+  for (const plugin of pluginManager.getPlugins()) {
+    const styles = pluginManager.getPluginStyles(plugin.name);
+    if (styles.length === 0) continue;
+    const pluginDir = pluginManager.getPluginDir(plugin.name);
+    if (!pluginDir) continue;
+
+    for (const cssPath of styles) {
+      const cssFilePath = resolve(pluginDir, cssPath);
+      // Containment check against raw resolved path
+      if (!cssFilePath.startsWith(pluginDir + SEPARATOR)) {
+        console.warn(
+          `⚠️  Plugin '${plugin.name}' CSS '${cssPath}' escapes plugin directory — skipping`
+        );
+        continue;
+      }
+      app.get(`/plugins/${plugin.name}/${cssPath}`, async (c) => {
+        try {
+          // Symlink-safe canonicalization (consistent with _shared route)
+          const realPluginDir = await Deno.realPath(pluginDir);
+          const realFile = await Deno.realPath(cssFilePath);
+          if (!realFile.startsWith(realPluginDir + SEPARATOR)) {
+            return c.json(problemJson("Not Found", 404, "Not found"), 404);
+          }
+          const content = await Deno.readTextFile(realFile);
+          return new Response(content, {
+            headers: { "Content-Type": "text/css; charset=utf-8" },
           });
         } catch {
           return c.json(problemJson("Not Found", 404, "Not found"), 404);
