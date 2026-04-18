@@ -1,49 +1,43 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@hono/hono@4": "4.12.12",
-    "jsr:@std/assert@1": "1.0.18",
-    "jsr:@std/assert@^1.0.17": "1.0.18",
-    "jsr:@std/async@^1.1.0": "1.1.1",
-    "jsr:@std/crypto@1": "1.0.5",
+    "jsr:@hono/hono@^4.12.14": "4.12.14",
+    "jsr:@std/assert@^1.0.17": "1.0.19",
+    "jsr:@std/assert@^1.0.19": "1.0.19",
+    "jsr:@std/crypto@^1.0.5": "1.0.5",
     "jsr:@std/data-structures@^1.0.10": "1.0.10",
-    "jsr:@std/dotenv@0.225": "0.225.6",
+    "jsr:@std/dotenv@~0.225.6": "0.225.6",
     "jsr:@std/fs@^1.0.22": "1.0.22",
     "jsr:@std/internal@^1.0.12": "1.0.12",
-    "jsr:@std/path@1": "1.1.4",
     "jsr:@std/path@^1.1.4": "1.1.4",
-    "jsr:@std/testing@1": "1.0.17",
-    "jsr:@std/yaml@1": "1.0.11",
-    "npm:@types/dompurify@^3.2.0": "3.2.0",
-    "npm:@vitejs/plugin-vue@^5.2.3": "5.2.4_vite@6.4.2_vue@3.5.32__typescript@5.9.3_typescript@5.9.3",
+    "jsr:@std/testing@^1.0.17": "1.0.17",
+    "jsr:@std/yaml@^1.0.12": "1.0.12",
+    "npm:@vitejs/plugin-vue@^5.2.4": "5.2.4_vite@6.4.2_vue@3.5.32__typescript@5.9.3_typescript@5.9.3",
     "npm:@vue/test-utils@^2.4.6": "2.4.6",
-    "npm:autoprefixer@^10.4.21": "10.5.0_postcss@8.5.10",
-    "npm:dompurify@^3.3.3": "3.4.0",
+    "npm:autoprefixer@^10.5.0": "10.5.0_postcss@8.5.10",
+    "npm:dompurify@^3.4.0": "3.4.0",
     "npm:happy-dom@^20.9.0": "20.9.0",
     "npm:marked@^15.0.12": "15.0.12",
-    "npm:postcss@^8.5.3": "8.5.10",
-    "npm:tailwindcss@^3.4.17": "3.4.19",
-    "npm:typescript@^5.8.3": "5.9.3",
+    "npm:postcss@^8.5.10": "8.5.10",
+    "npm:tailwindcss@^3.4.19": "3.4.19",
+    "npm:typescript@^5.9.3": "5.9.3",
     "npm:ventojs@^2.3.1": "2.3.1",
-    "npm:vite@*": "6.4.2",
-    "npm:vite@^6.3.2": "6.4.2",
+    "npm:vite@^6.4.2": "6.4.2",
     "npm:vitest@^3.1.2": "3.2.4_happy-dom@20.9.0",
+    "npm:vitest@^3.2.4": "3.2.4_happy-dom@20.9.0",
     "npm:vue-router@^5.0.4": "5.0.4_vue@3.5.32__typescript@5.9.3_typescript@5.9.3",
-    "npm:vue-tsc@^2.2.8": "2.2.12_typescript@5.9.3",
-    "npm:vue@^3.5.13": "3.5.32_typescript@5.9.3"
+    "npm:vue-tsc@^2.2.12": "2.2.12_typescript@5.9.3",
+    "npm:vue@^3.5.32": "3.5.32_typescript@5.9.3"
   },
   "jsr": {
-    "@hono/hono@4.12.12": {
-      "integrity": "dc765178d38b5c4619b358062f6aa5514f7205bb0530b2823ff6265bec69c535"
+    "@hono/hono@4.12.14": {
+      "integrity": "4eedba4b53f27c8e0db683d515e11ec3b88b8fdc1748e229cd7988d243ca018d"
     },
-    "@std/assert@1.0.18": {
-      "integrity": "270245e9c2c13b446286de475131dc688ca9abcd94fc5db41d43a219b34d1c78",
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
       "dependencies": [
         "jsr:@std/internal"
       ]
-    },
-    "@std/async@1.1.1": {
-      "integrity": "8a79beb3378cc229ce65ba2c746cfd03e4855ddd891d1eb6b9e32128e0d5339c"
     },
     "@std/crypto@1.0.5": {
       "integrity": "0dcfbb319fe0bba1bd3af904ceb4f948cde1b92979ec1614528380ed308a3b40"
@@ -57,7 +51,7 @@
     "@std/fs@1.0.22": {
       "integrity": "de0f277a58a867147a8a01bc1b181d0dfa80bfddba8c9cf2bacd6747bcec9308",
       "dependencies": [
-        "jsr:@std/path@^1.1.4"
+        "jsr:@std/path"
       ]
     },
     "@std/internal@1.0.12": {
@@ -73,15 +67,14 @@
       "integrity": "87bdc2700fa98249d48a17cd72413352d3d3680dcfbdb64947fd0982d6bbf681",
       "dependencies": [
         "jsr:@std/assert@^1.0.17",
-        "jsr:@std/async",
         "jsr:@std/data-structures",
         "jsr:@std/fs",
         "jsr:@std/internal",
-        "jsr:@std/path@^1.1.4"
+        "jsr:@std/path"
       ]
     },
-    "@std/yaml@1.0.11": {
-      "integrity": "bd139ce77f2d06cbed3713c8b26d301d2a2e12ecc7986130a268107e212143ee"
+    "@std/yaml@1.0.12": {
+      "integrity": "7deabca4545bcedd07c5f69ea53acea71b8b4c67562f224e17b90d75944cb20c"
     }
   },
   "npm": {
@@ -443,13 +436,6 @@
     },
     "@types/deep-eql@4.0.2": {
       "integrity": "sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw=="
-    },
-    "@types/dompurify@3.2.0": {
-      "integrity": "sha512-Fgg31wv9QbLDA0SpTOXO3MaxySc4DKGLi8sna4/Utjo4r3ZRPdCt4UQee8BWr+Q5z21yifghREPJGYaEOEIACg==",
-      "dependencies": [
-        "dompurify"
-      ],
-      "deprecated": true
     },
     "@types/estree@1.0.8": {
       "integrity": "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="
@@ -1793,29 +1779,28 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@hono/hono@4",
-      "jsr:@std/assert@1",
-      "jsr:@std/crypto@1",
-      "jsr:@std/dotenv@0.225",
-      "jsr:@std/path@1",
-      "jsr:@std/testing@1",
-      "jsr:@std/yaml@1",
-      "npm:@types/dompurify@^3.2.0",
-      "npm:@vitejs/plugin-vue@^5.2.3",
+      "jsr:@hono/hono@^4.12.14",
+      "jsr:@std/assert@^1.0.19",
+      "jsr:@std/crypto@^1.0.5",
+      "jsr:@std/dotenv@~0.225.6",
+      "jsr:@std/path@^1.1.4",
+      "jsr:@std/testing@^1.0.17",
+      "jsr:@std/yaml@^1.0.12",
+      "npm:@vitejs/plugin-vue@^5.2.4",
       "npm:@vue/test-utils@^2.4.6",
-      "npm:autoprefixer@^10.4.21",
-      "npm:dompurify@^3.3.3",
+      "npm:autoprefixer@^10.5.0",
+      "npm:dompurify@^3.4.0",
       "npm:happy-dom@^20.9.0",
       "npm:marked@^15.0.12",
-      "npm:postcss@^8.5.3",
-      "npm:tailwindcss@^3.4.17",
-      "npm:typescript@^5.8.3",
+      "npm:postcss@^8.5.10",
+      "npm:tailwindcss@^3.4.19",
+      "npm:typescript@^5.9.3",
       "npm:ventojs@^2.3.1",
-      "npm:vite@^6.3.2",
-      "npm:vitest@^3.1.2",
+      "npm:vite@^6.4.2",
+      "npm:vitest@^3.2.4",
       "npm:vue-router@^5.0.4",
-      "npm:vue-tsc@^2.2.8",
-      "npm:vue@^3.5.13"
+      "npm:vue-tsc@^2.2.12",
+      "npm:vue@^3.5.32"
     ]
   }
 }
