@@ -109,7 +109,7 @@ playground/               # Story data directory (series/stories/chapters)
                           # Underscore-prefixed dirs (_lore/) are system-reserved
 openspec/                 # Spec-driven workflow: specs, changes, archives
 docs/                     # Documentation (Traditional Chinese)
-skills/                   # Copilot agent skills (e.g., heartreverie-create-plugin)
+.agents/                  # Copilot agent skills (e.g., heartreverie-create-plugin)
 assets/                   # Static assets (images)
 ```
 
