@@ -46,6 +46,8 @@ const LLM_MIN_P: number = numEnv("LLM_MIN_P", 0);
 const LLM_TOP_A: number = numEnv("LLM_TOP_A", 1);
 const BACKGROUND_IMAGE: string =
   Deno.env.get("BACKGROUND_IMAGE") || "/assets/heart.webp";
+const LOG_LEVEL: string = Deno.env.get("LOG_LEVEL") || "info";
+const LOG_FILE: string | undefined = Deno.env.get("LOG_FILE");
 const PROMPT_FILE: string = (() => {
   const raw = Deno.env.get("PROMPT_FILE");
   if (!raw) return join(PLAYGROUND_DIR, "_prompts", "system.md");
@@ -73,4 +75,6 @@ export {
   LLM_TOP_A,
   BACKGROUND_IMAGE,
   PROMPT_FILE,
+  LOG_LEVEL,
+  LOG_FILE,
 };

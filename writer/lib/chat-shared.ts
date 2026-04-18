@@ -17,6 +17,10 @@ import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
 import type { AppConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("llm");
+const fileLog = createLogger("file");
 
 /** Options for executing a chat request. */
 export interface ChatOptions {
@@ -64,9 +68,15 @@ export class ChatError extends Error {
  */
 export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   const { series, name, message, template, config, safePath, hookDispatcher, buildPromptFromStory, onDelta, signal } = options;
+  const correlationId = crypto.randomUUID();
+  const reqLog = log.withContext({ correlationId });
+  const reqFileLog = fileLog.withContext({ correlationId });
+
+  reqLog.info("Chat execution started", { series, story: name, messageLength: message.length });
 
   // 1. Validate API key
   if (!Deno.env.get("LLM_API_KEY")) {
+    reqLog.error("LLM_API_KEY not configured");
     throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
   }
 
@@ -113,6 +123,21 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     { role: "user", content: message },
   ];
 
+  reqLog.debug("LLM request payload", {
+    model: config.LLM_MODEL,
+    temperature: config.LLM_TEMPERATURE,
+    frequencyPenalty: config.LLM_FREQUENCY_PENALTY,
+    presencePenalty: config.LLM_PRESENCE_PENALTY,
+    topK: config.LLM_TOP_K,
+    topP: config.LLM_TOP_P,
+    repetitionPenalty: config.LLM_REPETITION_PENALTY,
+    minP: config.LLM_MIN_P,
+    topA: config.LLM_TOP_A,
+    systemPromptLength: systemPrompt.length,
+    userMessageLength: message.length,
+  });
+
+  const llmStartTime = performance.now();
   const apiResponse = await fetch(config.LLM_API_URL, {
     method: "POST",
     headers: {
@@ -137,7 +162,13 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   if (!apiResponse.ok) {
     const errorBody = await apiResponse.text();
-    console.error("LLM API error:", apiResponse.status, errorBody);
+    const latencyMs = Math.round(performance.now() - llmStartTime);
+    reqLog.error("LLM API error", {
+      status: apiResponse.status,
+      latencyMs,
+      model: config.LLM_MODEL,
+      errorBody,
+    });
     throw new ChatError("llm-api", "AI service request failed", apiResponse.status);
   }
 
@@ -163,6 +194,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   const chapterPath = join(storyDir, `${padded}.md`);
   const encoder = new TextEncoder();
   let aiContent = "";
+  reqFileLog.info("Writing chapter file", { op: "write", path: chapterPath, chapter: targetNum });
 
   // Dispatch pre-write hook before file truncation
   const preWriteCtx = await hookDispatcher.dispatch("pre-write", {
@@ -250,14 +282,26 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   // On abort: throw ChatAbortError after file cleanup so callers can handle it
   if (aborted) {
+    const latencyMs = Math.round(performance.now() - llmStartTime);
+    reqLog.warn("Generation aborted by client", { latencyMs, contentLength: aiContent.length });
     throw new ChatAbortError("Generation aborted by client");
   }
 
   if (!aiContent) {
+    reqLog.error("No content in AI response", { model: config.LLM_MODEL });
     throw new ChatError("no-content", "No content in AI response", 502);
   }
 
   const fullContent = preContent + aiContent;
+  const latencyMs = Math.round(performance.now() - llmStartTime);
+  reqLog.info("LLM response completed", {
+    model: config.LLM_MODEL,
+    latencyMs,
+    contentLength: fullContent.length,
+    chapter: targetNum,
+  });
+  reqLog.debug("LLM response content", { content: fullContent });
+  reqFileLog.info("Chapter file written", { op: "write", path: chapterPath, bytes: encoder.encode(fullContent).length });
 
   // 8. Run post-response hooks
   await hookDispatcher.dispatch("post-response", {

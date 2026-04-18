@@ -17,6 +17,9 @@ import { join } from "@std/path";
 import type { SafePathFn, StoryEngine, BuildPromptResult, RenderResult, RenderOptions, ChapterEntry } from "../types.ts";
 import type { PluginManager } from "./plugin-manager.ts";
 import type { HookDispatcher } from "./hooks.ts";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("file");
 
 export function createStoryEngine(
   pluginManager: PluginManager,
@@ -53,8 +56,9 @@ export function createStoryEngine(
       chapterFiles = entries
         .filter((f) => /^\d+\.md$/.test(f))
         .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+      log.debug("Read story directory", { path: storyDir, chapterCount: chapterFiles.length });
     } catch {
-      // Directory may not exist yet
+      log.debug("Story directory not found", { path: storyDir });
     }
 
     const MAX_CHAPTERS: number = 200;
@@ -67,6 +71,12 @@ export function createStoryEngine(
       const content = await Deno.readTextFile(join(storyDir, f));
       chapters.push({ number: parseInt(f, 10), content });
     }
+    log.debug("Loaded chapters for prompt building", {
+      series,
+      story: name,
+      totalChapters: chapters.length,
+      nonEmpty: chapters.filter((ch) => ch.content.trim().length > 0).length,
+    });
 
     const isFirstRound: boolean = chapters.every((ch) => ch.content.trim() === "");
 

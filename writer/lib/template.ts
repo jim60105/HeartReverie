@@ -21,6 +21,9 @@ import type { PluginManager } from "./plugin-manager.ts";
 import { PLAYGROUND_DIR, ROOT_DIR } from "./config.ts";
 import { buildVentoError } from "./errors.ts";
 import { resolveLoreVariables, generateLoreVariables } from "./lore.ts";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("template");
 
 /**
  * Validate a Vento template string — only safe expressions are allowed.
@@ -129,10 +132,10 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
           const result = await ventoEnv.runString(passage.content, { ...renderContext });
           return { ...passage, content: result.content };
         } catch (renderErr: unknown) {
-          console.warn(
-            `⚠️  Lore passage '${passage.relativePath}' Vento render failed, using raw content:`,
-            renderErr instanceof Error ? renderErr.message : String(renderErr),
-          );
+          log.warn(`Lore passage '${passage.relativePath}' Vento render failed, using raw content`, {
+            passage: passage.relativePath,
+            error: renderErr instanceof Error ? renderErr.message : String(renderErr),
+          });
           return passage;
         }
       }),
@@ -152,6 +155,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
     });
 
     try {
+      const startTime = performance.now();
       const result = await ventoEnv.runString(systemTemplate, {
         ...dynamicVars,
         previous_context: previousContext || [],
@@ -163,8 +167,20 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
         ...pluginVars.variables,
         plugin_fragments: pluginVars.fragments || [],
       });
+      const latencyMs = Math.round(performance.now() - startTime);
+      const variableCount = Object.keys(loreVars).length + Object.keys(pluginVars.variables).length + Object.keys(dynamicVars).length + 4;
+      log.info("Template rendered successfully", { latencyMs, variableCount });
+      log.debug("Template render details", {
+        templatePath: templateOverride ? "(override)" : systemTemplatePath,
+        variableNames: [...Object.keys(loreVars), ...Object.keys(pluginVars.variables), ...Object.keys(dynamicVars)],
+        renderedLength: result.content.length,
+      });
       return { content: result.content, error: null };
     } catch (err: unknown) {
+      log.error("Template rendering failed", {
+        error: err instanceof Error ? err.message : String(err),
+        templatePath: templateOverride ? "(override)" : systemTemplatePath,
+      });
       return {
         content: null,
         error: buildVentoError(

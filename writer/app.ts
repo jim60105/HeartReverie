@@ -19,6 +19,7 @@ import { bodyLimit } from "@hono/hono/body-limit";
 import { serveStatic } from "@hono/hono/deno";
 import { join, relative } from "@std/path";
 import { problemJson } from "./lib/errors.ts";
+import { createLogger } from "./lib/logger.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerStoriesRoutes } from "./routes/stories.ts";
 import { registerChapterRoutes } from "./routes/chapters.ts";
@@ -30,6 +31,8 @@ import { registerLoreRoutes } from "./routes/lore.ts";
 import { registerWebSocketRoutes } from "./routes/ws.ts";
 import type { Context, Next } from "@hono/hono";
 import type { AppDeps } from "./types.ts";
+
+const httpLog = createLogger("http");
 
 interface RateLimiterOptions {
   readonly windowMs: number;
@@ -87,6 +90,25 @@ export function createApp(deps: AppDeps): Hono {
     crossOriginResourcePolicy: false,
     crossOriginOpenerPolicy: false,
   }));
+
+  // HTTP request/response logging middleware (API routes only)
+  app.use("/api/*", async (c, next) => {
+    const start = performance.now();
+    const method = c.req.method;
+    const path = new URL(c.req.url).pathname;
+    httpLog.debug("Request received", { method, path });
+    try {
+      await next();
+    } finally {
+      const latencyMs = Math.round(performance.now() - start);
+      const status = c.res.status;
+      if (status >= 400) {
+        httpLog.warn("Response error", { method, path, status, latencyMs });
+      } else {
+        httpLog.info("Response sent", { method, path, status, latencyMs });
+      }
+    }
+  });
 
   // WebSocket route — registered before bodyLimit/rateLimiter/auth middleware to bypass them
   registerWebSocketRoutes(app, deps);

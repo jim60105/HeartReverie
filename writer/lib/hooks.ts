@@ -14,6 +14,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import type { HookStage, HookHandler } from "../types.ts";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("plugin");
 
 interface HandlerEntry {
   readonly handler: HookHandler;
@@ -62,13 +65,23 @@ export class HookDispatcher {
    */
   async dispatch(stage: HookStage, context: Record<string, unknown>): Promise<Record<string, unknown>> {
     const handlers = this.#handlers.get(stage) || [];
+    const startTime = performance.now();
     for (const { handler } of handlers) {
       try {
         await handler(context);
       } catch (err: unknown) {
-        console.error(`Hook error in stage '${stage}':`, err instanceof Error ? err.message : String(err));
+        log.error(`Hook error in stage '${stage}'`, {
+          stage,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
+    const latencyMs = Math.round(performance.now() - startTime);
+    log.debug(`Hook dispatch completed`, {
+      stage,
+      handlerCount: handlers.length,
+      latencyMs,
+    });
     return context;
   }
 }

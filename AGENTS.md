@@ -138,6 +138,8 @@ The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on 
 | `LLM_MIN_P` | No | `0` | Min-P sampling |
 | `LLM_TOP_A` | No | `1` | Top-A sampling |
 | `PLUGIN_DIR` | No | — | External plugin directory (absolute path) |
+| `LOG_LEVEL` | No | `info` | Log level: debug, info, warn, error |
+| `LOG_FILE` | No | — | Path to JSON Lines log file (enables file logging with rotation) |
 | `PLAYGROUND_DIR` | No | `./playground` | Story data root |
 | `READER_DIR` | No | `./reader-dist` | Frontend static files root |
 | `BACKGROUND_IMAGE` | No | `/assets/heart.webp` | Background image URL path for the web reader |

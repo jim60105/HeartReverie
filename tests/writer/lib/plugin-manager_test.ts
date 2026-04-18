@@ -601,7 +601,7 @@ Deno.test("PluginManager", async (t) => {
       // Warning was logged about the override
       assertTrue(
         warnStub.calls.some((c) =>
-          String(c.args[0]).includes("overrides existing plugin")
+          String(c.args[0]).includes("Plugin override")
         ),
       );
     });

@@ -16,6 +16,9 @@
 import { join, resolve, isAbsolute, SEPARATOR } from "@std/path";
 import type { PluginManifest, DynamicVariableContext } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("plugin");
 
 interface PluginEntry {
   readonly manifest: PluginManifest;
@@ -82,9 +85,7 @@ export class PluginManager {
     // Scan external plugins (override built-in on name collision)
     if (this.#externalDir) {
       if (!isAbsolute(this.#externalDir)) {
-        console.warn(
-          `⚠️  PLUGIN_DIR must be an absolute path, got '${this.#externalDir}' — skipping external plugins`
-        );
+        log.warn("PLUGIN_DIR must be an absolute path — skipping external plugins", { path: this.#externalDir });
       } else {
         await this.#scanDir(this.#externalDir, "external");
       }
@@ -97,9 +98,7 @@ export class PluginManager {
       }
     }
 
-    console.log(
-      `✅ Loaded ${this.#plugins.size} plugin(s): ${[...this.#plugins.keys()].join(", ") || "(none)"}`
-    );
+    log.info("Plugins loaded", { count: this.#plugins.size, plugins: [...this.#plugins.keys()] });
   }
 
   /**
@@ -117,7 +116,7 @@ export class PluginManager {
         // Directory doesn't exist yet — that's fine
         return;
       }
-      console.warn(`⚠️  Failed to read plugin directory '${dir}':`, err instanceof Error ? err.message : String(err));
+      log.warn("Failed to read plugin directory", { dir, error: err instanceof Error ? err.message : String(err) });
       return;
     }
 
@@ -125,9 +124,7 @@ export class PluginManager {
       if (!entry.isDirectory || entry.name.startsWith(".")) continue;
 
       if (!isValidPluginName(entry.name)) {
-        console.warn(
-          `⚠️  Skipping plugin with invalid name '${entry.name}' in ${dir}`
-        );
+        log.warn("Skipping plugin with invalid name", { name: entry.name, dir });
         continue;
       }
 
@@ -146,40 +143,31 @@ export class PluginManager {
       try {
         const parsed: unknown = JSON.parse(raw);
         if (typeof parsed !== "object" || parsed === null) {
-          console.warn(`⚠️  Invalid plugin manifest in ${manifestPath}: not an object`);
+          log.warn("Invalid plugin manifest: not an object", { path: manifestPath });
           continue;
         }
         manifest = parsed as PluginManifest;
       } catch (err: unknown) {
-        console.warn(
-          `⚠️  Invalid JSON in ${manifestPath}:`,
-          err instanceof Error ? err.message : String(err)
-        );
+        log.warn("Invalid JSON in manifest", { path: manifestPath, error: err instanceof Error ? err.message : String(err) });
         continue;
       }
 
       // Validate required fields
       if (!manifest.name || typeof manifest.name !== "string") {
-        console.warn(
-          `⚠️  Plugin at ${pluginDir} missing required 'name' field — skipping`
-        );
+        log.warn("Plugin missing required 'name' field — skipping", { dir: pluginDir });
         continue;
       }
 
       // Require manifest name matches directory name to prevent impersonation
       if (manifest.name !== entry.name) {
-        console.warn(
-          `⚠️  Plugin '${entry.name}' manifest.name '${manifest.name}' does not match directory — skipping`
-        );
+        log.warn("Plugin manifest.name does not match directory — skipping", { dirName: entry.name, manifestName: manifest.name });
         continue;
       }
 
       // Log override when external plugin replaces built-in
       if (this.#plugins.has(manifest.name)) {
         const existing = this.#plugins.get(manifest.name)!;
-        console.warn(
-          `⚠️  ${source} plugin '${manifest.name}' overrides existing plugin from ${existing.dir}`
-        );
+        log.warn("Plugin override", { plugin: manifest.name, source, overriddenDir: existing.dir });
       }
 
       // Validate and normalize frontendStyles
@@ -198,9 +186,7 @@ export class PluginManager {
     const raw: unknown = manifest.frontendStyles;
     if (raw === undefined) return [];
     if (!Array.isArray(raw)) {
-      console.warn(
-        `⚠️  Plugin '${manifest.name}' has non-array frontendStyles — ignoring`
-      );
+      log.warn("Plugin has non-array frontendStyles — ignoring", { plugin: manifest.name });
       return [];
     }
 
@@ -209,36 +195,26 @@ export class PluginManager {
 
     for (const entry of raw) {
       if (typeof entry !== "string" || entry.length === 0) {
-        console.warn(
-          `⚠️  Plugin '${manifest.name}' has invalid frontendStyles entry (must be non-empty string) — skipping`
-        );
+        log.warn("Plugin has invalid frontendStyles entry (must be non-empty string) — skipping", { plugin: manifest.name });
         continue;
       }
       if (!entry.toLowerCase().endsWith(".css")) {
-        console.warn(
-          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' does not end with .css — skipping`
-        );
+        log.warn("Plugin frontendStyles entry does not end with .css — skipping", { plugin: manifest.name, entry });
         continue;
       }
       if (isAbsolute(entry)) {
-        console.warn(
-          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' is an absolute path — skipping`
-        );
+        log.warn("Plugin frontendStyles entry is an absolute path — skipping", { plugin: manifest.name, entry });
         continue;
       }
       // Reject path traversal segments
       const segments = entry.split(/[\\/]/);
       if (segments.some((s) => s === "..")) {
-        console.warn(
-          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' contains '..' — skipping`
-        );
+        log.warn("Plugin frontendStyles entry contains '..' — skipping", { plugin: manifest.name, entry });
         continue;
       }
       // Reject backslashes and URL-hostile characters
       if (/[\\#?%]/.test(entry)) {
-        console.warn(
-          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' contains invalid characters — skipping`
-        );
+        log.warn("Plugin frontendStyles entry contains invalid characters — skipping", { plugin: manifest.name, entry });
         continue;
       }
 
@@ -250,9 +226,7 @@ export class PluginManager {
 
       const resolved = resolve(pluginDir, normalized);
       if (!isPathContained(pluginDir, resolved)) {
-        console.warn(
-          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' escapes plugin directory — skipping`
-        );
+        log.warn("Plugin frontendStyles entry escapes plugin directory — skipping", { plugin: manifest.name, entry });
         continue;
       }
 
@@ -264,25 +238,18 @@ export class PluginManager {
       try {
         const stat = await Deno.stat(resolved);
         if (!stat.isFile) {
-          console.warn(
-            `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' is not a file — skipping`
-          );
+          log.warn("Plugin frontendStyles entry is not a file — skipping", { plugin: manifest.name, entry });
           continue;
         }
         // Symlink-safe: verify real path is still within plugin directory
         const realFile = await Deno.realPath(resolved);
         const realPluginDir = await Deno.realPath(pluginDir);
         if (!realFile.startsWith(realPluginDir + SEPARATOR) && realFile !== realPluginDir) {
-          console.warn(
-            `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' resolves outside plugin directory — skipping`
-          );
+          log.warn("Plugin frontendStyles entry resolves outside plugin directory — skipping", { plugin: manifest.name, entry });
           continue;
         }
       } catch (err: unknown) {
-        console.warn(
-          `⚠️  Plugin '${manifest.name}' frontendStyles entry '${entry}' not found:`,
-          err instanceof Error ? err.message : String(err)
-        );
+        log.warn("Plugin frontendStyles entry not found", { plugin: manifest.name, entry, error: err instanceof Error ? err.message : String(err) });
         continue;
       }
 
@@ -302,9 +269,7 @@ export class PluginManager {
     );
 
     if (!isPathContained(entry.dir, modulePath)) {
-      console.warn(
-        `⚠️  Plugin '${name}' backendModule escapes plugin directory — skipping`
-      );
+      log.warn("Plugin backendModule escapes plugin directory — skipping", { plugin: name, path: modulePath });
       return;
     }
 
@@ -317,9 +282,7 @@ export class PluginManager {
 
       const hasDynVars = typeof mod.getDynamicVariables === "function";
       if (!registerFn && !hasDynVars) {
-        console.warn(
-          `⚠️  Plugin '${name}' backend module has no register() or default export`
-        );
+        log.warn("Plugin backend module has no register() or default export", { plugin: name });
       }
 
       if (hasDynVars) {
@@ -329,10 +292,7 @@ export class PluginManager {
         );
       }
     } catch (err: unknown) {
-      console.error(
-        `❌ Failed to load backend module for plugin '${name}':`,
-        err instanceof Error ? err.message : String(err)
-      );
+      log.error("Failed to load backend module", { plugin: name, error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -360,25 +320,19 @@ export class PluginManager {
             // Regex pattern: extract inner pattern from /pattern/flags
             const lastSlash = tag.lastIndexOf("/");
             if (lastSlash <= 0) {
-              console.warn(
-                `⚠️  Plugin '${manifest.name}' has invalid regex promptStripTag '${tag}' — skipping`
-              );
+              log.warn("Plugin has invalid regex promptStripTag — skipping", { plugin: manifest.name, tag });
               continue;
             }
             const inner = tag.slice(1, lastSlash);
             if (inner.length === 0) {
-              console.warn(
-                `⚠️  Plugin '${manifest.name}' has empty regex promptStripTag '${tag}' — skipping`
-              );
+              log.warn("Plugin has empty regex promptStripTag — skipping", { plugin: manifest.name, tag });
               continue;
             }
             try {
               new RegExp(inner); // validate
               patterns.push(inner);
             } catch (err: unknown) {
-              console.warn(
-                `⚠️  Plugin '${manifest.name}' has invalid regex promptStripTag '${tag}': ${err instanceof Error ? err.message : String(err)} — skipping`
-              );
+              log.warn("Plugin has invalid regex in promptStripTag — skipping", { plugin: manifest.name, tag, error: err instanceof Error ? err.message : String(err) });
             }
           } else {
             // Plain tag name: auto-wrap
@@ -412,9 +366,7 @@ export class PluginManager {
         const filePath = resolve(dir, frag.file);
 
         if (!isPathContained(dir, filePath)) {
-          console.warn(
-            `⚠️  Plugin '${manifest.name}' fragment '${frag.file}' escapes plugin directory — skipping`
-          );
+          log.warn("Plugin fragment escapes plugin directory — skipping", { plugin: manifest.name, file: frag.file });
           continue;
         }
 
@@ -422,9 +374,7 @@ export class PluginManager {
         try {
           content = await Deno.readTextFile(filePath);
         } catch (err: unknown) {
-          console.warn(
-            `⚠️  Failed to read prompt fragment '${frag.file}' for plugin '${manifest.name}':`,
-            err instanceof Error ? err.message : String(err)
+          log.warn("Failed to read prompt fragment", { plugin: manifest.name, file: frag.file, error: err instanceof Error ? err.message : String(err) }
           );
           continue;
         }
@@ -468,20 +418,17 @@ export class PluginManager {
 
         for (const [key, value] of Object.entries(vars)) {
           if (PluginManager.#CORE_TEMPLATE_VARS.has(key)) {
-            console.warn(`⚠️  Plugin '${pluginName}' attempted to set core variable '${key}' — ignored`);
+            log.warn("Plugin attempted to set core variable — ignored", { plugin: pluginName, key });
             continue;
           }
           if (key in result) {
-            console.warn(`⚠️  Plugin '${pluginName}' dynamic variable '${key}' conflicts with earlier plugin — using first value`);
+            log.warn("Plugin dynamic variable conflicts with earlier plugin — using first value", { plugin: pluginName, key });
             continue;
           }
           result[key] = value;
         }
       } catch (err: unknown) {
-        console.warn(
-          `⚠️  Plugin '${pluginName}' getDynamicVariables() failed:`,
-          err instanceof Error ? err.message : String(err),
-        );
+        log.warn("Plugin getDynamicVariables() failed", { plugin: pluginName, error: err instanceof Error ? err.message : String(err) });
       }
     }
 

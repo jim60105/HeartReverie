@@ -17,6 +17,7 @@
 import "@std/dotenv/load";
 
 import * as config from "./lib/config.ts";
+import { initLogger, createLogger, closeLogger } from "./lib/logger.ts";
 import { HookDispatcher } from "./lib/hooks.ts";
 import { PluginManager } from "./lib/plugin-manager.ts";
 import { createSafePath, verifyPassphrase } from "./lib/middleware.ts";
@@ -24,17 +25,21 @@ import { createTemplateEngine } from "./lib/template.ts";
 import { createStoryEngine } from "./lib/story.ts";
 import { createApp } from "./app.ts";
 
+// ── Initialize logger first ────────────────────────────────────
+await initLogger();
+const log = createLogger("system");
+
 const certFile = config.CERT_FILE;
 const keyFile = config.KEY_FILE;
 const httpOnly = Deno.env.get("HTTP_ONLY") === "true";
 
 if (!httpOnly && (!certFile || !keyFile)) {
-  console.error("❌ CERT_FILE and KEY_FILE environment variables are required (set HTTP_ONLY=true to disable TLS)");
+  log.error("CERT_FILE and KEY_FILE environment variables are required (set HTTP_ONLY=true to disable TLS)");
   Deno.exit(1);
 }
 
 if (!Deno.env.get("LLM_API_KEY")) {
-  console.warn("⚠️  LLM_API_KEY is not set — chat functionality will not work");
+  log.warn("LLM_API_KEY is not set — chat functionality will not work");
 }
 
 // ── Plugin system ───────────────────────────────────────────────
@@ -63,9 +68,12 @@ const serveOptions = {
   port: config.PORT,
   hostname: "::",
   onListen({ port }) {
-    console.log(`✅ ${protocol.toUpperCase()} server listening on ${protocol}://localhost:${port}`);
-    console.log(`   Reader: ${config.READER_DIR}`);
-    console.log(`   Playground: ${config.PLAYGROUND_DIR}`);
+    log.info(`${protocol.toUpperCase()} server listening on ${protocol}://localhost:${port}`, {
+      protocol,
+      port,
+      readerDir: config.READER_DIR,
+      playgroundDir: config.PLAYGROUND_DIR,
+    });
   },
   ...(httpOnly ? {} : {
     cert: Deno.readTextFileSync(certFile!),
@@ -74,3 +82,12 @@ const serveOptions = {
 };
 
 Deno.serve(serveOptions, (req, info) => app.fetch(req, info));
+
+// ── Graceful shutdown: flush log file on SIGINT/SIGTERM ─────────
+const shutdown = async () => {
+  log.info("Shutdown signal received — flushing logs");
+  await closeLogger();
+  Deno.exit(0);
+};
+Deno.addSignalListener("SIGINT", shutdown);
+Deno.addSignalListener("SIGTERM", shutdown);

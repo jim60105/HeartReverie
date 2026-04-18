@@ -16,9 +16,12 @@
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
 import { executeChat, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
+import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
 import type { ContentfulStatusCode } from "@hono/hono/utils/http-status";
+
+const log = createLogger("http");
 
 /** HTTP title mapping for ChatError codes. */
 const ERROR_TITLES: Record<string, string> = {
@@ -79,7 +82,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           const title = ERROR_TITLES[err.code] ?? "Internal Server Error";
           return c.json(problemJson(title, err.httpStatus, err.message), status);
         }
-        console.error("Chat error:", err instanceof Error ? err.message : String(err));
+        log.error("Unexpected chat error", { error: err instanceof Error ? err.message : String(err), path: c.req.path });
         return c.json(problemJson("Internal Server Error", 500, "Failed to process chat request"), 500);
       }
     }

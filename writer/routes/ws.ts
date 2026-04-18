@@ -18,9 +18,14 @@ import { timingSafeEqual } from "@std/crypto/timing-safe-equal";
 import { join } from "@std/path";
 import { isValidParam } from "../lib/middleware.ts";
 import { executeChat, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
+import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { WSContext } from "@hono/hono/ws";
 import type { AppDeps, WsServerMessage } from "../types.ts";
+
+const log = createLogger("ws");
+const authLog = createLogger("auth");
+const fileLog = createLogger("file");
 
 const IDLE_TIMEOUT_MS = 60_000;
 const MAX_MESSAGE_LENGTH = 100_000;
@@ -285,6 +290,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
 
         const lastFile = chapterFiles[chapterFiles.length - 1]!;
         await Deno.remove(join(storyDir, lastFile));
+        fileLog.info("Chapter deleted (resend)", { op: "delete", path: join(storyDir, lastFile) });
       } catch (err: unknown) {
         if (err instanceof Deno.errors.NotFound) {
           wsSend(ws, { type: "chat:error", id, detail: "Story not found" });
@@ -312,6 +318,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
 
     return {
       onOpen(_evt: Event, ws: WSContext) {
+        log.info("WebSocket connection established", { event: "connected" });
         resetIdleTimer(ws);
       },
 
@@ -344,15 +351,19 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
 
           const passphrase = msg.passphrase;
           if (typeof passphrase !== "string" || !verifyWsPassphrase(passphrase)) {
+            authLog.warn("WebSocket auth failed", { source: "ws", success: false });
             wsSend(ws, { type: "auth:error", detail: "Invalid passphrase" });
             ws.close(4001, "Invalid passphrase");
             return;
           }
 
           authenticated = true;
+          authLog.info("WebSocket auth successful", { source: "ws", success: true });
           wsSend(ws, { type: "auth:ok" });
           return;
         }
+
+        log.debug("WebSocket message received", { event: "message", messageType: type as string });
 
         // Dispatch authenticated messages by type
         switch (type) {
@@ -372,12 +383,13 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
         }
       },
 
-      onClose() {
+      onClose(_evt: CloseEvent) {
+        log.info("WebSocket connection closed", { event: "closed" });
         cleanup();
       },
 
       onError(evt: Event) {
-        console.error("[ws] WebSocket error:", evt);
+        log.error("WebSocket error", { event: "error", detail: String(evt) });
         cleanup();
       },
     };
