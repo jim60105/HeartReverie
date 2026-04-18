@@ -76,6 +76,8 @@ deno task build:reader
 | `PLAYGROUND_DIR` | — | `./playground` | 故事資料根目錄 |
 | `READER_DIR` | — | `./reader-dist` | 前端靜態檔案根目錄 |
 | `BACKGROUND_IMAGE` | — | `/assets/heart.webp` | 背景圖片 URL 路徑 |
+| `LOG_LEVEL` | — | `info` | 日誌等級：debug、info、warn、error |
+| `LOG_FILE` | — | — | JSON Lines 日誌檔案路徑（啟用檔案日誌與自動輪替） |
 | `PROMPT_FILE` | — | `playground/_prompts/system.md` | 自訂提示詞模板檔案路徑 |
 | `HTTP_ONLY` | — | — | 設為 `true` 關閉 TLS（反向代理部署） |
 | `CERT_FILE` | — | — | 自訂 TLS 憑證路徑 |
@@ -83,13 +85,14 @@ deno task build:reader
 
 ## 🔌 外掛系統
 
-每個外掛是一個資料夾加上一份 `plugin.json`，宣告它要做的事。系統有五層擴展點：
+每個外掛是一個資料夾加上一份 `plugin.json`，宣告它要做的事。系統有六層擴展點：
 
 1. **提示詞注入**：`promptFragments` 把 Markdown 檔案映射成 Vento 模板變數，渲染時自動塞進提示詞
 2. **提示詞標籤移除**：`promptStripTags` 告訴引擎在組建提示詞時從 previousContext（已儲存章節內容）中移除哪些 XML 標籤
 3. **顯示標籤移除**：`displayStripTags` 告訴前端在瀏覽器渲染時移除哪些 XML 標籤，讀者不會看到這些內部標記
-4. **後端掛鉤**：`backendModule` 可以介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
+4. **後端掛鉤**：`backendModule` 透過 context 物件（含 hooks 與 logger）介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
 5. **前端模組**：`frontendModule` 在瀏覽器端透過 Vue composable 與 `frontend-render` 掛鉤處理自訂區塊渲染
+6. **前端樣式注入**：`frontendStyles` 宣告 CSS 樣式表路徑，在前端載入時自動注入為 `<link>` 元素
 
 完整文件請見 [`docs/plugin-system.md`][plugin-system-doc]。
 

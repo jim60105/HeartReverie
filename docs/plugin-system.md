@@ -17,6 +17,10 @@ plugins/                       ← 內建 plugin 目錄
 ├── context-compaction/
 │   ├── plugin.json
 │   └── handler.js
+├── response-notify/
+│   ├── plugin.json
+│   ├── handler.js
+│   └── frontend.js
 ├── thinking/
 │   ├── plugin.json
 │   ├── frontend.js
@@ -25,7 +29,7 @@ plugins/                       ← 內建 plugin 目錄
 └── ...（共 6 個 plugin）
 ```
 
-Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不同欄位：
+Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不同欄位：
 
 - **提示詞注入**：透過 `promptFragments` 將 Markdown 片段載入為 Vento 模板變數
 - **動態變數**：透過 `backendModule` 匯出 `getDynamicVariables()` 函式，在渲染提示詞時動態提供模板變數
@@ -33,6 +37,7 @@ Plugin 與伺服器的互動分為五個層面，分別對應 manifest 中的不
 - **顯示標籤清除**：透過 `displayStripTags` 宣告需要從前端顯示中移除的 XML 標籤或正規表達式，在瀏覽器渲染時生效
 - **後端 hook**：透過 `backendModule` 註冊伺服器端生命週期事件的處理函式
 - **前端模組**：透過 `frontendModule` 提供瀏覽器端的自訂標籤渲染邏輯
+- **前端樣式注入**：透過 `frontendStyles` 宣告 CSS 樣式表路徑，系統在前端初始化時自動注入 `<link rel="stylesheet">` 至 `<head>`
 
 ## Plugin Manifest 規格
 
@@ -545,6 +550,7 @@ export function register(hooks) {
 | start-hints | prompt-only | 首輪章節開場引導提示，含提示詞與顯示標籤清除 |
 | thinking | full-stack | 回覆前思考指令與折疊 `<thinking>`/`<think>` 標籤為可展開的 details 元素 |
 | user-message | full-stack | 使用者訊息標籤前端清除，pre-write hook 注入使用者訊息區塊 |
+| response-notify | full-stack | 後端 → 前端 Toast 通知系統，透過 `notification` hook 推送使用者提示 |
 
 [prompt-template]: ./prompt-template.md
 [lore-codex]: ./lore-codex.md

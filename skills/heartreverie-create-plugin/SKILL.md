@@ -146,14 +146,16 @@ Usually `promptStripTags` and `displayStripTags` use the same patterns. They dif
 
 ## Step 6: Create Backend Module (if applicable)
 
-For plugins with `backendModule`, create the handler file:
+For plugins with `backendModule`, create the handler file. Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger }` — a `PluginHooks` wrapper and a scoped `Logger`.
 
 **JavaScript (`handler.js`):**
 
 ```javascript
-export function register(hookDispatcher) {
-  hookDispatcher.register("post-response", async (context) => {
+export function register({ hooks, logger }) {
+  hooks.register("post-response", async (context) => {
+    const log = context.logger ?? logger;
     const { content, storyDir, rootDir } = context;
+    log.info("Processing response", { contentLength: content.length });
     // Process the LLM response
   }, 100);
 }
@@ -162,11 +164,13 @@ export function register(hookDispatcher) {
 **TypeScript (`handler.ts`):**
 
 ```typescript
-import type { HookDispatcher } from "../../writer/lib/hooks.ts";
+import type { PluginRegisterContext } from "../../writer/types.ts";
 
-export function register(hookDispatcher: HookDispatcher): void {
-  hookDispatcher.register("post-response", async (context) => {
+export function register({ hooks, logger }: PluginRegisterContext): void {
+  hooks.register("post-response", async (context) => {
+    const log = context.logger ?? logger;
     const content = context.content as string;
+    log.info("Processing response", { contentLength: content.length });
     // Process the LLM response
   }, 100);
 }
@@ -174,7 +178,7 @@ export function register(hookDispatcher: HookDispatcher): void {
 
 For the 3 active hook stages and their context parameters, read `references/hook-api.md`.
 
-Backend code style: ESM, **double quotes**, semicolons, `async/await`, JSDoc comments.
+Backend code style: ESM, **double quotes**, semicolons, `async/await`, JSDoc comments. Use `context.logger ?? logger` pattern in hook handlers for request-scoped logging.
 
 ## Step 7: Create Frontend Module (if applicable)
 
