@@ -16,8 +16,11 @@
 import { join } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
+import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
+
+const log = createLogger("file");
 
 export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">): void {
   const { safePath } = deps;
@@ -108,7 +111,9 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
 
         const lastFile = chapterFiles[chapterFiles.length - 1]!;
         const lastNum = parseInt(lastFile, 10);
-        await Deno.remove(join(dirPath, lastFile));
+        const deletePath = join(dirPath, lastFile);
+        await Deno.remove(deletePath);
+        log.info("Chapter deleted", { op: "delete", path: deletePath, chapter: lastNum });
         return c.json({ deleted: lastNum });
       } catch (err: unknown) {
         if (err instanceof Deno.errors.NotFound) {
@@ -138,6 +143,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
           return c.json({ message: "Story already exists" }, 200);
         } catch {
           await Deno.writeTextFile(filePath, "", { mode: 0o664 });
+          log.info("Story initialized", { op: "write", path: filePath, bytes: 0 });
           return c.json({ message: "Story initialized" }, 201);
         }
       } catch {

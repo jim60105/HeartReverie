@@ -21,9 +21,12 @@ import {
   filterByTag,
   parseFrontmatter,
 } from "../lib/lore.ts";
+import { createLogger } from "../lib/logger.ts";
 import type { LorePassage, LoreScope } from "../lib/lore.ts";
 import type { Context, Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
+
+const log = createLogger("file");
 
 export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "config">): void {
   const { safePath, config } = deps;
@@ -311,6 +314,7 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       await Deno.mkdir(dirname(filePath), { recursive: true, mode: 0o775 });
       const isNew = await Deno.stat(filePath).then(() => false).catch(() => true);
       await Deno.writeTextFile(filePath, fileContent, { mode: 0o664 });
+      log.info("Lore passage written", { op: "write", path: filePath, bytes: new TextEncoder().encode(fileContent).length, isNew });
       return c.json(
         { message: isNew ? "Passage created" : "Passage updated" },
         isNew ? 201 : 200,
@@ -362,6 +366,7 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
 
     try {
       await Deno.remove(filePath);
+      log.info("Lore passage deleted", { op: "delete", path: filePath });
       return c.body(null, 204);
     } catch (err: unknown) {
       if (err instanceof Deno.errors.NotFound) {

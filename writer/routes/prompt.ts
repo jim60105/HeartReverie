@@ -17,8 +17,11 @@ import { join, dirname } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
 import { validateTemplate } from "../lib/template.ts";
+import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
+
+const log = createLogger("file");
 
 /** Read the custom prompt file; fall back to system.md only when the custom file does not exist. */
 export async function readTemplate(config: { PROMPT_FILE: string; ROOT_DIR: string }): Promise<{ content: string; source: "custom" | "default" }> {
@@ -69,9 +72,10 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
 
       await Deno.mkdir(dirname(config.PROMPT_FILE), { recursive: true, mode: 0o775 });
       await Deno.writeTextFile(config.PROMPT_FILE, content, { mode: 0o664 });
+      log.info("Template file saved", { op: "write", path: config.PROMPT_FILE, bytes: new TextEncoder().encode(content).length });
       return c.json({ ok: true });
     } catch (err: unknown) {
-      console.error("PUT /api/template error:", err instanceof Error ? err.message : String(err));
+      log.error("Failed to save template", { op: "write", path: config.PROMPT_FILE, error: err instanceof Error ? err.message : String(err) });
       return c.json(problemJson("Internal Server Error", 500, "Failed to save template"), 500);
     }
   });
@@ -79,9 +83,10 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
   app.delete("/api/template", async (c) => {
     try {
       await Deno.remove(config.PROMPT_FILE);
+      log.info("Template file deleted", { op: "delete", path: config.PROMPT_FILE });
     } catch (err: unknown) {
       if (!(err instanceof Deno.errors.NotFound)) {
-        console.error("DELETE /api/template error:", err instanceof Error ? err.message : String(err));
+        log.error("Failed to delete template", { op: "delete", path: config.PROMPT_FILE, error: err instanceof Error ? err.message : String(err) });
         return c.json(problemJson("Internal Server Error", 500, "Failed to delete template"), 500);
       }
     }
@@ -152,7 +157,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
           errors: [],
         });
       } catch (err: unknown) {
-        console.error("Preview prompt error:", err instanceof Error ? err.message : String(err));
+        log.error("Preview prompt error", { error: err instanceof Error ? err.message : String(err), path: c.req.path });
         return c.json(problemJson("Internal Server Error", 500, "Failed to preview prompt"), 500);
       }
     }

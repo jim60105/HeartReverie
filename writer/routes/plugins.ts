@@ -16,8 +16,11 @@
 import { resolve, relative, SEPARATOR } from "@std/path";
 import { problemJson } from "../lib/errors.ts";
 import { resolveLoreVariables } from "../lib/lore.ts";
+import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
+
+const log = createLogger("plugin");
 
 export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManager" | "config">): void {
   const { pluginManager } = deps;
@@ -111,9 +114,7 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       const modulePath = resolve(pluginDir, plugin.frontendModule);
       // Containment check: frontendModule must stay inside plugin directory
       if (!modulePath.startsWith(pluginDir + SEPARATOR)) {
-        console.warn(
-          `⚠️  Plugin '${plugin.name}' frontendModule escapes plugin directory — skipping`
-        );
+        log.warn("Plugin frontendModule escapes plugin directory — skipping", { plugin: plugin.name, path: modulePath });
         continue;
       }
       // Use normalized relative path for route (strip ./ prefix from manifest values)
@@ -142,9 +143,7 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       const cssFilePath = resolve(pluginDir, cssPath);
       // Containment check against raw resolved path
       if (!cssFilePath.startsWith(pluginDir + SEPARATOR)) {
-        console.warn(
-          `⚠️  Plugin '${plugin.name}' CSS '${cssPath}' escapes plugin directory — skipping`
-        );
+        log.warn("Plugin CSS escapes plugin directory — skipping", { plugin: plugin.name, cssPath, resolved: cssFilePath });
         continue;
       }
       app.get(`/plugins/${plugin.name}/${cssPath}`, async (c) => {

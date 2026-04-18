@@ -18,6 +18,9 @@ import { timingSafeEqual } from "@std/crypto/timing-safe-equal";
 import type { Context, Next } from "@hono/hono";
 import type { SafePathFn } from "../types.ts";
 import { problemJson } from "./errors.ts";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("auth");
 
 export function isValidParam(value: string): boolean {
   return !/\.\.|\x00|[/\\]/.test(value) && !value.startsWith("_");
@@ -52,9 +55,12 @@ export async function verifyPassphrase(c: Context, next: Next): Promise<Response
 
   const provided = c.req.header("x-passphrase");
   if (!provided) {
-    console.warn(
-      `[auth] Rejected request: ${c.req.method} ${c.req.path} from ${c.req.header("x-forwarded-for") || "unknown"}`
-    );
+    log.warn("Rejected request: missing passphrase", {
+      method: c.req.method,
+      path: c.req.path,
+      source: "http",
+      success: false,
+    });
     return c.json(problemJson("Unauthorized", 401, "Invalid or missing passphrase"), 401);
   }
 
@@ -69,12 +75,16 @@ export async function verifyPassphrase(c: Context, next: Next): Promise<Response
   const match: boolean = (Number(lengthMatch) & Number(equal)) === 1;
 
   if (match) {
+    log.info("Authentication successful", { method: c.req.method, path: c.req.path, source: "http", success: true });
     await next();
     return;
   }
 
-  console.warn(
-    `[auth] Rejected request: ${c.req.method} ${c.req.path} from ${c.req.header("x-forwarded-for") || "unknown"}`
-  );
+  log.warn("Rejected request: invalid passphrase", {
+    method: c.req.method,
+    path: c.req.path,
+    source: "http",
+    success: false,
+  });
   return c.json(problemJson("Unauthorized", 401, "Invalid or missing passphrase"), 401);
 }
