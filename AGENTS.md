@@ -259,7 +259,7 @@ Plugin interaction layers:
 3. **Display tag stripping** — `displayStripTags` field declares plain tag names or regex patterns to remove from frontend display during browser rendering
 4. **CSS injection** — `frontendStyles` field declares CSS files to inject as `<link>` elements into the frontend `<head>` before JS modules load
 5. **Backend hooks** — `backendModule` registers handlers for 5 lifecycle stages: `prompt-assembly`, `response-stream`, `pre-write`, `post-response`, `strip-tags`
-6. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` hook
+6. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` hook and notification handling via `notification` hook
 
 ### Lore Codex
 

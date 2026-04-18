@@ -2,6 +2,8 @@ import { ref, watch } from "vue";
 import type { UseChatApiReturn } from "@/types";
 import { useAuth } from "@/composables/useAuth";
 import { useWebSocket } from "@/composables/useWebSocket";
+import { useNotification } from "@/composables/useNotification";
+import { frontendHooks } from "@/lib/plugin-hooks";
 
 const isLoading = ref(false);
 const errorMessage = ref("");
@@ -9,6 +11,11 @@ const streamingContent = ref("");
 
 let currentRequestId: string | null = null;
 let httpAbortController: AbortController | null = null;
+
+function dispatchNotification(event: string, data: Record<string, unknown>): void {
+  const { notify } = useNotification();
+  frontendHooks.dispatch("notification", { event, data, notify });
+}
 
 function abortCurrentRequest(): void {
   const { isConnected, isAuthenticated, send } = useWebSocket();
@@ -49,6 +56,7 @@ async function sendMessage(
         cleanup();
         streamingContent.value = '';
         isLoading.value = false;
+        dispatchNotification('chat:done', { id });
         resolve(true);
       });
       const unsubError = onMessage('chat:error', (msg) => {
@@ -57,6 +65,7 @@ async function sendMessage(
         streamingContent.value = '';
         errorMessage.value = '發送失敗';
         isLoading.value = false;
+        dispatchNotification('chat:error', { id });
         resolve(false);
       });
       const unsubAborted = onMessage('chat:aborted', (msg) => {
@@ -119,15 +128,18 @@ async function sendMessage(
 
     if (!res.ok) {
       errorMessage.value = "發送失敗";
+      dispatchNotification("chat:error", {});
       return false;
     }
 
+    dispatchNotification("chat:done", {});
     return true;
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === "AbortError") {
       return false;
     }
     errorMessage.value = "發送失敗";
+    dispatchNotification("chat:error", {});
     return false;
   } finally {
     httpAbortController = null;
@@ -159,6 +171,7 @@ async function resendMessage(
         cleanup();
         streamingContent.value = '';
         isLoading.value = false;
+        dispatchNotification('chat:done', { id });
         resolve(true);
       });
       const unsubError = onMessage('chat:error', (msg) => {
@@ -167,6 +180,7 @@ async function resendMessage(
         streamingContent.value = '';
         errorMessage.value = '重送失敗';
         isLoading.value = false;
+        dispatchNotification('chat:error', { id });
         resolve(false);
       });
       const unsubAborted = onMessage('chat:aborted', (msg) => {
@@ -221,6 +235,7 @@ async function resendMessage(
 
     if (!delRes.ok && delRes.status !== 404) {
       errorMessage.value = "重送失敗";
+      dispatchNotification("chat:error", {});
       return false;
     }
 
@@ -239,15 +254,18 @@ async function resendMessage(
 
     if (!res.ok) {
       errorMessage.value = "重送失敗";
+      dispatchNotification("chat:error", {});
       return false;
     }
 
+    dispatchNotification("chat:done", {});
     return true;
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === "AbortError") {
       return false;
     }
     errorMessage.value = "重送失敗";
+    dispatchNotification("chat:error", {});
     return false;
   } finally {
     httpAbortController = null;

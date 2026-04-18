@@ -14,6 +14,7 @@ The hook system SHALL define the following ordered hook stages that plugins can 
 - `pre-write`: Invoked after OpenRouter response is confirmed but before chapter file writing — plugins can inject content to prepend to the chapter file (e.g., user message wrappers)
 - `post-response`: Invoked after the response stream completes — plugins can run side effects (e.g., state status update)
 - `frontend-render`: Invoked during frontend rendering — plugins register tag extractors and custom renderers for LLM output tags
+- `notification`: Invoked when a WebSocket event or frontend action triggers a notification opportunity — plugins can call the notification composable to emit notifications to the user
 - `strip-tags`: Invoked during server-side chapter content stripping — plugins register tag names to strip from `previous_context` before prompt assembly
 
 Each stage SHALL have a well-defined context object that handlers receive and can modify.
@@ -42,9 +43,36 @@ Each stage SHALL have a well-defined context object that handlers receive and ca
 - **WHEN** the frontend `md-renderer` processes chapter content for display
 - **THEN** the hook system SHALL invoke all `frontend-render` handlers to register tag extractors and renderers before the rendering pipeline executes
 
+#### Scenario: Notification stage invocation
+- **WHEN** the frontend receives a WebSocket event that warrants user notification (e.g., `chat:done`)
+- **THEN** the hook system SHALL invoke all `notification` handlers in priority order, passing a context object containing `event` (string event type), `data` (event payload), and `notify` (the notification composable's notify function)
+
 #### Scenario: Strip-tags stage invocation
 - **WHEN** the server strips tags from chapter content before including it in `previous_context`
 - **THEN** the hook system SHALL invoke all `strip-tags` handlers to collect tag names that should be stripped, in addition to the default tags
+
+### Requirement: Notification hook context
+
+The `notification` frontend hook stage SHALL pass a context object with the following shape:
+- `event: string` — the WebSocket event type that triggered the notification opportunity (e.g., `'chat:done'`, `'chat:error'`)
+- `data: Record<string, unknown>` — the event payload data
+- `notify: (options: NotifyOptions) => string` — the notification composable's `notify` function for emitting notifications
+
+Handlers SHALL call `context.notify()` to emit notifications. The hook dispatcher SHALL NOT emit any notification by itself — it only provides the opportunity and the API.
+
+**Dispatch ownership**: Core application code (e.g., `useChatApi.ts`) SHALL be responsible for dispatching the `notification` hook via `frontendHooks.dispatch('notification', ctx)` when relevant events occur (both WebSocket `chat:done`/`chat:error` and HTTP fallback completion). Plugins SHALL only `register('notification', handler)` and call `ctx.notify(...)` — they do NOT dispatch the hook themselves.
+
+#### Scenario: Plugin receives notify function in context
+- **WHEN** a `notification` hook handler is invoked
+- **THEN** the context SHALL contain a callable `notify` function with the same signature as `useNotification().notify`
+
+#### Scenario: Multiple plugins can emit different notifications
+- **WHEN** two plugins both have `notification` handlers for the same event
+- **THEN** each plugin can independently call `context.notify()` with different options, resulting in multiple notifications
+
+#### Scenario: Notification dispatched on HTTP fallback completion
+- **WHEN** a chat request completes via the HTTP fallback path (not WebSocket)
+- **THEN** the core code SHALL dispatch the `notification` hook with `event: 'chat:done'` and relevant data, identical to the WebSocket path
 
 ### Requirement: Pre-write hook stage
 
@@ -110,7 +138,7 @@ Plugins SHALL register hook handlers via `hooks.on(stage, handler, priority?)` w
 - **WHEN** a plugin registers a handler that returns a Promise
 - **THEN** the hook system SHALL await the handler's completion before proceeding to the next handler in the stage
 
-The frontend `FrontendHookDispatcher` SHALL use `hooks.register(stage, handler, priority?)` where `stage` is a valid frontend hook stage name, `handler` is a synchronous function, and `priority` is an optional numeric value defaulting to `100`. The `FrontendHookDispatcher` only supports the `frontend-render` stage; `register()` SHALL validate that the stage name is `frontend-render` and SHALL log a warning and skip registration for unknown stage names. The `FrontendHookDispatcher` class SHALL be preserved as a TypeScript class (NOT converted to a Vue composable) for backward compatibility with existing plugin `frontend.js` modules that call `register(frontendHooks)`. The class API (`register`, `dispatch`) SHALL remain identical in signature and behavior.
+The frontend `FrontendHookDispatcher` SHALL use `hooks.register(stage, handler, priority?)` where `stage` is a valid frontend hook stage name, `handler` is a synchronous function, and `priority` is an optional numeric value defaulting to `100`. The `FrontendHookDispatcher` supports the `frontend-render` and `notification` stages; `register()` SHALL validate that the stage name is one of these and SHALL log a warning and skip registration for unknown stage names. The `FrontendHookDispatcher` class SHALL be preserved as a TypeScript class (NOT converted to a Vue composable) for backward compatibility with existing plugin `frontend.js` modules that call `register(frontendHooks)`. The class API (`register`, `dispatch`) SHALL remain identical in signature and behavior.
 
 #### Scenario: Frontend register a handler with explicit priority
 - **WHEN** a plugin calls `hooks.register('frontend-render', myHandler, 50)`

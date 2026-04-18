@@ -197,7 +197,7 @@ export interface UseBackgroundReturn {
 
 // ── Hook System Types ──
 
-export type HookStage = "frontend-render";
+export type HookStage = "frontend-render" | "notification";
 
 export interface HookHandler<T = Record<string, unknown>> {
   (context: T): void;
@@ -207,6 +207,52 @@ export interface FrontendRenderContext {
   text: string;
   placeholderMap: Map<string, string>;
   options: RenderOptions;
+}
+
+// ── Notification System ──
+
+export type NotificationLevel = "info" | "success" | "warning" | "error";
+
+export type NotificationPosition =
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "top-center"
+  | "bottom-center";
+
+export type NotificationChannel = "in-app" | "system" | "auto";
+
+export interface NotifyOptions {
+  title: string;
+  body?: string;
+  level?: NotificationLevel;
+  position?: NotificationPosition;
+  channel?: NotificationChannel;
+  duration?: number;
+}
+
+export interface ToastNotification {
+  id: string;
+  title: string;
+  body?: string;
+  level: NotificationLevel;
+  position: NotificationPosition;
+  createdAt: number;
+}
+
+export interface NotificationContext {
+  event: string;
+  data: Record<string, unknown>;
+  notify: (options: NotifyOptions) => string;
+}
+
+export interface UseNotificationReturn {
+  toasts: Ref<ToastNotification[]>;
+  notify: (options: NotifyOptions) => string;
+  dismiss: (id: string) => void;
+  requestPermission: () => Promise<NotificationPermission>;
+  permissionState: Ref<NotificationPermission | "unsupported">;
 }
 
 export interface RenderOptions {

@@ -238,20 +238,36 @@ export function register(hookDispatcher) {
 
 ### 前端 Hook
 
-前端 plugin 以 ES module 形式由瀏覽器載入，透過獨立的 FrontendHookDispatcher 註冊同步處理函式。前端 hook 目前僅支援一個階段：
+前端 plugin 以 ES module 形式由瀏覽器載入，透過獨立的 FrontendHookDispatcher 註冊同步處理函式。前端 hook 支援以下階段：
 
 | 階段 | 用途 | Context 參數 |
 |------|------|-------------|
 | `frontend-render` | 自訂內容渲染（例如將 `<options>` 轉為互動式 UI） | `{ text, placeholderMap, options }` — 其中 `options` 為 `{ isLastChapter: boolean }` |
+| `notification` | 通知觸發（LLM 回應完成/錯誤時由核心派發） | `{ event, data, notify }` — `event` 為 `'chat:done'` 或 `'chat:error'`，`notify` 為通知函式 |
 
 前端的標籤清除已改為宣告式設定，透過 `displayStripTags` manifest 欄位處理，不再需要前端模組。
 
 前端模組的結構：
 
 ```javascript
+// frontend-render 範例
 export function register(hooks) {
   hooks.register('frontend-render', (context) => {
     // 自訂渲染邏輯
+  }, 100);
+}
+```
+
+```javascript
+// notification 範例
+export function register(hooks) {
+  hooks.register('notification', (context) => {
+    if (context.event !== 'chat:done') return;
+    context.notify({
+      title: '完成通知',
+      level: 'success',
+      channel: 'auto',
+    });
   }, 100);
 }
 ```

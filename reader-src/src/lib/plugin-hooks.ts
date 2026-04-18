@@ -1,22 +1,33 @@
-import type { HookStage, HookHandler, FrontendRenderContext } from "@/types";
+import type {
+  HookStage,
+  HookHandler,
+  FrontendRenderContext,
+  NotificationContext,
+} from "@/types";
 
 type ContextMap = {
   "frontend-render": FrontendRenderContext;
+  "notification": NotificationContext;
 };
+
+type AnyContext = ContextMap[HookStage];
 
 interface HandlerEntry<T> {
   handler: HookHandler<T>;
   priority: number;
 }
 
-const VALID_STAGES: ReadonlySet<HookStage> = new Set(["frontend-render"]);
+const VALID_STAGES: ReadonlySet<HookStage> = new Set([
+  "frontend-render",
+  "notification",
+]);
 
 export class FrontendHookDispatcher {
-  #handlers = new Map<HookStage, HandlerEntry<FrontendRenderContext>[]>();
+  #handlers = new Map<HookStage, HandlerEntry<AnyContext>[]>();
 
-  register(
-    stage: HookStage,
-    handler: HookHandler<ContextMap[typeof stage]>,
+  register<S extends HookStage>(
+    stage: S,
+    handler: HookHandler<ContextMap[S]>,
     priority: number = 100,
   ): void {
     if (!VALID_STAGES.has(stage)) {
@@ -25,7 +36,7 @@ export class FrontendHookDispatcher {
     }
     if (!this.#handlers.has(stage)) this.#handlers.set(stage, []);
     const list = this.#handlers.get(stage)!;
-    list.push({ handler, priority });
+    list.push({ handler: handler as HookHandler<AnyContext>, priority });
     list.sort((a, b) => a.priority - b.priority);
   }
 

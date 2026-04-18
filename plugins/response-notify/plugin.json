@@ -1,0 +1,7 @@
+{
+  "name": "response-notify",
+  "version": "1.0.0",
+  "description": "Browser notification when LLM response generation completes",
+  "type": "frontend-only",
+  "frontendModule": "./frontend.js"
+}
