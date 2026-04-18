@@ -230,7 +230,7 @@ A `.containerignore` file MUST exclude at minimum:
 - `playground/`
 - `tmp/`
 - `plugins/state/rust/` — Rust source not needed (pre-built binary is at plugin root)
-- `openspec/`, `docs/`, `tests/`, `skills/`
+- `openspec/`, `docs/`, `tests/`, `.agents/`
 - OS/editor artifacts (`.DS_Store`, `*.swp`, `Thumbs.db`)
 - `node_modules/`
 

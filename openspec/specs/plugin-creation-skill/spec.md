@@ -7,13 +7,13 @@ TBD — Specification for the plugin creation skill that guides agents through s
 ## Requirements
 
 ### Requirement: Skill directory structure
-The skill SHALL be located at `skills/heartreverie-create-plugin/` and contain:
+The skill SHALL be located at `.agents/skills/heartreverie-create-plugin/` and contain:
 - `SKILL.md` — main skill file with YAML frontmatter and workflow instructions (under 500 lines)
 - `references/manifest-schema.md` — complete `plugin.json` field definitions
 - `references/hook-api.md` — backend and frontend hook stage documentation
 
 #### Scenario: Skill file exists with correct frontmatter
-- **WHEN** an agent reads `skills/heartreverie-create-plugin/SKILL.md`
+- **WHEN** an agent reads `.agents/skills/heartreverie-create-plugin/SKILL.md`
 - **THEN** the file SHALL contain YAML frontmatter with `name: heartreverie-create-plugin` and a `description` field that includes trigger phrases such as "create a plugin", "new plugin", "scaffold plugin", and "add a plugin"
 
 #### Scenario: Reference files exist
