@@ -29,12 +29,13 @@
 #   - deno     (for the backend server)
 #
 # Examples:
-#   ./serve.sh          # Serve on https://localhost:8443
-#   ./serve.sh 9000     # Serve on https://localhost:9000
+#   ./scripts/serve.sh          # Serve on https://localhost:8443
+#   ./scripts/serve.sh 9000     # Serve on https://localhost:9000
 
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+readonly PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Validate port number if provided
 if [[ -n "${1:-}" ]]; then
@@ -45,12 +46,12 @@ if [[ -n "${1:-}" ]]; then
 fi
 
 export PORT="${1:-8443}"
-export PLAYGROUND_DIR="${SCRIPT_DIR}/playground"
-export READER_DIR="${SCRIPT_DIR}/reader-dist"
-export CERT_DIR="${SCRIPT_DIR}/.certs"
+export PLAYGROUND_DIR="${PROJECT_DIR}/playground"
+export READER_DIR="${PROJECT_DIR}/reader-dist"
+export CERT_DIR="${PROJECT_DIR}/.certs"
 
 echo "🚀 Story writer starting on https://localhost:${PORT}"
-echo "   Project: ${SCRIPT_DIR}"
+echo "   Project: ${PROJECT_DIR}"
 echo "   Press Ctrl+C to stop"
 
-exec "${SCRIPT_DIR}/entrypoint.sh" "${SCRIPT_DIR}/writer/server.ts"
+exec "${PROJECT_DIR}/entrypoint.sh" "${PROJECT_DIR}/writer/server.ts"

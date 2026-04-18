@@ -46,7 +46,7 @@ deno install --lock=deno.lock
 deno task build:reader
 
 # 啟動
-./serve.sh
+./scripts/serve.sh
 ```
 
 伺服器預設跑在 `https://localhost:8443`。首次啟動會自動產生自簽 TLS 憑證。

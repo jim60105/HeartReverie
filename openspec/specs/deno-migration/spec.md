@@ -70,8 +70,8 @@ All tests SHALL be migrated to Deno's built-in test runner using `Deno.test()` a
 - **THEN** all backend and frontend tests execute and pass
 
 ### Requirement: serve.sh update
-The `serve.sh` script SHALL invoke `deno` instead of `node`, with appropriate permission flags.
+The `scripts/serve.sh` script SHALL invoke `deno` instead of `node`, with appropriate permission flags.
 
 #### Scenario: Script invocation
-- **WHEN** the developer runs `./serve.sh`
+- **WHEN** the developer runs `./scripts/serve.sh`
 - **THEN** the script checks for `deno` (not `node`), and execs `deno run` with `--allow-net --allow-read --allow-write --allow-env`

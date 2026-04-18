@@ -8,14 +8,14 @@ Root serve script that generates TLS certificates and starts the unified writer 
 
 ### Requirement: Certificate generation
 
-The root `serve.sh` script SHALL generate self-signed TLS certificates for HTTPS if they do not already exist. The certificate generation logic SHALL be reused from the existing `reader/serve.sh` script. Generated certificates SHALL be stored in a consistent location accessible to the writer backend.
+The root `scripts/serve.sh` script SHALL generate self-signed TLS certificates for HTTPS if they do not already exist. The certificate generation logic SHALL be reused from the existing `reader/serve.sh` script. Generated certificates SHALL be stored in a consistent location accessible to the writer backend.
 
 #### Scenario: First-time certificate generation
-- **WHEN** `serve.sh` is run and no certificates exist
+- **WHEN** `scripts/serve.sh` is run and no certificates exist
 - **THEN** self-signed TLS certificates SHALL be generated and stored for the server to use
 
 #### Scenario: Certificates already exist
-- **WHEN** `serve.sh` is run and valid certificates already exist
+- **WHEN** `scripts/serve.sh` is run and valid certificates already exist
 - **THEN** certificate generation SHALL be skipped and the existing certificates SHALL be used
 
 ### Requirement: Server initialization
@@ -52,14 +52,14 @@ The writer backend SHALL be a Deno application using Hono framework with ESM mod
 
 ### Requirement: Process management
 
-The `serve.sh` script SHALL start the writer backend via `deno run` with explicit permission flags (`--allow-net`, `--allow-read`, `--allow-write`, `--allow-env`). The script SHALL check for the `deno` command instead of `node`. No `node_modules` directory or `package.json` SHALL be required.
+The `scripts/serve.sh` script SHALL start the writer backend via `deno run` with explicit permission flags (`--allow-net`, `--allow-read`, `--allow-write`, `--allow-env`). The script SHALL check for the `deno` command instead of `node`. No `node_modules` directory or `package.json` SHALL be required.
 
 #### Scenario: Start the unified server
-- **WHEN** `serve.sh` is executed
+- **WHEN** `scripts/serve.sh` is executed
 - **THEN** the script SHALL invoke `deno run` with appropriate permission flags, and the server SHALL serve both the static frontend at `/` and the API at `/api/`
 
 #### Scenario: Server shutdown
-- **WHEN** the `serve.sh` process is terminated (e.g., Ctrl+C)
+- **WHEN** the `scripts/serve.sh` process is terminated (e.g., Ctrl+C)
 - **THEN** the Deno process SHALL be cleanly stopped
 
 ### Requirement: Configuration

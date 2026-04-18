@@ -454,7 +454,7 @@ cp /path/to/HeartReverie_Plugins/system.md ./system.md
 
 ```bash
 PLUGIN_DIR=/path/to/HeartReverie_Plugins \
-./serve.sh
+./scripts/serve.sh
 ```
 
 > [!WARNING]
