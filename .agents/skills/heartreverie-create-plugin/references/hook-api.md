@@ -164,6 +164,10 @@ Frontend modules are ES modules loaded by the browser. They register synchronous
 |-------|---------|-------------------|
 | `frontend-render` | Custom tag extraction and rendering | `{ text, placeholderMap, options }` |
 | `notification` | Browser notification when events occur (e.g., `chat:done`) | `{ event, data, notify }` |
+| `chat:send:before` | Transform the user message just before it is sent (pipeline) | `{ message, mode }` — `mode` is `'send'` or `'resend'`. If a handler returns a `string`, it replaces `context.message` for subsequent handlers. |
+| `chapter:render:after` | Post-process the token array after Markdown + initial DOMPurify pass | `{ tokens, rawMarkdown, options }` — mutate `tokens` freely; the system re-sanitizes any newly added or `.content`-mutated `html` tokens after dispatch. |
+| `story:switch` | Informational: fires when the active series/story changes | `{ series, story, mode, previousSeries, previousStory }` — `mode` is `'backend'` or `'fsa'`; `previousSeries`/`previousStory` are `null` on first load. |
+| `chapter:change` | Informational: fires when the displayed chapter changes | `{ chapter, index, previousIndex }` — `chapter` matches `ChapterData.number` (or `null` in FSA first-load); `previousIndex` is `null` on first load. |
 
 - `text` (`string`): The raw LLM output text before Markdown parsing
 - `placeholderMap` (`Map<string, string>`): Map of placeholder strings → rendered HTML
@@ -182,6 +186,46 @@ export function register(hooks) {
 ```
 
 **Important:** Frontend handlers are **synchronous** (no `async`).
+
+### `chat:send:before` Pipeline Contract
+
+The `chat:send:before` stage is a **pipeline**: if a handler returns a `string`, the dispatcher assigns it to `context.message` before calling the next handler. Any other return value (`undefined`, `null`, number, object) is ignored and `context.message` is left as-is. Handlers may also mutate `context.message` directly. There is no veto/cancel — to drop a message, return an empty string. `context.mode` is `'send'` for new messages or `'resend'` when regenerating the last assistant turn.
+
+```javascript
+hooks.register('chat:send:before', (ctx) => {
+  if (ctx.mode === 'resend') return; // only stamp new messages
+  return `[${new Date().toISOString()}] ${ctx.message}`;
+}, 100);
+```
+
+### `chapter:render:after` Post-Processing + Re-Sanitization
+
+`chapter:render:after` fires after Markdown parsing and the initial DOMPurify pass. Handlers may mutate `context.tokens` (push new tokens, replace existing ones, or edit `.content`). The dispatcher then re-runs DOMPurify on every `html` token that was added or whose `.content` changed — plugins do not need to sanitize HTML themselves, and untrusted HTML will never reach the DOM even if a plugin produces it.
+
+```javascript
+hooks.register('chapter:render:after', (ctx) => {
+  for (const tok of ctx.tokens) {
+    if (tok.type !== 'html') continue;
+    tok.content += '<footer class="note">generated</footer>';
+  }
+}, 100);
+```
+
+### `story:switch` and `chapter:change` (Informational)
+
+Both are informational — they cannot cancel navigation. Each fires at most once per real state transition:
+
+- `story:switch` compares `previousSeries`/`previousStory`; reload-to-last does **not** trigger it.
+- `chapter:change` skips dispatch when `previousIndex === index`.
+
+```javascript
+hooks.register('story:switch', (ctx) => {
+  // ctx.previousSeries / ctx.previousStory are null on first load
+}, 100);
+hooks.register('chapter:change', (ctx) => {
+  // ctx.chapter matches ChapterData.number (null for FSA first load)
+}, 100);
+```
 
 ### The Placeholder Pattern
 

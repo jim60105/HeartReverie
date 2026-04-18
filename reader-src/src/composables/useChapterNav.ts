@@ -1,10 +1,16 @@
 import { ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import router from "@/router";
-import type { UseChapterNavReturn, ChapterData } from "@/types";
+import type {
+  UseChapterNavReturn,
+  ChapterData,
+  StorySwitchContext,
+  ChapterChangeContext,
+} from "@/types";
 import { useAuth } from "@/composables/useAuth";
 import { useFileReader } from "@/composables/useFileReader";
 import { useWebSocket } from "@/composables/useWebSocket";
+import { frontendHooks } from "@/lib/plugin-hooks";
 import { isNumericMdFile, numericSort } from "@/lib/file-utils";
 
 const POLL_INTERVAL_BASE = 3000;
@@ -21,6 +27,8 @@ const fsaFiles = ref<FileSystemFileHandle[]>([]);
 // Private state
 let currentSeries: string | null = null;
 let currentStory: string | null = null;
+let previousSeries: string | null = null;
+let previousStory: string | null = null;
 let pollIntervalId: ReturnType<typeof setInterval> | null = null;
 let currentPollInterval = POLL_INTERVAL_BASE;
 let initialized = false;
@@ -33,6 +41,41 @@ const isLast = computed(() => currentIndex.value >= chapters.value.length - 1);
 const isLastChapter = computed(
   () => chapters.value.length > 0 && currentIndex.value === chapters.value.length - 1,
 );
+
+function dispatchStorySwitch(
+  nextMode: "fsa" | "backend",
+  nextSeries: string | null,
+  nextStory: string | null,
+): void {
+  const ctx: StorySwitchContext = {
+    previousSeries,
+    previousStory,
+    series: nextSeries,
+    story: nextStory,
+    mode: nextMode,
+  };
+  frontendHooks.dispatch("story:switch", ctx);
+  previousSeries = nextSeries;
+  previousStory = nextStory;
+}
+
+function dispatchChapterChange(
+  prevIndex: number | null,
+  nextIndex: number,
+): void {
+  if (prevIndex === nextIndex) return;
+  const chapterNumber =
+    chapters.value[nextIndex]?.number ?? nextIndex + 1;
+  const ctx: ChapterChangeContext = {
+    previousIndex: prevIndex,
+    index: nextIndex,
+    chapter: chapterNumber,
+    series: currentSeries,
+    story: currentStory,
+    mode: mode.value,
+  };
+  frontendHooks.dispatch("chapter:change", ctx);
+}
 
 function clearPolling(): void {
   if (pollIntervalId !== null) {
@@ -159,8 +202,10 @@ function syncRoute(): void {
 
 function navigateTo(index: number): void {
   if (index < 0 || index >= chapters.value.length) return;
+  const prev = currentIndex.value;
   currentIndex.value = index;
   currentContent.value = chapters.value[index]?.content ?? "";
+  dispatchChapterChange(prev, index);
 }
 
 async function loadFSAChapter(index: number): Promise<void> {
@@ -168,8 +213,10 @@ async function loadFSAChapter(index: number): Promise<void> {
   const { readFile } = useFileReader();
   const content = await readFile(fsaFiles.value[index]!);
   chapters.value[index] = { number: index + 1, content };
+  const prev = currentIndex.value;
   currentIndex.value = index;
   currentContent.value = content;
+  dispatchChapterChange(prev, index);
 }
 
 function next(): void {
@@ -198,6 +245,12 @@ async function loadFromFSA(handle: FileSystemDirectoryHandle): Promise<void> {
   folderName.value = handle.name;
   router.replace({ name: "home" }).catch(() => {});
 
+  // Always dispatch story:switch for FSA loads. When switching between
+  // local folders (FSA → FSA), series/story are both null so the old
+  // identity check missed these transitions. Each loadFromFSA call
+  // represents a distinct story.
+  dispatchStorySwitch("fsa", null, null);
+
   const fileHandles = await listChapterFiles(handle);
   fsaFiles.value = fileHandles;
 
@@ -219,6 +272,7 @@ async function loadFromFSA(handle: FileSystemDirectoryHandle): Promise<void> {
 
   currentIndex.value = 0;
   currentContent.value = chapters.value[currentIndex.value]?.content ?? "";
+  dispatchChapterChange(null, 0);
 
   // Start FSA polling (1s interval)
   pollIntervalId = setInterval(pollDirectory, 1000);
@@ -247,11 +301,24 @@ async function loadFromBackend(
 ): Promise<void> {
   clearPolling();
   const token = ++loadToken;
+  const priorMode = mode.value;
+  const priorSeries = currentSeries;
+  const priorStory = currentStory;
   mode.value = "backend";
   fsaFiles.value = [];
   currentSeries = series;
   currentStory = story;
   folderName.value = `${series} / ${story}`;
+
+  // Dispatch story:switch only for real transitions (different series/story
+  // or mode change). Reloads of the same story MUST NOT fire the hook.
+  const isTransition =
+    priorMode !== "backend" ||
+    priorSeries !== series ||
+    priorStory !== story;
+  if (isTransition) {
+    dispatchStorySwitch("backend", series, story);
+  }
 
   await loadFromBackendInternal(series, story);
   // Discard stale result if a newer load was triggered
@@ -269,6 +336,9 @@ async function loadFromBackend(
     : 0;
   currentIndex.value = startIdx;
   currentContent.value = chapters.value[startIdx]?.content ?? "";
+  if (isTransition) {
+    dispatchChapterChange(null, startIdx);
+  }
 
   syncRoute();
   sendSubscribeIfConnected();
@@ -288,9 +358,11 @@ async function reloadToLast(): Promise<void> {
     return;
   }
 
+  const prevIdx = currentIndex.value;
   const lastIdx = chapters.value.length - 1;
   currentIndex.value = lastIdx;
   currentContent.value = chapters.value[lastIdx]?.content ?? "";
+  dispatchChapterChange(prevIdx, lastIdx);
 
   syncRoute();
   startPollingIfNeeded();
@@ -344,8 +416,10 @@ function initRouteSync(): void {
       if (!newChapter || mode.value !== "backend") return;
       const idx = parseInt(newChapter as string, 10) - 1;
       if (idx >= 0 && idx < chapters.value.length && idx !== currentIndex.value) {
+        const prev = currentIndex.value;
         currentIndex.value = idx;
         currentContent.value = chapters.value[idx]?.content ?? "";
+        dispatchChapterChange(prev, idx);
       }
     },
   );

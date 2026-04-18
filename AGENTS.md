@@ -265,7 +265,10 @@ Plugin interaction layers:
 3. **Display tag stripping** — `displayStripTags` field declares plain tag names or regex patterns to remove from frontend display during browser rendering
 4. **CSS injection** — `frontendStyles` field declares CSS files to inject as `<link>` elements into the frontend `<head>` before JS modules load
 5. **Backend hooks** — `backendModule` registers handlers for 5 lifecycle stages: `prompt-assembly`, `response-stream`, `pre-write`, `post-response`, `strip-tags`
-6. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` hook and notification handling via `notification` hook
+6. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` hook and notification handling via `notification` hook. Additional frontend hook stages are available for lifecycle integration:
+   - `chat:send:before` — pipeline hook: handlers may transform the outgoing user message by returning a `string`; context is `{ message, mode: "send" | "resend" }`.
+   - `chapter:render:after` — post-processing hook: handlers may mutate `tokens` after Markdown + initial DOMPurify pass; the dispatcher re-sanitizes any newly added or `.content`-mutated `html` tokens, so plugins never need to sanitize HTML themselves.
+   - `story:switch` / `chapter:change` — informational hooks fired on real navigation state changes (no veto). Contexts carry `previousSeries`/`previousStory` and `previousIndex` respectively.
 7. **Plugin logger** — each plugin receives a scoped logger via `PluginRegisterContext`; `HookDispatcher` injects `context.logger` during dispatch
 
 ### Lore Codex

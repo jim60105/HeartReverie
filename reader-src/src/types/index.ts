@@ -197,16 +197,61 @@ export interface UseBackgroundReturn {
 
 // ── Hook System Types ──
 
-export type HookStage = "frontend-render" | "notification";
+export type HookStage =
+  | "frontend-render"
+  | "notification"
+  | "chat:send:before"
+  | "chapter:render:after"
+  | "story:switch"
+  | "chapter:change";
 
 export interface HookHandler<T = Record<string, unknown>> {
   (context: T): void;
+}
+
+/**
+ * Pipeline-style handler for `chat:send:before`. Handlers MAY return a
+ * replacement string for `context.message`; any non-string return value is
+ * ignored by the dispatcher.
+ */
+export interface ChatSendBeforeHandler {
+  (context: ChatSendBeforeContext): string | void;
 }
 
 export interface FrontendRenderContext {
   text: string;
   placeholderMap: Map<string, string>;
   options: RenderOptions;
+}
+
+export interface ChatSendBeforeContext {
+  message: string;
+  series: string;
+  story: string;
+  mode: "send" | "resend";
+}
+
+export interface ChapterRenderAfterContext {
+  tokens: RenderToken[];
+  rawMarkdown: string;
+  options: RenderOptions;
+}
+
+export interface StorySwitchContext {
+  previousSeries: string | null;
+  previousStory: string | null;
+  series: string | null;
+  story: string | null;
+  mode: "fsa" | "backend";
+}
+
+export interface ChapterChangeContext {
+  previousIndex: number | null;
+  index: number;
+  chapter: number;
+  series: string | null;
+  story: string | null;
+  mode: "fsa" | "backend";
 }
 
 // ── Notification System ──
