@@ -13,17 +13,23 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import type { HookDispatcher } from "../../writer/lib/hooks.ts";
+import type { PluginRegisterContext } from "../../writer/types.ts";
+import type { Logger } from "../../writer/lib/logger.ts";
 
 /**
  * Register the pre-write hook that wraps user messages in <user_message> tags.
- * @param {HookDispatcher} hookDispatcher
  */
-export function register(hookDispatcher: HookDispatcher): void {
-  hookDispatcher.register("pre-write", async (context) => {
+export function register({ hooks, logger }: PluginRegisterContext): void {
+  logger.info("Registering user-message plugin");
+
+  hooks.register("pre-write", async (context) => {
+    const log = (context.logger as Logger | undefined) ?? logger;
     const message = context.message as string;
     if (typeof message === "string" && message.length > 0) {
       context.preContent = `<user_message>\n${message}\n</user_message>\n\n`;
+      log.debug("Wrapped user message in <user_message> tags", { messageLength: message.length });
+    } else {
+      log.debug("Skipping user message wrapping: empty message");
     }
   }, 100);
 }

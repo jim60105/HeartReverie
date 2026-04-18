@@ -160,6 +160,22 @@ The frontend `FrontendHookDispatcher` SHALL use `hooks.register(stage, handler, 
 - **WHEN** an existing plugin's `frontend.js` module calls `register(frontendHooks)` where `frontendHooks` is a `FrontendHookDispatcher` instance
 - **THEN** the call SHALL succeed with the same API surface as the vanilla JS implementation, because the class is preserved as-is (not converted to a composable)
 
+### Requirement: Plugin registration interface
+
+The plugin backend module registration function SHALL accept a `PluginRegisterContext` object instead of a bare `HookDispatcher`. The context object SHALL contain `hooks` (a `PluginHooks` wrapper that auto-binds plugin name and baseLogger) and `logger` (a `Logger` instance scoped to the plugin name). The plugin manager SHALL construct this context object when loading each backend module.
+
+#### Scenario: Backend module receives context object
+- **WHEN** the plugin manager loads a backend module that exports a `register` function
+- **THEN** it SHALL call `register(context)` where `context` is `{ hooks: PluginHooks, logger: Logger }` instead of calling `register(hookDispatcher)` directly
+
+#### Scenario: Plugin accesses hook dispatcher from context
+- **WHEN** a plugin's `register(context)` function needs to register hooks
+- **THEN** it SHALL use `context.hooks.register(stage, handler, priority)` to register handlers (plugin name and baseLogger are auto-bound)
+
+#### Scenario: Plugin accesses logger from context
+- **WHEN** a plugin's `register(context)` function needs to log information
+- **THEN** it SHALL use `context.logger.info(message, data)` (or debug/warn/error) to emit structured log entries
+
 ### Requirement: Handler execution
 
 For each hook stage invocation, the hook system SHALL execute all registered handlers in priority order. `prompt-assembly` handlers SHALL receive a mutable context object containing `templateVariables` and `promptFragments`, and MAY modify these to contribute prompt content or adjust template data. `response-stream` handlers SHALL receive the current chunk and MAY return a transformed chunk. `post-response` handlers SHALL receive the completed response content and story metadata for side effects. `strip-tags` handlers SHALL receive a registration API to declare tag names for server-side stripping.

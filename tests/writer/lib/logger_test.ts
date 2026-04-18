@@ -340,4 +340,131 @@ Deno.test("Logger", async (t) => {
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
+
+  await t.step("baseData support", async (t) => {
+    await t.step("merges baseData into every log entry", async () => {
+      _resetLogger();
+      const tmpDir = await Deno.makeTempDir();
+      const logFile = join(tmpDir, "basedata.jsonl");
+      const logStub = stub(console, "log", () => {});
+      try {
+        await initLogger({ level: "debug", filePath: logFile });
+        const log = createLogger("plugin", { baseData: { plugin: "test-plugin" } });
+
+        log.info("Hello");
+
+        await new Promise((r) => setTimeout(r, 50));
+
+        const content = await Deno.readTextFile(logFile);
+        const entry: LogEntry = JSON.parse(content.trim());
+        assertEquals(entry.data?.plugin, "test-plugin");
+        assertEquals(entry.message, "Hello");
+      } finally {
+        logStub.restore();
+        _resetLogger();
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+
+    await t.step("call-site data takes precedence over baseData", async () => {
+      _resetLogger();
+      const tmpDir = await Deno.makeTempDir();
+      const logFile = join(tmpDir, "precedence.jsonl");
+      const logStub = stub(console, "log", () => {});
+      try {
+        await initLogger({ level: "debug", filePath: logFile });
+        const log = createLogger("plugin", { baseData: { plugin: "original", extra: "kept" } });
+
+        log.info("Overridden", { plugin: "override" });
+
+        await new Promise((r) => setTimeout(r, 50));
+
+        const content = await Deno.readTextFile(logFile);
+        const entry: LogEntry = JSON.parse(content.trim());
+        assertEquals(entry.data?.plugin, "override");
+        assertEquals(entry.data?.extra, "kept");
+      } finally {
+        logStub.restore();
+        _resetLogger();
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+
+    await t.step("withContext accumulates baseData", async () => {
+      _resetLogger();
+      const tmpDir = await Deno.makeTempDir();
+      const logFile = join(tmpDir, "accumulate.jsonl");
+      const logStub = stub(console, "log", () => {});
+      try {
+        await initLogger({ level: "debug", filePath: logFile });
+        const log = createLogger("plugin", { baseData: { plugin: "my-plugin" } });
+        const derived = log.withContext({ baseData: { request: "req-1" } });
+
+        derived.info("Derived log");
+
+        await new Promise((r) => setTimeout(r, 50));
+
+        const content = await Deno.readTextFile(logFile);
+        const entry: LogEntry = JSON.parse(content.trim());
+        assertEquals(entry.data?.plugin, "my-plugin");
+        assertEquals(entry.data?.request, "req-1");
+      } finally {
+        logStub.restore();
+        _resetLogger();
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+
+    await t.step("withContext baseData overrides parent baseData on collision", async () => {
+      _resetLogger();
+      const tmpDir = await Deno.makeTempDir();
+      const logFile = join(tmpDir, "override-chain.jsonl");
+      const logStub = stub(console, "log", () => {});
+      try {
+        await initLogger({ level: "debug", filePath: logFile });
+        const log = createLogger("plugin", { baseData: { plugin: "parent", shared: "old" } });
+        const derived = log.withContext({ baseData: { shared: "new" } });
+
+        derived.info("Chain test");
+
+        await new Promise((r) => setTimeout(r, 50));
+
+        const content = await Deno.readTextFile(logFile);
+        const entry: LogEntry = JSON.parse(content.trim());
+        assertEquals(entry.data?.plugin, "parent");
+        assertEquals(entry.data?.shared, "new");
+      } finally {
+        logStub.restore();
+        _resetLogger();
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+
+    await t.step("createLogger with context sets both correlationId and baseData", async () => {
+      _resetLogger();
+      const tmpDir = await Deno.makeTempDir();
+      const logFile = join(tmpDir, "both.jsonl");
+      const logStub = stub(console, "log", () => {});
+      try {
+        await initLogger({ level: "debug", filePath: logFile });
+        const log = createLogger("plugin", {
+          correlationId: "corr-123",
+          baseData: { plugin: "dual" },
+        });
+
+        log.info("Both set");
+
+        await new Promise((r) => setTimeout(r, 50));
+
+        const content = await Deno.readTextFile(logFile);
+        const entry: LogEntry = JSON.parse(content.trim());
+        assertEquals(entry.correlationId, "corr-123");
+        assertEquals(entry.data?.plugin, "dual");
+      } finally {
+        logStub.restore();
+        _resetLogger();
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+  });
 });

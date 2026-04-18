@@ -15,12 +15,15 @@
 
 import { assertEquals, assert } from "@std/assert";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
+import { createLogger } from "../../../writer/lib/logger.ts";
 import { register } from "../../../plugins/context-compaction/handler.ts";
+
+const testLogger = createLogger("plugin", { baseData: { plugin: "context-compaction" } });
 
 Deno.test("context-compaction prompt-assembly hook", async (t) => {
   await t.step("modifies previousContext via compaction", async () => {
     const hd = new HookDispatcher();
-    register(hd);
+    register({ hooks: hd, logger: testLogger });
 
     // Create a temp playground structure
     const tmpDir = await Deno.makeTempDir({ prefix: "hook-test-" });
@@ -61,7 +64,7 @@ Deno.test("context-compaction prompt-assembly hook", async (t) => {
 
   await t.step("passes rawChapters correctly", async () => {
     const hd = new HookDispatcher();
-    register(hd);
+    register({ hooks: hd, logger: testLogger });
 
     const tmpDir = await Deno.makeTempDir({ prefix: "hook-test-raw-" });
     const storyDir = `${tmpDir}/series/story`;
@@ -89,7 +92,7 @@ Deno.test("context-compaction prompt-assembly hook", async (t) => {
 
   await t.step("does nothing when disabled", async () => {
     const hd = new HookDispatcher();
-    register(hd);
+    register({ hooks: hd, logger: testLogger });
 
     const tmpDir = await Deno.makeTempDir({ prefix: "hook-test-disabled-" });
     const seriesDir = `${tmpDir}/disabled-series`;
@@ -130,7 +133,7 @@ Deno.test("context-compaction prompt-assembly hook", async (t) => {
 
   await t.step("does nothing with empty previousContext", async () => {
     const hd = new HookDispatcher();
-    register(hd);
+    register({ hooks: hd, logger: testLogger });
 
     const context: Record<string, unknown> = {
       previousContext: [],

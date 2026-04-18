@@ -182,4 +182,54 @@ Deno.test("HookDispatcher", async (t) => {
     await hd.dispatch("pre-write", ctx);
     assertEquals(ctx.preContent, "AB");
   });
+
+  await t.step("injects logger into context when correlationId is present", async () => {
+    const hd = new HookDispatcher();
+    let receivedLogger: unknown = undefined;
+    hd.register("post-response", async (ctx) => {
+      receivedLogger = ctx.logger;
+    }, 100, "test-plugin");
+
+    await hd.dispatch("post-response", { correlationId: "abc-123" });
+    // Logger should be injected
+    assertEquals(typeof receivedLogger, "object");
+    assertEquals(typeof (receivedLogger as Record<string, unknown>).info, "function");
+    assertEquals(typeof (receivedLogger as Record<string, unknown>).debug, "function");
+  });
+
+  await t.step("injects logger even without correlationId", async () => {
+    const hd = new HookDispatcher();
+    let receivedLogger: unknown = "sentinel";
+    hd.register("post-response", async (ctx) => {
+      receivedLogger = ctx.logger;
+    }, 100, "test-plugin");
+
+    await hd.dispatch("post-response", {});
+    // Logger should always be injected (per spec)
+    assertEquals(typeof receivedLogger, "object");
+    assertEquals(typeof (receivedLogger as Record<string, unknown>).info, "function");
+  });
+
+  await t.step("register accepts plugin name parameter", () => {
+    const hd = new HookDispatcher();
+    // Should not throw
+    hd.register("prompt-assembly", async () => {}, 100, "my-plugin");
+  });
+
+  await t.step("derives request logger from baseLogger preserving baseData", async () => {
+    const hd = new HookDispatcher();
+    const { createLogger } = await import("../../../writer/lib/logger.ts");
+    const pluginLogger = createLogger("plugin", { baseData: { plugin: "derive-test" } });
+
+    let receivedLogger: unknown = undefined;
+    hd.register("post-response", async (ctx) => {
+      receivedLogger = ctx.logger;
+    }, 100, "derive-test", pluginLogger);
+
+    await hd.dispatch("post-response", { correlationId: "req-xyz" });
+    // Logger should be derived from baseLogger (has info, debug, withContext methods)
+    assertEquals(typeof receivedLogger, "object");
+    assertEquals(typeof (receivedLogger as Record<string, unknown>).info, "function");
+    assertEquals(typeof (receivedLogger as Record<string, unknown>).withContext, "function");
+  });
 });

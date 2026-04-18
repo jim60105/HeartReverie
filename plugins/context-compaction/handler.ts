@@ -13,7 +13,8 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import type { HookDispatcher } from "../../writer/lib/hooks.ts";
+import type { PluginRegisterContext } from "../../writer/types.ts";
+import type { Logger } from "../../writer/lib/logger.ts";
 import { loadCompactionConfig } from "./config.ts";
 import { compactContext } from "./compactor.ts";
 import { dirname } from "@std/path";
@@ -21,14 +22,18 @@ import { dirname } from "@std/path";
 /**
  * Register the prompt-assembly hook for context compaction.
  */
-export function register(hookDispatcher: HookDispatcher): void {
-  hookDispatcher.register("prompt-assembly", async (context) => {
+export function register({ hooks, logger }: PluginRegisterContext): void {
+  logger.info("Registering context compaction plugin");
+
+  hooks.register("prompt-assembly", async (context) => {
+    const log = (context.logger as Logger | undefined) ?? logger;
     const previousContext = context.previousContext as string[];
     const rawChapters = context.rawChapters as string[];
     const storyDir = context.storyDir as string;
     const series = context.series as string;
 
     if (!previousContext || !rawChapters || previousContext.length === 0) {
+      log.debug("Skipping compaction: no context to compact", { chapters: rawChapters?.length ?? 0 });
       return;
     }
 
@@ -38,15 +43,30 @@ export function register(hookDispatcher: HookDispatcher): void {
     const config = await loadCompactionConfig(storyDir, series, playgroundDir);
 
     if (!config.enabled) {
+      log.debug("Context compaction disabled by config", { storyDir, series });
       return;
     }
+
+    log.debug("Compacting context", {
+      contextEntries: previousContext.length,
+      rawChapters: rawChapters.length,
+      recentChapters: config.recentChapters,
+    });
 
     const compacted = compactContext(previousContext, rawChapters, config);
 
     // Only replace in-place if compaction produced a different array
     if (compacted !== previousContext) {
+      const removedCount = previousContext.length - compacted.length;
       previousContext.length = 0;
       previousContext.push(...compacted);
+      log.info("Context compacted", {
+        originalEntries: previousContext.length + removedCount,
+        compactedEntries: compacted.length,
+        removedEntries: removedCount,
+      });
+    } else {
+      log.debug("No compaction needed", { contextEntries: previousContext.length });
     }
   }, 100);
 }

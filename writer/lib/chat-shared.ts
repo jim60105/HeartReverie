@@ -198,6 +198,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   // Dispatch pre-write hook before file truncation
   const preWriteCtx = await hookDispatcher.dispatch("pre-write", {
+    correlationId,
     message,
     chapterPath,
     storyDir,
@@ -305,6 +306,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   // 8. Run post-response hooks
   await hookDispatcher.dispatch("post-response", {
+    correlationId,
     content: fullContent,
     storyDir,
     series,

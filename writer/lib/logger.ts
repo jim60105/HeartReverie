@@ -40,8 +40,9 @@ export interface LogEntry {
 }
 
 /** Immutable context that can be bound to a logger instance. */
-interface LoggerContext {
+export interface LoggerContext {
   readonly correlationId?: string;
+  readonly baseData?: Record<string, unknown>;
 }
 
 /** Logger instance providing leveled logging methods. */
@@ -223,20 +224,33 @@ export async function initLogger(options?: {
 /**
  * Create a logger instance for a specific category.
  * @param category - The logging category (llm, file, template, plugin, auth, ws, http, system)
+ * @param ctx - Optional initial context (correlationId, baseData)
  */
-export function createLogger(category: LogCategory): Logger {
-  return createLoggerWithContext(category, null);
+export function createLogger(category: LogCategory, ctx?: LoggerContext): Logger {
+  return createLoggerWithContext(
+    category,
+    ctx?.correlationId ?? null,
+    ctx?.baseData,
+  );
 }
 
-function createLoggerWithContext(category: LogCategory, correlationId: string | null): Logger {
+function createLoggerWithContext(
+  category: LogCategory,
+  correlationId: string | null,
+  baseData?: Record<string, unknown>,
+): Logger {
   function log(level: LogLevel, message: string, data?: Record<string, unknown>): void {
+    // Merge baseData with call-site data; call-site takes precedence
+    const mergedData = baseData
+      ? { ...baseData, ...data }
+      : data;
     emit({
       timestamp: new Date().toISOString(),
       level,
       category,
       correlationId,
       message,
-      data,
+      data: mergedData,
     });
   }
 
@@ -246,7 +260,15 @@ function createLoggerWithContext(category: LogCategory, correlationId: string | 
     warn: (message, data) => log("warn", message, data),
     error: (message, data) => log("error", message, data),
     withContext(ctx: LoggerContext): Logger {
-      return createLoggerWithContext(category, ctx.correlationId ?? correlationId);
+      // Accumulate baseData: existing + new (new takes precedence)
+      const newBaseData = ctx.baseData
+        ? { ...baseData, ...ctx.baseData }
+        : baseData;
+      return createLoggerWithContext(
+        category,
+        ctx.correlationId ?? correlationId,
+        newBaseData,
+      );
     },
   };
 }
