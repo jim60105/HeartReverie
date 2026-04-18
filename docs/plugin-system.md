@@ -310,8 +310,18 @@ logger.error('Operation failed', { error: err.message });
 |------|------|-------------|
 | `frontend-render` | 自訂內容渲染（例如將 `<options>` 轉為互動式 UI） | `{ text, placeholderMap, options }` — 其中 `options` 為 `{ isLastChapter: boolean }` |
 | `notification` | 通知觸發（LLM 回應完成/錯誤時由核心派發） | `{ event, data, notify }` — `event` 為 `'chat:done'` 或 `'chat:error'`，`notify` 為通知函式 |
+| `chat:send:before` | 使用者送出訊息前，允許 plugin 改寫將送出的文字 | `{ message, mode }` — `mode` 為 `'send'` 或 `'resend'`；若 handler `return` 一個字串，該字串將覆蓋 `context.message`（pipeline 行為） |
+| `chapter:render:after` | 章節 Markdown 渲染完成後，允許 plugin 後處理 token 陣列 | `{ tokens, rawMarkdown, options }` — 可直接變更 `tokens`（push/replace/mutate `.content`）；任何新增或 `.content` 變動的 `html` token 會被系統再次以 DOMPurify 重新消毒 |
+| `story:switch` | 使用者切換系列／故事時觸發 | `{ series, story, mode, previousSeries, previousStory }` — `mode` 為 `'backend'` 或 `'fsa'`，首次載入時 `previousSeries`／`previousStory` 為 `null`；資訊用途，不可取消 |
+| `chapter:change` | 目前顯示的章節變動時觸發（包含跳章、翻頁、重新載入至最後一章） | `{ chapter, index, previousIndex }` — `chapter` 為對應 `ChapterData.number`（FSA 模式首次載入時為 `null`），`previousIndex` 為 `null` 代表首次載入；資訊用途，不可取消 |
 
 前端的標籤清除已改為宣告式設定，透過 `displayStripTags` manifest 欄位處理，不再需要前端模組。
+
+`chat:send:before` 採 **pipeline** 模式：handler 回傳 `string` 時會被寫回 `context.message`，下一個 handler 看到的是改寫後的字串；回傳 `undefined` / `null` / 非字串值則不變更 `message`，plugin 仍可直接變更 `context.message` 屬性。此階段不做取消（no veto）——若要過濾，handler 應回傳空字串。
+
+`chapter:render:after` 是 **後處理** 階段：hook 觸發時 tokens 已經過初次 DOMPurify 消毒，但由於允許 plugin 變更 `tokens` 陣列（新增、取代、就地改寫 `.content`），系統會在 hook 結束後針對新增或 `.content` 有變動的 `html` token 再次執行 DOMPurify；此為 XSS 安全網，plugin 無需自行處理 HTML 消毒。
+
+`story:switch` 與 `chapter:change` 為 **資訊型** hook：僅用於通知狀態變動，不支援取消導覽。它們只在每次真實的狀態轉變發射一次（`story:switch` 會比對 `previousSeries`/`previousStory`；`chapter:change` 會比對 `previousIndex`），no-op 導覽不觸發。
 
 前端模組的結構：
 
@@ -334,6 +344,40 @@ export function register(hooks) {
       level: 'success',
       channel: 'auto',
     });
+  }, 100);
+}
+```
+
+```javascript
+// chat:send:before 範例 — 在訊息前加上時間戳記
+export function register(hooks) {
+  hooks.register('chat:send:before', (context) => {
+    const stamp = new Date().toISOString();
+    return `[${stamp}] ${context.message}`;
+  }, 100);
+}
+```
+
+```javascript
+// chapter:render:after 範例 — 為每個 html token 末尾附上小備註
+export function register(hooks) {
+  hooks.register('chapter:render:after', (context) => {
+    for (const tok of context.tokens) {
+      if (tok.type !== 'html') continue;
+      tok.content += '<!-- post-processed -->';
+    }
+  }, 100);
+}
+```
+
+```javascript
+// story:switch / chapter:change 範例 — 資訊型 hook
+export function register(hooks) {
+  hooks.register('story:switch', (context) => {
+    console.log('switched to', context.series, context.story);
+  }, 100);
+  hooks.register('chapter:change', (context) => {
+    console.log('chapter', context.previousIndex, '→', context.index);
   }, 100);
 }
 ```

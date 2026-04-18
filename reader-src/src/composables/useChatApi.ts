@@ -1,5 +1,5 @@
 import { ref, watch } from "vue";
-import type { UseChatApiReturn } from "@/types";
+import type { UseChatApiReturn, ChatSendBeforeContext } from "@/types";
 import { useAuth } from "@/composables/useAuth";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useNotification } from "@/composables/useNotification";
@@ -38,6 +38,19 @@ async function sendMessage(
   message: string,
 ): Promise<boolean> {
   const { isConnected, isAuthenticated, send, onMessage } = useWebSocket();
+
+  // Dispatch chat:send:before hook BEFORE assigning request ids or issuing
+  // any network call. Pipeline semantics: handlers may return a string to
+  // replace ctx.message.
+  const beforeCtx: ChatSendBeforeContext = {
+    message,
+    series,
+    story,
+    mode: "send",
+  };
+  frontendHooks.dispatch("chat:send:before", beforeCtx);
+  const outgoingMessage = beforeCtx.message;
+
   isLoading.value = true;
   errorMessage.value = "";
   streamingContent.value = "";
@@ -105,7 +118,7 @@ async function sendMessage(
         currentRequestId = null;
       }
 
-      send({ type: 'chat:send', id, series, story, message });
+      send({ type: 'chat:send', id, series, story, message: outgoingMessage });
     });
   }
 
@@ -114,7 +127,7 @@ async function sendMessage(
   httpAbortController = new AbortController();
 
   try {
-    const body: Record<string, string> = { message };
+    const body: Record<string, string> = { message: outgoingMessage };
 
     const res = await fetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chat`,
@@ -153,6 +166,18 @@ async function resendMessage(
   message: string,
 ): Promise<boolean> {
   const { isConnected, isAuthenticated, send, onMessage } = useWebSocket();
+
+  // Dispatch chat:send:before hook BEFORE any network call. Pipeline
+  // semantics: handlers may return a string to replace ctx.message.
+  const beforeCtx: ChatSendBeforeContext = {
+    message,
+    series,
+    story,
+    mode: "resend",
+  };
+  frontendHooks.dispatch("chat:send:before", beforeCtx);
+  const outgoingMessage = beforeCtx.message;
+
   isLoading.value = true;
   errorMessage.value = "";
   streamingContent.value = "";
@@ -218,7 +243,7 @@ async function resendMessage(
         currentRequestId = null;
       }
 
-      send({ type: 'chat:resend', id, series, story, message });
+      send({ type: 'chat:resend', id, series, story, message: outgoingMessage });
     });
   }
 
@@ -240,7 +265,7 @@ async function resendMessage(
     }
 
     // Re-send the message
-    const body: Record<string, string> = { message };
+    const body: Record<string, string> = { message: outgoingMessage };
 
     const res = await fetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chat`,

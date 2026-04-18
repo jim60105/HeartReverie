@@ -10,6 +10,7 @@ import type {
   RenderToken,
   VentoErrorCardProps,
   FrontendRenderContext,
+  ChapterRenderAfterContext,
 } from "@/types";
 
 interface TokenData {
@@ -22,6 +23,51 @@ function sanitizeHtml(html: string): string {
     ADD_TAGS: ["details", "summary"],
     ADD_ATTR: ["open"],
   });
+}
+
+/**
+ * Dispatch the `chapter:render:after` hook and re-sanitize any HTML-bearing
+ * tokens that plugin handlers added or mutated. Re-sanitization is the
+ * authoritative XSS safety net: plugins may only mutate tokens *after*
+ * primary DOMPurify sanitization, so any replaced/added `.content` fields
+ * MUST pass through DOMPurify again before renderChapter() returns them.
+ * See spec: openspec/changes/frontend-hook-expansion — Requirement
+ * "chapter:render:after hook context and mutation model".
+ */
+function dispatchChapterRenderAfter(
+  tokens: RenderToken[],
+  rawMarkdown: string,
+  options: RenderOptions,
+): void {
+  // Snapshot each token's type and content so we can detect additions,
+  // type mutations (e.g. non-html → html), and content mutations.
+  const originalEntries = tokens.map((tok) => ({
+    ref: tok,
+    type: tok.type,
+    content: tok.type === "html" ? tok.content : null as string | null,
+  }));
+
+  const ctx: ChapterRenderAfterContext = { tokens, rawMarkdown, options };
+  frontendHooks.dispatch("chapter:render:after", ctx);
+
+  // Re-sanitize any html token that was added, changed type to html, or
+  // had its content mutated. This closes the non-html → html mutation XSS
+  // vector: a plugin cannot convert e.g. a vento-error token into an html
+  // token with unsanitized content.
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i]!;
+    if (tok.type !== "html") continue;
+    const original = originalEntries.find((e) => e.ref === tok);
+    const isNew = !original;
+    const wasMutatedToHtml = original !== undefined && original.type !== "html";
+    const contentChanged =
+      original !== undefined &&
+      original.type === "html" &&
+      original.content !== tok.content;
+    if (isNew || wasMutatedToHtml || contentChanged) {
+      tok.content = sanitizeHtml(tok.content);
+    }
+  }
 }
 
 function renderChapter(
@@ -82,6 +128,7 @@ function renderChapter(
     if (sanitized.trim()) {
       tokens.push({ type: "html", content: sanitized });
     }
+    dispatchChapterRenderAfter(tokens, rawMarkdown, options);
     return tokens;
   }
 
@@ -112,6 +159,7 @@ function renderChapter(
     }
   }
 
+  dispatchChapterRenderAfter(tokens, rawMarkdown, options);
   return tokens;
 }
 
