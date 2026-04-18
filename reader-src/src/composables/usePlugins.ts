@@ -62,6 +62,27 @@ function applyDisplayStrip(text: string): string {
   return text.replace(displayStripRegex, "");
 }
 
+function injectPluginStyles(pluginList: PluginDescriptor[]): void {
+  for (const p of pluginList) {
+    if (!Array.isArray(p.frontendStyles) || p.frontendStyles.length === 0) {
+      continue;
+    }
+    for (const href of p.frontendStyles) {
+      if (typeof href !== "string" || href.length === 0) continue;
+      // Deduplicate by comparing href attribute directly (avoids querySelector injection)
+      const existing = Array.from(document.head.querySelectorAll("link[rel=\"stylesheet\"]"));
+      if (existing.some((el) => el.getAttribute("href") === href)) continue;
+
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      link.dataset.plugin = p.name;
+      link.onerror = () => link.remove();
+      document.head.appendChild(link);
+    }
+  }
+}
+
 async function initPlugins(): Promise<void> {
   if (initialized.value) return;
   const { getAuthHeaders } = useAuth();
@@ -72,6 +93,8 @@ async function initPlugins(): Promise<void> {
     const pluginList: PluginDescriptor[] = await res.json();
 
     compileDisplayStripPatterns(pluginList);
+
+    injectPluginStyles(pluginList);
 
     const frontendPlugins = pluginList.filter((p) => p.hasFrontendModule);
 

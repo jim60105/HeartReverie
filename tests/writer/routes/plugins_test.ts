@@ -81,6 +81,7 @@ Deno.test({ name: "plugin routes", sanitizeOps: false, sanitizeResources: false,
       getBuiltinDir: () => "/nonexistent-plugins",
       getPromptVariables: async () => ({ variables: {}, fragments: [] }),
       getStripTagPatterns: () => null,
+        getPluginStyles: () => [],
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -135,6 +136,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
         getParameters: () => [],
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
+        getPluginStyles: () => [],
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -169,6 +171,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
         getParameters: () => [],
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
+        getPluginStyles: () => [],
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -212,6 +215,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
         getParameters: () => [],
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
+        getPluginStyles: () => [],
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -248,6 +252,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
         getParameters: () => [],
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
+        getPluginStyles: () => [],
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -287,6 +292,7 @@ Deno.test({ name: "shared plugin utils routes", sanitizeOps: false, sanitizeReso
         getBuiltinDir: () => tmpDir,
         getPromptVariables: async () => ({ variables: {}, fragments: [] }),
         getStripTagPatterns: () => null,
+        getPluginStyles: () => [],
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -359,6 +365,7 @@ Deno.test({ name: "parameters endpoint with lore discovery", sanitizeOps: false,
       getBuiltinDir: () => "/nonexistent-plugins",
       getPromptVariables: async () => ({ variables: {}, fragments: [] }),
       getStripTagPatterns: () => null,
+        getPluginStyles: () => [],
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -386,6 +393,89 @@ Deno.test({ name: "parameters endpoint with lore discovery", sanitizeOps: false,
     assertEquals(res.status, 200);
     assert(res.body.some((p: Record<string, unknown>) => p.name === "lore_all"));
     assert(res.body.some((p: Record<string, unknown>) => p.name === "lore_tags"));
+  });
+
+  // Cleanup
+  await Deno.remove(tmpDir, { recursive: true });
+} });
+
+Deno.test({ name: "plugin frontendStyles routes", sanitizeOps: false, sanitizeResources: false, fn: async (t) => {
+  Deno.env.set("PASSPHRASE", "test-pass");
+
+  const tmpDir = await Deno.makeTempDir();
+  const pluginDir = join(tmpDir, "styled-plugin");
+  await Deno.mkdir(pluginDir, { recursive: true });
+  await Deno.writeTextFile(join(pluginDir, "style.css"), ".foo { color: red; }");
+  await Deno.writeTextFile(join(pluginDir, "secret.css"), ".secret { color: black; }");
+
+  function makeApp(frontendStyles: string[], validatedStyles: string[] = frontendStyles) {
+    return createApp({
+      config: {
+        READER_DIR: "/nonexistent-reader",
+        PLAYGROUND_DIR: "/nonexistent-playground",
+        ROOT_DIR: "/nonexistent-root",
+      } as unknown as AppConfig,
+      safePath: () => null,
+      pluginManager: {
+        getPlugins: () => [
+          {
+            name: "styled-plugin",
+            version: "1.0.0",
+            description: "Plugin with styles",
+            type: "utility",
+            frontendStyles,
+          },
+        ],
+        getPluginDir: (name: string) => name === "styled-plugin" ? pluginDir : null,
+        getBuiltinDir: () => "/nonexistent-plugins",
+        getParameters: () => [],
+        getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+        getStripTagPatterns: () => null,
+        getPluginStyles: (name: string) => name === "styled-plugin" ? [...validatedStyles] : [],
+      } as unknown as PluginManager,
+      hookDispatcher: new HookDispatcher(),
+      buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      verifyPassphrase,
+    } as AppDeps);
+  }
+
+  await t.step("GET /api/plugins includes frontendStyles URL paths", async () => {
+    const app = makeApp(["style.css"]);
+    const res = await makeRequest(app, "GET", "/api/plugins");
+    assertEquals(res.status, 200);
+    assertEquals(res.body[0].frontendStyles, ["/plugins/styled-plugin/style.css"]);
+  });
+
+  await t.step("declared CSS file is served with text/css content type", async () => {
+    const app = makeApp(["style.css"]);
+    const res = await app.fetch(
+      new Request("http://localhost/plugins/styled-plugin/style.css", {
+        headers: { "x-passphrase": "test-pass" },
+      }),
+    );
+    assertEquals(res.status, 200);
+    assertEquals(res.headers.get("content-type"), "text/css; charset=utf-8");
+    const text = await res.text();
+    assertEquals(text, ".foo { color: red; }");
+  });
+
+  await t.step("undeclared CSS file returns 404 even if it exists on disk", async () => {
+    const app = makeApp(["style.css"], ["style.css"]);
+    const res = await makeRequest(app, "GET", "/plugins/styled-plugin/secret.css");
+    assertEquals(res.status, 404);
+  });
+
+  await t.step("path traversal attempt returns 404", async () => {
+    const app = makeApp(["style.css"]);
+    const res = await makeRequest(app, "GET", "/plugins/styled-plugin/../../etc/passwd");
+    assert(res.status === 403 || res.status === 404, `Expected 403 or 404, got ${res.status}`);
+  });
+
+  await t.step("plugin with no frontendStyles yields empty array in /api/plugins", async () => {
+    const app = makeApp([], []);
+    const res = await makeRequest(app, "GET", "/api/plugins");
+    assertEquals(res.status, 200);
+    assertEquals(res.body[0].frontendStyles, []);
   });
 
   // Cleanup
