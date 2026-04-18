@@ -21,9 +21,36 @@ import { createLogger } from "./logger.ts";
 
 const log = createLogger("file");
 
+/**
+ * Resolve the 1-based chapter number that the next write will target.
+ *
+ * Rule: if the last chapter file is empty, reuse its number; otherwise use
+ * `max(existing numbers) + 1`; when no chapter files exist, return `1`.
+ *
+ * This helper is the single source of truth for the target-chapter policy
+ * shared by `buildPromptFromStory()` (for plugin context) and
+ * `executeChat()` (for the actual write target).
+ *
+ * @param chapterFiles - Ordered `NNN.md` filenames already loaded from disk.
+ * @param chapters - Parsed chapter entries aligned with `chapterFiles`.
+ * @returns 1-based chapter number.
+ */
+export function resolveTargetChapterNumber(
+  chapterFiles: readonly string[],
+  chapters: readonly ChapterEntry[],
+): number {
+  const lastFile = chapterFiles[chapterFiles.length - 1];
+  const lastChapter = chapters[chapters.length - 1];
+  if (lastFile && lastChapter && lastChapter.content.trim() === "") {
+    return parseInt(lastFile, 10);
+  }
+  if (chapterFiles.length === 0) return 1;
+  return Math.max(...chapterFiles.map((f) => parseInt(f, 10))) + 1;
+}
+
 export function createStoryEngine(
   pluginManager: PluginManager,
-  safePath: SafePathFn,
+  _safePath: SafePathFn,
   renderSystemPrompt: (series: string, story?: string, options?: RenderOptions) => Promise<RenderResult>,
   hookDispatcher: HookDispatcher,
 ): StoryEngine {
@@ -61,6 +88,8 @@ export function createStoryEngine(
       log.debug("Story directory not found", { path: storyDir });
     }
 
+    const totalChapterCount = chapterFiles.length;
+
     const MAX_CHAPTERS: number = 200;
     if (chapterFiles.length > MAX_CHAPTERS) {
       chapterFiles = chapterFiles.slice(-MAX_CHAPTERS);
@@ -79,6 +108,20 @@ export function createStoryEngine(
     });
 
     const isFirstRound: boolean = chapters.every((ch) => ch.content.trim() === "");
+
+    // Compute target chapter number + previous content for plugin context.
+    // `previousContent` is the *unstripped* content of the chapter immediately
+    // preceding the target: if the target reuses a trailing empty file, use
+    // the last non-empty chapter; otherwise use the last chapter on disk.
+    const chapterNumber = resolveTargetChapterNumber(chapterFiles, chapters);
+    let previousContent = "";
+    const lastChapter = chapters[chapters.length - 1];
+    if (lastChapter && lastChapter.content.trim() === "") {
+      const lastNonEmpty = [...chapters].reverse().find((ch) => ch.content.trim().length > 0);
+      previousContent = lastNonEmpty ? lastNonEmpty.content : "";
+    } else if (lastChapter) {
+      previousContent = lastChapter.content;
+    }
 
     // Filter to non-empty chapters first, then build both arrays from the same set
     // to keep indices aligned for the compaction plugin
@@ -110,6 +153,9 @@ export function createStoryEngine(
         userInput: message,
         isFirstRound,
         storyDir,
+        chapterNumber,
+        previousContent,
+        chapterCount: totalChapterCount,
         templateOverride:
           typeof template === "string" ? template : undefined,
       });

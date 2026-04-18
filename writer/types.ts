@@ -103,11 +103,42 @@ export interface PluginParameter {
   readonly description?: string;
 }
 
-/** Context passed to plugin getDynamicVariables(). */
+/**
+ * Context passed to plugin `getDynamicVariables()`.
+ *
+ * All fields are derived from data already materialized by
+ * `buildPromptFromStory()` in `writer/lib/story.ts`. The object is a plain
+ * serializable bag: no functions, file handles, streams, or `AppConfig`.
+ */
 export interface DynamicVariableContext {
+  /** Series identifier for the current request. */
   readonly series: string;
+  /** Story identifier for the current request. */
   readonly name: string;
+  /** Absolute path to the story directory on disk. */
   readonly storyDir: string;
+  /**
+   * Raw user message that triggered this prompt build. May be a large
+   * arbitrary string — plugin authors should scrub before persisting.
+   * Empty string when the caller omitted a message (e.g., preview route).
+   */
+  readonly userInput: string;
+  /**
+   * 1-based number of the chapter that a subsequent write would target,
+   * computed by `resolveTargetChapterNumber()`: reuse the trailing empty
+   * chapter file if any, otherwise `max(existing) + 1`, otherwise `1`.
+   */
+  readonly chapterNumber: number;
+  /**
+   * Unstripped content of the chapter immediately preceding `chapterNumber`.
+   * Empty string when no prior chapter exists. Can be large (tens of KB);
+   * plugins that forward it into other variables should summarize first.
+   */
+  readonly previousContent: string;
+  /** True when every existing chapter on disk is blank. */
+  readonly isFirstRound: boolean;
+  /** Total number of `NNN.md` chapter files on disk, including empty trailing files. */
+  readonly chapterCount: number;
 }
 
 /** Hook registration interface exposed to plugins (subset of HookDispatcher). */
@@ -193,6 +224,9 @@ export interface RenderOptions {
   isFirstRound?: boolean;
   templateOverride?: string;
   storyDir?: string;
+  chapterNumber?: number;
+  previousContent?: string;
+  chapterCount?: number;
 }
 
 /** Discriminated union for renderSystemPrompt return. */

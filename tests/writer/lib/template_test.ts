@@ -227,13 +227,55 @@ Deno.test("createTemplateEngine", async (t) => {
     assertEquals(result.content, "Series:my-series Story:my-story");
   });
 
-  await t.step("series_name defaults to empty when undefined", async () => {
-    const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
-    const result = await renderSystemPrompt("", undefined, {
-      templateOverride: "[{{ series_name }}][{{ story_name }}]",
+  await t.step("renderSystemPrompt forwards rich context to getDynamicVariables", async () => {
+    let captured: Record<string, unknown> | null = null;
+    const pluginMgr = {
+      getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+      getDynamicVariables: async (ctx: Record<string, unknown>) => {
+        captured = ctx;
+        return {};
+      },
+    } as unknown as PluginManager;
+    const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
+    const result = await renderSystemPrompt("s", "n", {
+      templateOverride: "ok",
+      userInput: "hello",
+      isFirstRound: true,
+      storyDir: "/dir",
+      chapterNumber: 7,
+      previousContent: "prev body",
+      chapterCount: 6,
     });
     assertEquals(result.error, null);
-    assertEquals(result.content, "[][]");
+    assertEquals(captured!.series, "s");
+    assertEquals(captured!.name, "n");
+    assertEquals(captured!.storyDir, "/dir");
+    assertEquals(captured!.userInput, "hello");
+    assertEquals(captured!.chapterNumber, 7);
+    assertEquals(captured!.previousContent, "prev body");
+    assertEquals(captured!.isFirstRound, true);
+    assertEquals(captured!.chapterCount, 6);
+  });
+
+  await t.step("renderSystemPrompt defaults rich context fields when caller omits them", async () => {
+    let captured: Record<string, unknown> | null = null;
+    const pluginMgr = {
+      getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+      getDynamicVariables: async (ctx: Record<string, unknown>) => {
+        captured = ctx;
+        return {};
+      },
+    } as unknown as PluginManager;
+    const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
+    const result = await renderSystemPrompt("s", "n", {
+      templateOverride: "ok",
+    });
+    assertEquals(result.error, null);
+    assertEquals(captured!.userInput, "");
+    assertEquals(captured!.chapterNumber, 1);
+    assertEquals(captured!.previousContent, "");
+    assertEquals(captured!.isFirstRound, false);
+    assertEquals(captured!.chapterCount, 0);
   });
 });
 

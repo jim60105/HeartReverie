@@ -107,8 +107,17 @@ Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不
 
 ```javascript
 // handler.js — 動態變數匯出範例
-export async function getDynamicVariables({ series, name, storyDir }) {
-  // 根據故事目錄讀取資料並回傳鍵值對
+export async function getDynamicVariables({
+  series,
+  name,
+  storyDir,
+  userInput,
+  chapterNumber,
+  previousContent,
+  isFirstRound,
+  chapterCount,
+}) {
+  // 根據故事目錄、目前請求或前一章內容產生鍵值對
   return { my_dynamic_var: await computeSomeValue(storyDir) };
 }
 ```
@@ -120,6 +129,13 @@ export async function getDynamicVariables({ series, name, storyDir }) {
 | `series` | `string` | 系列名稱 |
 | `name` | `string` | 故事名稱 |
 | `storyDir` | `string` | 故事目錄的絕對路徑 |
+| `userInput` | `string` | 本次請求的原始使用者訊息；預覽路徑下為空字串。**注意：** 為原文未經清理,外掛若要寫入檔案,請自行過濾敏感內容 |
+| `chapterNumber` | `number` | 本次生成將寫入的章節編號（1-based）。規則為「若尾端章節為空則重用,否則 `max(existing) + 1`,皆無則為 `1`」,與實際寫入的檔案一致 |
+| `previousContent` | `string` | `chapterNumber` 前一章的原始未清理內容；無前章時為空字串。**注意：** 可能長達數十 KB,不建議直接塞入其他變數,可參考 `context-compaction` 外掛做摘要 |
+| `isFirstRound` | `boolean` | 所有既有章節均為空白時為 `true` |
+| `chapterCount` | `number` | 磁碟上 `NNN.md` 章節檔案數量（包含尾端空檔案） |
+
+此 context 為純資料物件,不包含函式、檔案控制代碼、API key 或 `AppConfig` 等基礎設施物件;後續欄位新增請透過 `writer-backend` 規格變更提案。
 
 **衝突處理規則：**
 
