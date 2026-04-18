@@ -34,13 +34,13 @@
 
 set -euo pipefail
 
-readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-readonly PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly PROJECT_DIR="$HOME/repos/HeartReverie"
+readonly PLUGINS_DIR="$HOME/repos/HeartReverie_Plugins"
 
 # Validate port number if provided
 if [[ -n "${1:-}" ]]; then
     if [[ ! "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
-        echo "❌ Invalid port number: $1 (must be 1–65535)" >&2
+        echo "❌ Invalid port number: $1 (must be 1~65535)" >&2
         exit 1
     fi
 fi
@@ -49,6 +49,7 @@ export PORT="${1:-8443}"
 export PLAYGROUND_DIR="${PROJECT_DIR}/playground"
 export READER_DIR="${PROJECT_DIR}/reader-dist"
 export CERT_DIR="${PROJECT_DIR}/.certs"
+export PLUGIN_DIR="${PLUGINS_DIR}"
 
 echo "🚀 Story writer starting on https://localhost:${PORT}"
 echo "   Project: ${PROJECT_DIR}"
