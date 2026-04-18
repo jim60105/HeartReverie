@@ -80,6 +80,11 @@ let logFile: Deno.FsFile | null = null;
 let currentFileSize = 0;
 let initialized = false;
 
+// LLM log target — separate file, bypasses console and audit, not gated by LOG_LEVEL
+let llmLogFilePath: string | null = null;
+let llmLogFile: Deno.FsFile | null = null;
+let llmCurrentFileSize = 0;
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_BACKUPS = 5;
 const encoder = new TextEncoder();
@@ -87,9 +92,14 @@ const encoder = new TextEncoder();
 // ── Write queue (serializes file writes to prevent race conditions) ──
 
 let writeQueue: Promise<void> = Promise.resolve();
+let llmWriteQueue: Promise<void> = Promise.resolve();
 
 function enqueueWrite(entry: LogEntry): void {
   writeQueue = writeQueue.then(() => writeToFile(entry)).catch(() => {});
+}
+
+function enqueueLlmWrite(entry: LogEntry): void {
+  llmWriteQueue = llmWriteQueue.then(() => writeToLlmFile(entry)).catch(() => {});
 }
 
 // ── File rotation ───────────────────────────────────────────────
@@ -119,6 +129,34 @@ async function rotateLogFile(): Promise<void> {
   currentFileSize = 0;
 }
 
+async function rotateLlmLogFile(): Promise<void> {
+  if (!llmLogFilePath || !llmLogFile) return;
+
+  llmLogFile.close();
+  llmLogFile = null;
+
+  for (let i = MAX_BACKUPS; i >= 1; i--) {
+    const src = i === 1 ? llmLogFilePath : `${llmLogFilePath}.${i - 1}`;
+    const dest = `${llmLogFilePath}.${i}`;
+    try {
+      if (i === MAX_BACKUPS) {
+        await Deno.remove(dest).catch(() => {});
+      }
+      await Deno.rename(src, dest);
+    } catch {
+      // File may not exist — skip
+    }
+  }
+
+  try {
+    llmLogFile = await Deno.open(llmLogFilePath, { write: true, create: true, append: true, mode: 0o664 });
+    llmCurrentFileSize = 0;
+  } catch {
+    console.warn(`[logger] Failed to reopen LLM log file after rotation: ${llmLogFilePath} — LLM file logging disabled`);
+    llmLogFilePath = null;
+  }
+}
+
 async function writeToFile(entry: LogEntry): Promise<void> {
   if (!logFile || !logFilePath) return;
 
@@ -132,6 +170,24 @@ async function writeToFile(entry: LogEntry): Promise<void> {
   try {
     await logFile.write(bytes);
     currentFileSize += bytes.length;
+  } catch {
+    // Silently skip file write errors to avoid cascading failures
+  }
+}
+
+async function writeToLlmFile(entry: LogEntry): Promise<void> {
+  if (!llmLogFile || !llmLogFilePath) return;
+
+  const line = JSON.stringify(entry) + "\n";
+  const bytes = encoder.encode(line);
+
+  if (llmCurrentFileSize + bytes.length > MAX_FILE_SIZE) {
+    await rotateLlmLogFile();
+  }
+
+  try {
+    await llmLogFile.write(bytes);
+    llmCurrentFileSize += bytes.length;
   } catch {
     // Silently skip file write errors to avoid cascading failures
   }
@@ -179,6 +235,7 @@ function emit(entry: LogEntry): void {
 export async function initLogger(options?: {
   level?: LogLevel;
   filePath?: string | null;
+  llmFilePath?: string | null;
 }): Promise<void> {
   if (initialized) return;
 
@@ -215,6 +272,35 @@ export async function initLogger(options?: {
       // Cannot open log file — continue with console-only
       logFilePath = null;
       logFile = null;
+    }
+  }
+
+  // Resolve LLM log file path
+  if (options?.llmFilePath !== undefined) {
+    llmLogFilePath = options.llmFilePath || null;
+  } else {
+    const envLlmFile = Deno.env.get("LLM_LOG_FILE");
+    if (envLlmFile === "") {
+      llmLogFilePath = null; // Explicitly disabled
+    } else if (envLlmFile) {
+      llmLogFilePath = envLlmFile;
+    } else {
+      llmLogFilePath = "playground/_logs/llm.jsonl";
+    }
+  }
+
+  // Open LLM log file if configured
+  if (llmLogFilePath) {
+    try {
+      await Deno.mkdir(dirname(llmLogFilePath), { recursive: true, mode: 0o775 });
+      llmLogFile = await Deno.open(llmLogFilePath, { write: true, create: true, append: true, mode: 0o664 });
+      const stat = await llmLogFile.stat();
+      llmCurrentFileSize = stat.size;
+    } catch {
+      // Cannot open LLM log file — log warning to console and disable
+      console.warn(`[logger] Failed to open LLM log file: ${llmLogFilePath} — LLM file logging disabled`);
+      llmLogFilePath = null;
+      llmLogFile = null;
     }
   }
 
@@ -274,6 +360,65 @@ function createLoggerWithContext(
 }
 
 /**
+ * Create a logger that writes ONLY to the LLM log file.
+ * Bypasses console output and the audit log. Not gated by LOG_LEVEL.
+ * Returns a no-op logger if LLM logging is disabled.
+ */
+export function createLlmLogger(ctx?: LoggerContext): Logger {
+  if (!llmLogFile) {
+    // No-op logger when LLM logging is disabled
+    const noop: Logger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      withContext: () => noop,
+    };
+    return noop;
+  }
+
+  return createLlmLoggerWithContext(
+    ctx?.correlationId ?? null,
+    ctx?.baseData,
+  );
+}
+
+function createLlmLoggerWithContext(
+  correlationId: string | null,
+  baseData?: Record<string, unknown>,
+): Logger {
+  function log(_level: LogLevel, message: string, data?: Record<string, unknown>): void {
+    // LLM logger always writes (not gated by LOG_LEVEL), file-only
+    const mergedData = baseData ? { ...baseData, ...data } : data;
+    const entry: LogEntry = {
+      timestamp: new Date().toISOString(),
+      level: "info", // LLM entries always logged as info
+      category: "llm",
+      correlationId,
+      message,
+      data: mergedData,
+    };
+    if (llmLogFile) {
+      enqueueLlmWrite(entry);
+    }
+  }
+
+  return {
+    debug: (message, data) => log("debug", message, data),
+    info: (message, data) => log("info", message, data),
+    warn: (message, data) => log("warn", message, data),
+    error: (message, data) => log("error", message, data),
+    withContext(ctx: LoggerContext): Logger {
+      const newBaseData = ctx.baseData ? { ...baseData, ...ctx.baseData } : baseData;
+      return createLlmLoggerWithContext(
+        ctx.correlationId ?? correlationId,
+        newBaseData,
+      );
+    },
+  };
+}
+
+/**
  * Get the current configured log level (for testing/inspection).
  */
 export function getLogLevel(): LogLevel {
@@ -288,11 +433,18 @@ export function _resetLogger(): void {
     logFile.close();
     logFile = null;
   }
+  if (llmLogFile) {
+    llmLogFile.close();
+    llmLogFile = null;
+  }
   logFilePath = null;
+  llmLogFilePath = null;
   currentFileSize = 0;
+  llmCurrentFileSize = 0;
   configuredLevel = "info";
   initialized = false;
   writeQueue = Promise.resolve();
+  llmWriteQueue = Promise.resolve();
 }
 
 /**
@@ -302,8 +454,13 @@ export function _resetLogger(): void {
 export async function closeLogger(): Promise<void> {
   // Wait for all queued writes to complete
   await writeQueue;
+  await llmWriteQueue;
   if (logFile) {
     logFile.close();
     logFile = null;
+  }
+  if (llmLogFile) {
+    llmLogFile.close();
+    llmLogFile = null;
   }
 }
