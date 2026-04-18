@@ -210,6 +210,11 @@ export interface LLMStreamChunk {
       content?: string;
     };
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
 }
 
 // ── WebSocket Message Types ──

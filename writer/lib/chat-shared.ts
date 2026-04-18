@@ -17,7 +17,7 @@ import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
 import type { AppConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
-import { createLogger } from "./logger.ts";
+import { createLogger, createLlmLogger } from "./logger.ts";
 
 const log = createLogger("llm");
 const fileLog = createLogger("file");
@@ -71,6 +71,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   const correlationId = crypto.randomUUID();
   const reqLog = log.withContext({ correlationId });
   const reqFileLog = fileLog.withContext({ correlationId });
+  const llmLog = createLlmLogger().withContext({ correlationId });
 
   reqLog.info("Chat execution started", { series, story: name, messageLength: message.length });
 
@@ -137,28 +138,61 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     userMessageLength: message.length,
   });
 
-  const llmStartTime = performance.now();
-  const apiResponse = await fetch(config.LLM_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
-    },
-    body: JSON.stringify({
-      model: config.LLM_MODEL,
-      messages,
-      stream: true,
+  llmLog.info("LLM request", {
+    type: "request",
+    series,
+    story: name,
+    model: config.LLM_MODEL,
+    parameters: {
       temperature: config.LLM_TEMPERATURE,
-      frequency_penalty: config.LLM_FREQUENCY_PENALTY,
-      presence_penalty: config.LLM_PRESENCE_PENALTY,
-      top_k: config.LLM_TOP_K,
-      top_p: config.LLM_TOP_P,
-      repetition_penalty: config.LLM_REPETITION_PENALTY,
-      min_p: config.LLM_MIN_P,
-      top_a: config.LLM_TOP_A,
-    }),
-    signal,
+      frequencyPenalty: config.LLM_FREQUENCY_PENALTY,
+      presencePenalty: config.LLM_PRESENCE_PENALTY,
+      topK: config.LLM_TOP_K,
+      topP: config.LLM_TOP_P,
+      repetitionPenalty: config.LLM_REPETITION_PENALTY,
+      minP: config.LLM_MIN_P,
+      topA: config.LLM_TOP_A,
+    },
+    systemPrompt,
+    userMessage: message,
   });
+
+  const llmStartTime = performance.now();
+  let apiResponse: Response;
+  try {
+    apiResponse = await fetch(config.LLM_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
+      },
+      body: JSON.stringify({
+        model: config.LLM_MODEL,
+        messages,
+        stream: true,
+        stream_options: { include_usage: true },
+        temperature: config.LLM_TEMPERATURE,
+        frequency_penalty: config.LLM_FREQUENCY_PENALTY,
+        presence_penalty: config.LLM_PRESENCE_PENALTY,
+        top_k: config.LLM_TOP_K,
+        top_p: config.LLM_TOP_P,
+        repetition_penalty: config.LLM_REPETITION_PENALTY,
+        min_p: config.LLM_MIN_P,
+        top_a: config.LLM_TOP_A,
+      }),
+      signal,
+    });
+  } catch (err: unknown) {
+    const latencyMs = Math.round(performance.now() - llmStartTime);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      llmLog.info("LLM error", { type: "error", errorCode: "aborted", latencyMs });
+      throw new ChatAbortError("Generation aborted by client");
+    }
+    const errMsg = err instanceof Error ? err.message : String(err);
+    reqLog.error("LLM fetch failed", { latencyMs, error: errMsg });
+    llmLog.info("LLM error", { type: "error", errorCode: "network", latencyMs, error: errMsg });
+    throw new ChatError("llm-api", "AI service request failed", 502);
+  }
 
   if (!apiResponse.ok) {
     const errorBody = await apiResponse.text();
@@ -169,10 +203,23 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       model: config.LLM_MODEL,
       errorBody,
     });
+    llmLog.info("LLM error", {
+      type: "error",
+      errorCode: "llm-api",
+      httpStatus: apiResponse.status,
+      latencyMs,
+      errorBody,
+    });
     throw new ChatError("llm-api", "AI service request failed", apiResponse.status);
   }
 
   if (!apiResponse.body) {
+    const noBodyLatency = Math.round(performance.now() - llmStartTime);
+    llmLog.info("LLM error", {
+      type: "error",
+      errorCode: "no-body",
+      latencyMs: noBodyLatency,
+    });
     throw new ChatError("no-body", "No response body from AI service", 502);
   }
 
@@ -214,6 +261,11 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   }
 
   let aborted = false;
+  let tokenUsage: {
+    prompt: number | null;
+    completion: number | null;
+    total: number | null;
+  } = { prompt: null, completion: null, total: null };
   try {
     // 7. Parse SSE stream and write incrementally, calling onDelta for each chunk
     const reader = apiResponse.body.getReader();
@@ -245,6 +297,13 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
             await file.write(encoder.encode(delta));
             onDelta?.(delta);
           }
+          if (parsed.usage) {
+            tokenUsage = {
+              prompt: parsed.usage.prompt_tokens ?? null,
+              completion: parsed.usage.completion_tokens ?? null,
+              total: parsed.usage.total_tokens ?? null,
+            };
+          }
         } catch {
           // Skip malformed JSON chunks
         }
@@ -265,6 +324,13 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
               await file.write(encoder.encode(delta));
               onDelta?.(delta);
             }
+            if (parsed.usage) {
+              tokenUsage = {
+                prompt: parsed.usage.prompt_tokens ?? null,
+                completion: parsed.usage.completion_tokens ?? null,
+                total: parsed.usage.total_tokens ?? null,
+              };
+            }
           }
         } catch {
           // Skip malformed JSON
@@ -275,6 +341,10 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     if (err instanceof DOMException && err.name === "AbortError") {
       aborted = true;
     } else {
+      // Log unexpected stream errors before rethrowing
+      const latencyMs = Math.round(performance.now() - llmStartTime);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      llmLog.info("LLM error", { type: "error", errorCode: "stream", latencyMs, error: errMsg, partialLength: aiContent.length });
       throw err;
     }
   } finally {
@@ -285,11 +355,26 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   if (aborted) {
     const latencyMs = Math.round(performance.now() - llmStartTime);
     reqLog.warn("Generation aborted by client", { latencyMs, contentLength: aiContent.length });
+    llmLog.info("LLM response", {
+      type: "response",
+      response: preContent + aiContent,
+      latencyMs,
+      chapter: targetNum,
+      tokens: tokenUsage,
+      aborted: true,
+    });
     throw new ChatAbortError("Generation aborted by client");
   }
 
   if (!aiContent) {
+    const noContentLatency = Math.round(performance.now() - llmStartTime);
     reqLog.error("No content in AI response", { model: config.LLM_MODEL });
+    llmLog.info("LLM error", {
+      type: "error",
+      errorCode: "no-content",
+      latencyMs: noContentLatency,
+      model: config.LLM_MODEL,
+    });
     throw new ChatError("no-content", "No content in AI response", 502);
   }
 
@@ -302,6 +387,13 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     chapter: targetNum,
   });
   reqLog.debug("LLM response content", { content: fullContent });
+  llmLog.info("LLM response", {
+    type: "response",
+    response: fullContent,
+    latencyMs,
+    chapter: targetNum,
+    tokens: tokenUsage,
+  });
   reqFileLog.info("Chapter file written", { op: "write", path: chapterPath, bytes: encoder.encode(fullContent).length });
 
   // 8. Run post-response hooks

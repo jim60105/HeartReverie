@@ -33,7 +33,7 @@ Deno.test("Logger", async (t) => {
       const warnStub = stub(console, "warn", () => {});
       const errorStub = stub(console, "error", () => {});
       try {
-        await initLogger({ level: "warn", filePath: null });
+        await initLogger({ level: "warn", filePath: null, llmFilePath: null });
         const log = createLogger("system");
 
         log.debug("should not appear");
@@ -58,7 +58,7 @@ Deno.test("Logger", async (t) => {
       const warnStub = stub(console, "warn", () => {});
       const errorStub = stub(console, "error", () => {});
       try {
-        await initLogger({ level: "debug", filePath: null });
+        await initLogger({ level: "debug", filePath: null, llmFilePath: null });
         const log = createLogger("http");
 
         log.debug("d");
@@ -84,7 +84,7 @@ Deno.test("Logger", async (t) => {
       const warnStub = stub(console, "warn", () => {});
       const errorStub = stub(console, "error", () => {});
       try {
-        await initLogger({ level: "error", filePath: null });
+        await initLogger({ level: "error", filePath: null, llmFilePath: null });
         const log = createLogger("auth");
 
         log.debug("no");
@@ -109,7 +109,7 @@ Deno.test("Logger", async (t) => {
       _resetLogger();
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "info", filePath: null });
+        await initLogger({ level: "info", filePath: null, llmFilePath: null });
         const log = createLogger("llm");
 
         log.info("Request sent", { model: "gpt-4" });
@@ -129,7 +129,7 @@ Deno.test("Logger", async (t) => {
       _resetLogger();
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "info", filePath: null });
+        await initLogger({ level: "info", filePath: null, llmFilePath: null });
         const log = createLogger("llm");
         const reqLog = log.withContext({ correlationId: "abcd1234-5678-9abc-def0-123456789abc" });
 
@@ -149,7 +149,7 @@ Deno.test("Logger", async (t) => {
       _resetLogger();
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "info", filePath: null });
+        await initLogger({ level: "info", filePath: null, llmFilePath: null });
         const log = createLogger("http");
 
         const req1 = log.withContext({ correlationId: "aaaa-1111" });
@@ -183,7 +183,7 @@ Deno.test("Logger", async (t) => {
       const logStub = stub(console, "log", () => {});
       const warnStub = stub(console, "warn", () => {});
       try {
-        await initLogger({ level: "info", filePath: logFile });
+        await initLogger({ level: "info", filePath: logFile, llmFilePath: null });
         const log = createLogger("file");
 
         log.info("File write test", { path: "/test.md" });
@@ -221,7 +221,7 @@ Deno.test("Logger", async (t) => {
       const logFile = join(tmpDir, "level-test.jsonl");
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "warn", filePath: logFile });
+        await initLogger({ level: "warn", filePath: logFile, llmFilePath: null });
         const log = createLogger("system");
 
         log.debug("no");
@@ -247,7 +247,7 @@ Deno.test("Logger", async (t) => {
     _resetLogger();
     const logStub = stub(console, "log", () => {});
     try {
-      await initLogger({ level: "debug", filePath: null });
+      await initLogger({ level: "debug", filePath: null, llmFilePath: null });
       assertEquals(getLogLevel(), "debug");
     } finally {
       logStub.restore();
@@ -259,8 +259,8 @@ Deno.test("Logger", async (t) => {
     _resetLogger();
     const logStub = stub(console, "log", () => {});
     try {
-      await initLogger({ level: "debug", filePath: null });
-      await initLogger({ level: "error", filePath: null }); // should be ignored
+      await initLogger({ level: "debug", filePath: null, llmFilePath: null });
+      await initLogger({ level: "error", filePath: null, llmFilePath: null }); // should be ignored
       assertEquals(getLogLevel(), "debug");
     } finally {
       logStub.restore();
@@ -272,13 +272,13 @@ Deno.test("Logger", async (t) => {
     _resetLogger();
     const logStub = stub(console, "log", () => {});
     try {
-      await initLogger({ level: "error", filePath: null });
+      await initLogger({ level: "error", filePath: null, llmFilePath: null });
       assertEquals(getLogLevel(), "error");
       _resetLogger();
       // After reset, default level is info
       assertEquals(getLogLevel(), "info");
       // Can reinitialize
-      await initLogger({ level: "debug", filePath: null });
+      await initLogger({ level: "debug", filePath: null, llmFilePath: null });
       assertEquals(getLogLevel(), "debug");
     } finally {
       logStub.restore();
@@ -293,7 +293,7 @@ Deno.test("Logger", async (t) => {
       const logFile = join(tmpDir, "sensitive.jsonl");
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "debug", filePath: logFile });
+        await initLogger({ level: "debug", filePath: logFile, llmFilePath: null });
         const log = createLogger("auth");
 
         // The logger does not filter data — callers must never pass sensitive fields
@@ -319,7 +319,7 @@ Deno.test("Logger", async (t) => {
     const logFile = join(tmpDir, "flush-test.jsonl");
     const logStub = stub(console, "log", () => {});
     try {
-      await initLogger({ level: "info", filePath: logFile });
+      await initLogger({ level: "info", filePath: logFile, llmFilePath: null });
       const log = createLogger("system");
 
       // Write multiple entries rapidly
@@ -348,7 +348,7 @@ Deno.test("Logger", async (t) => {
       const logFile = join(tmpDir, "basedata.jsonl");
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "debug", filePath: logFile });
+        await initLogger({ level: "debug", filePath: logFile, llmFilePath: null });
         const log = createLogger("plugin", { baseData: { plugin: "test-plugin" } });
 
         log.info("Hello");
@@ -372,7 +372,7 @@ Deno.test("Logger", async (t) => {
       const logFile = join(tmpDir, "precedence.jsonl");
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "debug", filePath: logFile });
+        await initLogger({ level: "debug", filePath: logFile, llmFilePath: null });
         const log = createLogger("plugin", { baseData: { plugin: "original", extra: "kept" } });
 
         log.info("Overridden", { plugin: "override" });
@@ -396,7 +396,7 @@ Deno.test("Logger", async (t) => {
       const logFile = join(tmpDir, "accumulate.jsonl");
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "debug", filePath: logFile });
+        await initLogger({ level: "debug", filePath: logFile, llmFilePath: null });
         const log = createLogger("plugin", { baseData: { plugin: "my-plugin" } });
         const derived = log.withContext({ baseData: { request: "req-1" } });
 
@@ -421,7 +421,7 @@ Deno.test("Logger", async (t) => {
       const logFile = join(tmpDir, "override-chain.jsonl");
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "debug", filePath: logFile });
+        await initLogger({ level: "debug", filePath: logFile, llmFilePath: null });
         const log = createLogger("plugin", { baseData: { plugin: "parent", shared: "old" } });
         const derived = log.withContext({ baseData: { shared: "new" } });
 
@@ -446,7 +446,7 @@ Deno.test("Logger", async (t) => {
       const logFile = join(tmpDir, "both.jsonl");
       const logStub = stub(console, "log", () => {});
       try {
-        await initLogger({ level: "debug", filePath: logFile });
+        await initLogger({ level: "debug", filePath: logFile, llmFilePath: null });
         const log = createLogger("plugin", {
           correlationId: "corr-123",
           baseData: { plugin: "dual" },

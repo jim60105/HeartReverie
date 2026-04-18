@@ -48,6 +48,7 @@ const BACKGROUND_IMAGE: string =
   Deno.env.get("BACKGROUND_IMAGE") || "/assets/heart.webp";
 const LOG_LEVEL: string = Deno.env.get("LOG_LEVEL") || "info";
 const LOG_FILE: string | undefined = Deno.env.get("LOG_FILE");
+const LLM_LOG_FILE: string | undefined = Deno.env.get("LLM_LOG_FILE");
 const PROMPT_FILE: string = (() => {
   const raw = Deno.env.get("PROMPT_FILE");
   if (!raw) return join(PLAYGROUND_DIR, "_prompts", "system.md");
@@ -77,4 +78,5 @@ export {
   PROMPT_FILE,
   LOG_LEVEL,
   LOG_FILE,
+  LLM_LOG_FILE,
 };
