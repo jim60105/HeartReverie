@@ -8,6 +8,7 @@
   - [Stage Details](#stage-details)
   - [Priority System](#priority-system)
   - [Error Handling](#error-handling)
+  - [Plugin Logger](#plugin-logger)
 - [Frontend Hooks](#frontend-hooks)
   - [Frontend Registration Pattern](#frontend-registration-pattern)
   - [The Placeholder Pattern](#the-placeholder-pattern)
@@ -18,7 +19,7 @@
 
 ## Backend Hooks
 
-Backend modules register handlers via `HookDispatcher`. The module must export a `register` function that receives the dispatcher.
+Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger }` — a `PluginHooks` interface for hook registration and a pre-scoped `Logger` for structured logging.
 
 ### Hook Stages
 
@@ -35,9 +36,11 @@ Backend modules register handlers via `HookDispatcher`. The module must export a
 **JavaScript (`handler.js`):**
 
 ```javascript
-export function register(hookDispatcher) {
-  hookDispatcher.register("post-response", async (context) => {
+export function register({ hooks, logger }) {
+  hooks.register("post-response", async (context) => {
+    const log = context.logger ?? logger;
     const { content, storyDir, rootDir } = context;
+    log.info("Processing response", { contentLength: content.length });
     // Process the LLM response
   }, 100);
 }
@@ -46,12 +49,14 @@ export function register(hookDispatcher) {
 **TypeScript (`handler.ts`):**
 
 ```typescript
-import type { HookDispatcher } from "../../writer/lib/hooks.ts";
+import type { PluginRegisterContext } from "../../writer/types.ts";
 
-export function register(hookDispatcher: HookDispatcher): void {
-  hookDispatcher.register("post-response", async (context) => {
+export function register({ hooks, logger }: PluginRegisterContext): void {
+  hooks.register("post-response", async (context) => {
+    const log = context.logger ?? logger;
     const content = context.content as string;
     const storyDir = context.storyDir as string;
+    log.info("Processing response", { contentLength: content.length });
     // Process the LLM response
   }, 100);
 }
@@ -64,7 +69,8 @@ export function register(hookDispatcher: HookDispatcher): void {
 Runs during system prompt rendering. Use to modify `previousContext` or inject dynamic content.
 
 ```typescript
-hookDispatcher.register("prompt-assembly", async (context) => {
+hooks.register("prompt-assembly", async (context) => {
+  const log = context.logger;
   const previousContext = context.previousContext as string[];
   const storyDir = context.storyDir as string;
   const name = context.name as string;
@@ -79,7 +85,7 @@ Context is mutable — modify arrays in-place (e.g., `previousContext.length = 0
 Runs after the full LLM response is received but before it is written to the chapter file. Use to prepend or modify content before writing.
 
 ```typescript
-hookDispatcher.register("pre-write", async (context) => {
+hooks.register("pre-write", async (context) => {
   const message = context.message as string;
   if (typeof message === "string" && message.length > 0) {
     // Prepend content before the LLM response in the chapter file
@@ -93,7 +99,8 @@ hookDispatcher.register("pre-write", async (context) => {
 Runs after the LLM response is complete and written. Use for side effects: running external tools, updating state files, logging.
 
 ```javascript
-hookDispatcher.register("post-response", async (context) => {
+hooks.register("post-response", async (context) => {
+  const log = context.logger;
   const { content, storyDir, rootDir } = context;
   // Run external binary, update files, etc.
 }, 100);
@@ -102,7 +109,7 @@ hookDispatcher.register("post-response", async (context) => {
 ### Priority System
 
 ```
-hookDispatcher.register(stage, handler, priority)
+hooks.register(stage, handler, priority)
 ```
 
 - **Lower priority number = runs first**
@@ -113,7 +120,7 @@ hookDispatcher.register(stage, handler, priority)
 ### Error Handling
 
 - Each handler runs in a try/catch
-- Exceptions are **logged to console** but **do not block** other handlers
+- Exceptions are **logged via the structured logger** but **do not block** other handlers
 - A failing handler does not prevent subsequent handlers from executing
 - The (possibly mutated) context is returned regardless of errors
 
@@ -121,8 +128,27 @@ hookDispatcher.register(stage, handler, priority)
 // From HookDispatcher.dispatch():
 // for (const { handler } of handlers) {
 //   try { await handler(context); }
-//   catch (err) { console.error(`Hook error in stage '${stage}':`, err.message); }
+//   // Errors are logged via the structured logger (category: "plugin") but do not block other handlers
 // }
+```
+
+### Plugin Logger
+
+Each plugin receives a pre-scoped `Logger` instance via the register context. The logger has `{ plugin: "<name>" }` in its `baseData`, so all log entries automatically include the plugin name.
+
+During hook dispatch, `context.logger` is always injected — it is derived from the plugin's base logger with a `correlationId` when available (from chat requests). Use the pattern:
+
+```javascript
+const log = context.logger ?? logger;
+```
+
+Logger methods: `debug(message, data?)`, `info(message, data?)`, `warn(message, data?)`, `error(message, data?)`, `withContext(ctx)`.
+
+```javascript
+log.info("Compaction applied", { chapters: 5, removed: 2 });
+log.debug("Processing chapter", { index: 3 });
+log.warn("Binary not found", { path: "/usr/bin/tool" });
+log.error("Execution failed", { exitCode: 1, stderr: "..." });
 ```
 
 ---

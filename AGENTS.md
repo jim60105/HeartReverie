@@ -96,6 +96,7 @@ plugins/                  # Built-in plugins (manifest-driven) + shared utils
   start-hints/            # First-round chapter opening guidance
   thinking/               # Fold <thinking>/<think> tags into collapsible details
   user-message/           # User message lifecycle: wrap, strip from context/display
+  response-notify/        # Toast notification system for backend → frontend messages
 tests/                    # Backend tests (Deno)
   writer/
     lib/                  # Backend library tests (*_test.ts)
@@ -249,11 +250,12 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 ### Plugin System
 
-The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 5 built-in plugins plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
+The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 6 built-in plugins plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
 
 Key classes:
 - `PluginManager` (`writer/lib/plugin-manager.ts`) — scans `plugins/` and optional `PLUGIN_DIR`, validates manifests, loads modules
 - `HookDispatcher` (`writer/lib/hooks.ts`) — registers and dispatches async lifecycle hooks with priority ordering
+- `PluginRegisterContext` (`writer/types.ts`) — context object passed to plugin `register()`: `{ hooks: PluginHooks, logger: Logger }`; the `hooks` wrapper auto-binds the plugin name, and `context.logger` is always injected during hook dispatch
 
 Plugin interaction layers:
 1. **Prompt injection** — `promptFragments` field maps Markdown files to Vento template variables
@@ -262,6 +264,7 @@ Plugin interaction layers:
 4. **CSS injection** — `frontendStyles` field declares CSS files to inject as `<link>` elements into the frontend `<head>` before JS modules load
 5. **Backend hooks** — `backendModule` registers handlers for 5 lifecycle stages: `prompt-assembly`, `response-stream`, `pre-write`, `post-response`, `strip-tags`
 6. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` hook and notification handling via `notification` hook
+7. **Plugin logger** — each plugin receives a scoped logger via `PluginRegisterContext`; `HookDispatcher` injects `context.logger` during dispatch
 
 ### Lore Codex
 
