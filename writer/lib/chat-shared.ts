@@ -241,6 +241,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   const chapterPath = join(storyDir, `${padded}.md`);
   const encoder = new TextEncoder();
   let aiContent = "";
+  let sawModelContent = false;
   reqFileLog.info("Writing chapter file", { op: "write", path: chapterPath, chapter: targetNum });
 
   // Dispatch pre-write hook before file truncation
@@ -266,6 +267,29 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     completion: number | null;
     total: number | null;
   } = { prompt: null, completion: null, total: null };
+
+  /**
+   * Dispatch the `response-stream` hook for a delta and persist the resulting
+   * chunk. Handlers may mutate `context.chunk` to transform or drop (via `""`)
+   * the delta; non-string values coerce to `""`.
+   */
+  const persistChunk = async (delta: string): Promise<void> => {
+    const ctx = await hookDispatcher.dispatch("response-stream", {
+      correlationId,
+      chunk: delta,
+      series,
+      name,
+      storyDir,
+      chapterPath,
+      chapterNumber: targetNum,
+    });
+    const out = typeof ctx.chunk === "string" ? ctx.chunk : "";
+    if (out.length > 0) {
+      aiContent += out;
+      await file.write(encoder.encode(out));
+      onDelta?.(out);
+    }
+  };
   try {
     // 7. Parse SSE stream and write incrementally, calling onDelta for each chunk
     const reader = apiResponse.body.getReader();
@@ -293,9 +317,8 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
           const parsed = raw as LLMStreamChunk;
           const delta = parsed.choices?.[0]?.delta?.content;
           if (delta) {
-            aiContent += delta;
-            await file.write(encoder.encode(delta));
-            onDelta?.(delta);
+            sawModelContent = true;
+            await persistChunk(delta);
           }
           if (parsed.usage) {
             tokenUsage = {
@@ -320,9 +343,8 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
             const parsed = raw as LLMStreamChunk;
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
-              aiContent += delta;
-              await file.write(encoder.encode(delta));
-              onDelta?.(delta);
+              sawModelContent = true;
+              await persistChunk(delta);
             }
             if (parsed.usage) {
               tokenUsage = {
@@ -366,7 +388,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     throw new ChatAbortError("Generation aborted by client");
   }
 
-  if (!aiContent) {
+  if (!sawModelContent) {
     const noContentLatency = Math.round(performance.now() - llmStartTime);
     reqLog.error("No content in AI response", { model: config.LLM_MODEL });
     llmLog.info("LLM error", {

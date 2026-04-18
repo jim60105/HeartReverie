@@ -131,6 +131,41 @@ export interface PluginModule {
 /** Valid hook lifecycle stages. */
 export type HookStage = "prompt-assembly" | "response-stream" | "pre-write" | "post-response" | "strip-tags";
 
+/**
+ * Context payload dispatched for the `response-stream` hook stage.
+ *
+ * Dispatched by `executeChat()` once per non-empty content delta parsed from
+ * the LLM SSE stream, before the delta is persisted or emitted via `onDelta`.
+ *
+ * The `chunk` field is **mutable**: handlers MAY overwrite it to transform
+ * the chunk (e.g., redaction, translation, censorship). Assigning `""` drops
+ * the chunk entirely — no bytes are written to the chapter file, the
+ * `aiContent` accumulator is not advanced, and `onDelta` is not invoked for
+ * that delta. If `chunk` is not a string after dispatch (e.g., set to a
+ * number, `undefined`, or deleted), it is coerced to `""` (drop).
+ *
+ * All other fields are read-only context for handlers; mutating them has no
+ * effect on persistence.
+ */
+export interface ResponseStreamPayload {
+  /** Per-request correlation ID shared with all loggers in this chat execution. */
+  readonly correlationId: string;
+  /** Mutable content delta text. Overwrite to transform; set to `""` to drop. */
+  chunk: string;
+  /** Series name under `playground/`. */
+  readonly series: string;
+  /** Story name under `playground/<series>/`. */
+  readonly name: string;
+  /** Absolute path to the story directory. */
+  readonly storyDir: string;
+  /** Absolute path to the chapter file being written. */
+  readonly chapterPath: string;
+  /** Target chapter number (1-based). */
+  readonly chapterNumber: number;
+  /** Logger injected by `HookDispatcher` at dispatch time. */
+  readonly logger?: unknown;
+}
+
 /** Hook handler function signature. */
 export type HookHandler = (context: Record<string, unknown>) => Promise<void>;
 
