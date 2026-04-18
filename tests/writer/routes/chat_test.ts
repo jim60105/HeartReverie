@@ -18,6 +18,7 @@ import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
+import { createLogger } from "../../../writer/lib/logger.ts";
 import { register as registerUserMessage } from "../../../plugins/user-message/handler.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps, AppConfig, BuildPromptResult } from "../../../writer/types.ts";
@@ -132,7 +133,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
     const tmpDir = overrides._tmpDir as string;
     // Create hookDispatcher with user-message plugin registered (pre-write hook)
     const hd = (overrides.hookDispatcher as HookDispatcher | undefined) ?? new HookDispatcher();
-    registerUserMessage(hd);
+    registerUserMessage({ hooks: hd, logger: createLogger("plugin", { baseData: { plugin: "user-message" } }) });
     return {
       config: {
         READER_DIR: "/nonexistent-reader",

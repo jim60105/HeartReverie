@@ -15,12 +15,15 @@
 
 import type { HookStage, HookHandler } from "../types.ts";
 import { createLogger } from "./logger.ts";
+import type { Logger } from "./logger.ts";
 
 const log = createLogger("plugin");
 
 interface HandlerEntry {
   readonly handler: HookHandler;
   readonly priority: number;
+  readonly plugin?: string;
+  readonly baseLogger?: Logger;
 }
 
 const VALID_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
@@ -39,8 +42,10 @@ export class HookDispatcher {
    * @param {HookStage} stage - One of: prompt-assembly, response-stream, pre-write, post-response, strip-tags
    * @param {function} handler - Async function receiving a context object
    * @param {number} priority - Lower runs first (default 100)
+   * @param {string} plugin - Optional plugin name for logger scoping
+   * @param {Logger} baseLogger - Optional plugin logger to derive request-scoped loggers from
    */
-  register(stage: HookStage, handler: HookHandler, priority: number = 100): void {
+  register(stage: HookStage, handler: HookHandler, priority: number = 100, plugin?: string, baseLogger?: Logger): void {
     if (!VALID_STAGES.has(stage)) {
       throw new Error(
         `Invalid hook stage '${stage}'. Valid stages: ${[...VALID_STAGES].join(", ")}`
@@ -52,12 +57,16 @@ export class HookDispatcher {
 
     if (!this.#handlers.has(stage)) this.#handlers.set(stage, []);
     const list = this.#handlers.get(stage)!;
-    list.push({ handler, priority });
+    list.push({ handler, priority, plugin, baseLogger });
     list.sort((a, b) => a.priority - b.priority);
   }
 
   /**
    * Dispatch all handlers for a stage in priority order.
+   * A logger is always injected as context.logger for each handler. When the
+   * context contains a correlationId, it is bound to the logger. If the handler
+   * has a baseLogger, the request logger is derived from it (preserving all
+   * baseData). Otherwise a fresh logger is created with the plugin name.
    * Errors in individual handlers are logged but do not stop execution.
    * @param {string} stage
    * @param {object} context - Mutable context passed to each handler
@@ -65,13 +74,26 @@ export class HookDispatcher {
    */
   async dispatch(stage: HookStage, context: Record<string, unknown>): Promise<Record<string, unknown>> {
     const handlers = this.#handlers.get(stage) || [];
+    const correlationId = typeof context.correlationId === "string" ? context.correlationId : undefined;
     const startTime = performance.now();
-    for (const { handler } of handlers) {
+    for (const { handler, plugin, baseLogger } of handlers) {
       try {
+        // Always inject context.logger for each handler
+        if (baseLogger) {
+          // Derive from plugin's logger — preserves all existing baseData
+          context.logger = (correlationId
+            ? baseLogger.withContext({ correlationId })
+            : baseLogger) as unknown;
+        } else {
+          const baseData: Record<string, unknown> = {};
+          if (plugin) baseData.plugin = plugin;
+          context.logger = createLogger("plugin", { ...(correlationId ? { correlationId } : {}), baseData }) as unknown;
+        }
         await handler(context);
       } catch (err: unknown) {
         log.error(`Hook error in stage '${stage}'`, {
           stage,
+          plugin,
           error: err instanceof Error ? err.message : String(err),
         });
       }

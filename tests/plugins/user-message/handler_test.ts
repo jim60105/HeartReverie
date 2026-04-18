@@ -15,12 +15,15 @@
 
 import { assertEquals } from "@std/assert";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
+import { createLogger } from "../../../writer/lib/logger.ts";
 import { register } from "../../../plugins/user-message/handler.ts";
+
+const testLogger = createLogger("plugin", { baseData: { plugin: "user-message" } });
 
 Deno.test("user-message handler", async (t) => {
   await t.step("sets preContent with user_message tags", async () => {
     const hd = new HookDispatcher();
-    register(hd);
+    register({ hooks: hd, logger: testLogger });
 
     const ctx: Record<string, unknown> = {
       message: "Hello world",
@@ -36,7 +39,7 @@ Deno.test("user-message handler", async (t) => {
 
   await t.step("preserves empty preContent when message is empty", async () => {
     const hd = new HookDispatcher();
-    register(hd);
+    register({ hooks: hd, logger: testLogger });
 
     const ctx: Record<string, unknown> = {
       message: "",
@@ -59,7 +62,7 @@ Deno.test("user-message handler", async (t) => {
       order.push("early");
     }, 50);
 
-    register(hd);
+    register({ hooks: hd, logger: testLogger });
 
     // Register a handler at priority 200 (should run after user-message)
     hd.register("pre-write", async () => {
@@ -77,7 +80,7 @@ Deno.test("user-message handler", async (t) => {
 
   await t.step("handles multiline messages", async () => {
     const hd = new HookDispatcher();
-    register(hd);
+    register({ hooks: hd, logger: testLogger });
 
     const ctx: Record<string, unknown> = {
       message: "line 1\nline 2\nline 3",

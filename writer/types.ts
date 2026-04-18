@@ -16,6 +16,7 @@
 import type { Context, Next } from "@hono/hono";
 import type { PluginManager } from "./lib/plugin-manager.ts";
 import type { HookDispatcher } from "./lib/hooks.ts";
+import type { Logger } from "./lib/logger.ts";
 
 /** Application configuration resolved from environment variables and defaults. */
 export interface AppConfig {
@@ -109,10 +110,21 @@ export interface DynamicVariableContext {
   readonly storyDir: string;
 }
 
+/** Hook registration interface exposed to plugins (subset of HookDispatcher). */
+export interface PluginHooks {
+  register(stage: HookStage, handler: HookHandler, priority?: number): void;
+}
+
+/** Context passed to plugin register() function. */
+export interface PluginRegisterContext {
+  readonly hooks: PluginHooks;
+  readonly logger: Logger;
+}
+
 /** Interface for dynamically imported plugin backend modules. */
 export interface PluginModule {
-  register?: (hookDispatcher: HookDispatcher) => void | Promise<void>;
-  default?: (hookDispatcher: HookDispatcher) => void | Promise<void>;
+  register?: (context: PluginRegisterContext) => void | Promise<void>;
+  default?: (context: PluginRegisterContext) => void | Promise<void>;
   getDynamicVariables?: (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>;
 }
 

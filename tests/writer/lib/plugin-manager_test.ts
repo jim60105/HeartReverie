@@ -283,8 +283,8 @@ Deno.test("PluginManager", async (t) => {
         await Deno.mkdir(pDir, { recursive: true });
         await Deno.writeTextFile(
           join(pDir, "backend.js"),
-          `export function register(hookDispatcher) {
-             hookDispatcher.register("post-response", async (ctx) => { ctx.called = true; });
+          `export function register({ hooks }) {
+             hooks.register("post-response", async (ctx) => { ctx.called = true; });
            }`,
         );
         await Deno.writeTextFile(

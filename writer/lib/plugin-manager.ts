@@ -277,7 +277,16 @@ export class PluginManager {
       const mod = await import("file://" + modulePath) as Record<string, unknown>;
       const registerFn = mod.register || mod.default;
       if (typeof registerFn === "function") {
-        await (registerFn as (hd: HookDispatcher) => void | Promise<void>)(this.#hookDispatcher);
+        const pluginLogger = createLogger("plugin", { baseData: { plugin: name } });
+        // Wrap hooks.register to auto-bind plugin name and baseLogger
+        const boundHooks = {
+          register: (stage: Parameters<HookDispatcher["register"]>[0], handler: Parameters<HookDispatcher["register"]>[1], priority?: number) => {
+            this.#hookDispatcher.register(stage, handler, priority ?? 100, name, pluginLogger);
+          },
+        };
+        const context = { hooks: boundHooks, logger: pluginLogger };
+        await (registerFn as (ctx: typeof context) => void | Promise<void>)(context);
+        log.debug("Plugin registered successfully", { plugin: name });
       }
 
       const hasDynVars = typeof mod.getDynamicVariables === "function";
