@@ -62,7 +62,7 @@ jobs:
           echo "You can pull the image using Podman:" >> release_notes.md
           echo "" >> release_notes.md
           echo '```bash' >> release_notes.md
-          echo "podman pull ghcr.io/\${{ github.repository_owner }}/heartreverie:${VERSION_NUM}" >> release_notes.md
+          echo "podman pull ghcr.io/${{ github.repository_owner }}/heartreverie:${VERSION_NUM}" >> release_notes.md
           echo '```' >> release_notes.md
 
       - name: Create Release
