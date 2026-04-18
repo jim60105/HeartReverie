@@ -7,6 +7,7 @@ import { useWebSocket } from "@/composables/useWebSocket";
 import { useAuth } from "@/composables/useAuth";
 import { useRoute } from "vue-router";
 import PassphraseGate from "@/components/PassphraseGate.vue";
+import ToastContainer from "@/components/ToastContainer.vue";
 import "@/styles/base.css";
 
 const route = useRoute();
@@ -49,4 +50,5 @@ async function handleUnlocked() {
   <PassphraseGate @unlocked="handleUnlocked">
     <router-view />
   </PassphraseGate>
+  <ToastContainer />
 </template>
