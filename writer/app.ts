@@ -116,11 +116,11 @@ export function createApp(deps: AppDeps): Hono {
   // Body size limit (replaces Express express.json({ limit: "1mb" }))
   app.use("/api/*", bodyLimit({ maxSize: 1024 * 1024 }));
 
-  // Rate limiting
-  app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 60 }));
-  app.use("/api/auth/verify", rateLimiter({ windowMs: 60_000, limit: 10 }));
-  app.use("/api/stories/:series/:name/chat", rateLimiter({ windowMs: 60_000, limit: 10 }));
-  app.use("/api/stories/:series/:name/preview-prompt", rateLimiter({ windowMs: 60_000, limit: 10 }));
+  // Rate limiting — generous for single-user personal app; protects against loops
+  app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 300 }));
+  app.use("/api/auth/verify", rateLimiter({ windowMs: 60_000, limit: 30 }));
+  app.use("/api/stories/:series/:name/chat", rateLimiter({ windowMs: 60_000, limit: 30 }));
+  app.use("/api/stories/:series/:name/preview-prompt", rateLimiter({ windowMs: 60_000, limit: 60 }));
 
   // Auth middleware for API routes (skip public endpoints and WebSocket upgrade)
   app.use("/api/*", async (c, next) => {

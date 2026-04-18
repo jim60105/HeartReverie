@@ -231,22 +231,11 @@ async function loadFromBackendInternal(
   const { getAuthHeaders } = useAuth();
 
   const res = await fetch(
-    `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters`,
+    `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters?include=content`,
     { headers: { ...getAuthHeaders() } },
   );
   if (!res.ok) throw new Error("Failed to load chapters");
-  const chapterNums: number[] = await res.json();
-
-  const loaded: ChapterData[] = [];
-  for (const num of chapterNums) {
-    const chRes = await fetch(
-      `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/${num}`,
-      { headers: { ...getAuthHeaders() } },
-    );
-    if (!chRes.ok) continue;
-    const { content } = (await chRes.json()) as { content: string };
-    loaded.push({ number: num, content });
-  }
+  const loaded: ChapterData[] = await res.json();
 
   chapters.value = loaded;
 }
