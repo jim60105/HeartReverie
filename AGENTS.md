@@ -323,7 +323,7 @@ Key files:
 ### Security Patterns
 
 - **Authentication**: Passphrase via `X-Passphrase` header (HTTP) or first-message auth (WebSocket), timing-safe comparison (`@std/crypto/timing-safe-equal`)
-- **Rate limiting**: Global 60 req/min, auth/chat/preview 10 req/min (WebSocket bypasses rate limiting)
+- **Rate limiting**: Global 300 req/min, auth 30 req/min, chat 30 req/min, preview-prompt 60 req/min (WebSocket bypasses rate limiting)
 - **Path traversal prevention**: `isValidParam()`, `safePath()`, `isPathContained()`, `isValidPluginName()` — all enforce directory boundaries
 - **SSTI prevention**: `validateTemplate()` whitelist-only parser for user-submitted Vento templates — blocks function calls, property access, `process.env`
 - **Frontend security**: DOMPurify on all rendered HTML, CSP via `<meta>` tag with SRI hashes

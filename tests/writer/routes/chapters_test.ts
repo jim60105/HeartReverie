@@ -109,6 +109,32 @@ Deno.test({ name: "chapter routes", sanitizeOps: false, sanitizeResources: false
       assertEquals(res.status, 404);
     });
 
+    await t.step("GET /api/stories/:series/:name/chapters?include=content returns batch data", async () => {
+      // Re-create chapter 2 (deleted in prior step)
+      await Deno.writeTextFile(join(storyDir, "002.md"), "Chapter 2 restored");
+      const res = await makeRequest(
+        app,
+        "GET",
+        "/api/stories/series1/story1/chapters?include=content",
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body.length, 2);
+      assertEquals(res.body[0].number, 1);
+      assertEquals(res.body[0].content, "Chapter 1 content");
+      assertEquals(res.body[1].number, 2);
+      assertEquals(res.body[1].content, "Chapter 2 restored");
+    });
+
+    await t.step("GET chapters?include=unknown falls back to number[] format", async () => {
+      const res = await makeRequest(
+        app,
+        "GET",
+        "/api/stories/series1/story1/chapters?include=unknown",
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body, [1, 2]);
+    });
+
     await t.step("DELETE /api/stories/:series/:name/chapters/last deletes last chapter", async () => {
       const res = await makeRequest(
         app,
@@ -181,6 +207,21 @@ Deno.test({ name: "chapter routes – additional coverage", sanitizeOps: false, 
     await t.step("GET chapters returns 404 for nonexistent story", async () => {
       const res = await makeRequest(app, "GET", "/api/stories/no/such/chapters");
       assertEquals(res.status, 404);
+    });
+
+    await t.step("GET chapters?include=content returns 404 for nonexistent story", async () => {
+      const res = await makeRequest(app, "GET", "/api/stories/no/such/chapters?include=content");
+      assertEquals(res.status, 404);
+    });
+
+    await t.step("GET chapters?include=content returns empty array for story with no chapters", async () => {
+      // newseries/newstory was created by init step with only 001.md (empty file)
+      // Create a fresh empty directory
+      const emptyStory = join(tmpDir, "emptyseries", "emptystory");
+      await Deno.mkdir(emptyStory, { recursive: true });
+      const res = await makeRequest(app, "GET", "/api/stories/emptyseries/emptystory/chapters?include=content");
+      assertEquals(res.status, 200);
+      assertEquals(res.body, []);
     });
 
     await t.step("GET chapter with negative number returns 400", async () => {
