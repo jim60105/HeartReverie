@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import type { ChatInputProps } from "@/types";
 import { useChatApi } from "@/composables/useChatApi";
+import { useChapterNav } from "@/composables/useChapterNav";
 
 defineProps<ChatInputProps>();
 
@@ -11,8 +12,32 @@ const emit = defineEmits<{
 }>();
 
 const { isLoading, errorMessage, streamingContent, abortCurrentRequest } = useChatApi();
+const { getBackendContext } = useChapterNav();
 
-const inputText = ref("");
+const STORAGE_KEY_PREFIX = "heartreverie:chat-input";
+
+function getStorageKey(): string {
+  const ctx = getBackendContext();
+  return `${STORAGE_KEY_PREFIX}:${ctx.series ?? ""}:${ctx.story ?? ""}`;
+}
+
+function loadPersistedText(): string {
+  try {
+    return sessionStorage.getItem(getStorageKey()) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function persistText(text: string): void {
+  try {
+    sessionStorage.setItem(getStorageKey(), text);
+  } catch {
+    // Silently ignore storage errors (e.g., private browsing restrictions)
+  }
+}
+
+const inputText = ref(loadPersistedText());
 const isResending = ref(false);
 
 function handleSend() {
@@ -23,6 +48,7 @@ function handleSend() {
   }
   errorMessage.value = "";
   isResending.value = false;
+  persistText(inputText.value);
   emit("send", message);
 }
 
@@ -34,6 +60,7 @@ function handleResend() {
   }
   errorMessage.value = "";
   isResending.value = true;
+  persistText(inputText.value);
   emit("resend", message);
 }
 

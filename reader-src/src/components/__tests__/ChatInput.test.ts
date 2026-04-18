@@ -18,12 +18,28 @@ vi.mock("@/composables/useChatApi", () => ({
   }),
 }));
 
+let mockSeries = "test-series";
+let mockStory = "test-story";
+
+vi.mock("@/composables/useChapterNav", () => ({
+  useChapterNav: () => ({
+    getBackendContext: () => ({
+      series: mockSeries,
+      story: mockStory,
+      isBackendMode: true,
+    }),
+  }),
+}));
+
 describe("ChatInput", () => {
   beforeEach(() => {
     isLoadingRef.value = false;
     errorMessageRef.value = "";
     streamingContentRef.value = "";
     abortCurrentRequestFn.mockClear();
+    sessionStorage.clear();
+    mockSeries = "test-series";
+    mockStory = "test-story";
   });
 
   it("renders textarea and buttons", () => {
@@ -166,6 +182,88 @@ describe("ChatInput", () => {
       const buttons = wrapper.findAll(".chat-btn");
       const sendBtn = buttons.find((b) => b.text().includes("發送"));
       expect(sendBtn).toBeTruthy();
+    });
+  });
+
+  describe("sessionStorage persistence", () => {
+    const storageKey = "heartreverie:chat-input:test-series:test-story";
+
+    it("saves text to sessionStorage on send", async () => {
+      const wrapper = mount(ChatInput);
+      await wrapper.find("textarea").setValue("hello world");
+      const buttons = wrapper.findAll(".chat-btn");
+      await buttons[buttons.length - 1]!.trigger("click");
+      expect(sessionStorage.getItem(storageKey)).toBe("hello world");
+    });
+
+    it("saves text to sessionStorage on resend", async () => {
+      const wrapper = mount(ChatInput);
+      await wrapper.find("textarea").setValue("resend text");
+      const buttons = wrapper.findAll(".chat-btn");
+      await buttons[buttons.length - 2]!.trigger("click");
+      expect(sessionStorage.getItem(storageKey)).toBe("resend text");
+    });
+
+    it("restores text from sessionStorage on mount", () => {
+      sessionStorage.setItem(storageKey, "restored text");
+      const wrapper = mount(ChatInput);
+      const ta = wrapper.find("textarea").element as HTMLTextAreaElement;
+      expect(ta.value).toBe("restored text");
+    });
+
+    it("defaults to empty string when no stored value", () => {
+      const wrapper = mount(ChatInput);
+      const ta = wrapper.find("textarea").element as HTMLTextAreaElement;
+      expect(ta.value).toBe("");
+    });
+
+    it("text survives component remount", async () => {
+      const wrapper = mount(ChatInput);
+      await wrapper.find("textarea").setValue("persist me");
+      const buttons = wrapper.findAll(".chat-btn");
+      await buttons[buttons.length - 1]!.trigger("click");
+      wrapper.unmount();
+
+      const wrapper2 = mount(ChatInput);
+      const ta = wrapper2.find("textarea").element as HTMLTextAreaElement;
+      expect(ta.value).toBe("persist me");
+    });
+
+    it("isolates storage per story", async () => {
+      const wrapper = mount(ChatInput);
+      await wrapper.find("textarea").setValue("story A text");
+      const buttons = wrapper.findAll(".chat-btn");
+      await buttons[buttons.length - 1]!.trigger("click");
+      wrapper.unmount();
+
+      mockSeries = "other-series";
+      mockStory = "other-story";
+      const wrapper2 = mount(ChatInput);
+      const ta = wrapper2.find("textarea").element as HTMLTextAreaElement;
+      expect(ta.value).toBe("");
+    });
+
+    it("handles sessionStorage errors gracefully", () => {
+      const getItemSpy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+        throw new Error("SecurityError");
+      });
+      const wrapper = mount(ChatInput);
+      const ta = wrapper.find("textarea").element as HTMLTextAreaElement;
+      expect(ta.value).toBe("");
+      getItemSpy.mockRestore();
+    });
+
+    it("handles sessionStorage setItem errors gracefully", async () => {
+      const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+        throw new Error("QuotaExceededError");
+      });
+      const wrapper = mount(ChatInput);
+      await wrapper.find("textarea").setValue("text");
+      const buttons = wrapper.findAll(".chat-btn");
+      // Should not throw
+      await buttons[buttons.length - 1]!.trigger("click");
+      expect(wrapper.emitted("send")).toBeTruthy();
+      setItemSpy.mockRestore();
     });
   });
 });
