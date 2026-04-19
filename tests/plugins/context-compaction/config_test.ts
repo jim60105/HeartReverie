@@ -31,7 +31,7 @@ Deno.test("loadCompactionConfig", async (t) => {
     const seriesDir = join(tmpDir, "test-series");
     await Deno.mkdir(seriesDir, { recursive: true });
     await Deno.writeTextFile(
-      join(seriesDir, "compaction-config.yml"),
+      join(seriesDir, "compaction-config.yaml"),
       "recentChapters: 5\nenabled: true\n",
     );
 
@@ -46,11 +46,11 @@ Deno.test("loadCompactionConfig", async (t) => {
     const storyDir = join(seriesDir, "override-story");
     await Deno.mkdir(storyDir, { recursive: true });
     await Deno.writeTextFile(
-      join(seriesDir, "compaction-config.yml"),
+      join(seriesDir, "compaction-config.yaml"),
       "recentChapters: 5\nenabled: true\n",
     );
     await Deno.writeTextFile(
-      join(storyDir, "compaction-config.yml"),
+      join(storyDir, "compaction-config.yaml"),
       "recentChapters: 10\nenabled: false\n",
     );
 
@@ -63,7 +63,7 @@ Deno.test("loadCompactionConfig", async (t) => {
     const seriesDir = join(tmpDir, "invalid-series");
     await Deno.mkdir(seriesDir, { recursive: true });
     await Deno.writeTextFile(
-      join(seriesDir, "compaction-config.yml"),
+      join(seriesDir, "compaction-config.yaml"),
       "recentChapters: -1\n",
     );
 
@@ -76,7 +76,7 @@ Deno.test("loadCompactionConfig", async (t) => {
     const seriesDir = join(tmpDir, "disabled-series");
     await Deno.mkdir(seriesDir, { recursive: true });
     await Deno.writeTextFile(
-      join(seriesDir, "compaction-config.yml"),
+      join(seriesDir, "compaction-config.yaml"),
       "enabled: false\n",
     );
 

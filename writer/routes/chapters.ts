@@ -156,7 +156,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         await Promise.allSettled([
           Deno.remove(join(dirPath, `${paddedNum}-state.yaml`)),
           Deno.remove(join(dirPath, `${paddedNum}-state-diff.yaml`)),
-          Deno.remove(join(dirPath, "current-status.yml")),
+          Deno.remove(join(dirPath, "current-status.yaml")),
         ]);
 
         return c.json({ deleted: lastNum });
@@ -234,7 +234,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
             stateFiles.push(Deno.remove(join(dirPath, entry.name)).catch(() => {}));
           }
         }
-        stateFiles.push(Deno.remove(join(dirPath, "current-status.yml")).catch(() => {}));
+        stateFiles.push(Deno.remove(join(dirPath, "current-status.yaml")).catch(() => {}));
         await Promise.allSettled(stateFiles);
 
         return c.json({ number: num, content });
@@ -313,7 +313,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
           stateCleanup.push(Deno.remove(join(dirPath, entry.name)).catch(() => {}));
         }
       }
-      stateCleanup.push(Deno.remove(join(dirPath, "current-status.yml")).catch(() => {}));
+      stateCleanup.push(Deno.remove(join(dirPath, "current-status.yaml")).catch(() => {}));
       await Promise.allSettled(stateCleanup);
 
       // Keep usage records aligned with remaining chapters.

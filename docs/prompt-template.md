@@ -92,7 +92,7 @@
 1. **讀取章節檔案** — 從 `playground/:series/:name/` 目錄讀取所有現有章節檔案（最多取最近 200 個章節）
 2. **偵測第一回合** — 檢查是否所有章節內容皆為空
 3. **清理章節內容** — 對每個章節呼叫 `stripPromptTags()` 移除外掛定義的 XML 標籤，建構 `previousContext` 陣列
-4. **載入狀態資料** — 讀取 `current-status.yml`（若不存在則回退至 `init-status.yml`）
+4. **載入狀態資料** — 讀取 `current-status.yaml`（若不存在則回退至 `init-status.yaml`）
 
 ### 3. 渲染模板
 
