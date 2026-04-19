@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assert, assertEquals } from "@std/assert";
+import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
@@ -103,6 +104,32 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
     await t.step("GET /api/stories/:series returns 404 for nonexistent series", async () => {
       const res = await makeRequest(app, "GET", "/api/stories/nonexistent");
       assertEquals(res.status, 404);
+    });
+
+    await t.step("WHEN readDir throws on GET /api/stories THEN returns 500", async () => {
+      const readDirStub = stub(Deno, "readDir", () => {
+        throw new Error("disk error");
+      });
+      try {
+        const res = await makeRequest(app, "GET", "/api/stories");
+        assertEquals(res.status, 500);
+        assertEquals(res.body?.detail, "Failed to list stories");
+      } finally {
+        readDirStub.restore();
+      }
+    });
+
+    await t.step("WHEN readDir throws non-NotFound on GET /api/stories/:series THEN returns 500", async () => {
+      const readDirStub = stub(Deno, "readDir", () => {
+        throw new Error("disk read error");
+      });
+      try {
+        const res = await makeRequest(app, "GET", "/api/stories/scifi");
+        assertEquals(res.status, 500);
+        assertEquals(res.body?.detail, "Failed to list series");
+      } finally {
+        readDirStub.restore();
+      }
     });
   } finally {
     await Deno.remove(tmpDir, { recursive: true });

@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals } from "@std/assert";
+import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
@@ -177,6 +178,73 @@ Deno.test({ name: "story-config routes", sanitizeOps: false, sanitizeResources: 
     await t.step("underscore-prefixed series is rejected by validateParams → 400", async () => {
       const res = await makeRequest(app, "GET", "/api/_lore/story/config");
       assertEquals(res.status, 400);
+    });
+
+    // ── Error-path coverage ──
+
+    await t.step("WHEN _config.json contains malformed JSON THEN GET returns 422 validation error", async () => {
+      await Deno.writeTextFile(join(storyDir, "_config.json"), "{ not-valid-json");
+      try {
+        const res = await makeRequest(app, "GET", "/api/series1/story1/config");
+        assertEquals(res.status, 422);
+        assertEquals(res.body?.title, "Unprocessable Entity");
+      } finally {
+        await Deno.remove(join(storyDir, "_config.json"));
+      }
+    });
+
+    await t.step("WHEN Deno.stat throws non-NotFound on GET THEN returns 500 internal error", async () => {
+      const statStub = stub(Deno, "stat", () => {
+        throw new Error("stat failed unexpectedly");
+      });
+      try {
+        const res = await makeRequest(app, "GET", "/api/series1/story1/config");
+        assertEquals(res.status, 500);
+        assertEquals(res.body?.detail, "Failed to stat story directory");
+      } finally {
+        statStub.restore();
+      }
+    });
+
+    await t.step("WHEN Deno.stat throws non-NotFound on PUT THEN returns 500 internal error", async () => {
+      const statStub = stub(Deno, "stat", () => {
+        throw new Error("stat failed unexpectedly");
+      });
+      try {
+        const res = await makeRequest(app, "PUT", "/api/series1/story1/config", { temperature: 0.5 });
+        assertEquals(res.status, 500);
+        assertEquals(res.body?.detail, "Failed to stat story directory");
+      } finally {
+        statStub.restore();
+      }
+    });
+
+    await t.step("WHEN writeStoryLlmConfig throws generic error THEN PUT returns 500 internal error", async () => {
+      const writeStub = stub(Deno, "writeTextFile", () => {
+        throw new Error("write failed");
+      });
+      try {
+        const res = await makeRequest(app, "PUT", "/api/series1/story1/config", { temperature: 0.7 });
+        assertEquals(res.status, 500);
+        assertEquals(res.body?.detail, "Failed to write story config");
+      } finally {
+        writeStub.restore();
+      }
+    });
+
+    await t.step("WHEN readStoryLlmConfig throws generic error THEN GET returns 500 internal error", async () => {
+      await Deno.writeTextFile(join(storyDir, "_config.json"), "{}");
+      const readStub = stub(Deno, "readTextFile", () => {
+        throw new Error("read failed");
+      });
+      try {
+        const res = await makeRequest(app, "GET", "/api/series1/story1/config");
+        assertEquals(res.status, 500);
+        assertEquals(res.body?.detail, "Failed to read story config");
+      } finally {
+        readStub.restore();
+        await Deno.remove(join(storyDir, "_config.json")).catch(() => {});
+      }
     });
   } finally {
     Deno.env.delete("PASSPHRASE");
