@@ -16,12 +16,13 @@
 import { upgradeWebSocket } from "@hono/hono/deno";
 import { timingSafeEqual } from "@std/crypto/timing-safe-equal";
 import { join } from "@std/path";
+import { parse as parseYaml } from "@std/yaml";
 import { isValidParam } from "../lib/middleware.ts";
 import { executeChat, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { WSContext } from "@hono/hono/ws";
-import type { AppDeps, WsServerMessage } from "../types.ts";
+import type { AppDeps, StateDiffPayload, WsServerMessage } from "../types.ts";
 
 const log = createLogger("ws");
 const authLog = createLogger("auth");
@@ -134,6 +135,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
 
       let prevCount = -1;
       let prevLastContent = "";
+      let prevStateDiffJson: string | undefined;
 
       subscriptionIntervalId = setInterval(async () => {
         try {
@@ -162,14 +164,37 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
             const lastNum = parseInt(lastFile, 10);
             try {
               const content = await Deno.readTextFile(join(storyDir, lastFile));
-              if (content !== prevLastContent) {
+
+              // Try to load stateDiff for the last chapter
+              let stateDiff: StateDiffPayload | undefined;
+              try {
+                const padded = String(lastNum).padStart(3, "0");
+                const diffYaml = await Deno.readTextFile(
+                  join(storyDir, `${padded}-state-diff.yaml`),
+                );
+                const parsed = parseYaml(diffYaml) as StateDiffPayload;
+                if (parsed?.entries && Array.isArray(parsed.entries)) {
+                  stateDiff = parsed;
+                }
+              } catch {
+                // No diff file — that's fine
+              }
+
+              const diffJson = stateDiff ? JSON.stringify(stateDiff) : undefined;
+              if (
+                content !== prevLastContent ||
+                diffJson !== prevStateDiffJson
+              ) {
                 prevLastContent = content;
+                prevStateDiffJson = diffJson;
+
                 wsSend(ws, {
                   type: "chapters:content",
                   series,
                   story,
                   chapter: lastNum,
                   content,
+                  stateDiff,
                 });
               }
             } catch {
@@ -292,6 +317,14 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
         const lastNum = parseInt(lastFile, 10);
         await Deno.remove(join(storyDir, lastFile));
         fileLog.info("Chapter deleted (resend)", { op: "delete", path: join(storyDir, lastFile) });
+
+        // Best-effort cleanup of state/diff artifacts for the deleted chapter
+        const padded = String(lastNum).padStart(3, "0");
+        await Promise.allSettled([
+          Deno.remove(join(storyDir, `${padded}-state.yaml`)),
+          Deno.remove(join(storyDir, `${padded}-state-diff.yaml`)),
+          Deno.remove(join(storyDir, "current-status.yml")),
+        ]);
 
         // Prune stale usage records for the deleted chapter
         const { pruneUsage } = await import("../lib/usage.ts");

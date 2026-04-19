@@ -270,6 +270,22 @@ export interface BuildPromptResult {
 export interface ChapterEntry {
   number: number;
   content: string;
+  stateDiff?: StateDiffPayload;
+}
+
+/** A single entry in a state diff between consecutive chapters. */
+export interface StateDiffEntry {
+  path: string;
+  kind: "added" | "removed" | "modified" | "truncated";
+  oldValue?: unknown;
+  newValue?: unknown;
+}
+
+/** Payload for per-chapter state diff data. */
+export interface StateDiffPayload {
+  generatedAt: string;
+  chapterNum: number;
+  entries: StateDiffEntry[];
 }
 
 /** Vento template error details. */
@@ -469,6 +485,7 @@ export interface WsChaptersContentMessage {
   readonly story: string;
   readonly chapter: number;
   readonly content: string;
+  readonly stateDiff?: StateDiffPayload;
 }
 
 /** Server-to-client: generic protocol error. */

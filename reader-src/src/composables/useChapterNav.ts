@@ -170,10 +170,10 @@ async function pollBackend(): Promise<void> {
       );
       if (series !== currentSeries || story !== currentStory) return;
       if (!chRes.ok) return;
-      const { content } = (await chRes.json()) as { content: string };
+      const { content, stateDiff } = (await chRes.json()) as { content: string; stateDiff?: import("@/types").StateDiffPayload };
       const lastIdx = chapters.value.length - 1;
       if (content !== chapters.value[lastIdx]?.content) {
-        chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, number: lastNum as number, content };
+        chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, number: lastNum as number, content, stateDiff };
         if (currentIndex.value === lastIdx) {
           currentContent.value = content;
         }
@@ -462,7 +462,7 @@ function initRouteSync(): void {
     const lastIdx = chapters.value.length - 1;
     if (lastIdx < 0) return;
     if (msg.chapter !== chapters.value[lastIdx]!.number) return;
-    chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, content: msg.content };
+    chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, content: msg.content, stateDiff: msg.stateDiff };
     if (currentIndex.value === lastIdx) {
       currentContent.value = msg.content;
     }
