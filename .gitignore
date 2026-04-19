@@ -21,3 +21,4 @@ reader-dist/
 *~
 .DS_Store
 Thumbs.db
+coverage/
