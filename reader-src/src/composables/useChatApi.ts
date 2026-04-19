@@ -1,8 +1,9 @@
 import { ref, watch } from "vue";
-import type { UseChatApiReturn, ChatSendBeforeContext } from "@/types";
+import type { UseChatApiReturn, ChatSendBeforeContext, TokenUsageRecord } from "@/types";
 import { useAuth } from "@/composables/useAuth";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useNotification } from "@/composables/useNotification";
+import { useUsage } from "@/composables/useUsage";
 import { frontendHooks } from "@/lib/plugin-hooks";
 
 const isLoading = ref(false);
@@ -69,6 +70,7 @@ async function sendMessage(
         cleanup();
         streamingContent.value = '';
         isLoading.value = false;
+        useUsage().pushRecord(msg.usage);
         dispatchNotification('chat:done', { id });
         resolve(true);
       });
@@ -145,6 +147,18 @@ async function sendMessage(
       return false;
     }
 
+    // Success path: try to sync usage from response or reconcile via GET.
+    try {
+      const body = (await res.json()) as { usage?: TokenUsageRecord | null };
+      if (body && typeof body === "object" && body.usage) {
+        useUsage().pushRecord(body.usage);
+      } else {
+        await useUsage().load(series, story);
+      }
+    } catch {
+      await useUsage().load(series, story);
+    }
+
     dispatchNotification("chat:done", {});
     return true;
   } catch (err: unknown) {
@@ -196,6 +210,7 @@ async function resendMessage(
         cleanup();
         streamingContent.value = '';
         isLoading.value = false;
+        useUsage().pushRecord(msg.usage);
         dispatchNotification('chat:done', { id });
         resolve(true);
       });
@@ -281,6 +296,17 @@ async function resendMessage(
       errorMessage.value = "重送失敗";
       dispatchNotification("chat:error", {});
       return false;
+    }
+
+    try {
+      const body = (await res.json()) as { usage?: TokenUsageRecord | null };
+      if (body && typeof body === "object" && body.usage) {
+        useUsage().pushRecord(body.usage);
+      } else {
+        await useUsage().load(series, story);
+      }
+    } catch {
+      await useUsage().load(series, story);
     }
 
     dispatchNotification("chat:done", {});

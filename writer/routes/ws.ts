@@ -212,7 +212,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
       const controller = new AbortController();
       abortControllers.set(id, controller);
       try {
-        await executeChat({
+        const result = await executeChat({
           series,
           name: story,
           message,
@@ -225,7 +225,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
           },
           signal: controller.signal,
         });
-        wsSend(ws, { type: "chat:done", id });
+        wsSend(ws, { type: "chat:done", id, usage: result.usage });
       } catch (err: unknown) {
         if (err instanceof ChatAbortError) {
           wsSend(ws, { type: "chat:aborted", id });
@@ -289,8 +289,13 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
         }
 
         const lastFile = chapterFiles[chapterFiles.length - 1]!;
+        const lastNum = parseInt(lastFile, 10);
         await Deno.remove(join(storyDir, lastFile));
         fileLog.info("Chapter deleted (resend)", { op: "delete", path: join(storyDir, lastFile) });
+
+        // Prune stale usage records for the deleted chapter
+        const { pruneUsage } = await import("../lib/usage.ts");
+        await pruneUsage(storyDir, lastNum - 1);
       } catch (err: unknown) {
         if (err instanceof Deno.errors.NotFound) {
           wsSend(ws, { type: "chat:error", id, detail: "Story not found" });

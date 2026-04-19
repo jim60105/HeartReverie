@@ -5,6 +5,7 @@ import { useChapterNav } from "@/composables/useChapterNav";
 import AppHeader from "./AppHeader.vue";
 import ContentArea from "./ContentArea.vue";
 import ChatInput from "./ChatInput.vue";
+import UsagePanel from "./UsagePanel.vue";
 import { useChatApi } from "@/composables/useChatApi";
 
 const route = useRoute();
@@ -61,6 +62,7 @@ onMounted(() => {
     <AppHeader />
     <main class="main-content">
       <ContentArea />
+      <UsagePanel />
       <ChatInput
         v-if="showChatInput"
         :key="chatInputKey"

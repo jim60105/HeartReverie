@@ -418,6 +418,33 @@ export interface UseStoryLlmConfigReturn {
   reset: () => void;
 }
 
+// ── Token Usage Tracking ──
+
+export interface TokenUsageRecord {
+  chapter: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  model: string;
+  timestamp: string;
+}
+
+export interface UsageTotals {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  count: number;
+}
+
+export interface UseUsageReturn {
+  records: Ref<TokenUsageRecord[]>;
+  totals: Ref<UsageTotals>;
+  currentKey: Ref<string>;
+  load: (series: string, story: string) => Promise<void>;
+  pushRecord: (record: TokenUsageRecord | null | undefined) => void;
+  reset: () => void;
+}
+
 // ── WebSocket Message Types ──
 
 /** Client-to-server: authentication handshake. */
@@ -487,6 +514,7 @@ export interface WsChatDeltaMessage {
 export interface WsChatDoneMessage {
   type: "chat:done";
   id: string;
+  usage?: TokenUsageRecord | null;
 }
 
 /** Server-to-client: chat error. */

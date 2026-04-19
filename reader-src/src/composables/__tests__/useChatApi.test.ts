@@ -90,13 +90,23 @@ describe("useChatApi", () => {
       vi.fn(
         () =>
           new Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; headers: Headers }>((resolve) => {
-            resolvePromise = () =>
+            // First call: chat POST. Subsequent: usage reconcile GET.
+            if (!resolvePromise) {
+              resolvePromise = () =>
+                resolve({
+                  ok: true,
+                  status: 200,
+                  json: () => Promise.resolve({}),
+                  headers: new Headers(),
+                });
+            } else {
               resolve({
                 ok: true,
                 status: 200,
-                json: () => Promise.resolve({}),
+                json: () => Promise.resolve({ records: [], totals: { promptTokens: 0, completionTokens: 0, totalTokens: 0, count: 0 } }),
                 headers: new Headers(),
               });
+            }
           }),
       ),
     );
@@ -122,13 +132,18 @@ describe("useChatApi", () => {
         status: 200,
         json: () => Promise.resolve({}),
         headers: new Headers(),
+      })
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ records: [], totals: { promptTokens: 0, completionTokens: 0, totalTokens: 0, count: 0 } }),
+        headers: new Headers(),
       });
     vi.stubGlobal("fetch", fetchMock);
 
     const api = await getChatApi();
     const result = await api.resendMessage("s", "t", "msg");
     expect(result).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]![1]).toHaveProperty("method", "DELETE");
     expect(fetchMock.mock.calls[1]![1]).toHaveProperty("method", "POST");
   });

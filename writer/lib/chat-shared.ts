@@ -15,11 +15,12 @@
 
 import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
-import type { AppConfig, LlmConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError } from "../types.ts";
+import type { AppConfig, LlmConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError, TokenUsageRecord } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { resolveTargetChapterNumber } from "./story.ts";
 import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
 import { createLogger, createLlmLogger } from "./logger.ts";
+import { appendUsage, buildRecord } from "./usage.ts";
 
 const log = createLogger("llm");
 const fileLog = createLogger("file");
@@ -42,6 +43,7 @@ export interface ChatOptions {
 export interface ChatResult {
   readonly chapter: number;
   readonly content: string;
+  readonly usage: TokenUsageRecord | null;
 }
 
 /** Error thrown when a chat generation is aborted by the client. */
@@ -425,6 +427,25 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   });
   reqFileLog.info("Chapter file written", { op: "write", path: chapterPath, bytes: encoder.encode(fullContent).length });
 
+  // 8a. Persist token usage when the upstream provider reported complete numbers
+  let usage: TokenUsageRecord | null = null;
+  if (
+    tokenUsage.prompt !== null &&
+    tokenUsage.completion !== null &&
+    tokenUsage.total !== null
+  ) {
+    usage = buildRecord({
+      chapter: targetNum,
+      promptTokens: tokenUsage.prompt,
+      completionTokens: tokenUsage.completion,
+      totalTokens: tokenUsage.total,
+      model: llmConfig.model,
+    });
+    await appendUsage(storyDir, usage);
+  } else {
+    reqLog.debug("Usage unavailable from upstream", { chapter: targetNum, model: llmConfig.model });
+  }
+
   // 8. Run post-response hooks
   await hookDispatcher.dispatch("post-response", {
     correlationId,
@@ -435,5 +456,5 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     rootDir: config.ROOT_DIR,
   });
 
-  return { chapter: targetNum, content: fullContent };
+  return { chapter: targetNum, content: fullContent, usage };
 }
