@@ -1,5 +1,10 @@
 # HeartReverie 浮心夜夢
 
+[![codecov](https://codecov.io/gh/jim60105/HeartReverie/graph/badge.svg?token=1DJzsidNtp)](https://codecov.io/gh/jim60105/HeartReverie)
+[![CI](https://github.com/jim60105/HeartReverie/actions/workflows/ci.yaml/badge.svg)](https://github.com/jim60105/HeartReverie/actions/workflows/ci.yaml)
+[![GitHub release](https://img.shields.io/github/v/release/jim60105/HeartReverie)](https://github.com/jim60105/HeartReverie/releases)
+[![License](https://img.shields.io/github/license/jim60105/HeartReverie)](./LICENSE)
+
 <section align="center">
   <img src="assets/heart.webp"/>
 </section>
