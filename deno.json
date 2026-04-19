@@ -14,8 +14,11 @@
     "dev:reader": "cd reader-src && deno run -A npm:vite@^8.0.0",
     "build:reader": "cd reader-src && deno run -A npm:vue-tsc@^3.0.0 --noEmit && deno run -A npm:vite@^8.0.0 build --outDir ../reader-dist",
     "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/",
+    "test:backend:coverage": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run --coverage=coverage tests/writer/",
     "test:frontend": "cd reader-src && deno run -A npm:vitest@^4.0.0 run",
-    "test": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/ && cd reader-src && deno run -A npm:vitest@^4.0.0 run"
+    "test": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/ && cd reader-src && deno run -A npm:vitest@^4.0.0 run",
+    "coverage:summary": "deno coverage coverage --exclude='tests/'",
+    "coverage:lcov": "deno coverage coverage --lcov --output=coverage.lcov --exclude='tests/'"
   },
   "imports": {
     "@hono/hono": "jsr:@hono/hono@^4.12.14",
