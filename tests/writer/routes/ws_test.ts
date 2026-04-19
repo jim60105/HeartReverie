@@ -271,6 +271,46 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       await waitForClose(ws);
     });
 
+    await t.step("chat:resend: deletes last chapter state artifacts before send", async () => {
+      const ws = await openWs(addr);
+      await authenticate(ws);
+
+      const storyDir = join(tmpDir, "resend-cleanup", "story");
+      await Deno.mkdir(storyDir, { recursive: true });
+      await Deno.writeTextFile(join(storyDir, "001.md"), "Chapter 1");
+      await Deno.writeTextFile(join(storyDir, "002.md"), "Chapter 2");
+      await Deno.writeTextFile(join(storyDir, "001-state.yaml"), "state: keep");
+      await Deno.writeTextFile(join(storyDir, "002-state.yaml"), "state: remove");
+      await Deno.writeTextFile(join(storyDir, "002-state-diff.yaml"), "diff: remove");
+      await Deno.writeTextFile(join(storyDir, "current-status.yaml"), "status: remove");
+
+      ws.send(JSON.stringify({
+        type: "chat:resend",
+        id: "req-5-cleanup",
+        series: "resend-cleanup",
+        story: "story",
+        message: "retry",
+      }));
+      const msg = await readMessage(ws, 5000);
+      assertEquals(msg.type, "chat:error");
+      assertEquals(msg.id, "req-5-cleanup");
+
+      const entries: string[] = [];
+      for await (const entry of Deno.readDir(storyDir)) {
+        entries.push(entry.name);
+      }
+      entries.sort();
+      assertEquals(entries.includes("001.md"), true);
+      assertEquals(entries.includes("001-state.yaml"), true);
+      assertEquals(entries.includes("002.md"), false);
+      assertEquals(entries.includes("002-state.yaml"), false);
+      assertEquals(entries.includes("002-state-diff.yaml"), false);
+      assertEquals(entries.includes("current-status.yaml"), false);
+
+      ws.close();
+      await waitForClose(ws);
+    });
+
     // ── chat:abort ──
 
     await t.step("chat:abort: unknown id is silently ignored", async () => {

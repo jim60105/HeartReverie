@@ -82,6 +82,11 @@ Deno.test({
     await Deno.writeTextFile(join(srcDir, "001.md"), "chapter one");
     await Deno.writeTextFile(join(srcDir, "002.md"), "chapter two");
     await Deno.writeTextFile(join(srcDir, "003.md"), "chapter three");
+    await Deno.writeTextFile(join(srcDir, "001-state.yaml"), "state: one");
+    await Deno.writeTextFile(join(srcDir, "001-state-diff.yaml"), "diff: one");
+    await Deno.writeTextFile(join(srcDir, "002-state.yaml"), "state: two");
+    await Deno.writeTextFile(join(srcDir, "003-state.yaml"), "state: three");
+    await Deno.writeTextFile(join(srcDir, "current-status.yaml"), "current: source");
 
     // Story-scoped lore
     const loreDir = join(srcDir, "_lore");
@@ -120,6 +125,28 @@ Deno.test({
           // expected
         }
         assertEquals(found003, false);
+
+        assertEquals(await Deno.readTextFile(join(destDir, "001-state.yaml")), "state: one");
+        assertEquals(await Deno.readTextFile(join(destDir, "001-state-diff.yaml")), "diff: one");
+        assertEquals(await Deno.readTextFile(join(destDir, "002-state.yaml")), "state: two");
+
+        let found003State = false;
+        try {
+          await Deno.stat(join(destDir, "003-state.yaml"));
+          found003State = true;
+        } catch {
+          // expected
+        }
+        assertEquals(found003State, false);
+
+        let foundCurrentStatus = false;
+        try {
+          await Deno.stat(join(destDir, "current-status.yaml"));
+          foundCurrentStatus = true;
+        } catch {
+          // expected
+        }
+        assertEquals(foundCurrentStatus, false);
 
         // Story-scoped lore copied
         const loreCopy = await Deno.readTextFile(join(destDir, "_lore", "passage.md"));
