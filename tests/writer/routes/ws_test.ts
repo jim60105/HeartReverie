@@ -34,6 +34,19 @@ function readMessage(ws: WebSocket, timeoutMs = 2000): Promise<Record<string, un
   });
 }
 
+async function readUntilType(
+  ws: WebSocket,
+  expectedType: string,
+  attempts = 6,
+  timeoutMs = 2500,
+): Promise<Record<string, unknown>> {
+  for (let i = 0; i < attempts; i++) {
+    const msg = await readMessage(ws, timeoutMs);
+    if (msg.type === expectedType) return msg;
+  }
+  throw new Error(`Did not receive ${expectedType}`);
+}
+
 /** Wait for a WebSocket close event. */
 function waitForClose(ws: WebSocket, timeoutMs = 2000): Promise<CloseEvent> {
   return new Promise((resolve, reject) => {
@@ -189,6 +202,34 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       await waitForClose(ws);
     });
 
+    await t.step("subscribe: polling pushes chapter count and content/stateDiff updates", async () => {
+      const ws = await openWs(addr);
+      await authenticate(ws);
+
+      const storyDir = join(tmpDir, "sub-watch", "story");
+      await Deno.mkdir(storyDir, { recursive: true });
+      await Deno.writeTextFile(join(storyDir, "001.md"), "Initial content");
+      await Deno.writeTextFile(
+        join(storyDir, "001-state-diff.yaml"),
+        "entries:\n  - category: mood\n    item: tone\n    before: calm\n    after: tense\n",
+      );
+      ws.send(JSON.stringify({ type: "subscribe", series: "sub-watch", story: "story" }));
+
+      const updated = await readUntilType(ws, "chapters:updated", 5, 2500);
+      assertEquals(updated.count, 1);
+      const content = await readUntilType(ws, "chapters:content", 5, 2500);
+      assertEquals(content.chapter, 1);
+      assertEquals(content.content, "Initial content");
+      assertEquals(Array.isArray((content.stateDiff as { entries?: unknown[] })?.entries), true);
+
+      await Deno.writeTextFile(join(storyDir, "001.md"), "Changed content");
+      const updatedContent = await readUntilType(ws, "chapters:content", 5, 2500);
+      assertEquals(updatedContent.content, "Changed content");
+
+      ws.close();
+      await waitForClose(ws);
+    });
+
     // ── 8.4: chat:send ──
 
     await t.step("chat:send: fails with unreachable LLM API", async () => {
@@ -215,6 +256,44 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       const msg = await readMessage(ws);
       assertEquals(msg.type, "error");
       assertEquals(msg.detail, "Invalid chat:send parameters");
+      ws.close();
+      await waitForClose(ws);
+    });
+
+    await t.step("chat:send: invalid story naming returns chat:error", async () => {
+      const ws = await openWs(addr);
+      await authenticate(ws);
+
+      ws.send(JSON.stringify({
+        type: "chat:send",
+        id: "req-invalid-name",
+        series: "bad/name",
+        story: "n1",
+        message: "hello",
+      }));
+      const msg = await readMessage(ws);
+      assertEquals(msg.type, "chat:error");
+      assertEquals(msg.id, "req-invalid-name");
+      assertEquals(msg.detail, "Invalid series or story name");
+      ws.close();
+      await waitForClose(ws);
+    });
+
+    await t.step("chat:send: oversized message returns chat:error", async () => {
+      const ws = await openWs(addr);
+      await authenticate(ws);
+
+      ws.send(JSON.stringify({
+        type: "chat:send",
+        id: "req-long",
+        series: "s1",
+        story: "n1",
+        message: "x".repeat(100_001),
+      }));
+      const msg = await readMessage(ws);
+      assertEquals(msg.type, "chat:error");
+      assertEquals(msg.id, "req-long");
+      assertEquals(msg.detail, "Message exceeds maximum length");
       ws.close();
       await waitForClose(ws);
     });
@@ -267,6 +346,44 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       const msg = await readMessage(ws);
       assertEquals(msg.type, "error");
       assertEquals(msg.detail, "Invalid chat:resend parameters");
+      ws.close();
+      await waitForClose(ws);
+    });
+
+    await t.step("chat:resend: invalid story naming returns chat:error", async () => {
+      const ws = await openWs(addr);
+      await authenticate(ws);
+
+      ws.send(JSON.stringify({
+        type: "chat:resend",
+        id: "req-resend-invalid-name",
+        series: "bad/name",
+        story: "n1",
+        message: "hello",
+      }));
+      const msg = await readMessage(ws);
+      assertEquals(msg.type, "chat:error");
+      assertEquals(msg.id, "req-resend-invalid-name");
+      assertEquals(msg.detail, "Invalid series or story name");
+      ws.close();
+      await waitForClose(ws);
+    });
+
+    await t.step("chat:resend: oversized message returns chat:error", async () => {
+      const ws = await openWs(addr);
+      await authenticate(ws);
+
+      ws.send(JSON.stringify({
+        type: "chat:resend",
+        id: "req-resend-long",
+        series: "s1",
+        story: "n1",
+        message: "x".repeat(100_001),
+      }));
+      const msg = await readMessage(ws);
+      assertEquals(msg.type, "chat:error");
+      assertEquals(msg.id, "req-resend-long");
+      assertEquals(msg.detail, "Message exceeds maximum length");
       ws.close();
       await waitForClose(ws);
     });

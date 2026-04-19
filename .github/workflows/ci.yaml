@@ -67,14 +67,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-deno-
 
-      - name: Run backend tests with coverage
-        run: deno task test:backend:coverage
-
-      - name: Generate coverage summary
-        run: deno task coverage:summary
-
-      - name: Generate LCOV report
-        run: deno task coverage:lcov
+      - name: Run aggregate coverage gate
+        run: deno task test:coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

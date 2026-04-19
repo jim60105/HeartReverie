@@ -90,6 +90,10 @@ Deno.test({ name: "chapter routes", sanitizeOps: false, sanitizeResources: false
     });
 
     await t.step("GET /api/stories/:series/:name/chapters/:number reads a chapter", async () => {
+      await Deno.writeTextFile(
+        join(storyDir, "001-state-diff.yaml"),
+        "entries:\n  - category: location\n    item: city\n    before: old\n    after: new\n",
+      );
       const res = await makeRequest(
         app,
         "GET",
@@ -98,6 +102,7 @@ Deno.test({ name: "chapter routes", sanitizeOps: false, sanitizeResources: false
       assertEquals(res.status, 200);
       assertEquals(res.body.number, 1);
       assertEquals(res.body.content, "Chapter 1 content");
+      assertEquals(Array.isArray(res.body.stateDiff.entries), true);
     });
 
     await t.step("GET /api/stories/:series/:name/chapters/:number returns 404 for nonexistent", async () => {
@@ -112,6 +117,10 @@ Deno.test({ name: "chapter routes", sanitizeOps: false, sanitizeResources: false
     await t.step("GET /api/stories/:series/:name/chapters?include=content returns batch data", async () => {
       // Re-create chapter 2 (deleted in prior step)
       await Deno.writeTextFile(join(storyDir, "002.md"), "Chapter 2 restored");
+      await Deno.writeTextFile(
+        join(storyDir, "002-state-diff.yaml"),
+        "entries:\n  - category: test\n    item: demo\n    before: old\n    after: new\n",
+      );
       const res = await makeRequest(
         app,
         "GET",
@@ -123,6 +132,7 @@ Deno.test({ name: "chapter routes", sanitizeOps: false, sanitizeResources: false
       assertEquals(res.body[0].content, "Chapter 1 content");
       assertEquals(res.body[1].number, 2);
       assertEquals(res.body[1].content, "Chapter 2 restored");
+      assertEquals(Array.isArray(res.body[1].stateDiff.entries), true);
     });
 
     await t.step("GET chapters?include=unknown falls back to number[] format", async () => {
@@ -392,6 +402,30 @@ Deno.test({ name: "chapter routes – additional coverage", sanitizeOps: false, 
         { content: 123 } as unknown as Record<string, unknown>,
       );
       assertEquals(res.status, 400);
+    });
+
+    await t.step("PUT chapter returns 400 for malformed JSON body", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/stories/edit3/story3/chapters/1", {
+          method: "PUT",
+          headers: { "x-passphrase": "test-pass", "Content-Type": "application/json" },
+          body: "{not json",
+        }),
+      );
+      assertEquals(res.status, 400);
+      assertEquals((await res.json()).detail, "Malformed JSON body");
+    });
+
+    await t.step("PUT chapter requires object body", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/stories/edit3/story3/chapters/1", {
+          method: "PUT",
+          headers: { "x-passphrase": "test-pass", "Content-Type": "application/json" },
+          body: JSON.stringify("not-object"),
+        }),
+      );
+      assertEquals(res.status, 400);
+      assertEquals((await res.json()).detail, "Request body must be an object");
     });
 
     await t.step("PUT chapter returns 409 when generation is active", async () => {

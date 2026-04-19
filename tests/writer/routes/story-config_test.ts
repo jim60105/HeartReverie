@@ -138,9 +138,34 @@ Deno.test({ name: "story-config routes", sanitizeOps: false, sanitizeResources: 
       assertEquals(res.status, 404);
     });
 
+    await t.step("WHEN story path exists as file THEN GET returns 404 story not found", async () => {
+      const filePath = join(tmpDir, "series1", "not-a-dir");
+      await Deno.writeTextFile(filePath, "x");
+      const res = await makeRequest(app, "GET", "/api/series1/not-a-dir/config");
+      assertEquals(res.status, 404);
+    });
+
+    await t.step("WHEN story path exists as file THEN PUT returns 404 story not found", async () => {
+      const res = await makeRequest(app, "PUT", "/api/series1/not-a-dir/config", { temperature: 0.3 });
+      assertEquals(res.status, 404);
+    });
+
     await t.step("GET returns 404 when story directory missing", async () => {
       const res = await makeRequest(app, "GET", "/api/series1/ghost-story/config");
       assertEquals(res.status, 404);
+    });
+
+    await t.step("WHEN PUT body is invalid JSON THEN returns 400 with bad request problem", async () => {
+      const res = await makeRequest(
+        app,
+        "PUT",
+        "/api/series1/story1/config",
+        "{invalid-json",
+        { "Content-Type": "application/json" },
+      );
+      assertEquals(res.status, 400);
+      assertEquals(res.body?.title, "Bad Request");
+      assertEquals(res.body?.detail, "Invalid JSON body");
     });
 
     await t.step("PUT rejects path traversal → 400", async () => {

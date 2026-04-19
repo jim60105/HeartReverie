@@ -14,6 +14,7 @@
     "jsr:@std/yaml@^1.0.12": "1.0.12",
     "npm:@tailwindcss/postcss@4": "4.2.2",
     "npm:@vitejs/plugin-vue@6": "6.0.6_vite@8.0.8_vue@3.5.32__typescript@6.0.2",
+    "npm:@vitest/coverage-v8@4": "4.1.4_vitest@4.1.4",
     "npm:@vue/test-utils@^2.4.6": "2.4.6",
     "npm:dompurify@^3.4.0": "3.4.0",
     "npm:happy-dom@^20.9.0": "20.9.0",
@@ -24,7 +25,7 @@
     "npm:ventojs@^2.3.1": "2.3.1",
     "npm:vite@8": "8.0.8",
     "npm:vitest@3": "3.2.4_happy-dom@20.9.0",
-    "npm:vitest@4": "4.1.4_happy-dom@20.9.0_vite@8.0.8",
+    "npm:vitest@4": "4.1.4_@vitest+coverage-v8@4.1.4_happy-dom@20.9.0_vite@8.0.8",
     "npm:vue-router@^5.0.4": "5.0.4_vue@3.5.32__typescript@6.0.2_typescript@6.0.2",
     "npm:vue-tsc@3": "3.2.6_typescript@6.0.2",
     "npm:vue@^3.5.32": "3.5.32_typescript@6.0.2"
@@ -110,6 +111,9 @@
         "@babel/helper-string-parser",
         "@babel/helper-validator-identifier"
       ]
+    },
+    "@bcoe/v8-coverage@1.0.2": {
+      "integrity": "sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA=="
     },
     "@emnapi/core@1.9.2": {
       "integrity": "sha512-UC+ZhH3XtczQYfOlu3lNEkdW/p4dsJ1r/bP7H8+rhao3TTTMO1ATq/4DdIi23XuGoFY+Cz0JmCbdVl0hz9jZcA==",
@@ -671,6 +675,22 @@
         "vue"
       ]
     },
+    "@vitest/coverage-v8@4.1.4_vitest@4.1.4": {
+      "integrity": "sha512-x7FptB5oDruxNPDNY2+S8tCh0pcq7ymCe1gTHcsp733jYjrJl8V1gMUlVysuCD9Kz46Xz9t1akkv08dPcYDs1w==",
+      "dependencies": [
+        "@bcoe/v8-coverage",
+        "@vitest/utils@4.1.4",
+        "ast-v8-to-istanbul",
+        "istanbul-lib-coverage",
+        "istanbul-lib-report",
+        "istanbul-reports",
+        "magicast",
+        "obug",
+        "std-env@4.1.0",
+        "tinyrainbow@3.1.0",
+        "vitest@4.1.4_@vitest+coverage-v8@4.1.4_happy-dom@20.9.0_vite@8.0.8"
+      ]
+    },
     "@vitest/expect@3.2.4": {
       "integrity": "sha512-Io0yyORnB6sikFlt8QW5K7slY4OjqNX9jmJQ02QDda8lyM6B5oNgVWoSoKPac8/kgnCUzuHQKrSLtu/uOqqrig==",
       "dependencies": [
@@ -959,6 +979,14 @@
         "pathe"
       ]
     },
+    "ast-v8-to-istanbul@1.0.0": {
+      "integrity": "sha512-1fSfIwuDICFA4LKkCzRPO7F0hzFf0B7+Xqrl27ynQaa+Rh0e1Es0v6kWHPott3lU10AyAr7oKHa65OppjLn3Rg==",
+      "dependencies": [
+        "@jridgewell/trace-mapping",
+        "estree-walker@3.0.3",
+        "js-tokens@10.0.0"
+      ]
+    },
     "ast-walker-scope@0.8.3": {
       "integrity": "sha512-cbdCP0PGOBq0ASG+sjnKIoYkWMKhhz+F/h9pRexUdX2Hd38+WOlBkRKlqkGOSm0YQpcFMQBJeK4WspUAkwsEdg==",
       "dependencies": [
@@ -1191,8 +1219,14 @@
         "ws"
       ]
     },
+    "has-flag@4.0.0": {
+      "integrity": "sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ=="
+    },
     "hookable@5.5.3": {
       "integrity": "sha512-Yc+BQe8SvoXH1643Qez1zqLRmbA5rCL+sSmk6TVos0LWVfNIB7PGncdlId77WzLGSIB5KaWgTaNTs2lNVEI6VQ=="
+    },
+    "html-escaper@2.0.2": {
+      "integrity": "sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg=="
     },
     "ini@1.3.8": {
       "integrity": "sha512-JV/yugV2uzW5iMRSiZAyDtQd+nxtUnjeLt0acNdw98kKLrvuRVyB80tsREOE7yvGVgalhZ6RNXCmEHkUKBKxew=="
@@ -1202,6 +1236,24 @@
     },
     "isexe@2.0.0": {
       "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="
+    },
+    "istanbul-lib-coverage@3.2.2": {
+      "integrity": "sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg=="
+    },
+    "istanbul-lib-report@3.0.1": {
+      "integrity": "sha512-GCfE1mtsHGOELCU8e/Z7YWzpmybrx/+dSTfLrvY8qRmaY6zXTKWn6WQIjaAFw069icm6GVMNkgu0NzI4iPZUNw==",
+      "dependencies": [
+        "istanbul-lib-coverage",
+        "make-dir",
+        "supports-color"
+      ]
+    },
+    "istanbul-reports@3.2.0": {
+      "integrity": "sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA==",
+      "dependencies": [
+        "html-escaper",
+        "istanbul-lib-report"
+      ]
     },
     "jackspeak@3.4.3": {
       "integrity": "sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==",
@@ -1229,6 +1281,9 @@
     },
     "js-cookie@3.0.5": {
       "integrity": "sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw=="
+    },
+    "js-tokens@10.0.0": {
+      "integrity": "sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q=="
     },
     "js-tokens@9.0.1": {
       "integrity": "sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ=="
@@ -1339,6 +1394,20 @@
       "integrity": "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==",
       "dependencies": [
         "@jridgewell/sourcemap-codec"
+      ]
+    },
+    "magicast@0.5.2": {
+      "integrity": "sha512-E3ZJh4J3S9KfwdjZhe2afj6R9lGIN5Pher1pF39UGrXRqq/VDaGVIGN13BjHd2u8B61hArAGOnso7nBOouW3TQ==",
+      "dependencies": [
+        "@babel/parser",
+        "@babel/types",
+        "source-map-js"
+      ]
+    },
+    "make-dir@4.0.0": {
+      "integrity": "sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==",
+      "dependencies": [
+        "semver"
       ]
     },
     "marked@18.0.0": {
@@ -1572,7 +1641,13 @@
     "strip-literal@3.1.0": {
       "integrity": "sha512-8r3mkIM/2+PpjHoOtiAW8Rg3jJLHaV7xPwG+YRGrv6FP0wwk/toTpATxWYOW0BKdWwl82VT2tFYi5DlROa0Mxg==",
       "dependencies": [
-        "js-tokens"
+        "js-tokens@9.0.1"
+      ]
+    },
+    "supports-color@7.2.0": {
+      "integrity": "sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==",
+      "dependencies": [
+        "has-flag"
       ]
     },
     "tailwindcss@4.2.2": {
@@ -1713,9 +1788,10 @@
       ],
       "bin": true
     },
-    "vitest@4.1.4_happy-dom@20.9.0_vite@8.0.8": {
+    "vitest@4.1.4_@vitest+coverage-v8@4.1.4_happy-dom@20.9.0_vite@8.0.8": {
       "integrity": "sha512-tFuJqTxKb8AvfyqMfnavXdzfy3h3sWZRWwfluGbkeR7n0HUev+FmNgZ8SDrRBTVrVCjgH5cA21qGbCffMNtWvg==",
       "dependencies": [
+        "@vitest/coverage-v8",
         "@vitest/expect@4.1.4",
         "@vitest/mocker@4.1.4_vite@8.0.8",
         "@vitest/pretty-format@4.1.4",
@@ -1739,6 +1815,7 @@
         "why-is-node-running"
       ],
       "optionalPeers": [
+        "@vitest/coverage-v8",
         "happy-dom"
       ],
       "bin": true
@@ -1851,6 +1928,7 @@
       "jsr:@std/yaml@^1.0.12",
       "npm:@tailwindcss/postcss@4",
       "npm:@vitejs/plugin-vue@6",
+      "npm:@vitest/coverage-v8@4",
       "npm:@vue/test-utils@^2.4.6",
       "npm:dompurify@^3.4.0",
       "npm:happy-dom@^20.9.0",

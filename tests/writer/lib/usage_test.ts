@@ -18,11 +18,14 @@ import { join } from "@std/path";
 import {
   appendUsage,
   buildRecord,
+  copyUsage,
   computeTotals,
+  pruneUsage,
   readUsage,
   USAGE_BACKUP_FILENAME,
   USAGE_FILENAME,
 } from "../../../writer/lib/usage.ts";
+import { stub } from "@std/testing/mock";
 
 function makeRecord(chapter: number, prompt: number, completion: number): ReturnType<typeof buildRecord> {
   return buildRecord({
@@ -130,6 +133,82 @@ Deno.test({
     await t.step("appendUsage swallows errors when story dir does not exist", async () => {
       // Target a non-existent directory; appendUsage must not throw.
       await appendUsage("/nonexistent-path-for-usage-test-xyz", makeRecord(1, 1, 1));
+    });
+
+    await t.step("readUsage returns [] when _usage.json is not an array", async () => {
+      const dir = await Deno.makeTempDir({ prefix: "usage-nonarray-" });
+      try {
+        await Deno.writeTextFile(join(dir, USAGE_FILENAME), JSON.stringify({ hello: "world" }));
+        assertEquals(await readUsage(dir), []);
+      } finally {
+        await Deno.remove(dir, { recursive: true });
+      }
+    });
+
+    await t.step("readUsage filters malformed records and keeps valid entries", async () => {
+      const dir = await Deno.makeTempDir({ prefix: "usage-filter-" });
+      try {
+        await Deno.writeTextFile(
+          join(dir, USAGE_FILENAME),
+          JSON.stringify([
+            { chapter: 1, promptTokens: 10, completionTokens: 5, totalTokens: 15, model: "ok", timestamp: "2026-01-01T00:00:00.000Z" },
+            { chapter: "bad", promptTokens: 1, completionTokens: 1, totalTokens: 2, model: "bad", timestamp: "2026-01-01T00:00:00.000Z" },
+          ]),
+        );
+        const records = await readUsage(dir);
+        assertEquals(records.length, 1);
+        assertEquals(records[0]?.chapter, 1);
+      } finally {
+        await Deno.remove(dir, { recursive: true });
+      }
+    });
+
+    await t.step("pruneUsage removes records above keepThroughChapter", async () => {
+      const dir = await Deno.makeTempDir({ prefix: "usage-prune-" });
+      try {
+        await appendUsage(dir, makeRecord(1, 10, 1));
+        await appendUsage(dir, makeRecord(2, 20, 2));
+        await appendUsage(dir, makeRecord(3, 30, 3));
+
+        await pruneUsage(dir, 2);
+        const records = await readUsage(dir);
+        assertEquals(records.map((r) => r.chapter), [1, 2]);
+      } finally {
+        await Deno.remove(dir, { recursive: true });
+      }
+    });
+
+    await t.step("copyUsage copies only records at or below keepThroughChapter", async () => {
+      const src = await Deno.makeTempDir({ prefix: "usage-copy-src-" });
+      const dst = await Deno.makeTempDir({ prefix: "usage-copy-dst-" });
+      try {
+        await appendUsage(src, makeRecord(1, 10, 1));
+        await appendUsage(src, makeRecord(2, 20, 2));
+        await appendUsage(src, makeRecord(3, 30, 3));
+
+        await copyUsage(src, dst, 2);
+        const copied = await readUsage(dst);
+        assertEquals(copied.map((r) => r.chapter), [1, 2]);
+      } finally {
+        await Deno.remove(src, { recursive: true });
+        await Deno.remove(dst, { recursive: true });
+      }
+    });
+
+    await t.step("copyUsage swallows destination write errors", async () => {
+      const src = await Deno.makeTempDir({ prefix: "usage-copy-error-src-" });
+      const dst = await Deno.makeTempDir({ prefix: "usage-copy-error-dst-" });
+      const writeStub = stub(Deno, "writeTextFile", () => {
+        throw new Error("write denied");
+      });
+      try {
+        await appendUsage(src, makeRecord(1, 1, 1));
+        await copyUsage(src, dst, 1);
+      } finally {
+        writeStub.restore();
+        await Deno.remove(src, { recursive: true });
+        await Deno.remove(dst, { recursive: true });
+      }
     });
   },
 });

@@ -42,5 +42,11 @@ export default defineConfig({
     environment: "happy-dom",
     include: ["src/**/__tests__/**/*.test.ts"],
     globals: true,
+    coverage: {
+      provider: "v8",
+      reportsDirectory: "../coverage/frontend",
+      reporter: ["text-summary", "lcovonly"],
+      exclude: ["src/__tests__/setup.ts"],
+    },
   },
 });

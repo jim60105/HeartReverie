@@ -255,4 +255,56 @@ Deno.test("LLM Logger", async (t) => {
       await Deno.remove(tmpDir, { recursive: true });
     }
   });
+
+  await t.step("rotates LLM log file when size limit is exceeded", async () => {
+    _resetLogger();
+    const tmpDir = await Deno.makeTempDir();
+    const llmFile = join(tmpDir, "llm-rotate.jsonl");
+    await Deno.writeFile(llmFile, new Uint8Array(10 * 1024 * 1024));
+    try {
+      await initLogger({ level: "info", filePath: null, llmFilePath: llmFile });
+      const llm = createLlmLogger();
+      llm.info("post-rotate");
+      await closeLogger();
+
+      const rotated = await Deno.readTextFile(`${llmFile}.1`);
+      assertEquals(rotated.length, 10 * 1024 * 1024);
+      const fresh = await Deno.readTextFile(llmFile);
+      assertStringIncludes(fresh, "post-rotate");
+    } finally {
+      _resetLogger();
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("disables LLM file logging when reopen after rotation fails", async () => {
+    _resetLogger();
+    const tmpDir = await Deno.makeTempDir();
+    const llmFile = join(tmpDir, "llm-reopen-fail.jsonl");
+    const warnStub = stub(console, "warn", () => {});
+    const realOpen = Deno.open;
+    let llmOpenCount = 0;
+    const openStub = stub(Deno, "open", (path: string | URL, options?: Deno.OpenOptions) => {
+      if (String(path) === llmFile) {
+        llmOpenCount++;
+        if (llmOpenCount > 1) {
+          throw new Error("reopen failed");
+        }
+      }
+      return realOpen(path, options);
+    });
+    await Deno.writeFile(llmFile, new Uint8Array(10 * 1024 * 1024));
+    try {
+      await initLogger({ level: "info", filePath: null, llmFilePath: llmFile });
+      const llm = createLlmLogger();
+      llm.info("trigger-rotation");
+      await closeLogger();
+      assertEquals(warnStub.calls.length > 0, true);
+    } finally {
+      openStub.restore();
+      warnStub.restore();
+      _resetLogger();
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
 });

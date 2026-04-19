@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals, assert } from "@std/assert";
+import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
@@ -173,6 +174,12 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
       assertEquals(res.status, 400);
     });
 
+    await t.step("PUT /api/template rejects oversized content with 400", async () => {
+      const res = await makeRequest(app, "PUT", "/api/template", { content: "x".repeat(500_001) });
+      assertEquals(res.status, 400);
+      assertEquals(res.body.detail, "Template exceeds maximum length");
+    });
+
     await t.step("PUT /api/template creates parent directories", async () => {
       const nestedFile = join(tmpDir, "deep", "nested", "dir", "system.md");
       const appNested = createApp({
@@ -264,6 +271,19 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
       assertEquals(res.body.ok, true);
     });
 
+    await t.step("DELETE /api/template returns 500 on non-NotFound errors", async () => {
+      const removeStub = stub(Deno, "remove", () => {
+        throw new Error("permission denied");
+      });
+      try {
+        const res = await makeRequest(app, "DELETE", "/api/template");
+        assertEquals(res.status, 500);
+        assertEquals(res.body.detail, "Failed to delete template");
+      } finally {
+        removeStub.restore();
+      }
+    });
+
     await t.step("POST preview-prompt returns rendered prompt", async () => {
       await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
       const res = await makeRequest(
@@ -279,6 +299,48 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
       assertEquals(res.body.variables.isFirstRound, false);
       assertEquals(res.body.variables.previous_context, "1 chapters");
       assertEquals(res.body.errors.length, 0);
+    });
+
+    await t.step("POST preview-prompt prefers request template override", async () => {
+      let capturedTemplate: string | undefined;
+      const appCapture = createApp({
+        config: {
+          READER_DIR: "/nonexistent-reader",
+          PLAYGROUND_DIR: tmpDir,
+          ROOT_DIR: tmpDir,
+          PROMPT_FILE: promptFile,
+        } as unknown as AppConfig,
+        safePath,
+        pluginManager: {
+          getPlugins: () => [],
+          getParameters: () => [],
+          getPluginDir: () => null,
+          getBuiltinDir: () => "/nonexistent-plugins",
+          getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+          getStripTagPatterns: () => null,
+        } as unknown as PluginManager,
+        hookDispatcher: new HookDispatcher(),
+        buildPromptFromStory: async (_series, _name, _storyDir, _message, templateOverride) => {
+          capturedTemplate = templateOverride;
+          return {
+            prompt: "rendered",
+            previousContext: [],
+            isFirstRound: true,
+            ventoError: null,
+          } as unknown as BuildPromptResult;
+        },
+        verifyPassphrase,
+      } as AppDeps);
+
+      await Deno.mkdir(join(tmpDir, "s2", "n2"), { recursive: true });
+      const res = await makeRequest(
+        appCapture,
+        "POST",
+        "/api/stories/s2/n2/preview-prompt",
+        { message: "test", template: "custom override" },
+      );
+      assertEquals(res.status, 200);
+      assertEquals(capturedTemplate, "custom override");
     });
 
     await t.step("POST preview-prompt returns 400 for empty message", async () => {
@@ -336,6 +398,40 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
       );
       assertEquals(res.status, 422);
       assertEquals(res.body.type, "vento-error");
+    });
+
+    await t.step("POST preview-prompt returns 500 when buildPromptFromStory throws", async () => {
+      const appThrow = createApp({
+        config: {
+          READER_DIR: "/nonexistent-reader",
+          PLAYGROUND_DIR: tmpDir,
+          ROOT_DIR: tmpDir,
+          PROMPT_FILE: promptFile,
+        } as unknown as AppConfig,
+        safePath,
+        pluginManager: {
+          getPlugins: () => [],
+          getParameters: () => [],
+          getPluginDir: () => null,
+          getBuiltinDir: () => "/nonexistent-plugins",
+          getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+          getStripTagPatterns: () => null,
+        } as unknown as PluginManager,
+        hookDispatcher: new HookDispatcher(),
+        buildPromptFromStory: async () => {
+          throw new Error("boom");
+        },
+        verifyPassphrase,
+      } as AppDeps);
+
+      const res = await makeRequest(
+        appThrow,
+        "POST",
+        "/api/stories/s1/n1/preview-prompt",
+        { message: "test" },
+      );
+      assertEquals(res.status, 500);
+      assertEquals(res.body.detail, "Failed to preview prompt");
     });
 
     await t.step("POST preview-prompt returns 400 for path traversal", async () => {

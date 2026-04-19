@@ -268,6 +268,131 @@ Deno.test("Logger", async (t) => {
     }
   });
 
+  await t.step("initLogger falls back to info for invalid LOG_LEVEL env", async () => {
+    _resetLogger();
+    const prevLevel = Deno.env.get("LOG_LEVEL");
+    const logStub = stub(console, "log", () => {});
+    try {
+      Deno.env.set("LOG_LEVEL", "not-a-level");
+      await initLogger({ filePath: null, llmFilePath: null });
+      assertEquals(getLogLevel(), "info");
+    } finally {
+      if (prevLevel === undefined) Deno.env.delete("LOG_LEVEL");
+      else Deno.env.set("LOG_LEVEL", prevLevel);
+      logStub.restore();
+      _resetLogger();
+    }
+  });
+
+  await t.step("initLogger uses valid LOG_LEVEL from env when options.level omitted", async () => {
+    _resetLogger();
+    const prevLevel = Deno.env.get("LOG_LEVEL");
+    const logStub = stub(console, "log", () => {});
+    try {
+      Deno.env.set("LOG_LEVEL", "warn");
+      await initLogger({ filePath: null, llmFilePath: null });
+      assertEquals(getLogLevel(), "warn");
+    } finally {
+      if (prevLevel === undefined) Deno.env.delete("LOG_LEVEL");
+      else Deno.env.set("LOG_LEVEL", prevLevel);
+      logStub.restore();
+      _resetLogger();
+    }
+  });
+
+  await t.step("LOG_FILE empty string disables default audit file", async () => {
+    _resetLogger();
+    const tmpDir = await Deno.makeTempDir();
+    const cwd = Deno.cwd();
+    const prevLogFile = Deno.env.get("LOG_FILE");
+    const prevLlmFile = Deno.env.get("LLM_LOG_FILE");
+    const logStub = stub(console, "log", () => {});
+    try {
+      Deno.chdir(tmpDir);
+      Deno.env.set("LOG_FILE", "");
+      Deno.env.set("LLM_LOG_FILE", "");
+      await initLogger();
+      createLogger("system").info("no-audit-file");
+      await closeLogger();
+      let hasAudit = true;
+      try {
+        await Deno.stat(join(tmpDir, "playground", "_logs", "audit.jsonl"));
+      } catch {
+        hasAudit = false;
+      }
+      assertEquals(hasAudit, false);
+    } finally {
+      if (prevLogFile === undefined) Deno.env.delete("LOG_FILE");
+      else Deno.env.set("LOG_FILE", prevLogFile);
+      if (prevLlmFile === undefined) Deno.env.delete("LLM_LOG_FILE");
+      else Deno.env.set("LLM_LOG_FILE", prevLlmFile);
+      Deno.chdir(cwd);
+      logStub.restore();
+      _resetLogger();
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("LOG_FILE env path is used when options.filePath is omitted", async () => {
+    _resetLogger();
+    const tmpDir = await Deno.makeTempDir();
+    const cwd = Deno.cwd();
+    const prevLogFile = Deno.env.get("LOG_FILE");
+    const prevLlmFile = Deno.env.get("LLM_LOG_FILE");
+    const envLogFile = join(tmpDir, "env-audit.jsonl");
+    const logStub = stub(console, "log", () => {});
+    try {
+      Deno.chdir(tmpDir);
+      Deno.env.set("LOG_FILE", envLogFile);
+      Deno.env.set("LLM_LOG_FILE", "");
+      await initLogger();
+      createLogger("system").info("env path");
+      await closeLogger();
+      const content = await Deno.readTextFile(envLogFile);
+      const entry: LogEntry = JSON.parse(content.trim());
+      assertEquals(entry.message, "env path");
+    } finally {
+      if (prevLogFile === undefined) Deno.env.delete("LOG_FILE");
+      else Deno.env.set("LOG_FILE", prevLogFile);
+      if (prevLlmFile === undefined) Deno.env.delete("LLM_LOG_FILE");
+      else Deno.env.set("LLM_LOG_FILE", prevLlmFile);
+      Deno.chdir(cwd);
+      logStub.restore();
+      _resetLogger();
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("defaults LOG_FILE to playground/_logs/audit.jsonl when unset", async () => {
+    _resetLogger();
+    const tmpDir = await Deno.makeTempDir();
+    const cwd = Deno.cwd();
+    const prevLogFile = Deno.env.get("LOG_FILE");
+    const prevLlmFile = Deno.env.get("LLM_LOG_FILE");
+    const logStub = stub(console, "log", () => {});
+    try {
+      Deno.chdir(tmpDir);
+      Deno.env.delete("LOG_FILE");
+      Deno.env.set("LLM_LOG_FILE", "");
+      await initLogger();
+      createLogger("system").info("default path");
+      await closeLogger();
+      const defaultPath = join(tmpDir, "playground", "_logs", "audit.jsonl");
+      const content = await Deno.readTextFile(defaultPath);
+      const entry: LogEntry = JSON.parse(content.trim());
+      assertEquals(entry.message, "default path");
+    } finally {
+      if (prevLogFile === undefined) Deno.env.delete("LOG_FILE");
+      else Deno.env.set("LOG_FILE", prevLogFile);
+      if (prevLlmFile === undefined) Deno.env.delete("LLM_LOG_FILE");
+      else Deno.env.set("LLM_LOG_FILE", prevLlmFile);
+      Deno.chdir(cwd);
+      logStub.restore();
+      _resetLogger();
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
   await t.step("_resetLogger resets all state", async () => {
     _resetLogger();
     const logStub = stub(console, "log", () => {});
@@ -282,6 +407,48 @@ Deno.test("Logger", async (t) => {
       assertEquals(getLogLevel(), "debug");
     } finally {
       logStub.restore();
+      _resetLogger();
+    }
+  });
+
+  await t.step("initLogger continues when audit file open fails", async () => {
+    _resetLogger();
+    const openStub = stub(Deno, "open", () => {
+      throw new Error("open failed");
+    });
+    const logStub = stub(console, "log", () => {});
+    try {
+      await initLogger({ level: "debug", filePath: "cannot-open.jsonl", llmFilePath: null });
+      createLogger("system").info("console still works");
+      assertEquals(logStub.calls.length, 1);
+    } finally {
+      openStub.restore();
+      logStub.restore();
+      _resetLogger();
+    }
+  });
+
+  await t.step("initLogger disables LLM file logging when llm file open fails", async () => {
+    _resetLogger();
+    const realOpen = Deno.open;
+    const openStub = stub(Deno, "open", (path: string | URL, options?: Deno.OpenOptions) => {
+      if (String(path).endsWith("llm-unopenable.jsonl")) {
+        throw new Error("open failed");
+      }
+      return realOpen(path, options);
+    });
+    const warnStub = stub(console, "warn", () => {});
+    try {
+      await initLogger({
+        level: "debug",
+        filePath: null,
+        llmFilePath: "llm-unopenable.jsonl",
+      });
+      createLogger("system").info("still runs");
+      assertEquals(warnStub.calls.length > 0, true);
+    } finally {
+      openStub.restore();
+      warnStub.restore();
       _resetLogger();
     }
   });
@@ -334,6 +501,28 @@ Deno.test("Logger", async (t) => {
       const content = await Deno.readTextFile(logFile);
       const lines = content.trim().split("\n");
       assertEquals(lines.length, 3);
+    } finally {
+      logStub.restore();
+      _resetLogger();
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("rotates audit log file when size limit is exceeded", async () => {
+    _resetLogger();
+    const tmpDir = await Deno.makeTempDir();
+    const logFile = join(tmpDir, "rotate.jsonl");
+    const logStub = stub(console, "log", () => {});
+    await Deno.writeFile(logFile, new Uint8Array(10 * 1024 * 1024));
+    try {
+      await initLogger({ level: "info", filePath: logFile, llmFilePath: null });
+      createLogger("system").info("after-rotate");
+      await closeLogger();
+
+      const rotated = await Deno.readTextFile(`${logFile}.1`);
+      assertEquals(rotated.length, 10 * 1024 * 1024);
+      const fresh = await Deno.readTextFile(logFile);
+      assertStringIncludes(fresh, "after-rotate");
     } finally {
       logStub.restore();
       _resetLogger();
