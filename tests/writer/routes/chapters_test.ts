@@ -152,6 +152,37 @@ Deno.test({ name: "chapter routes", sanitizeOps: false, sanitizeResources: false
       );
       assertEquals(listRes.body, [1]);
     });
+
+    await t.step("DELETE /chapters/last removes deleted chapter state artifacts", async () => {
+      const cleanupDir = join(tmpDir, "cleanup-series", "cleanup-story");
+      await Deno.mkdir(cleanupDir, { recursive: true });
+      await Deno.writeTextFile(join(cleanupDir, "001.md"), "Chapter 1");
+      await Deno.writeTextFile(join(cleanupDir, "002.md"), "Chapter 2");
+      await Deno.writeTextFile(join(cleanupDir, "001-state.yaml"), "state: keep");
+      await Deno.writeTextFile(join(cleanupDir, "002-state.yaml"), "state: remove");
+      await Deno.writeTextFile(join(cleanupDir, "002-state-diff.yaml"), "diff: remove");
+      await Deno.writeTextFile(join(cleanupDir, "current-status.yaml"), "status: remove");
+
+      const res = await makeRequest(
+        app,
+        "DELETE",
+        "/api/stories/cleanup-series/cleanup-story/chapters/last",
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body.deleted, 2);
+
+      const entries: string[] = [];
+      for await (const entry of Deno.readDir(cleanupDir)) {
+        entries.push(entry.name);
+      }
+      entries.sort();
+      assertEquals(entries.includes("001.md"), true);
+      assertEquals(entries.includes("001-state.yaml"), true);
+      assertEquals(entries.includes("002.md"), false);
+      assertEquals(entries.includes("002-state.yaml"), false);
+      assertEquals(entries.includes("002-state-diff.yaml"), false);
+      assertEquals(entries.includes("current-status.yaml"), false);
+    });
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }
@@ -280,6 +311,47 @@ Deno.test({ name: "chapter routes – additional coverage", sanitizeOps: false, 
       assertEquals(onDisk, "rewritten");
     });
 
+    await t.step("PUT chapter invalidates state cache artifacts from edited chapter onward", async () => {
+      const editDir = join(tmpDir, "edit-cache", "story");
+      await Deno.mkdir(editDir, { recursive: true });
+      await Deno.writeTextFile(join(editDir, "001.md"), "ch1");
+      await Deno.writeTextFile(join(editDir, "002.md"), "ch2");
+      await Deno.writeTextFile(join(editDir, "003.md"), "ch3");
+      await Deno.writeTextFile(join(editDir, "001-state.yaml"), "state: keep");
+      await Deno.writeTextFile(join(editDir, "001-state-diff.yaml"), "diff: keep");
+      await Deno.writeTextFile(join(editDir, "002-state.yaml"), "state: remove");
+      await Deno.writeTextFile(join(editDir, "002-state-diff.yaml"), "diff: remove");
+      await Deno.writeTextFile(join(editDir, "003-state.yaml"), "state: remove");
+      await Deno.writeTextFile(join(editDir, "003-state-diff.yaml"), "diff: remove");
+      await Deno.writeTextFile(join(editDir, "current-status.yaml"), "status: remove");
+
+      const res = await makeRequest(
+        app,
+        "PUT",
+        "/api/stories/edit-cache/story/chapters/2",
+        { content: "chapter 2 edited" },
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body.number, 2);
+      assertEquals(res.body.content, "chapter 2 edited");
+
+      const chapter2 = await Deno.readTextFile(join(editDir, "002.md"));
+      assertEquals(chapter2, "chapter 2 edited");
+
+      const entries: string[] = [];
+      for await (const entry of Deno.readDir(editDir)) {
+        entries.push(entry.name);
+      }
+      entries.sort();
+      assertEquals(entries.includes("001-state.yaml"), true);
+      assertEquals(entries.includes("001-state-diff.yaml"), true);
+      assertEquals(entries.includes("002-state.yaml"), false);
+      assertEquals(entries.includes("002-state-diff.yaml"), false);
+      assertEquals(entries.includes("003-state.yaml"), false);
+      assertEquals(entries.includes("003-state-diff.yaml"), false);
+      assertEquals(entries.includes("current-status.yaml"), false);
+    });
+
     await t.step("PUT chapter returns 404 for non-existent chapter", async () => {
       const editDir = join(tmpDir, "edit2", "story2");
       await Deno.mkdir(editDir, { recursive: true });
@@ -366,6 +438,47 @@ Deno.test({ name: "chapter routes – additional coverage", sanitizeOps: false, 
       }
       left.sort();
       assertEquals(left, ["001.md", "002.md"]);
+    });
+
+    await t.step("DELETE after removes rewound chapter state artifacts and current status", async () => {
+      const dir = join(tmpDir, "rw-state", "story");
+      await Deno.mkdir(dir, { recursive: true });
+      for (const n of [1, 2, 3, 4]) {
+        const padded = String(n).padStart(3, "0");
+        await Deno.writeTextFile(join(dir, `${padded}.md`), `ch${n}`);
+      }
+      await Deno.writeTextFile(join(dir, "001-state.yaml"), "state: keep");
+      await Deno.writeTextFile(join(dir, "001-state-diff.yaml"), "diff: keep");
+      await Deno.writeTextFile(join(dir, "002-state.yaml"), "state: keep");
+      await Deno.writeTextFile(join(dir, "002-state-diff.yaml"), "diff: keep");
+      await Deno.writeTextFile(join(dir, "003-state.yaml"), "state: remove");
+      await Deno.writeTextFile(join(dir, "003-state-diff.yaml"), "diff: remove");
+      await Deno.writeTextFile(join(dir, "004-state.yaml"), "state: remove");
+      await Deno.writeTextFile(join(dir, "004-state-diff.yaml"), "diff: remove");
+      await Deno.writeTextFile(join(dir, "current-status.yaml"), "status: remove");
+
+      const res = await makeRequest(
+        app,
+        "DELETE",
+        "/api/stories/rw-state/story/chapters/after/2",
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body.deleted, [3, 4]);
+
+      const entries: string[] = [];
+      for await (const entry of Deno.readDir(dir)) {
+        entries.push(entry.name);
+      }
+      entries.sort();
+      assertEquals(entries.includes("001-state.yaml"), true);
+      assertEquals(entries.includes("001-state-diff.yaml"), true);
+      assertEquals(entries.includes("002-state.yaml"), true);
+      assertEquals(entries.includes("002-state-diff.yaml"), true);
+      assertEquals(entries.includes("003-state.yaml"), false);
+      assertEquals(entries.includes("003-state-diff.yaml"), false);
+      assertEquals(entries.includes("004-state.yaml"), false);
+      assertEquals(entries.includes("004-state-diff.yaml"), false);
+      assertEquals(entries.includes("current-status.yaml"), false);
     });
 
     await t.step("DELETE after 0 clears all chapters", async () => {
