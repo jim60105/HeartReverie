@@ -5,6 +5,7 @@ const MainLayout = () => import("@/components/MainLayout.vue");
 const SettingsLayout = () => import("@/components/SettingsLayout.vue");
 const PromptEditorPage = () => import("@/components/PromptEditorPage.vue");
 const LoreCodexPage = () => import("@/components/lore/LoreCodexPage.vue");
+const LlmSettingsPage = () => import("@/components/LlmSettingsPage.vue");
 
 export const settingsChildren: RouteRecordRaw[] = [
   {
@@ -18,6 +19,12 @@ export const settingsChildren: RouteRecordRaw[] = [
     name: "settings-lore",
     component: LoreCodexPage,
     meta: { title: "典籍" },
+  },
+  {
+    path: "llm",
+    name: "settings-llm",
+    component: LlmSettingsPage,
+    meta: { title: "LLM 設定" },
   },
 ];
 

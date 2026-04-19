@@ -27,10 +27,12 @@ const log = createLogger("http");
 const ERROR_TITLES: Record<string, string> = {
   "api-key": "Internal Server Error",
   "bad-path": "Bad Request",
+  "vento": "Unprocessable Entity",
   "no-prompt": "Internal Server Error",
   "llm-api": "AI Service Error",
   "no-body": "Bad Gateway",
   "no-content": "Bad Gateway",
+  "story-config": "Unprocessable Entity",
 };
 
 export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "hookDispatcher" | "buildPromptFromStory" | "config">): void {

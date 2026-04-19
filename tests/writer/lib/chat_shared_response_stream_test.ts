@@ -39,6 +39,17 @@ function buildConfig(tmpDir: string): AppConfig {
     LLM_REPETITION_PENALTY: 1.2,
     LLM_MIN_P: 0,
     LLM_TOP_A: 1,
+    llmDefaults: {
+      model: "test-model",
+      temperature: 0.1,
+      frequencyPenalty: 0.13,
+      presencePenalty: 0.52,
+      topK: 10,
+      topP: 0,
+      repetitionPenalty: 1.2,
+      minP: 0,
+      topA: 1,
+    },
     BACKGROUND_IMAGE: "/bg.webp",
     PROMPT_FILE: "nonexistent",
   };

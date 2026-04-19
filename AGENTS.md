@@ -286,6 +286,20 @@ Key files:
 - `writer/lib/lore.ts` — Core library: frontmatter parsing, tag normalization, scope collection, template variable generation
 - `writer/routes/lore.ts` — REST API routes for passage CRUD
 
+### Per-Story LLM Settings
+
+Each story may carry a `_config.json` file beside its chapter files to override the server's default LLM sampling parameters for that story only. The file is a JSON object containing any subset of: `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`. Missing fields fall back to the corresponding `LLM_*` environment variable. The `LLM_API_URL` and `LLM_API_KEY` are **not** per-story configurable.
+
+- **Location**: `playground/<series>/<story>/_config.json` (underscore prefix keeps it out of chapter listings)
+- **API**: `GET /api/:series/:name/config` returns overrides (`{}` when absent); `PUT /api/:series/:name/config` validates and atomically persists them. PUT returns 404 when the story directory does not exist — it never implicitly creates a story.
+- **Validation**: whitelist-only parsing strips unknown keys and silently drops `null`/`undefined`; `model` must be a non-empty string, numeric fields must be finite numbers; violations return 400 Problem Details.
+- **Merge semantics**: `Object.assign({}, llmDefaults, overrides)` in `resolveStoryLlmConfig()` — applied once per chat request just after `storyDir` validation, before the upstream LLM fetch body is built.
+- **Frontend**: `/settings/llm` page with story picker + per-field override toggles (`useStoryLlmConfig` composable).
+
+Key files:
+- `writer/lib/story-config.ts` — validate/read/write/resolve helpers plus typed error classes
+- `writer/routes/story-config.ts` — GET/PUT route handlers
+
 ### Prompt Rendering Pipeline
 
 1. `buildPromptFromStory()` reads chapters, strips tags, loads status YAML, detects first-round

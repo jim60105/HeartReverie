@@ -390,6 +390,34 @@ export interface UseLoreApiReturn {
   ) => Promise<void>;
 }
 
+// ── Story LLM Config ──
+
+export interface StoryLlmConfig {
+  model?: string;
+  temperature?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  topK?: number;
+  topP?: number;
+  repetitionPenalty?: number;
+  minP?: number;
+  topA?: number;
+}
+
+export interface UseStoryLlmConfigReturn {
+  overrides: Ref<StoryLlmConfig>;
+  loading: Ref<boolean>;
+  saving: Ref<boolean>;
+  error: Ref<string | null>;
+  loadConfig: (series: string, name: string) => Promise<void>;
+  saveConfig: (
+    series: string,
+    name: string,
+    overrides: StoryLlmConfig,
+  ) => Promise<StoryLlmConfig>;
+  reset: () => void;
+}
+
 // ── WebSocket Message Types ──
 
 /** Client-to-server: authentication handshake. */

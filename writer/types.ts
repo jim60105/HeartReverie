@@ -18,6 +18,26 @@ import type { PluginManager } from "./lib/plugin-manager.ts";
 import type { HookDispatcher } from "./lib/hooks.ts";
 import type { Logger } from "./lib/logger.ts";
 
+/**
+ * Resolved per-request LLM configuration (camelCase). Matches the upstream
+ * chat/completions sampler knobs; `*_penalty` fields are mapped to snake_case
+ * exactly once when building the upstream fetch body.
+ */
+export interface LlmConfig {
+  readonly model: string;
+  readonly temperature: number;
+  readonly frequencyPenalty: number;
+  readonly presencePenalty: number;
+  readonly topK: number;
+  readonly topP: number;
+  readonly repetitionPenalty: number;
+  readonly minP: number;
+  readonly topA: number;
+}
+
+/** Per-story override bag — every field is optional. */
+export type StoryLlmConfigOverrides = Partial<LlmConfig>;
+
 /** Application configuration resolved from environment variables and defaults. */
 export interface AppConfig {
   readonly ROOT_DIR: string;
@@ -39,6 +59,8 @@ export interface AppConfig {
   readonly LLM_TOP_A: number;
   readonly BACKGROUND_IMAGE: string;
   readonly PROMPT_FILE: string;
+  /** Defaults for per-story LLM overrides, assembled from the flat `LLM_*` env vars. */
+  readonly llmDefaults: LlmConfig;
 }
 
 /** Function that resolves path segments under the playground directory, returning null on traversal. */

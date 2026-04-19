@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join, resolve } from "@std/path";
+import type { LlmConfig } from "../types.ts";
 
 const ROOT_DIR: string = resolve(import.meta.dirname!, "../..");
 const PLAYGROUND_DIR: string =
@@ -49,6 +50,23 @@ const BACKGROUND_IMAGE: string =
 const LOG_LEVEL: string = Deno.env.get("LOG_LEVEL") || "info";
 const LOG_FILE: string | undefined = Deno.env.get("LOG_FILE");
 const LLM_LOG_FILE: string | undefined = Deno.env.get("LLM_LOG_FILE");
+/**
+ * Defaults for per-story LLM overrides, assembled from the flat `LLM_*` env
+ * vars above. Per-story `_config.json` values are merged on top of this via
+ * `Object.assign({}, llmDefaults, storyOverrides)` in `resolveStoryLlmConfig`.
+ */
+const llmDefaults: LlmConfig = {
+  model: LLM_MODEL,
+  temperature: LLM_TEMPERATURE,
+  frequencyPenalty: LLM_FREQUENCY_PENALTY,
+  presencePenalty: LLM_PRESENCE_PENALTY,
+  topK: LLM_TOP_K,
+  topP: LLM_TOP_P,
+  repetitionPenalty: LLM_REPETITION_PENALTY,
+  minP: LLM_MIN_P,
+  topA: LLM_TOP_A,
+};
+
 const PROMPT_FILE: string = (() => {
   const raw = Deno.env.get("PROMPT_FILE");
   if (!raw) return join(PLAYGROUND_DIR, "_prompts", "system.md");
@@ -74,6 +92,7 @@ export {
   LLM_REPETITION_PENALTY,
   LLM_MIN_P,
   LLM_TOP_A,
+  llmDefaults,
   BACKGROUND_IMAGE,
   PROMPT_FILE,
   LOG_LEVEL,
