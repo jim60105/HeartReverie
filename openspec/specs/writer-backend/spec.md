@@ -155,7 +155,15 @@ The server SHALL register lore CRUD routes as a core route module at `writer/rou
 
 ### Requirement: LLM API proxy
 
-The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JSON body with a `message` field. The server SHALL construct the prompt using the pipeline above, send it to the LLM API URL (configured via `LLM_API_URL` environment variable, defaulting to `https://openrouter.ai/api/v1/chat/completions`) using native `fetch` with `stream: true` in the request body, and write the assistant's response incrementally as the next numbered chapter file. The server SHALL use the `LLM_API_KEY` environment variable for authentication and the `LLM_MODEL` environment variable (defaulting to `deepseek/deepseek-v3.2`) for model selection. The server SHALL read generation parameters from environment variables with the following defaults: `LLM_TEMPERATURE` (default `0.1`), `LLM_FREQUENCY_PENALTY` (default `0.13`), `LLM_PRESENCE_PENALTY` (default `0.52`), `LLM_TOP_K` (default `10`), `LLM_TOP_P` (default `0`), `LLM_REPETITION_PENALTY` (default `1.2`), `LLM_MIN_P` (default `0`), `LLM_TOP_A` (default `1`). Parameters whose environment variable is not set SHALL use their default value. All parameter values SHALL be parsed as numbers; if parsing fails, the default SHALL be used. The server SHALL stream the response using SSE and write content deltas to the chapter file in real time.
+The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JSON body with a `message` field. The server SHALL construct the prompt using the pipeline above, send it to the LLM API URL (configured via `LLM_API_URL` environment variable, defaulting to `https://openrouter.ai/api/v1/chat/completions`) using native `fetch` with `stream: true` in the request body, and write the assistant's response incrementally as the next numbered chapter file. The server SHALL use the `LLM_API_KEY` environment variable for authentication.
+
+The server SHALL resolve the effective LLM configuration for each chat request by merging an env-derived `llmDefaults` object with the target story's validated `_config.json` overrides using `Object.assign({}, llmDefaults, storyOverrides)`. Merging SHALL happen per request so that edits to a story's `_config.json` take effect on the next chat without a server restart.
+
+The `llmDefaults` object SHALL be built from the following environment variables (applied when the variable is unset or fails numeric parsing, the field SHALL use the stated default): `LLM_MODEL` (default `deepseek/deepseek-v3.2`), `LLM_TEMPERATURE` (default `0.1`), `LLM_FREQUENCY_PENALTY` (default `0.13`), `LLM_PRESENCE_PENALTY` (default `0.52`), `LLM_TOP_K` (default `10`), `LLM_TOP_P` (default `0`), `LLM_REPETITION_PENALTY` (default `1.2`), `LLM_MIN_P` (default `0`), `LLM_TOP_A` (default `1`).
+
+`storyOverrides` SHALL be the validated partial subset of those same fields read from `playground/<series>/<story>/_config.json` (absent file ⇒ empty overrides). Only the whitelisted keys `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA` SHALL be honoured; unknown keys SHALL be ignored. Values whose type does not match the whitelist SHALL cause the request to fail with an RFC 9457 Problem Details error.
+
+The merged configuration SHALL be used to populate the upstream request body (mapping camelCase fields to their OpenAI-compatible snake_case equivalents: `frequencyPenalty` → `frequency_penalty`, `presencePenalty` → `presence_penalty`, `topK` → `top_k`, `topP` → `top_p`, `repetitionPenalty` → `repetition_penalty`, `minP` → `min_p`, `topA` → `top_a`). The server SHALL stream the response using SSE and write content deltas to the chapter file in real time.
 
 Before streaming the AI response, the server SHALL write the user's chat message to the chapter file wrapped in `<user_message>` and `</user_message>` tags, followed by a blank line. The user message block SHALL appear at the beginning of the chapter file, before any AI-generated content. The `<user_message>` block SHALL also be included in the full content returned in the HTTP response.
 
@@ -189,13 +197,28 @@ The server SHALL parse the SSE response by reading `data:` lines from the respon
 - **WHEN** `LLM_API_URL` is set to a non-default value (e.g., a self-hosted vLLM endpoint)
 - **THEN** the server SHALL send chat completion requests to that URL instead of the OpenRouter default
 
-#### Scenario: Custom sampling parameters
-- **WHEN** `LLM_TEMPERATURE` is set to `0.7` in the environment
+#### Scenario: Custom env sampling parameters apply as defaults
+- **WHEN** `LLM_TEMPERATURE` is set to `0.7` in the environment and the target story has no `_config.json`
 - **THEN** the chat completion request body SHALL contain `temperature: 0.7` instead of the default `0.1`
 
-#### Scenario: Invalid sampling parameter value
+#### Scenario: Invalid env sampling parameter value
 - **WHEN** an LLM parameter env var contains a non-numeric value (e.g., `LLM_TEMPERATURE=abc`)
-- **THEN** the server SHALL fall back to the default value for that parameter
+- **THEN** the server SHALL fall back to the documented default value for that parameter when building `llmDefaults`
+
+#### Scenario: Per-story override replaces env default
+- **GIVEN** env default `temperature=0.1` and the target story's `_config.json` contains `{ "temperature": 0.9 }`
+- **WHEN** a chat request targets that story
+- **THEN** the upstream chat completion request body SHALL contain `temperature: 0.9`
+
+#### Scenario: Per-story partial override preserves other env defaults
+- **GIVEN** the target story's `_config.json` contains only `{ "temperature": 0.9 }`
+- **WHEN** a chat request targets that story
+- **THEN** the upstream chat completion request body SHALL contain `temperature: 0.9` and SHALL contain every other LLM parameter at its env-derived default value
+
+#### Scenario: Malformed per-story config aborts the request
+- **GIVEN** the target story's `_config.json` cannot be parsed as JSON or contains a wrong-type value
+- **WHEN** a chat request targets that story
+- **THEN** the server SHALL respond with an RFC 9457 Problem Details error and SHALL NOT send a request upstream and SHALL NOT create a new chapter file
 
 #### Scenario: Path traversal prevention
 - **WHEN** a client sends a request with path parameters containing `..` or other traversal sequences
@@ -440,3 +463,37 @@ The writer backend SHALL expose `GET /api/plugins` that returns a JSON array of 
 #### Scenario: No plugins loaded
 - **WHEN** no plugins are loaded (empty `plugins/` directory and no `PLUGIN_DIR`)
 - **THEN** the server SHALL return an empty JSON array `[]`
+
+### Requirement: Per-story LLM config REST endpoints
+
+The server SHALL expose two authenticated routes for managing per-story LLM overrides:
+- `GET /api/:series/:name/config` SHALL return the story's validated overrides as a JSON object, or `{}` when `_config.json` does not exist.
+- `PUT /api/:series/:name/config` SHALL accept a JSON object body, validate it against the LLM parameter whitelist (`model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`), strip unknown keys as well as `null` / `undefined` values, and persist the normalised object to `playground/<series>/<story>/_config.json`. The target story directory MUST already exist before the PUT; if it does not, the server SHALL respond with HTTP 404 Problem Details and SHALL NOT create the directory or the file.
+
+Both routes SHALL sit behind the existing `X-Passphrase` auth middleware, SHALL be subject to the existing global rate limiter, and SHALL resolve `:series` and `:name` through the existing `safePath()` helper. Error responses SHALL use RFC 9457 Problem Details. These routes SHALL NOT collide with the existing public `GET /api/config` endpoint.
+
+#### Scenario: GET returns empty object when file is absent
+- **GIVEN** a valid story with no `_config.json`
+- **WHEN** an authenticated client issues `GET /api/:series/:name/config`
+- **THEN** the response SHALL be HTTP 200 with body `{}`
+
+#### Scenario: PUT persists validated overrides
+- **WHEN** an authenticated client issues `PUT /api/:series/:name/config` with body `{ "temperature": 0.9, "topK": 5, "unknown": "x" }`
+- **THEN** the server SHALL write `{ "temperature": 0.9, "topK": 5 }` to `_config.json` and respond HTTP 200 with the persisted object
+
+#### Scenario: PUT rejects wrong-type value
+- **WHEN** an authenticated client issues `PUT /api/:series/:name/config` with body `{ "temperature": "hot" }`
+- **THEN** the server SHALL respond HTTP 400 with an RFC 9457 Problem Details body and SHALL NOT modify the persisted file
+
+#### Scenario: Unauthenticated request is rejected
+- **WHEN** a client issues `GET /api/:series/:name/config` without a valid `X-Passphrase` header
+- **THEN** the server SHALL respond HTTP 401 with an RFC 9457 Problem Details body
+
+#### Scenario: Path traversal is rejected
+- **WHEN** a client supplies a `:series` or `:name` that would resolve outside the playground directory
+- **THEN** the server SHALL respond HTTP 400 and SHALL NOT read or write any file
+
+#### Scenario: PUT for a non-existent story returns 404
+- **GIVEN** a `:series`/`:name` pair that passes `safePath()` but whose story directory does not exist under `playground/`
+- **WHEN** an authenticated client issues `PUT /api/:series/:name/config`
+- **THEN** the server SHALL respond with HTTP 404 and an RFC 9457 Problem Details body and SHALL NOT create the story directory or `_config.json`
