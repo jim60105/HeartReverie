@@ -100,3 +100,35 @@ Deno.test("buildPromptFromStory: chapterCount reflects true on-disk total even w
     await Deno.remove(storyDir, { recursive: true });
   }
 });
+
+Deno.test("buildPromptFromStory: _config.json alongside chapters is ignored in listing", async () => {
+  const storyDir = await Deno.makeTempDir({ prefix: "heartreverie-config-listing-test-" });
+  try {
+    await Deno.writeTextFile(`${storyDir}/001.md`, "chapter 1");
+    await Deno.writeTextFile(`${storyDir}/002.md`, "chapter 2");
+    await Deno.writeTextFile(`${storyDir}/_config.json`, '{"temperature":0.9}');
+    await Deno.writeTextFile(`${storyDir}/README.md`, "not a chapter");
+
+    const pluginManagerStub = {
+      getStripTagPatterns: () => null,
+      getPromptVariables: () => Promise.resolve({}),
+    } as unknown as PluginManager;
+    const hookDispatcherStub = {
+      dispatch: (_s: string, ctx: Record<string, unknown>) => Promise.resolve(ctx),
+    } as unknown as HookDispatcher;
+    const renderSystemPrompt = (): Promise<RenderResult> =>
+      Promise.resolve({ content: "rendered", error: null } as RenderResult);
+
+    const engine = createStoryEngine(
+      pluginManagerStub,
+      (p: string) => p,
+      renderSystemPrompt,
+      hookDispatcherStub,
+    );
+    const result = await engine.buildPromptFromStory("s", "n", storyDir, "msg");
+
+    assertEquals(result.chapterFiles, ["001.md", "002.md"]);
+  } finally {
+    await Deno.remove(storyDir, { recursive: true });
+  }
+});

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Per-story LLM settings: stories may now carry a `_config.json` file beside their chapters to override any of `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`. Missing or empty fields fall back to the server's env defaults.
+- REST API `GET/PUT /api/:series/:name/config` for reading and writing a story's LLM overrides (auth + rate-limit protected; PUT requires the story directory to already exist).
+- Frontend settings page at `/settings/llm` with a story picker and per-field override toggles for managing a story's LLM configuration.
+
 ## [0.2.0] - 2025-07-17
 
 ### Added

@@ -15,9 +15,10 @@
 
 import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
-import type { AppConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError } from "../types.ts";
+import type { AppConfig, LlmConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { resolveTargetChapterNumber } from "./story.ts";
+import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
 import { createLogger, createLlmLogger } from "./logger.ts";
 
 const log = createLogger("llm");
@@ -52,7 +53,7 @@ export class ChatAbortError extends Error {
 export class ChatError extends Error {
   override readonly name = "ChatError";
   constructor(
-    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "no-body" | "no-content",
+    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "no-body" | "no-content" | "story-config",
     message: string,
     public readonly httpStatus: number = 500,
     public readonly ventoError?: VentoError,
@@ -86,6 +87,20 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   const storyDir = safePath(series, name);
   if (!storyDir) {
     throw new ChatError("bad-path", "Invalid path", 400);
+  }
+
+  // 2b. Load per-story LLM overrides merged over env defaults
+  let llmConfig: LlmConfig;
+  try {
+    llmConfig = await resolveStoryLlmConfig(storyDir, config.llmDefaults);
+  } catch (err) {
+    if (err instanceof StoryConfigValidationError) {
+      reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
+      throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
+    throw new ChatError("story-config", "Failed to read story configuration", 500);
   }
 
   // 3. Resolve template: body override > custom file > system.md
@@ -126,15 +141,15 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   ];
 
   reqLog.debug("LLM request payload", {
-    model: config.LLM_MODEL,
-    temperature: config.LLM_TEMPERATURE,
-    frequencyPenalty: config.LLM_FREQUENCY_PENALTY,
-    presencePenalty: config.LLM_PRESENCE_PENALTY,
-    topK: config.LLM_TOP_K,
-    topP: config.LLM_TOP_P,
-    repetitionPenalty: config.LLM_REPETITION_PENALTY,
-    minP: config.LLM_MIN_P,
-    topA: config.LLM_TOP_A,
+    model: llmConfig.model,
+    temperature: llmConfig.temperature,
+    frequencyPenalty: llmConfig.frequencyPenalty,
+    presencePenalty: llmConfig.presencePenalty,
+    topK: llmConfig.topK,
+    topP: llmConfig.topP,
+    repetitionPenalty: llmConfig.repetitionPenalty,
+    minP: llmConfig.minP,
+    topA: llmConfig.topA,
     systemPromptLength: systemPrompt.length,
     userMessageLength: message.length,
   });
@@ -143,16 +158,16 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     type: "request",
     series,
     story: name,
-    model: config.LLM_MODEL,
+    model: llmConfig.model,
     parameters: {
-      temperature: config.LLM_TEMPERATURE,
-      frequencyPenalty: config.LLM_FREQUENCY_PENALTY,
-      presencePenalty: config.LLM_PRESENCE_PENALTY,
-      topK: config.LLM_TOP_K,
-      topP: config.LLM_TOP_P,
-      repetitionPenalty: config.LLM_REPETITION_PENALTY,
-      minP: config.LLM_MIN_P,
-      topA: config.LLM_TOP_A,
+      temperature: llmConfig.temperature,
+      frequencyPenalty: llmConfig.frequencyPenalty,
+      presencePenalty: llmConfig.presencePenalty,
+      topK: llmConfig.topK,
+      topP: llmConfig.topP,
+      repetitionPenalty: llmConfig.repetitionPenalty,
+      minP: llmConfig.minP,
+      topA: llmConfig.topA,
     },
     systemPrompt,
     userMessage: message,
@@ -168,18 +183,18 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
         Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
       },
       body: JSON.stringify({
-        model: config.LLM_MODEL,
+        model: llmConfig.model,
         messages,
         stream: true,
         stream_options: { include_usage: true },
-        temperature: config.LLM_TEMPERATURE,
-        frequency_penalty: config.LLM_FREQUENCY_PENALTY,
-        presence_penalty: config.LLM_PRESENCE_PENALTY,
-        top_k: config.LLM_TOP_K,
-        top_p: config.LLM_TOP_P,
-        repetition_penalty: config.LLM_REPETITION_PENALTY,
-        min_p: config.LLM_MIN_P,
-        top_a: config.LLM_TOP_A,
+        temperature: llmConfig.temperature,
+        frequency_penalty: llmConfig.frequencyPenalty,
+        presence_penalty: llmConfig.presencePenalty,
+        top_k: llmConfig.topK,
+        top_p: llmConfig.topP,
+        repetition_penalty: llmConfig.repetitionPenalty,
+        min_p: llmConfig.minP,
+        top_a: llmConfig.topA,
       }),
       signal,
     });
@@ -201,7 +216,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     reqLog.error("LLM API error", {
       status: apiResponse.status,
       latencyMs,
-      model: config.LLM_MODEL,
+      model: llmConfig.model,
       errorBody,
     });
     llmLog.info("LLM error", {
@@ -382,12 +397,12 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   if (!sawModelContent) {
     const noContentLatency = Math.round(performance.now() - llmStartTime);
-    reqLog.error("No content in AI response", { model: config.LLM_MODEL });
+    reqLog.error("No content in AI response", { model: llmConfig.model });
     llmLog.info("LLM error", {
       type: "error",
       errorCode: "no-content",
       latencyMs: noContentLatency,
-      model: config.LLM_MODEL,
+      model: llmConfig.model,
     });
     throw new ChatError("no-content", "No content in AI response", 502);
   }
@@ -395,7 +410,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   const fullContent = preContent + aiContent;
   const latencyMs = Math.round(performance.now() - llmStartTime);
   reqLog.info("LLM response completed", {
-    model: config.LLM_MODEL,
+    model: llmConfig.model,
     latencyMs,
     contentLength: fullContent.length,
     chapter: targetNum,
