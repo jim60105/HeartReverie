@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Token usage tracking: each successful LLM chat response is persisted to `_usage.json` in the story directory (chapter, prompt/completion/total tokens, model, timestamp). New `GET /api/stories/:series/:name/usage` endpoint returns the records plus computed totals.
+- WebSocket `chat:done` messages now carry an optional `usage` field with the token record for the just-completed generation (or `null` when the upstream provider omitted usage counters).
+- Frontend `UsagePanel.vue` in the reading layout shows a collapsible summary (`總計：N tokens · 最近：P+C`) and a table of the 10 most recent records, populated via the new `useUsage` composable.
 - Per-story LLM settings: stories may now carry a `_config.json` file beside their chapters to override any of `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`. Missing or empty fields fall back to the server's env defaults.
 - REST API `GET/PUT /api/:series/:name/config` for reading and writing a story's LLM overrides (auth + rate-limit protected; PUT requires the story directory to already exist).
 - Frontend settings page at `/settings/llm` with a story picker and per-field override toggles for managing a story's LLM configuration.

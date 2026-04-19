@@ -30,6 +30,7 @@ import { registerConfigRoutes } from "./routes/config.ts";
 import { registerStoryConfigRoutes } from "./routes/story-config.ts";
 import { registerLoreRoutes } from "./routes/lore.ts";
 import { registerWebSocketRoutes } from "./routes/ws.ts";
+import { registerUsageRoutes } from "./routes/usage.ts";
 import type { Context, Next } from "@hono/hono";
 import type { AppDeps } from "./types.ts";
 
@@ -140,6 +141,7 @@ export function createApp(deps: AppDeps): Hono {
   registerStoryConfigRoutes(app, deps);
   registerPluginRoutes(app, deps);
   registerPromptRoutes(app, deps);
+  registerUsageRoutes(app, deps);
 
   // Block dotfile access (e.g., /.env, /.gitignore)
   app.use("/*", async (c, next) => {

@@ -26,6 +26,7 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     middleware.ts         # Auth, rate limiting, secure headers
     story.ts              # Story/chapter file operations
     template.ts           # Vento template rendering engine
+    usage.ts              # Token usage persistence: _usage.json reader/writer with per-story async lock
     chat-shared.ts        # Shared chat execution logic (HTTP + WebSocket)
   routes/
     auth.ts               # POST /api/auth — passphrase verification
@@ -36,6 +37,7 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     plugins.ts            # GET plugins — frontend module discovery
     prompt.ts             # GET/POST prompt — template preview and file persistence
     stories.ts            # GET stories — series/story listing
+    usage.ts              # GET /api/stories/:series/:name/usage — token usage records + totals
     ws.ts                 # WebSocket upgrade handler and message dispatching
 reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
   vite.config.ts          # Vite build configuration
@@ -57,6 +59,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       PromptEditor.vue    # System prompt template editor
       PromptEditorPage.vue # Prompt editor page wrapper
       PromptPreview.vue   # Rendered prompt preview
+      UsagePanel.vue      # Collapsible token-usage summary + recent records table
       PassphraseGate.vue  # Authentication gate
       SettingsLayout.vue  # Settings page with sidebar navigation
       VentoErrorCard.vue  # Vento template error display component
@@ -75,6 +78,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       usePlugins.ts       # Plugin loading and hook management
       usePromptEditor.ts  # Prompt editor state
       useStorySelector.ts # Story selector state
+      useUsage.ts         # Token-usage state: load records, push on chat:done, reset on story change
       useWebSocket.ts     # WebSocket connection management
     lib/
       file-utils.ts       # File utility functions
@@ -326,7 +330,7 @@ The server exposes a WebSocket endpoint at `GET /api/ws` for real-time streaming
 - **Single connection** — one WebSocket per client, registered before body-limit and auth middleware in `writer/app.ts`
 - **First-message auth** — client sends `{ type: "auth", passphrase }` as the first message; server validates with timing-safe comparison, responds `auth:ok` or `auth:error` (close code 4001)
 - **JSON protocol** — all messages are `{ type: "...", ... }` discriminated unions defined in `writer/types.ts` (`WsClientMessage` / `WsServerMessage`)
-- **Chat streaming** — `chat:send` / `chat:resend` messages trigger LLM generation via shared `executeChat()` function in `writer/lib/chat-shared.ts`; each SSE chunk is dual-written (file + WebSocket `chat:delta`); completed with `chat:done` or `chat:error`
+- **Chat streaming** — `chat:send` / `chat:resend` messages trigger LLM generation via shared `executeChat()` function in `writer/lib/chat-shared.ts`; each SSE chunk is dual-written (file + WebSocket `chat:delta`); completed with `chat:done` (includes optional `usage: TokenUsageRecord | null` field) or `chat:error`
 - **Stop generation** — `chat:abort` message cancels an active LLM generation; backend closes the upstream LLM connection via `AbortSignal`, preserves partial chapter content, and responds with `chat:aborted`
 - **Story subscription** — `subscribe` message starts 1-second server-side polling of a story's chapter directory; pushes `chapters:updated` on count change and `chapters:content` on last-chapter content change
 - **Frontend composable** — `useWebSocket.ts` singleton manages connection, auth handshake, and exponential backoff reconnection (1s → 30s cap)

@@ -308,6 +308,28 @@ export interface LLMStreamChunk {
   };
 }
 
+/**
+ * One token-usage record appended to `<storyDir>/_usage.json` after each
+ * successful chat generation that reported usage numbers from the upstream
+ * provider. All fields are required and finite; `timestamp` is ISO-8601.
+ */
+export interface TokenUsageRecord {
+  readonly chapter: number;
+  readonly promptTokens: number;
+  readonly completionTokens: number;
+  readonly totalTokens: number;
+  readonly model: string;
+  readonly timestamp: string;
+}
+
+/** Aggregated totals over a list of `TokenUsageRecord`. */
+export interface UsageTotals {
+  readonly promptTokens: number;
+  readonly completionTokens: number;
+  readonly totalTokens: number;
+  readonly count: number;
+}
+
 // ── WebSocket Message Types ──
 
 /** Client-to-server: authentication handshake. */
@@ -377,6 +399,7 @@ export interface WsChatDeltaMessage {
 export interface WsChatDoneMessage {
   readonly type: "chat:done";
   readonly id: string;
+  readonly usage?: TokenUsageRecord | null;
 }
 
 /** Server-to-client: chat error. */

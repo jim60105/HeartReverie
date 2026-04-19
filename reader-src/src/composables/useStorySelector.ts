@@ -3,6 +3,7 @@ import { useRoute } from "vue-router";
 import router from "@/router";
 import type { UseStorySelectorReturn } from "@/types";
 import { useAuth } from "@/composables/useAuth";
+import { useUsage } from "@/composables/useUsage";
 
 const seriesList = ref<string[]>([]);
 const storyList = ref<string[]>([]);
@@ -71,6 +72,13 @@ function initRouteSync(): void {
       }
       if (newStory) {
         selectedStory.value = newStory as string;
+      }
+      if (newSeries && newStory) {
+        const usage = useUsage();
+        usage.reset();
+        await usage.load(newSeries as string, newStory as string);
+      } else {
+        useUsage().reset();
       }
     },
     { immediate: true },
