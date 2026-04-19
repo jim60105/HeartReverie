@@ -2,7 +2,7 @@
 tmp/
 .certs/
 .env
-**/current-status.yml
+**/current-status.yaml
 
 # Deno
 .coverage/

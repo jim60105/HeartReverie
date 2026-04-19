@@ -12,7 +12,7 @@ The root `.gitignore` file SHALL include standard Deno ignore patterns in additi
 
 #### Scenario: Merged gitignore content
 - **WHEN** the root `.gitignore` is updated
-- **THEN** it SHALL contain all existing project-specific entries (`.env`, `.certs/`, `playground/`, `**/current-status.yml`, `.coverage/`) plus standard Deno community ignore patterns
+- **THEN** it SHALL contain all existing project-specific entries (`.env`, `.certs/`, `playground/`, `**/current-status.yaml`, `.coverage/`) plus standard Deno community ignore patterns
 
 ### Requirement: Rust project gitignore
 

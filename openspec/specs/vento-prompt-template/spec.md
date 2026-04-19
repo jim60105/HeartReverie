@@ -27,7 +27,7 @@ The system prompt template (`system.md`) SHALL receive the following variables f
 
 #### Scenario: status_data provided by plugin
 - **WHEN** the system prompt is rendered and the `state` plugin is loaded
-- **THEN** `status_data` SHALL be present in the Vento template context with the same content as before (from `current-status.yml` or `init-status.yml`)
+- **THEN** `status_data` SHALL be present in the Vento template context with the same content as before (from `current-status.yaml` or `init-status.yaml`)
 - **AND** it SHALL be provided via the plugin's `getDynamicVariables` mechanism, NOT as a core variable
 
 #### Scenario: status_data absent when state plugin not loaded

@@ -16,10 +16,10 @@
 
 ## 設定
 
-外掛透過 `compaction-config.yml` 進行設定，支援兩個層級（高優先覆寫低優先）：
+外掛透過 `compaction-config.yaml` 進行設定，支援兩個層級（高優先覆寫低優先）：
 
-1. **故事層級**：`playground/{series}/{name}/compaction-config.yml`
-2. **系列層級**：`playground/{series}/compaction-config.yml`
+1. **故事層級**：`playground/{series}/{name}/compaction-config.yaml`
+2. **系列層級**：`playground/{series}/compaction-config.yaml`
 
 若兩個層級都不存在設定檔，外掛使用預設值。
 

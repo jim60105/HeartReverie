@@ -163,7 +163,7 @@ export function registerBranchRoutes(
             }
           }
         }
-        // Intentionally do NOT copy current-status.yml (D9)
+        // Intentionally do NOT copy current-status.yaml (D9)
 
         // Copy story-scoped _lore/ when present.
         const loreSrc = join(srcDir, "_lore");

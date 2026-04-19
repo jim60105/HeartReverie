@@ -323,7 +323,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
         await Promise.allSettled([
           Deno.remove(join(storyDir, `${padded}-state.yaml`)),
           Deno.remove(join(storyDir, `${padded}-state-diff.yaml`)),
-          Deno.remove(join(storyDir, "current-status.yml")),
+          Deno.remove(join(storyDir, "current-status.yaml")),
         ]);
 
         // Prune stale usage records for the deleted chapter

@@ -101,7 +101,7 @@ Deno.test("context-compaction prompt-assembly hook", async (t) => {
 
     // Write disabled config
     await Deno.writeTextFile(
-      `${storyDir}/compaction-config.yml`,
+      `${storyDir}/compaction-config.yaml`,
       "enabled: false\n",
     );
 

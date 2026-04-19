@@ -29,7 +29,7 @@ const DEFAULTS: CompactionConfig = {
   enabled: true,
 };
 
-const CONFIG_FILENAME = "compaction-config.yml";
+const CONFIG_FILENAME = "compaction-config.yaml";
 
 /**
  * Load compaction configuration with story-level > series-level > defaults precedence.
