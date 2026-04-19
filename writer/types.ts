@@ -285,6 +285,20 @@ export interface VentoError {
   expressions?: string[];
 }
 
+/**
+ * Story export payload shape emitted by `GET /api/stories/:series/:name/export?format=json`.
+ *
+ * Chapters are sorted by ascending `number`. Content is stripped of plugin
+ * tags (both `promptStripTags` and `displayStripTags`) and empty entries
+ * (after trim) are omitted from the array.
+ */
+export interface StoryExportJson {
+  readonly series: string;
+  readonly name: string;
+  readonly exportedAt: string;
+  readonly chapters: readonly { readonly number: number; readonly content: string }[];
+}
+
 /** RFC 9457 Problem Details response shape. */
 export interface ProblemDetail {
   type: string;

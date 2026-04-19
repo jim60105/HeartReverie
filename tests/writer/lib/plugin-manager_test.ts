@@ -130,6 +130,118 @@ Deno.test("PluginManager", async (t) => {
       });
     });
 
+    await t.step("getCombinedStripTagPatterns", async (t) => {
+      await t.step("returns null when neither promptStripTags nor displayStripTags declared", async () => {
+        const pluginDir = join(tmpDir, "combined-none");
+        const pDir = join(pluginDir, "none-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({ name: "none-plugin", version: "1.0.0" }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getCombinedStripTagPatterns(), null);
+      });
+
+      await t.step("includes promptStripTags only", async () => {
+        const pluginDir = join(tmpDir, "combined-prompt-only");
+        const pDir = join(pluginDir, "prompt-only");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "prompt-only",
+            version: "1.0.0",
+            promptStripTags: ["thinking"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const re = pm.getCombinedStripTagPatterns();
+        assertTrue(re instanceof RegExp);
+        assertTrue(re.test("<thinking>x</thinking>"));
+      });
+
+      await t.step("includes displayStripTags only", async () => {
+        const pluginDir = join(tmpDir, "combined-display-only");
+        const pDir = join(pluginDir, "display-only");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "display-only",
+            version: "1.0.0",
+            displayStripTags: ["imgthink"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const re = pm.getCombinedStripTagPatterns();
+        assertTrue(re instanceof RegExp);
+        assertTrue(re.test("<imgthink>x</imgthink>"));
+      });
+
+      await t.step("merges both fields including regex-form entries", async () => {
+        const pluginDir = join(tmpDir, "combined-both");
+        const pDir = join(pluginDir, "both-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "both-plugin",
+            version: "1.0.0",
+            promptStripTags: ["user_message", "/\\[hidden\\]/"],
+            displayStripTags: ["imgthink"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const re = pm.getCombinedStripTagPatterns();
+        assertTrue(re instanceof RegExp);
+        // `replaceAll` exercises the combined regex across all three inputs.
+        const scrubbed = "<user_message>a</user_message> <imgthink>b</imgthink> [hidden]".replaceAll(re, "_");
+        assertEquals(scrubbed, "_ _ _");
+      });
+
+      await t.step("deduplicates identical raw entries across fields", async () => {
+        const pluginDir = join(tmpDir, "combined-dedup");
+        const pDir = join(pluginDir, "dedup-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "dedup-plugin",
+            version: "1.0.0",
+            promptStripTags: ["shared"],
+            displayStripTags: ["shared"],
+          }),
+        );
+
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const re = pm.getCombinedStripTagPatterns();
+        assertTrue(re instanceof RegExp);
+        // The combined source should only contain the "shared" tag pattern once.
+        const occurrences = (re.source.match(/<shared>/g) ?? []).length;
+        assertEquals(occurrences, 1);
+      });
+    });
+
     await t.step("init with invalid plugin names", async (t) => {
       await t.step("skips plugins with path traversal in name", async () => {
         const pluginDir = join(tmpDir, "bad-names");

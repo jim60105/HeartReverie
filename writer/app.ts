@@ -31,6 +31,7 @@ import { registerStoryConfigRoutes } from "./routes/story-config.ts";
 import { registerLoreRoutes } from "./routes/lore.ts";
 import { registerWebSocketRoutes } from "./routes/ws.ts";
 import { registerUsageRoutes } from "./routes/usage.ts";
+import { registerExportRoutes } from "./routes/export.ts";
 import type { Context, Next } from "@hono/hono";
 import type { AppDeps } from "./types.ts";
 
@@ -137,6 +138,7 @@ export function createApp(deps: AppDeps): Hono {
   registerStoriesRoutes(app, deps);
   registerLoreRoutes(app, deps);
   registerChapterRoutes(app, deps);
+  registerExportRoutes(app, deps);
   registerChatRoutes(app, deps);
   registerStoryConfigRoutes(app, deps);
   registerPluginRoutes(app, deps);

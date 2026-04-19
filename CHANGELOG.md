@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Story export endpoint: `GET /api/stories/:series/:name/export?format=md|json|txt` downloads the full story as Markdown (chapters concatenated with `---` separators), structured JSON, or plain text. Plugin prompt/display strip tag patterns are merged and applied so exported content matches what the reader sees. Filenames use RFC 5987 `filename*` encoding for full Unicode support.
+- Story export UI: `StorySelector` now includes a 匯出 section with Markdown / JSON / TXT buttons that trigger the export endpoint and download the resulting file in the browser.
 - Token usage tracking: each successful LLM chat response is persisted to `_usage.json` in the story directory (chapter, prompt/completion/total tokens, model, timestamp). New `GET /api/stories/:series/:name/usage` endpoint returns the records plus computed totals.
 - WebSocket `chat:done` messages now carry an optional `usage` field with the token record for the just-completed generation (or `null` when the upstream provider omitted usage counters).
 - Frontend `UsagePanel.vue` in the reading layout shows a collapsible summary (`總計：N tokens · 最近：P+C`) and a table of the 10 most recent records, populated via the new `useUsage` composable.

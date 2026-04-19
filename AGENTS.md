@@ -25,6 +25,7 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     lore.ts               # Lore codex library (passage storage, retrieval, tag system, template variable generation)
     middleware.ts         # Auth, rate limiting, secure headers
     story.ts              # Story/chapter file operations
+    export.ts             # Story export renderers (Markdown/JSON/plain text) + RFC 5987 filename encoding
     template.ts           # Vento template rendering engine
     usage.ts              # Token usage persistence: _usage.json reader/writer with per-story async lock
     chat-shared.ts        # Shared chat execution logic (HTTP + WebSocket)
@@ -37,6 +38,7 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     plugins.ts            # GET plugins — frontend module discovery
     prompt.ts             # GET/POST prompt — template preview and file persistence
     stories.ts            # GET stories — series/story listing
+    export.ts             # GET /api/stories/:series/:name/export — bundled story download (md/json/txt)
     usage.ts              # GET /api/stories/:series/:name/usage — token usage records + totals
     ws.ts                 # WebSocket upgrade handler and message dispatching
 reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
@@ -78,6 +80,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       usePlugins.ts       # Plugin loading and hook management
       usePromptEditor.ts  # Prompt editor state
       useStorySelector.ts # Story selector state
+      useStoryExport.ts   # Story export download (Markdown/JSON/TXT)
       useUsage.ts         # Token-usage state: load records, push on chat:done, reset on story change
       useWebSocket.ts     # WebSocket connection management
     lib/
