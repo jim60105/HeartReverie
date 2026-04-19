@@ -22,6 +22,7 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     hooks.ts              # HookDispatcher: backend lifecycle hook system
     config.ts             # Environment variable loading and validation
     errors.ts             # RFC 9457 Problem Details helpers
+    generation-registry.ts # In-memory refcounted registry marking stories with active LLM generation (guards edit/rewind/branch)
     lore.ts               # Lore codex library (passage storage, retrieval, tag system, template variable generation)
     middleware.ts         # Auth, rate limiting, secure headers
     story.ts              # Story/chapter file operations
@@ -31,7 +32,8 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     chat-shared.ts        # Shared chat execution logic (HTTP + WebSocket)
   routes/
     auth.ts               # POST /api/auth — passphrase verification
-    chapters.ts           # GET/PUT chapters — read and write chapter content
+    branch.ts             # POST /api/stories/:series/:name/branch — fork a story at a chapter
+    chapters.ts           # GET/PUT/DELETE chapters — read, edit, rewind chapter content
     chat.ts               # POST chat — LLM streaming proxy (HTTP fallback)
     config.ts             # GET /api/config — public configuration (background image)
     lore.ts               # Lore codex API routes (CRUD for passages)
@@ -72,6 +74,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
     composables/
       useAuth.ts          # Authentication state management
       useBackground.ts    # Background image configuration
+      useChapterActions.ts # Edit / rewind / branch chapter REST API client
       useChapterNav.ts    # Chapter navigation and polling
       useChatApi.ts       # Chat API (WebSocket with HTTP fallback)
       useFileReader.ts    # File System Access API + IndexedDB

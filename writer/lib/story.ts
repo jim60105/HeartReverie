@@ -22,6 +22,80 @@ import { createLogger } from "./logger.ts";
 const log = createLogger("file");
 
 /**
+ * List chapter files (`NNN.md`) in the given directory, sorted by numeric order.
+ *
+ * Returns an empty array when the directory does not exist or cannot be read.
+ *
+ * @param dir - Absolute path to the story directory.
+ * @returns Sorted array of chapter filenames like `["001.md", "002.md", …]`.
+ */
+export async function listChapterFiles(dir: string): Promise<string[]> {
+  const entries: string[] = [];
+  try {
+    for await (const entry of Deno.readDir(dir)) {
+      entries.push(entry.name);
+    }
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((f) => /^\d+\.md$/.test(f))
+    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+}
+
+/**
+ * Atomically write a chapter file by staging a temp file in the same
+ * directory and renaming it over the target path.
+ *
+ * The temp file name includes a UUID to avoid collisions between concurrent
+ * writers. On any failure the temp file is best-effort removed.
+ *
+ * @param dirPath - Absolute path to the story directory.
+ * @param chapterFile - Chapter filename such as `"003.md"`.
+ * @param content - New chapter content to write.
+ */
+export async function atomicWriteChapter(
+  dirPath: string,
+  chapterFile: string,
+  content: string,
+): Promise<void> {
+  const tmpName = `${chapterFile}.tmp-${crypto.randomUUID()}`;
+  const tmpPath = join(dirPath, tmpName);
+  const finalPath = join(dirPath, chapterFile);
+  let renamed = false;
+  try {
+    await Deno.writeTextFile(tmpPath, content, { mode: 0o664 });
+    await Deno.rename(tmpPath, finalPath);
+    renamed = true;
+  } finally {
+    if (!renamed) {
+      try {
+        await Deno.remove(tmpPath);
+      } catch {
+        // temp file may not exist; ignore
+      }
+    }
+  }
+}
+
+/**
+ * Copy a chapter file from one story directory to another via
+ * `atomicWriteChapter`, preserving the default chapter file mode.
+ *
+ * @param srcDir - Absolute path to the source story directory.
+ * @param dstDir - Absolute path to the destination story directory.
+ * @param chapterFile - Chapter filename such as `"003.md"`.
+ */
+export async function copyChapterFile(
+  srcDir: string,
+  dstDir: string,
+  chapterFile: string,
+): Promise<void> {
+  const content = await Deno.readTextFile(join(srcDir, chapterFile));
+  await atomicWriteChapter(dstDir, chapterFile, content);
+}
+
+/**
  * Resolve the 1-based chapter number that the next write will target.
  *
  * Rule: if the last chapter file is empty, reuse its number; otherwise use
@@ -74,19 +148,8 @@ export function createStoryEngine(
     message: string,
     template?: string,
   ): Promise<BuildPromptResult> {
-    let chapterFiles: string[] = [];
-    try {
-      const entries: string[] = [];
-      for await (const entry of Deno.readDir(storyDir)) {
-        entries.push(entry.name);
-      }
-      chapterFiles = entries
-        .filter((f) => /^\d+\.md$/.test(f))
-        .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-      log.debug("Read story directory", { path: storyDir, chapterCount: chapterFiles.length });
-    } catch {
-      log.debug("Story directory not found", { path: storyDir });
-    }
+    let chapterFiles: string[] = await listChapterFiles(storyDir);
+    log.debug("Read story directory", { path: storyDir, chapterCount: chapterFiles.length });
 
     const totalChapterCount = chapterFiles.length;
 

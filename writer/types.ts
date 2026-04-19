@@ -308,6 +308,37 @@ export interface ProblemDetail {
   [key: string]: unknown;
 }
 
+// ── Chapter Edit / Rewind / Branch ──
+
+/** Request body for `PUT /api/stories/:series/:name/chapters/:number`. */
+export interface ChapterEditRequest {
+  readonly content: string;
+}
+
+/** Response body for `PUT /api/stories/:series/:name/chapters/:number`. */
+export interface ChapterEditResponse {
+  readonly number: number;
+  readonly content: string;
+}
+
+/** Response body for `DELETE /api/stories/:series/:name/chapters/after/:number`. */
+export interface ChapterRewindResponse {
+  readonly deleted: readonly number[];
+}
+
+/** Request body for `POST /api/stories/:series/:name/branch`. */
+export interface BranchRequest {
+  readonly fromChapter: number;
+  readonly newName?: string;
+}
+
+/** Response body for `POST /api/stories/:series/:name/branch`. */
+export interface BranchResponse {
+  readonly series: string;
+  readonly name: string;
+  readonly copiedChapters: readonly number[];
+}
+
 /** LLM SSE stream chunk shape (OpenAI-compatible format). */
 export interface LLMStreamChunk {
   choices?: ReadonlyArray<{

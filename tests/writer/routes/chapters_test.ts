@@ -259,6 +259,186 @@ Deno.test({ name: "chapter routes – additional coverage", sanitizeOps: false, 
       const mdFiles = entries.filter((f) => /^\d+\.md$/.test(f));
       assertEquals(mdFiles.length, 0);
     });
+
+    // ── PUT /chapters/:number edit ──────────────────────────────────────
+
+    await t.step("PUT chapter happy path updates file and returns content", async () => {
+      const editDir = join(tmpDir, "edit", "story");
+      await Deno.mkdir(editDir, { recursive: true });
+      await Deno.writeTextFile(join(editDir, "001.md"), "original");
+
+      const res = await makeRequest(
+        app,
+        "PUT",
+        "/api/stories/edit/story/chapters/1",
+        { content: "rewritten" },
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body.number, 1);
+      assertEquals(res.body.content, "rewritten");
+      const onDisk = await Deno.readTextFile(join(editDir, "001.md"));
+      assertEquals(onDisk, "rewritten");
+    });
+
+    await t.step("PUT chapter returns 404 for non-existent chapter", async () => {
+      const editDir = join(tmpDir, "edit2", "story2");
+      await Deno.mkdir(editDir, { recursive: true });
+      const res = await makeRequest(
+        app,
+        "PUT",
+        "/api/stories/edit2/story2/chapters/5",
+        { content: "x" },
+      );
+      assertEquals(res.status, 404);
+    });
+
+    await t.step("PUT chapter returns 400 for invalid number", async () => {
+      const res = await makeRequest(
+        app,
+        "PUT",
+        "/api/stories/edit/story/chapters/0",
+        { content: "x" },
+      );
+      assertEquals(res.status, 400);
+      const res2 = await makeRequest(
+        app,
+        "PUT",
+        "/api/stories/edit/story/chapters/-1",
+        { content: "x" },
+      );
+      assertEquals(res2.status, 400);
+    });
+
+    await t.step("PUT chapter returns 400 for non-string content", async () => {
+      const editDir = join(tmpDir, "edit3", "story3");
+      await Deno.mkdir(editDir, { recursive: true });
+      await Deno.writeTextFile(join(editDir, "001.md"), "x");
+      const res = await makeRequest(
+        app,
+        "PUT",
+        "/api/stories/edit3/story3/chapters/1",
+        { content: 123 } as unknown as Record<string, unknown>,
+      );
+      assertEquals(res.status, 400);
+    });
+
+    await t.step("PUT chapter returns 409 when generation is active", async () => {
+      const { markGenerationActive, clearGenerationActive } = await import(
+        "../../../writer/lib/generation-registry.ts"
+      );
+      const editDir = join(tmpDir, "edit4", "story4");
+      await Deno.mkdir(editDir, { recursive: true });
+      await Deno.writeTextFile(join(editDir, "001.md"), "x");
+      markGenerationActive("edit4", "story4");
+      try {
+        const res = await makeRequest(
+          app,
+          "PUT",
+          "/api/stories/edit4/story4/chapters/1",
+          { content: "y" },
+        );
+        assertEquals(res.status, 409);
+      } finally {
+        clearGenerationActive("edit4", "story4");
+      }
+    });
+
+    // ── DELETE /chapters/after/:number rewind ────────────────────────────
+
+    await t.step("DELETE after happy path removes newer chapters in descending order", async () => {
+      const dir = join(tmpDir, "rw", "story");
+      await Deno.mkdir(dir, { recursive: true });
+      for (const n of [1, 2, 3, 4, 5]) {
+        const padded = String(n).padStart(3, "0");
+        await Deno.writeTextFile(join(dir, `${padded}.md`), `ch${n}`);
+      }
+      const res = await makeRequest(
+        app,
+        "DELETE",
+        "/api/stories/rw/story/chapters/after/2",
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body.deleted, [3, 4, 5]);
+
+      const left: string[] = [];
+      for await (const e of Deno.readDir(dir)) {
+        if (/^\d+\.md$/.test(e.name)) left.push(e.name);
+      }
+      left.sort();
+      assertEquals(left, ["001.md", "002.md"]);
+    });
+
+    await t.step("DELETE after 0 clears all chapters", async () => {
+      const dir = join(tmpDir, "rw2", "story");
+      await Deno.mkdir(dir, { recursive: true });
+      await Deno.writeTextFile(join(dir, "001.md"), "a");
+      await Deno.writeTextFile(join(dir, "002.md"), "b");
+
+      const res = await makeRequest(
+        app,
+        "DELETE",
+        "/api/stories/rw2/story/chapters/after/0",
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body.deleted, [1, 2]);
+    });
+
+    await t.step("DELETE after no-op when nothing to delete", async () => {
+      const dir = join(tmpDir, "rw3", "story");
+      await Deno.mkdir(dir, { recursive: true });
+      await Deno.writeTextFile(join(dir, "001.md"), "a");
+      const res = await makeRequest(
+        app,
+        "DELETE",
+        "/api/stories/rw3/story/chapters/after/5",
+      );
+      assertEquals(res.status, 200);
+      assertEquals(res.body.deleted, []);
+    });
+
+    await t.step("DELETE after invalid number returns 400", async () => {
+      const res = await makeRequest(
+        app,
+        "DELETE",
+        "/api/stories/rw/story/chapters/after/abc",
+      );
+      assertEquals(res.status, 400);
+      const res2 = await makeRequest(
+        app,
+        "DELETE",
+        "/api/stories/rw/story/chapters/after/-1",
+      );
+      assertEquals(res2.status, 400);
+    });
+
+    await t.step("DELETE after returns 409 when generation active", async () => {
+      const { markGenerationActive, clearGenerationActive } = await import(
+        "../../../writer/lib/generation-registry.ts"
+      );
+      const dir = join(tmpDir, "rw4", "story");
+      await Deno.mkdir(dir, { recursive: true });
+      await Deno.writeTextFile(join(dir, "001.md"), "a");
+      markGenerationActive("rw4", "story");
+      try {
+        const res = await makeRequest(
+          app,
+          "DELETE",
+          "/api/stories/rw4/story/chapters/after/0",
+        );
+        assertEquals(res.status, 409);
+      } finally {
+        clearGenerationActive("rw4", "story");
+      }
+    });
+
+    await t.step("DELETE after returns 404 when story missing", async () => {
+      const res = await makeRequest(
+        app,
+        "DELETE",
+        "/api/stories/nope/story/chapters/after/0",
+      );
+      assertEquals(res.status, 404);
+    });
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }
