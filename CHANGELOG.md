@@ -9,22 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Chapter editing: `PUT /api/stories/:series/:name/chapters/:number` rewrites an existing chapter's content atomically (temp file + rename). Blocked with HTTP 409 while an LLM generation is active for the same story.
-- Story rewind: `DELETE /api/stories/:series/:name/chapters/after/:number` removes every chapter strictly after `:number` (with `0` valid for "delete all"), in descending order. Returns `{ deleted: number[] }` sorted ascending and prunes matching `_usage.json` records.
-- Story branching: `POST /api/stories/:series/:name/branch` forks a story at a given chapter into a new story directory, copying chapters `001..fromChapter`, the story-scoped `_lore/` tree, and usage records up to that chapter. `newName` is validated via `isValidParam()` or auto-generated as `<name>-branch-<timestamp>`. Partial failures trigger best-effort cleanup of the destination.
-- In-memory `writer/lib/generation-registry.ts` refcounted registry marks stories as having active LLM generations; `chat-shared.ts` wraps upstream LLM execution so edit / rewind / branch requests are rejected with HTTP 409 while streaming.
-- Frontend `useChapterActions` composable (`editChapter`, `rewindAfter`, `branchFrom`) plus per-chapter toolbar in `ChapterContent.vue` (編輯 / 倒回至此 / 從此分支) visible only in backend mode, with inline `<textarea>` editing, rewind confirmation, and branch navigation via Vue Router.
+- No unreleased changes yet.
+
+## [0.3.0] - 2026-04-19
 
 ### Added
 
-- Story export endpoint: `GET /api/stories/:series/:name/export?format=md|json|txt` downloads the full story as Markdown (chapters concatenated with `---` separators), structured JSON, or plain text. Plugin prompt/display strip tag patterns are merged and applied so exported content matches what the reader sees. Filenames use RFC 5987 `filename*` encoding for full Unicode support.
-- Story export UI: `StorySelector` now includes a 匯出 section with Markdown / JSON / TXT buttons that trigger the export endpoint and download the resulting file in the browser.
-- Token usage tracking: each successful LLM chat response is persisted to `_usage.json` in the story directory (chapter, prompt/completion/total tokens, model, timestamp). New `GET /api/stories/:series/:name/usage` endpoint returns the records plus computed totals.
-- WebSocket `chat:done` messages now carry an optional `usage` field with the token record for the just-completed generation (or `null` when the upstream provider omitted usage counters).
-- Frontend `UsagePanel.vue` in the reading layout shows a collapsible summary (`總計：N tokens · 最近：P+C`) and a table of the 10 most recent records, populated via the new `useUsage` composable.
-- Per-story LLM settings: stories may now carry a `_config.json` file beside their chapters to override any of `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`. Missing or empty fields fall back to the server's env defaults.
-- REST API `GET/PUT /api/:series/:name/config` for reading and writing a story's LLM overrides (auth + rate-limit protected; PUT requires the story directory to already exist).
-- Frontend settings page at `/settings/llm` with a story picker and per-field override toggles for managing a story's LLM configuration.
+- Added chapter editing (`PUT /api/stories/:series/:name/chapters/:number`), rewind (`DELETE /api/stories/:series/:name/chapters/after/:number`), and branching (`POST /api/stories/:series/:name/branch`) with atomic writes, generation-time conflict protection (HTTP 409), usage pruning, and branch copy of chapter/lore data.
+- Added story export in Markdown/JSON/plain text via `GET /api/stories/:series/:name/export`, with merged plugin strip-tag processing so exports match reader-visible content.
+- Added per-story token usage tracking to `_usage.json`, `GET /api/stories/:series/:name/usage`, and WebSocket `chat:done` payloads; added frontend `UsagePanel` summary and recent records table.
+- Added per-story LLM override settings via `_config.json`, new `GET/PUT /api/:series/:name/config`, and a dedicated `/settings/llm` page with per-field override toggles.
+- Added plugin runtime capabilities: activated backend `response-stream` hook dispatch, expanded frontend hooks (`chat:send:before`, `chapter:render:after`, `story:switch`, `chapter:change`), and enriched `DynamicVariableContext` with runtime message/chapter fields.
+- Added state plugin chapter-delivery support across HTTP/WebSocket chapter payloads, including `stateDiff` propagation, resend/edit/rewind state artifact cleanup, and branch-copy support for state files.
+- Added Codecov coverage workflow and Deno coverage tasks (`test:backend:coverage`, `coverage:summary`, `coverage:lcov`) for CI reporting.
+- Added README badges for CI status, coverage, release, and license.
+
+### Changed
+
+- Renamed `.yml` files and references to `.yaml` across workflows, docs, tests, and related config paths.
+
+### Fixed
+
+- Fixed release note Podman pull command owner interpolation so generated pull instructions resolve to the correct image path.
 
 ## [0.2.0] - 2025-07-17
 
@@ -105,6 +111,7 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jim60105/HeartReverie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jim60105/HeartReverie/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jim60105/HeartReverie/releases/tag/v0.1.0
