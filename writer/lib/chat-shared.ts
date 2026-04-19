@@ -21,6 +21,7 @@ import { resolveTargetChapterNumber } from "./story.ts";
 import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
 import { createLogger, createLlmLogger } from "./logger.ts";
 import { appendUsage, buildRecord } from "./usage.ts";
+import { markGenerationActive, clearGenerationActive } from "./generation-registry.ts";
 
 const log = createLogger("llm");
 const fileLog = createLogger("file");
@@ -135,6 +136,12 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   if (!systemPrompt) {
     throw new ChatError("no-prompt", "Failed to generate prompt", 500);
   }
+
+  // Mark this story as having an active generation; guard destructive
+  // edits/rewinds/branches from concurrent writers. The matching clear
+  // runs in the `finally` block at the end of this function.
+  markGenerationActive(series, name);
+  try {
 
   // 5. Call LLM API with streaming
   const messages: Array<{ role: string; content: string }> = [
@@ -457,4 +464,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   });
 
   return { chapter: targetNum, content: fullContent, usage };
+  } finally {
+    clearGenerationActive(series, name);
+  }
 }

@@ -17,6 +17,9 @@ import { join } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
+import { atomicWriteChapter, listChapterFiles } from "../lib/story.ts";
+import { isGenerationActive } from "../lib/generation-registry.ts";
+import { pruneUsage } from "../lib/usage.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
 
@@ -39,13 +42,8 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
       const includeContent = c.req.query("include") === "content";
 
       try {
-        const entries = [];
-        for await (const entry of Deno.readDir(dirPath)) {
-          entries.push(entry.name);
-        }
-        const chapterFiles = entries
-          .filter((f) => /^\d+\.md$/.test(f))
-          .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        await Deno.stat(dirPath);
+        const chapterFiles = await listChapterFiles(dirPath);
 
         if (!includeContent) {
           return c.json(chapterFiles.map((f) => parseInt(f, 10)));
@@ -110,13 +108,8 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
       }
 
       try {
-        const entries = [];
-        for await (const entry of Deno.readDir(dirPath)) {
-          entries.push(entry.name);
-        }
-        const chapterFiles = entries
-          .filter((f) => /^\d+\.md$/.test(f))
-          .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        await Deno.stat(dirPath);
+        const chapterFiles = await listChapterFiles(dirPath);
 
         if (chapterFiles.length === 0) {
           return c.json(problemJson("Not Found", 404, "No chapters to delete"), 404);
@@ -135,6 +128,136 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         return c.json(problemJson("Internal Server Error", 500, "Failed to delete chapter"), 500);
       }
     }
+  );
+
+  // PUT /api/stories/:series/:name/chapters/:number — edit chapter in place
+  app.put(
+    "/api/stories/:series/:name/chapters/:number",
+    validateParams,
+    async (c) => {
+      const series = c.req.param("series")!;
+      const name = c.req.param("name")!;
+      const numRaw = c.req.param("number")!;
+      const num = parseInt(numRaw, 10);
+      if (!/^\d+$/.test(numRaw) || isNaN(num) || num < 1) {
+        return c.json(problemJson("Bad Request", 400, "Invalid chapter number"), 400);
+      }
+
+      if (isGenerationActive(series, name)) {
+        return c.json(
+          problemJson("Conflict", 409, "Generation in progress for this story"),
+          409,
+        );
+      }
+
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json(problemJson("Bad Request", 400, "Malformed JSON body"), 400);
+      }
+      if (typeof body !== "object" || body === null) {
+        return c.json(problemJson("Bad Request", 400, "Request body must be an object"), 400);
+      }
+      const content = (body as Record<string, unknown>).content;
+      if (typeof content !== "string") {
+        return c.json(problemJson("Bad Request", 400, "Field 'content' must be a string"), 400);
+      }
+
+      const dirPath = safePath(series, name);
+      if (!dirPath) {
+        return c.json(problemJson("Bad Request", 400, "Invalid path"), 400);
+      }
+
+      const padded = String(num).padStart(3, "0");
+      const chapterFile = `${padded}.md`;
+      const filePath = join(dirPath, chapterFile);
+
+      try {
+        await Deno.stat(filePath);
+      } catch (err: unknown) {
+        if (err instanceof Deno.errors.NotFound) {
+          return c.json(problemJson("Not Found", 404, "Chapter not found"), 404);
+        }
+        return c.json(problemJson("Internal Server Error", 500, "Failed to stat chapter"), 500);
+      }
+
+      try {
+        await atomicWriteChapter(dirPath, chapterFile, content);
+        log.info("Chapter edited", { op: "write", path: filePath, chapter: num, bytes: content.length });
+        return c.json({ number: num, content });
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log.warn("Failed to edit chapter", { op: "write", path: filePath, error: errMsg });
+        return c.json(problemJson("Internal Server Error", 500, "Failed to write chapter"), 500);
+      }
+    },
+  );
+
+  // DELETE /api/stories/:series/:name/chapters/after/:number — rewind story
+  // Deletes every chapter with number strictly greater than `:number`.
+  // `:number` of 0 clears all chapters.
+  app.delete(
+    "/api/stories/:series/:name/chapters/after/:number",
+    validateParams,
+    async (c) => {
+      const series = c.req.param("series")!;
+      const name = c.req.param("name")!;
+      const numRaw = c.req.param("number")!;
+      const num = parseInt(numRaw, 10);
+      if (!/^\d+$/.test(numRaw) || isNaN(num) || num < 0) {
+        return c.json(problemJson("Bad Request", 400, "Invalid chapter number"), 400);
+      }
+
+      if (isGenerationActive(series, name)) {
+        return c.json(
+          problemJson("Conflict", 409, "Generation in progress for this story"),
+          409,
+        );
+      }
+
+      const dirPath = safePath(series, name);
+      if (!dirPath) {
+        return c.json(problemJson("Bad Request", 400, "Invalid path"), 400);
+      }
+
+      try {
+        await Deno.stat(dirPath);
+      } catch (err: unknown) {
+        if (err instanceof Deno.errors.NotFound) {
+          return c.json(problemJson("Not Found", 404, "Story not found"), 404);
+        }
+        return c.json(problemJson("Internal Server Error", 500, "Failed to access story"), 500);
+      }
+
+      const chapterFiles = await listChapterFiles(dirPath);
+      const toDelete = chapterFiles
+        .map((f) => parseInt(f, 10))
+        .filter((n) => n > num)
+        .sort((a, b) => b - a);
+
+      const deleted: number[] = [];
+      for (const n of toDelete) {
+        const padded = String(n).padStart(3, "0");
+        const path = join(dirPath, `${padded}.md`);
+        try {
+          await Deno.remove(path);
+          deleted.push(n);
+          log.info("Chapter deleted", { op: "delete", path, chapter: n });
+        } catch (err: unknown) {
+          if (err instanceof Deno.errors.NotFound) continue;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          log.warn("Failed to delete chapter", { op: "delete", path, error: errMsg });
+          return c.json(problemJson("Internal Server Error", 500, "Failed to delete chapters"), 500);
+        }
+      }
+
+      // Keep usage records aligned with remaining chapters.
+      await pruneUsage(dirPath, num);
+
+      deleted.sort((a, b) => a - b);
+      return c.json({ deleted });
+    },
   );
 
   // POST /api/stories/:series/:name/init — initialize story

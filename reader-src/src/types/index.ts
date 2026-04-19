@@ -580,3 +580,49 @@ export interface UseWebSocketReturn {
 }
 
 
+
+// ── Chapter Actions ──
+
+export interface ChapterEditRequest {
+  content: string;
+}
+
+export interface ChapterEditResponse {
+  number: number;
+  content: string;
+}
+
+export interface ChapterRewindResponse {
+  deleted: number[];
+}
+
+export interface BranchRequest {
+  fromChapter: number;
+  newName?: string;
+}
+
+export interface BranchResponse {
+  series: string;
+  name: string;
+  copiedChapters: number[];
+}
+
+export interface UseChapterActionsReturn {
+  editChapter: (
+    series: string,
+    story: string,
+    number: number,
+    content: string,
+  ) => Promise<ChapterEditResponse>;
+  rewindAfter: (
+    series: string,
+    story: string,
+    number: number,
+  ) => Promise<ChapterRewindResponse>;
+  branchFrom: (
+    series: string,
+    story: string,
+    fromChapter: number,
+    newName?: string,
+  ) => Promise<BranchResponse>;
+}

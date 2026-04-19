@@ -23,6 +23,7 @@ import { createLogger } from "./lib/logger.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerStoriesRoutes } from "./routes/stories.ts";
 import { registerChapterRoutes } from "./routes/chapters.ts";
+import { registerBranchRoutes } from "./routes/branch.ts";
 import { registerChatRoutes } from "./routes/chat.ts";
 import { registerPluginRoutes } from "./routes/plugins.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
@@ -138,6 +139,7 @@ export function createApp(deps: AppDeps): Hono {
   registerStoriesRoutes(app, deps);
   registerLoreRoutes(app, deps);
   registerChapterRoutes(app, deps);
+  registerBranchRoutes(app, deps);
   registerExportRoutes(app, deps);
   registerChatRoutes(app, deps);
   registerStoryConfigRoutes(app, deps);
