@@ -74,7 +74,7 @@ describe("usePromptEditor preview and error paths", () => {
   });
 
   it("previewTemplate uses fallback preview message and includes template when dirty", async () => {
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (url.includes("/api/plugins/parameters")) {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]), headers: new Headers() });
       }
