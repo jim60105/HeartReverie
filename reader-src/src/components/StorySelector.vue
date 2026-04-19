@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useStorySelector } from "@/composables/useStorySelector";
+import { useStoryExport, type ExportFormat } from "@/composables/useStoryExport";
 
 const {
   seriesList,
@@ -11,9 +12,16 @@ const {
   createStory,
   navigateToStory,
 } = useStorySelector();
+const { exportStory } = useStoryExport();
 
 const newStoryName = ref("");
 const isOpen = ref(false);
+const exportError = ref("");
+const exportingFormat = ref<ExportFormat | "">("");
+
+const canExport = computed(
+  () => selectedSeries.value !== "" && selectedStory.value !== "",
+);
 
 onMounted(() => {
   fetchSeries();
@@ -37,6 +45,20 @@ function handleLoad() {
   if (!series || !story) return;
   navigateToStory(series, story);
   isOpen.value = false;
+}
+
+async function handleExport(format: ExportFormat) {
+  if (!canExport.value) return;
+  exportError.value = "";
+  exportingFormat.value = format;
+  try {
+    await exportStory(selectedSeries.value, selectedStory.value, format);
+    isOpen.value = false;
+  } catch (err: unknown) {
+    exportError.value = err instanceof Error ? err.message : "匯出失敗";
+  } finally {
+    exportingFormat.value = "";
+  }
 }
 </script>
 
@@ -80,6 +102,37 @@ function handleLoad() {
             📥 載入
           </button>
         </div>
+
+        <label class="field-label export-label">匯出</label>
+        <div class="selector-actions export-actions">
+          <button
+            class="themed-btn action-btn"
+            :disabled="!canExport || exportingFormat !== ''"
+            data-testid="export-md"
+            @click="handleExport('md')"
+          >
+            Markdown
+          </button>
+          <button
+            class="themed-btn action-btn"
+            :disabled="!canExport || exportingFormat !== ''"
+            data-testid="export-json"
+            @click="handleExport('json')"
+          >
+            JSON
+          </button>
+          <button
+            class="themed-btn action-btn"
+            :disabled="!canExport || exportingFormat !== ''"
+            data-testid="export-txt"
+            @click="handleExport('txt')"
+          >
+            TXT
+          </button>
+        </div>
+        <p v-if="exportError" class="export-error" role="alert">
+          匯出失敗：{{ exportError }}
+        </p>
       </div>
     </div>
   </details>
@@ -131,6 +184,10 @@ function handleLoad() {
   font-size: 0.75rem;
 }
 
+.export-label {
+  margin-top: 6px;
+}
+
 .selector-select,
 .selector-input {
   background: var(--item-bg);
@@ -159,4 +216,16 @@ function handleLoad() {
   font-weight: 500;
   cursor: pointer;
 }
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-error {
+  color: #ffb3c1;
+  font-size: 0.75rem;
+  margin: 4px 0 0;
+}
 </style>
+

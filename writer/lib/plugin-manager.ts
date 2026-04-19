@@ -313,6 +313,37 @@ export class PluginManager {
   }
 
   /**
+   * Compile a single tag entry (plain name or `/regex/flags`) into a regex
+   * source fragment, or `null` when the entry is invalid. Shared by both
+   * `getStripTagPatterns()` and `getCombinedStripTagPatterns()`.
+   */
+  #compileStripTagEntry(tag: unknown, pluginName: string): string | null {
+    if (typeof tag !== "string" || tag.length === 0) return null;
+
+    if (tag.startsWith("/")) {
+      const lastSlash = tag.lastIndexOf("/");
+      if (lastSlash <= 0) {
+        log.warn("Plugin has invalid regex stripTag — skipping", { plugin: pluginName, tag });
+        return null;
+      }
+      const inner = tag.slice(1, lastSlash);
+      if (inner.length === 0) {
+        log.warn("Plugin has empty regex stripTag — skipping", { plugin: pluginName, tag });
+        return null;
+      }
+      try {
+        new RegExp(inner);
+        return inner;
+      } catch (err: unknown) {
+        log.warn("Plugin has invalid regex in stripTag — skipping", { plugin: pluginName, tag, error: err instanceof Error ? err.message : String(err) });
+        return null;
+      }
+    }
+
+    return `<${escapeRegex(tag)}>[\\s\\S]*?</${escapeRegex(tag)}>`;
+  }
+
+  /**
    * Returns a combined regex matching all tags from plugins' promptStripTags arrays,
    * or null if no strip tags are registered.
    * Entries starting with "/" are treated as regex pattern strings.
@@ -323,30 +354,43 @@ export class PluginManager {
     for (const { manifest } of this.#plugins.values()) {
       if (Array.isArray(manifest.promptStripTags)) {
         for (const tag of manifest.promptStripTags) {
-          if (typeof tag !== "string" || tag.length === 0) continue;
+          const compiled = this.#compileStripTagEntry(tag, manifest.name);
+          if (compiled !== null) patterns.push(compiled);
+        }
+      }
+    }
 
-          if (tag.startsWith("/")) {
-            // Regex pattern: extract inner pattern from /pattern/flags
-            const lastSlash = tag.lastIndexOf("/");
-            if (lastSlash <= 0) {
-              log.warn("Plugin has invalid regex promptStripTag — skipping", { plugin: manifest.name, tag });
-              continue;
-            }
-            const inner = tag.slice(1, lastSlash);
-            if (inner.length === 0) {
-              log.warn("Plugin has empty regex promptStripTag — skipping", { plugin: manifest.name, tag });
-              continue;
-            }
-            try {
-              new RegExp(inner); // validate
-              patterns.push(inner);
-            } catch (err: unknown) {
-              log.warn("Plugin has invalid regex in promptStripTag — skipping", { plugin: manifest.name, tag, error: err instanceof Error ? err.message : String(err) });
-            }
-          } else {
-            // Plain tag name: auto-wrap
-            patterns.push(`<${escapeRegex(tag)}>[\\s\\S]*?</${escapeRegex(tag)}>`);
-          }
+    if (patterns.length === 0) return null;
+
+    return new RegExp(patterns.join("|"), "gi");
+  }
+
+  /**
+   * Returns a combined regex matching tags from BOTH `promptStripTags` and
+   * `displayStripTags` across all loaded plugins, or null if neither field
+   * declares any entries. Deduplicates identical raw entries before compiling.
+   * Intended for callers (e.g., story export) that want to produce content
+   * fully stripped of all plugin-declared tags, matching what the frontend
+   * actually displays.
+   */
+  getCombinedStripTagPatterns(): RegExp | null {
+    const seen = new Set<string>();
+    const patterns: string[] = [];
+
+    for (const { manifest } of this.#plugins.values()) {
+      const sources: readonly (readonly string[] | undefined)[] = [
+        manifest.promptStripTags,
+        manifest.displayStripTags,
+      ];
+      for (const source of sources) {
+        if (!Array.isArray(source)) continue;
+        for (const tag of source) {
+          if (typeof tag !== "string") continue;
+          const dedupKey = `${manifest.name}::${tag}`;
+          if (seen.has(dedupKey)) continue;
+          seen.add(dedupKey);
+          const compiled = this.#compileStripTagEntry(tag, manifest.name);
+          if (compiled !== null) patterns.push(compiled);
         }
       }
     }
