@@ -151,6 +151,20 @@ export function registerBranchRoutes(
           copiedChapters.push(n);
         }
 
+        // Copy state/diff files for chapters ≤ fromChapter (best-effort; may not exist).
+        for (let n = 1; n <= fromChapter; n++) {
+          const pad = String(n).padStart(3, "0");
+          for (const suffix of ["-state.yaml", "-state-diff.yaml"]) {
+            const fileName = `${pad}${suffix}`;
+            try {
+              await Deno.copyFile(join(srcDir, fileName), join(destDir, fileName));
+            } catch {
+              // State/diff files may not exist for all chapters — that's fine
+            }
+          }
+        }
+        // Intentionally do NOT copy current-status.yml (D9)
+
         // Copy story-scoped _lore/ when present.
         const loreSrc = join(srcDir, "_lore");
         try {

@@ -5,6 +5,20 @@
 export interface ChapterData {
   number: number;
   content: string;
+  stateDiff?: StateDiffPayload;
+}
+
+export interface StateDiffEntry {
+  path: string;
+  kind: "added" | "removed" | "modified" | "truncated";
+  oldValue?: unknown;
+  newValue?: unknown;
+}
+
+export interface StateDiffPayload {
+  generatedAt: string;
+  chapterNum: number;
+  entries: StateDiffEntry[];
 }
 
 export interface StoryInfo {
@@ -302,6 +316,7 @@ export interface UseNotificationReturn {
 
 export interface RenderOptions {
   isLastChapter?: boolean;
+  stateDiff?: StateDiffPayload;
 }
 
 // ── Render Token Types ──
@@ -539,6 +554,7 @@ export interface WsChaptersContentMessage {
   story: string;
   chapter: number;
   content: string;
+  stateDiff?: StateDiffPayload;
 }
 
 /** Server-to-client: generic protocol error. */

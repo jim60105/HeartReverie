@@ -21,7 +21,10 @@ const {
 const { editChapter, rewindAfter, branchFrom } = useChapterActions();
 
 const tokens = computed(() =>
-  renderChapter(props.rawMarkdown, { isLastChapter: props.isLastChapter }),
+  renderChapter(props.rawMarkdown, {
+    isLastChapter: props.isLastChapter,
+    stateDiff: chapters.value[currentIndex.value]?.stateDiff,
+  }),
 );
 
 const showToolbar = computed(() => mode.value === "backend");

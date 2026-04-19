@@ -461,6 +461,8 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     series,
     name,
     rootDir: config.ROOT_DIR,
+    chapterNumber: targetNum,
+    chapterPath,
   });
 
   return { chapter: targetNum, content: fullContent, usage };
