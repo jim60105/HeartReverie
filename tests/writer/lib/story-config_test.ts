@@ -15,6 +15,7 @@
 
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { join } from "@std/path";
+import { stub } from "@std/testing/mock";
 import {
   readStoryLlmConfig,
   resolveStoryLlmConfig,
@@ -142,6 +143,11 @@ Deno.test("readStoryLlmConfig / writeStoryLlmConfig round-trip", async (t) => {
         StoryConfigValidationError,
       );
     });
+
+    await t.step("empty config file returns {}", async () => {
+      await Deno.writeTextFile(join(tmpDir, "_config.json"), "   \n");
+      assertEquals(await readStoryLlmConfig(tmpDir), {});
+    });
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }
@@ -156,6 +162,87 @@ Deno.test("writeStoryLlmConfig rejects missing story dir", async () => {
       StoryConfigNotFoundError,
     );
   } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+Deno.test("writeStoryLlmConfig rejects non-directory story path", async () => {
+  const tmpDir = await Deno.makeTempDir({ prefix: "story-config-file-" });
+  const storyFile = join(tmpDir, "story.md");
+  try {
+    await Deno.writeTextFile(storyFile, "not a directory");
+    await assertRejects(
+      () => writeStoryLlmConfig(storyFile, { temperature: 0.7 }),
+      StoryConfigNotFoundError,
+    );
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+Deno.test("readStoryLlmConfig rethrows non-notfound file errors", async () => {
+  const readStub = stub(Deno, "readTextFile", () => {
+    throw new Deno.errors.PermissionDenied("denied");
+  });
+  try {
+    await assertRejects(
+      () => readStoryLlmConfig("/irrelevant"),
+      Deno.errors.PermissionDenied,
+    );
+  } finally {
+    readStub.restore();
+  }
+});
+
+Deno.test("writeStoryLlmConfig rethrows unexpected stat errors", async () => {
+  const statStub = stub(Deno, "stat", () => {
+    throw new Error("stat failed");
+  });
+  try {
+    await assertRejects(
+      () => writeStoryLlmConfig("/irrelevant", { temperature: 0.7 }),
+      Error,
+      "stat failed",
+    );
+  } finally {
+    statStub.restore();
+  }
+});
+
+Deno.test("writeStoryLlmConfig removes temp file when rename fails", async () => {
+  const tmpDir = await Deno.makeTempDir({ prefix: "story-config-rename-" });
+  const renameStub = stub(Deno, "rename", () => {
+    throw new Error("rename failed");
+  });
+  try {
+    await assertRejects(
+      () => writeStoryLlmConfig(tmpDir, { temperature: 0.8 }),
+      Error,
+      "rename failed",
+    );
+    const entries: string[] = [];
+    for await (const entry of Deno.readDir(tmpDir)) {
+      entries.push(entry.name);
+    }
+    assertEquals(entries.some((name) => name.endsWith(".tmp")), false);
+  } finally {
+    renameStub.restore();
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+Deno.test("writeStoryLlmConfig ignores chmod failures after rename", async () => {
+  const tmpDir = await Deno.makeTempDir({ prefix: "story-config-chmod-" });
+  const chmodStub = stub(Deno, "chmod", () => {
+    throw new Error("chmod unsupported");
+  });
+  try {
+    const persisted = await writeStoryLlmConfig(tmpDir, { temperature: 0.65 });
+    assertEquals(persisted, { temperature: 0.65 });
+    const onDisk = JSON.parse(await Deno.readTextFile(join(tmpDir, "_config.json")));
+    assertEquals(onDisk, { temperature: 0.65 });
+  } finally {
+    chmodStub.restore();
     await Deno.remove(tmpDir, { recursive: true });
   }
 });

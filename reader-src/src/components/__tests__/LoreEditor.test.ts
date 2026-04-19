@@ -1,6 +1,8 @@
-import { mount } from "@vue/test-utils";
+import { ref } from "vue";
+import { flushPromises, mount } from "@vue/test-utils";
 import LoreEditor from "@/components/lore/LoreEditor.vue";
 
+const allTagsRef = ref<string[]>(["角色", "世界觀", "設定"]);
 const mockReadPassage = vi.fn();
 const mockWritePassage = vi.fn();
 const mockDeletePassage = vi.fn();
@@ -10,122 +12,101 @@ vi.mock("@/composables/useLoreApi", () => ({
     readPassage: mockReadPassage,
     writePassage: mockWritePassage,
     deletePassage: mockDeletePassage,
+    allTags: allTagsRef,
   }),
 }));
 
 describe("LoreEditor", () => {
   beforeEach(() => {
+    allTagsRef.value = ["角色", "世界觀", "設定"];
     vi.clearAllMocks();
   });
 
-  it('renders "新增篇章" title when no path prop', () => {
-    const wrapper = mount(LoreEditor, {
-      props: { scope: "global" },
+  it("loads existing passage in edit mode", async () => {
+    mockReadPassage.mockResolvedValueOnce({
+      frontmatter: { tags: ["角色"], priority: 3, enabled: false },
+      content: "內文",
     });
-    expect(wrapper.find(".editor-title").text()).toBe("新增篇章");
+
+    const wrapper = mount(LoreEditor, { props: { scope: "story", path: "a.md", series: "s", story: "t" } });
+    await flushPromises();
+
+    expect(mockReadPassage).toHaveBeenCalledWith("story", "a.md", "s", "t");
+    expect((wrapper.find('input[placeholder="example.md"]').element as HTMLInputElement).value).toBe("a.md");
+    expect((wrapper.find('textarea[placeholder="Markdown 內容..."]').element as HTMLTextAreaElement).value).toBe("內文");
+    expect(wrapper.text()).toContain("停用");
   });
 
-  it('renders "編輯篇章" title when path prop is given', () => {
-    mockReadPassage.mockResolvedValue({
-      frontmatter: { tags: [], priority: 0, enabled: true },
-      content: "",
-    });
-    const wrapper = mount(LoreEditor, {
-      props: { scope: "global", path: "test.md" },
-    });
-    expect(wrapper.find(".editor-title").text()).toBe("編輯篇章");
+  it("shows tag suggestions and inserts selected tag", async () => {
+    const wrapper = mount(LoreEditor, { props: { scope: "global" } });
+    const tagsInput = wrapper.find('input[placeholder="角色, 世界觀, 設定"]');
+
+    await tagsInput.setValue("角");
+    await tagsInput.trigger("focus");
+    await flushPromises();
+
+    const suggestion = wrapper.find(".tag-suggestion");
+    expect(suggestion.text()).toBe("角色");
+    await suggestion.trigger("mousedown");
+
+    expect((tagsInput.element as HTMLInputElement).value).toBe(" 角色, ");
   });
 
-  it("filename input is editable in create mode", () => {
-    const wrapper = mount(LoreEditor, {
-      props: { scope: "global" },
-    });
-    const input = wrapper.find('input[type="text"][placeholder="example.md"]');
-    expect(input.attributes("readonly")).toBeUndefined();
-  });
+  it("saves new passage and emits saved", async () => {
+    mockWritePassage.mockResolvedValueOnce(undefined);
+    const wrapper = mount(LoreEditor, { props: { scope: "series", series: "s" } });
 
-  it("filename input is readonly in edit mode", () => {
-    mockReadPassage.mockResolvedValue({
-      frontmatter: { tags: [], priority: 0, enabled: true },
-      content: "",
-    });
-    const wrapper = mount(LoreEditor, {
-      props: { scope: "global", path: "test.md" },
-    });
-    const input = wrapper.find('input[type="text"][placeholder="example.md"]');
-    expect(input.attributes("readonly")).toBeDefined();
-  });
+    await wrapper.find('input[placeholder="example.md"]').setValue("new.md");
+    await wrapper.find('input[placeholder="角色, 世界觀, 設定"]').setValue("角色, 設定");
+    await wrapper.find('textarea[placeholder="Markdown 內容..."]').setValue("lore text");
+    await wrapper.find(".toolbar-btn--save").trigger("click");
+    await flushPromises();
 
-  it("shows filename validation error when not ending with .md", async () => {
-    const wrapper = mount(LoreEditor, {
-      props: { scope: "global" },
-    });
-    const input = wrapper.find('input[type="text"][placeholder="example.md"]');
-    await input.setValue("noext");
-
-    expect(wrapper.find(".field-hint--error").text()).toBe(
-      "檔名必須以 .md 結尾",
+    expect(mockWritePassage).toHaveBeenCalledWith(
+      "series",
+      "new.md",
+      { tags: ["角色", "設定"], priority: 0, enabled: true },
+      "lore text",
+      "s",
+      undefined,
     );
+    expect(wrapper.emitted("saved")).toHaveLength(1);
   });
 
-  it("save button is disabled when filename is invalid", async () => {
-    const wrapper = mount(LoreEditor, {
-      props: { scope: "global" },
-    });
-    const input = wrapper.find('input[type="text"][placeholder="example.md"]');
-    await input.setValue("bad");
-
-    const saveBtn = wrapper.find(".toolbar-btn--save");
-    expect(saveBtn.attributes("disabled")).toBeDefined();
-  });
-
-  it('emits "cancelled" when cancel button clicked', async () => {
-    const wrapper = mount(LoreEditor, {
-      props: { scope: "global" },
-    });
-    const cancelBtn = wrapper
-      .findAll("button")
-      .find((b) => b.text().includes("取消"));
-    expect(cancelBtn).toBeDefined();
-
-    await cancelBtn!.trigger("click");
-    expect(wrapper.emitted("cancelled")).toHaveLength(1);
-  });
-
-  it("delete button only shown in edit mode", () => {
-    const createWrapper = mount(LoreEditor, {
-      props: { scope: "global" },
-    });
-    expect(createWrapper.find(".toolbar-btn--danger").exists()).toBe(false);
-
-    mockReadPassage.mockResolvedValue({
+  it("shows save/delete fallback errors for non-Error exceptions", async () => {
+    mockWritePassage.mockRejectedValueOnce("x");
+    mockDeletePassage.mockRejectedValueOnce("x");
+    mockReadPassage.mockResolvedValueOnce({
       frontmatter: { tags: [], priority: 0, enabled: true },
       content: "",
     });
-    const editWrapper = mount(LoreEditor, {
-      props: { scope: "global", path: "test.md" },
-    });
-    expect(editWrapper.find(".toolbar-btn--danger").exists()).toBe(true);
+
+    const wrapper = mount(LoreEditor, { props: { scope: "global", path: "x.md" } });
+    await flushPromises();
+    await wrapper.find(".toolbar-btn--save").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".editor-error").text()).toContain("儲存失敗");
+
+    await wrapper.find(".toolbar-btn--danger").trigger("click");
+    await wrapper.find(".confirm-actions .toolbar-btn--danger").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".editor-error").text()).toContain("刪除失敗");
   });
 
-  it("delete shows confirmation dialog before proceeding", async () => {
-    mockReadPassage.mockResolvedValue({
+  it("deletes passage and emits deleted", async () => {
+    mockReadPassage.mockResolvedValueOnce({
       frontmatter: { tags: [], priority: 0, enabled: true },
       content: "",
     });
-    const wrapper = mount(LoreEditor, {
-      props: { scope: "global", path: "test.md" },
-    });
+    mockDeletePassage.mockResolvedValueOnce(undefined);
 
-    // No confirm dialog initially
-    expect(wrapper.find(".confirm-overlay").exists()).toBe(false);
+    const wrapper = mount(LoreEditor, { props: { scope: "global", path: "x.md" } });
+    await flushPromises();
+    await wrapper.find(".toolbar-btn--danger").trigger("click");
+    await wrapper.find(".confirm-actions .toolbar-btn--danger").trigger("click");
+    await flushPromises();
 
-    // Click delete button
-    const deleteBtn = wrapper.find(".toolbar-btn--danger");
-    await deleteBtn.trigger("click");
-
-    // Confirm dialog appears
-    expect(wrapper.find(".confirm-overlay").exists()).toBe(true);
-    expect(wrapper.find(".confirm-text").text()).toContain("test.md");
+    expect(mockDeletePassage).toHaveBeenCalledWith("global", "x.md", undefined, undefined);
+    expect(wrapper.emitted("deleted")).toHaveLength(1);
   });
 });

@@ -14,11 +14,15 @@
     "dev:reader": "cd reader-src && deno run -A npm:vite@^8.0.0",
     "build:reader": "cd reader-src && deno run -A npm:vue-tsc@^3.0.0 --noEmit && deno run -A npm:vite@^8.0.0 build --outDir ../reader-dist",
     "test:backend": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/",
-    "test:backend:coverage": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run --coverage=coverage tests/writer/",
+    "test:backend:coverage": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run --coverage=coverage/backend tests/writer/ && deno coverage coverage/backend --lcov --output=coverage/backend.lcov --exclude='tests/'",
     "test:frontend": "cd reader-src && deno run -A npm:vitest@^4.0.0 run",
+    "test:frontend:coverage": "cd reader-src && deno run -A npm:vitest@^4.0.0 run --coverage",
     "test": "deno test --allow-read --allow-write --allow-env --allow-net --allow-run tests/writer/ && cd reader-src && deno run -A npm:vitest@^4.0.0 run",
-    "coverage:summary": "deno coverage coverage --exclude='tests/'",
-    "coverage:lcov": "deno coverage coverage --lcov --output=coverage.lcov --exclude='tests/'"
+    "coverage:clean": "rm -rf coverage/backend coverage/frontend coverage/backend.lcov coverage.lcov",
+    "coverage:merge": "deno run --allow-read --allow-write scripts/coverage.ts merge coverage/backend.lcov coverage/frontend/lcov.info coverage.lcov",
+    "coverage:summary": "deno run --allow-read scripts/coverage.ts summary coverage.lcov",
+    "coverage:threshold": "deno run --allow-read scripts/coverage.ts gate coverage.lcov 90",
+    "test:coverage": "deno task coverage:clean && deno task test:backend:coverage && deno task test:frontend:coverage && deno task coverage:merge && deno task coverage:summary && deno task coverage:threshold"
   },
   "imports": {
     "@hono/hono": "jsr:@hono/hono@^4.12.14",
@@ -34,6 +38,7 @@
     "marked": "npm:marked@^18.0.0",
     "dompurify": "npm:dompurify@^3.4.0",
     "@vitejs/plugin-vue": "npm:@vitejs/plugin-vue@^6.0.0",
+    "@vitest/coverage-v8": "npm:@vitest/coverage-v8@^4.0.0",
     "@vue/test-utils": "npm:@vue/test-utils@^2.4.6",
     "happy-dom": "npm:happy-dom@^20.9.0",
     "postcss": "npm:postcss@^8.5.10",

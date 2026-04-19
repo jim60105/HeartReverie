@@ -22,3 +22,4 @@ reader-dist/
 .DS_Store
 Thumbs.db
 coverage/
+coverage.lcov

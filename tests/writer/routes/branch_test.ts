@@ -245,6 +245,55 @@ Deno.test({
         );
         assertEquals(res.status, 400);
       });
+
+      await t.step("object body is required", async () => {
+        const res = await app.fetch(
+          new Request("http://localhost/api/stories/series1/story1/branch", {
+            method: "POST",
+            headers: { "x-passphrase": "test-pass", "Content-Type": "application/json" },
+            body: JSON.stringify("not-object"),
+          }),
+        );
+        assertEquals(res.status, 400);
+        assertEquals((await res.json()).detail, "Request body must be an object");
+      });
+
+      await t.step("newName must be string", async () => {
+        const res = await makeRequest(
+          app,
+          "POST",
+          "/api/stories/series1/story1/branch",
+          { fromChapter: 1, newName: 123 as unknown as string },
+        );
+        assertEquals(res.status, 400);
+        assertEquals(res.body.detail, "Field 'newName' must be a string");
+      });
+
+      await t.step("source path that is not a directory returns 404", async () => {
+        await Deno.writeTextFile(join(tmpDir, "series1", "file-story"), "not a directory");
+        const res = await makeRequest(
+          app,
+          "POST",
+          "/api/stories/series1/file-story/branch",
+          { fromChapter: 1, newName: "copy-from-file" },
+        );
+        assertEquals(res.status, 404);
+        assertEquals(res.body.detail, "Story not found");
+      });
+
+      await t.step("branch succeeds when source has no story-scoped lore", async () => {
+        const srcNoLore = join(tmpDir, "series1", "story-no-lore");
+        await Deno.mkdir(srcNoLore, { recursive: true });
+        await Deno.writeTextFile(join(srcNoLore, "001.md"), "chapter one");
+        const res = await makeRequest(
+          app,
+          "POST",
+          "/api/stories/series1/story-no-lore/branch",
+          { fromChapter: 1, newName: "fork-no-lore" },
+        );
+        assertEquals(res.status, 201);
+        assertEquals(res.body.copiedChapters, [1]);
+      });
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
