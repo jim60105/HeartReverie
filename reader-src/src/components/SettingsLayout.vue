@@ -2,8 +2,10 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { settingsChildren } from "@/router";
+import { useLastReadingRoute } from "@/composables/useLastReadingRoute";
 
 const router = useRouter();
+const { lastReadingRoute } = useLastReadingRoute();
 
 const tabs = computed(() =>
   settingsChildren
@@ -15,8 +17,9 @@ const tabs = computed(() =>
 );
 
 function goBack() {
-  if (router.options.history.state.back) {
-    router.back();
+  const target = lastReadingRoute.value;
+  if (target) {
+    router.push(target);
   } else {
     router.push({ name: "home" });
   }
