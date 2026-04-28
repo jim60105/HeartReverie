@@ -172,6 +172,8 @@ Additionally, the upstream request body SHALL include a `reasoning` object on ev
 - When the merged `reasoningEnabled` is `false`: `reasoning: { enabled: false }` (the `effort` property SHALL be omitted).
 - When `LLM_REASONING_OMIT` is `true`: the `reasoning` key SHALL NOT appear in the request body at all.
 
+The upstream `fetch` call SHALL additionally attach three hard-coded OpenRouter app-attribution HTTP headers — `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie%20%E6%B5%AE%E5%BF%83%E5%A4%9C%E5%A4%A2` (the UTF-8 percent-encoded form of `HeartReverie 浮心夜夢`), and `X-OpenRouter-Categories: roleplay,creative-writing` — alongside `Content-Type` and `Authorization`, on every chat request, regardless of the configured `LLM_API_URL`. The header values SHALL come from a single module-level frozen constant in `writer/lib/chat-shared.ts` and SHALL NOT be configurable at runtime (no env vars, no `_config.json` keys, no API surface). See the `openrouter-app-attribution` capability for the complete specification.
+
 When the upstream provider returns a non-2xx status, the server SHALL include the upstream response body (truncated if very large) in both the operational log entry AND in the `detail` field of the RFC 9457 Problem Details response returned to the client, so that a strict provider rejecting the `reasoning` field is diagnosable end-to-end.
 
 The server SHALL stream the response using SSE and write content deltas to the chapter file in real time.
@@ -312,6 +314,17 @@ The operational debug log entry and the LLM interaction log entry produced for e
 - **GIVEN** a custom `LLM_API_URL` whose backend rejects the `reasoning` field with HTTP 400 and a JSON body `{"error":"unknown field: reasoning"}`
 - **WHEN** a chat request is dispatched
 - **THEN** the server SHALL respond to the client with an RFC 9457 Problem Details body whose `detail` field includes (a truncated form of) the upstream response body, AND SHALL log the same upstream body at error level
+
+#### Scenario: Attribution headers attached on every chat request
+
+- **WHEN** the server dispatches any chat completion request to the upstream LLM
+- **THEN** the upstream `fetch` call SHALL carry exactly `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie%20%E6%B5%AE%E5%BF%83%E5%A4%9C%E5%A4%A2` (UTF-8 percent-encoded form of `HeartReverie 浮心夜夢`), and `X-OpenRouter-Categories: roleplay,creative-writing` in addition to `Content-Type` and `Authorization`
+
+#### Scenario: Attribution headers identical regardless of LLM_API_URL
+
+- **GIVEN** `LLM_API_URL` is set to a non-OpenRouter endpoint
+- **WHEN** a chat request is dispatched
+- **THEN** the upstream `fetch` call SHALL still carry the three hard-coded attribution headers with the documented values
 
 ### Requirement: Delete last chapter
 

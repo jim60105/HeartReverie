@@ -26,6 +26,22 @@ import { markGenerationActive, clearGenerationActive } from "./generation-regist
 const log = createLogger("llm");
 const fileLog = createLogger("file");
 
+/**
+ * OpenRouter app-attribution headers attached to every upstream chat request.
+ * See https://openrouter.ai/docs/app-attribution for the spec. Forks that want
+ * to attribute their usage separately MUST edit this constant in source — the
+ * values are intentionally not configurable at runtime.
+ *
+ * The X-OpenRouter-Title value is the UTF-8 percent-encoded form of
+ * "HeartReverie 浮心夜夢"; raw non-Latin-1 bytes are not valid in HTTP header
+ * values and would be rejected by `fetch()`.
+ */
+const LLM_APP_ATTRIBUTION_HEADERS: Readonly<Record<string, string>> = Object.freeze({
+  "HTTP-Referer": "https://github.com/jim60105/HeartReverie",
+  "X-OpenRouter-Title": encodeURIComponent("HeartReverie 浮心夜夢"),
+  "X-OpenRouter-Categories": "roleplay,creative-writing",
+});
+
 /** Options for executing a chat request. */
 export interface ChatOptions {
   readonly series: string;
@@ -216,6 +232,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     apiResponse = await fetch(config.LLM_API_URL, {
       method: "POST",
       headers: {
+        ...LLM_APP_ATTRIBUTION_HEADERS,
         "Content-Type": "application/json",
         Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
       },
