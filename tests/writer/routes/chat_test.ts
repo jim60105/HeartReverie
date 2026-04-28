@@ -149,6 +149,9 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
         LLM_REPETITION_PENALTY: 1.2,
         LLM_MIN_P: 0,
         LLM_TOP_A: 1,
+    LLM_REASONING_ENABLED: true,
+    LLM_REASONING_EFFORT: "high",
+    LLM_REASONING_OMIT: false,
         llmDefaults: {
           model: "test-model",
           temperature: 0.1,
@@ -159,6 +162,8 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
           repetitionPenalty: 1.2,
           minP: 0,
           topA: 1,
+          reasoningEnabled: true,
+          reasoningEffort: "high",
         },
       } as unknown as AppConfig,
       safePath: createSafePath(tmpDir),
@@ -501,7 +506,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
     }
   });
 
-  await t.step("error response sanitization — 502 returns generic message", async () => {
+  await t.step("error response surfaces upstream body — 502 includes upstream detail", async () => {
     const tmpDir = await Deno.makeTempDir({ prefix: "chat-sanitize-" });
     Deno.env.set("PASSPHRASE", "test-pass");
     Deno.env.set("LLM_API_KEY", "test-key");
@@ -511,10 +516,15 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
       const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "Hello" });
       assertEquals(res.status, 502);
-      assertEquals(res.body.detail, "AI service request failed");
-      // Verify raw upstream body is NOT leaked
+      // Spec: the upstream response body SHALL be included (truncated) in
+      // the RFC 9457 `detail` so a strict provider rejection is diagnosable.
+      assertEquals(
+        typeof res.body.detail === "string" &&
+          res.body.detail.startsWith("AI service request failed: ") &&
+          res.body.detail.includes("Internal gateway error with secrets"),
+        true,
+      );
       assertEquals(res.body.title, "AI Service Error");
-      assertEquals(JSON.stringify(res.body).includes("secrets"), false);
     } finally {
       globalThis.fetch = originalFetch;
       Deno.env.delete("LLM_API_KEY");

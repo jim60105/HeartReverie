@@ -36,6 +36,8 @@ const defaults: LlmConfig = {
   repetitionPenalty: 1.2,
   minP: 0,
   topA: 1,
+  reasoningEnabled: true,
+  reasoningEffort: "high",
 };
 
 Deno.test("validateStoryLlmConfig", async (t) => {
@@ -103,8 +105,84 @@ Deno.test("validateStoryLlmConfig", async (t) => {
       repetitionPenalty: 1.1,
       minP: 0.05,
       topA: 0.8,
+      reasoningEnabled: false,
+      reasoningEffort: "low" as const,
     };
     assertEquals(validateStoryLlmConfig(full), full);
+  });
+
+  await t.step("drops null/undefined for reasoning fields", () => {
+    assertEquals(
+      validateStoryLlmConfig({
+        reasoningEnabled: null,
+        reasoningEffort: undefined,
+      }),
+      {},
+    );
+  });
+
+  await t.step("accepts boolean reasoningEnabled (true and false)", () => {
+    assertEquals(validateStoryLlmConfig({ reasoningEnabled: true }), {
+      reasoningEnabled: true,
+    });
+    assertEquals(validateStoryLlmConfig({ reasoningEnabled: false }), {
+      reasoningEnabled: false,
+    });
+  });
+
+  await t.step("rejects non-boolean reasoningEnabled", () => {
+    for (const v of ["yes", 1, 0, {}, []]) {
+      assertThrows(
+        () => validateStoryLlmConfig({ reasoningEnabled: v }),
+        StoryConfigValidationError,
+        "reasoningEnabled",
+      );
+    }
+  });
+
+  await t.step("accepts each of the six reasoning effort values", () => {
+    for (const effort of ["none", "minimal", "low", "medium", "high", "xhigh"] as const) {
+      assertEquals(validateStoryLlmConfig({ reasoningEffort: effort }), {
+        reasoningEffort: effort,
+      });
+    }
+  });
+
+  await t.step("rejects unknown reasoningEffort", () => {
+    assertThrows(
+      () => validateStoryLlmConfig({ reasoningEffort: "extreme" }),
+      StoryConfigValidationError,
+      "reasoningEffort",
+    );
+  });
+
+  await t.step("rejects mixed-case reasoningEffort (case-sensitive)", () => {
+    assertThrows(
+      () => validateStoryLlmConfig({ reasoningEffort: "HIGH" }),
+      StoryConfigValidationError,
+      "reasoningEffort",
+    );
+  });
+
+  await t.step("rejects non-string reasoningEffort", () => {
+    for (const v of [1, true, {}, []]) {
+      assertThrows(
+        () => validateStoryLlmConfig({ reasoningEffort: v }),
+        StoryConfigValidationError,
+        "reasoningEffort",
+      );
+    }
+  });
+
+  await t.step("strips foreign keys when reasoning fields are present", () => {
+    assertEquals(
+      validateStoryLlmConfig({
+        reasoningEnabled: true,
+        reasoningEffort: "medium",
+        bogus: 1,
+      }),
+      { reasoningEnabled: true, reasoningEffort: "medium" },
+    );
   });
 });
 

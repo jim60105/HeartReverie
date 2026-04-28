@@ -14,7 +14,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join, resolve } from "@std/path";
-import type { LlmConfig } from "../types.ts";
+import type { LlmConfig, ReasoningEffort } from "../types.ts";
+import { REASONING_EFFORTS } from "../types.ts";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("system");
 
 const ROOT_DIR: string = resolve(import.meta.dirname!, "../..");
 const PLAYGROUND_DIR: string =
@@ -37,6 +41,50 @@ function numEnv(key: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+const TRUE_TOKENS = new Set(["true", "1", "yes", "on"]);
+const FALSE_TOKENS = new Set(["false", "0", "no", "off"]);
+
+/**
+ * Parse a boolean env var.
+ *
+ * Rules: `"true" | "1" | "yes" | "on"` (case-insensitive, trimmed) → `true`;
+ * `"false" | "0" | "no" | "off"` → `false`; empty/unset → `fallback`; any
+ * other non-empty string → `fallback` AND emits a `warn`-level log naming
+ * the variable and the unrecognized value.
+ */
+function boolEnv(key: string, fallback: boolean): boolean {
+  const raw = Deno.env.get(key);
+  if (raw === undefined) return fallback;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "") return fallback;
+  if (TRUE_TOKENS.has(normalized)) return true;
+  if (FALSE_TOKENS.has(normalized)) return false;
+  log.warn("Unrecognized boolean env value; falling back to default", {
+    variable: key,
+    value: raw,
+    fallback,
+  });
+  return fallback;
+}
+
+/**
+ * Parse a `ReasoningEffort` env var validated against {@link REASONING_EFFORTS}
+ * (case-sensitive). Invalid values fall back to `fallback` and emit a warn log.
+ */
+function effortEnv(key: string, fallback: ReasoningEffort): ReasoningEffort {
+  const raw = Deno.env.get(key);
+  if (raw === undefined || raw === "") return fallback;
+  if ((REASONING_EFFORTS as readonly string[]).includes(raw)) {
+    return raw as ReasoningEffort;
+  }
+  log.warn("Unrecognized reasoning effort env value; falling back to default", {
+    variable: key,
+    value: raw,
+    fallback,
+  });
+  return fallback;
+}
+
 const LLM_TEMPERATURE: number = numEnv("LLM_TEMPERATURE", 0.1);
 const LLM_FREQUENCY_PENALTY: number = numEnv("LLM_FREQUENCY_PENALTY", 0.13);
 const LLM_PRESENCE_PENALTY: number = numEnv("LLM_PRESENCE_PENALTY", 0.52);
@@ -45,6 +93,9 @@ const LLM_TOP_P: number = numEnv("LLM_TOP_P", 0);
 const LLM_REPETITION_PENALTY: number = numEnv("LLM_REPETITION_PENALTY", 1.2);
 const LLM_MIN_P: number = numEnv("LLM_MIN_P", 0);
 const LLM_TOP_A: number = numEnv("LLM_TOP_A", 1);
+const LLM_REASONING_ENABLED: boolean = boolEnv("LLM_REASONING_ENABLED", true);
+const LLM_REASONING_EFFORT: ReasoningEffort = effortEnv("LLM_REASONING_EFFORT", "high");
+const LLM_REASONING_OMIT: boolean = boolEnv("LLM_REASONING_OMIT", false);
 const BACKGROUND_IMAGE: string =
   Deno.env.get("BACKGROUND_IMAGE") || "/assets/heart.webp";
 const LOG_LEVEL: string = Deno.env.get("LOG_LEVEL") || "info";
@@ -65,6 +116,8 @@ const llmDefaults: LlmConfig = {
   repetitionPenalty: LLM_REPETITION_PENALTY,
   minP: LLM_MIN_P,
   topA: LLM_TOP_A,
+  reasoningEnabled: LLM_REASONING_ENABLED,
+  reasoningEffort: LLM_REASONING_EFFORT,
 };
 
 const PROMPT_FILE: string = (() => {
@@ -92,6 +145,9 @@ export {
   LLM_REPETITION_PENALTY,
   LLM_MIN_P,
   LLM_TOP_A,
+  LLM_REASONING_ENABLED,
+  LLM_REASONING_EFFORT,
+  LLM_REASONING_OMIT,
   llmDefaults,
   BACKGROUND_IMAGE,
   PROMPT_FILE,

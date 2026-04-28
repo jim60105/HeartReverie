@@ -246,6 +246,51 @@ Deno.test({ name: "story-config routes", sanitizeOps: false, sanitizeResources: 
         await Deno.remove(join(storyDir, "_config.json")).catch(() => {});
       }
     });
+    await t.step("PUT persists reasoning overrides → 200", async () => {
+      const res = await makeRequest(app, "PUT", "/api/series1/story1/config", {
+        reasoningEnabled: false,
+        reasoningEffort: "low",
+      });
+      assertEquals(res.status, 200);
+      assertEquals(res.body, { reasoningEnabled: false, reasoningEffort: "low" });
+
+      const get = await makeRequest(app, "GET", "/api/series1/story1/config");
+      assertEquals(get.body, { reasoningEnabled: false, reasoningEffort: "low" });
+      // Real boolean preserved (not stringified)
+      assertEquals(typeof get.body.reasoningEnabled, "boolean");
+    });
+
+    await t.step("PUT rejects non-boolean reasoningEnabled → 400", async () => {
+      const res = await makeRequest(app, "PUT", "/api/series1/story1/config", {
+        reasoningEnabled: "yes",
+      });
+      assertEquals(res.status, 400);
+      assertEquals(typeof res.body?.detail === "string" &&
+        res.body.detail.includes("reasoningEnabled"), true);
+    });
+
+    await t.step("PUT rejects unknown reasoningEffort → 400", async () => {
+      const res = await makeRequest(app, "PUT", "/api/series1/story1/config", {
+        reasoningEffort: "extreme",
+      });
+      assertEquals(res.status, 400);
+      assertEquals(typeof res.body?.detail === "string" &&
+        res.body.detail.includes("reasoningEffort"), true);
+    });
+
+    await t.step("PUT rejects mixed-case reasoningEffort → 400", async () => {
+      const res = await makeRequest(app, "PUT", "/api/series1/story1/config", {
+        reasoningEffort: "HIGH",
+      });
+      assertEquals(res.status, 400);
+    });
+
+    await t.step("PUT clears reasoning overrides via empty body", async () => {
+      const res = await makeRequest(app, "PUT", "/api/series1/story1/config", {});
+      assertEquals(res.status, 200);
+      assertEquals(res.body, {});
+    });
+
   } finally {
     Deno.env.delete("PASSPHRASE");
     await Deno.remove(tmpDir, { recursive: true });

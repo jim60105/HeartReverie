@@ -407,6 +407,23 @@ export interface UseLoreApiReturn {
 
 // ── Story LLM Config ──
 
+/**
+ * Reasoning-effort tuple — kept in sync with the backend tuple in
+ * `writer/types.ts`. The two toolchains (Deno vs Vite) cannot share a literal
+ * import directly; the parity test in `__tests__/reasoning-effort-parity.test.ts`
+ * locks the two declarations against drift.
+ */
+export const REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
+
+export type ReasoningEffort = typeof REASONING_EFFORTS[number];
+
 export interface StoryLlmConfig {
   model?: string;
   temperature?: number;
@@ -417,6 +434,8 @@ export interface StoryLlmConfig {
   repetitionPenalty?: number;
   minP?: number;
   topA?: number;
+  reasoningEnabled?: boolean;
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface UseStoryLlmConfigReturn {

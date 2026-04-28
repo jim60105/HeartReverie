@@ -19,6 +19,22 @@ import type { HookDispatcher } from "./lib/hooks.ts";
 import type { Logger } from "./lib/logger.ts";
 
 /**
+ * Single source of truth for the reasoning-effort enum. The frontend imports
+ * the same module so backend and frontend cannot drift.
+ */
+export const REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
+
+/** Reasoning effort tier accepted by OpenRouter / OpenAI-compatible reasoning models. */
+export type ReasoningEffort = typeof REASONING_EFFORTS[number];
+
+/**
  * Resolved per-request LLM configuration (camelCase). Matches the upstream
  * chat/completions sampler knobs; `*_penalty` fields are mapped to snake_case
  * exactly once when building the upstream fetch body.
@@ -33,9 +49,14 @@ export interface LlmConfig {
   readonly repetitionPenalty: number;
   readonly minP: number;
   readonly topA: number;
+  readonly reasoningEnabled: boolean;
+  readonly reasoningEffort: ReasoningEffort;
 }
 
-/** Per-story override bag — every field is optional. */
+/**
+ * Per-story override bag — every field is optional. Includes the optional
+ * `reasoningEnabled` / `reasoningEffort` overrides.
+ */
 export type StoryLlmConfigOverrides = Partial<LlmConfig>;
 
 /** Application configuration resolved from environment variables and defaults. */
@@ -57,6 +78,9 @@ export interface AppConfig {
   readonly LLM_REPETITION_PENALTY: number;
   readonly LLM_MIN_P: number;
   readonly LLM_TOP_A: number;
+  readonly LLM_REASONING_ENABLED: boolean;
+  readonly LLM_REASONING_EFFORT: ReasoningEffort;
+  readonly LLM_REASONING_OMIT: boolean;
   readonly BACKGROUND_IMAGE: string;
   readonly PROMPT_FILE: string;
   /** Defaults for per-story LLM overrides, assembled from the flat `LLM_*` env vars. */

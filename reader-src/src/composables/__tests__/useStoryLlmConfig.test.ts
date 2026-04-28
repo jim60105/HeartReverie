@@ -112,4 +112,27 @@ describe("useStoryLlmConfig", () => {
     await p;
     expect(api.loading.value).toBe(false);
   });
+
+  it("round-trips reasoningEnabled (boolean) and reasoningEffort (enum) preserving real types", async () => {
+    mockFetch({ reasoningEnabled: false, reasoningEffort: "low" });
+    const api = await getApi();
+    await api.loadConfig("s", "n");
+    expect(api.overrides.value).toEqual({
+      reasoningEnabled: false,
+      reasoningEffort: "low",
+    });
+    expect(typeof api.overrides.value.reasoningEnabled).toBe("boolean");
+    expect(typeof api.overrides.value.reasoningEffort).toBe("string");
+
+    mockFetch({ reasoningEnabled: true, reasoningEffort: "xhigh" });
+    const result = await api.saveConfig("s", "n", {
+      reasoningEnabled: true,
+      reasoningEffort: "xhigh",
+    });
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls.at(-1)!;
+    const body = JSON.parse(call[1]!.body);
+    expect(body).toEqual({ reasoningEnabled: true, reasoningEffort: "xhigh" });
+    expect(typeof body.reasoningEnabled).toBe("boolean");
+    expect(result).toEqual({ reasoningEnabled: true, reasoningEffort: "xhigh" });
+  });
 });
