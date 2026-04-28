@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from "vue";
+import { reactive, computed, watch, onMounted } from "vue";
 import { useStorySelector } from "@/composables/useStorySelector";
 import { useStoryLlmConfig } from "@/composables/useStoryLlmConfig";
 import { useNotification } from "@/composables/useNotification";
-import type { StoryLlmConfig } from "@/types";
+import { REASONING_EFFORTS, type StoryLlmConfig } from "@/types";
 
 type FieldKey = keyof StoryLlmConfig;
 
-interface FieldDef {
-  key: FieldKey;
-  label: string;
-  type: "string" | "number";
-  step?: string;
-}
+type FieldDef =
+  | { key: FieldKey; label: string; type: "string"; step?: string }
+  | { key: FieldKey; label: string; type: "number"; step?: string }
+  | { key: FieldKey; label: string; type: "boolean" }
+  | { key: FieldKey; label: string; type: "enum"; options: readonly string[] };
 
 const FIELDS: FieldDef[] = [
   { key: "model", label: "模型 (model)", type: "string" },
@@ -24,6 +23,8 @@ const FIELDS: FieldDef[] = [
   { key: "repetitionPenalty", label: "重複懲罰 (repetition_penalty)", type: "number", step: "0.01" },
   { key: "minP", label: "Min-P (min_p)", type: "number", step: "0.01" },
   { key: "topA", label: "Top-A (top_a)", type: "number", step: "0.01" },
+  { key: "reasoningEnabled", label: "推理啟用 (reasoning_enabled)", type: "boolean" },
+  { key: "reasoningEffort", label: "推理強度 (reasoning_effort)", type: "enum", options: REASONING_EFFORTS },
 ];
 
 const { seriesList, storyList, selectedSeries, selectedStory, fetchSeries, fetchStories } =
@@ -42,8 +43,11 @@ const enabledMap = reactive<Record<FieldKey, boolean>>({
   repetitionPenalty: false,
   minP: false,
   topA: false,
+  reasoningEnabled: false,
+  reasoningEffort: false,
 });
 
+// String-keyed values for `string` / `number` / `enum` field types.
 const valueMap = reactive<Record<FieldKey, string>>({
   model: "",
   temperature: "",
@@ -54,6 +58,14 @@ const valueMap = reactive<Record<FieldKey, string>>({
   repetitionPenalty: "",
   minP: "",
   topA: "",
+  reasoningEnabled: "",
+  reasoningEffort: "high",
+});
+
+// Real boolean values for `boolean` field types — kept separate from
+// `valueMap` so the type stays clean.
+const booleanMap = reactive<Record<string, boolean>>({
+  reasoningEnabled: false,
 });
 
 const canSave = computed(
@@ -65,7 +77,15 @@ function syncFromOverrides(source: StoryLlmConfig): void {
     const present = Object.prototype.hasOwnProperty.call(source, f.key);
     enabledMap[f.key] = present;
     const v = source[f.key];
-    valueMap[f.key] = v === undefined || v === null ? "" : String(v);
+    if (f.type === "boolean") {
+      booleanMap[f.key] = typeof v === "boolean" ? v : false;
+      valueMap[f.key] = "";
+    } else if (f.type === "enum") {
+      const fallback = f.key === "reasoningEffort" ? "high" : "";
+      valueMap[f.key] = typeof v === "string" && f.options.includes(v) ? v : fallback;
+    } else {
+      valueMap[f.key] = v === undefined || v === null ? "" : String(v);
+    }
   }
 }
 
@@ -79,6 +99,23 @@ function collectPayload(): StoryLlmConfig | null {
   const payload: StoryLlmConfig = {};
   for (const f of FIELDS) {
     if (!enabledMap[f.key]) continue;
+    if (f.type === "boolean") {
+      (payload as Record<string, unknown>)[f.key] = booleanMap[f.key] === true;
+      continue;
+    }
+    if (f.type === "enum") {
+      const value = valueMap[f.key];
+      if (!f.options.includes(value)) {
+        notify({
+          title: "欄位錯誤",
+          body: `${f.label} 必須為 ${f.options.join(" / ")}`,
+          level: "error",
+        });
+        return null;
+      }
+      (payload as Record<string, unknown>)[f.key] = value;
+      continue;
+    }
     const raw = valueMap[f.key].trim();
     if (f.type === "string") {
       if (raw === "") {
@@ -97,6 +134,10 @@ function collectPayload(): StoryLlmConfig | null {
   }
   return payload;
 }
+
+const reasoningEffortMuted = computed(
+  () => enabledMap.reasoningEnabled === true && booleanMap.reasoningEnabled === false,
+);
 
 async function handleSave(): Promise<void> {
   if (!canSave.value) return;
@@ -141,7 +182,14 @@ watch(
   },
 );
 
-defineExpose({ handleSave, handleReset, enabledMap, valueMap });
+defineExpose({
+  handleSave,
+  handleReset,
+  enabledMap,
+  valueMap,
+  booleanMap,
+  reasoningEffortMuted,
+});
 </script>
 
 <template>
@@ -178,6 +226,23 @@ defineExpose({ handleSave, handleReset, enabledMap, valueMap });
           <span class="field-label">{{ f.label }}</span>
         </label>
         <input
+          v-if="f.type === 'boolean'"
+          type="checkbox"
+          class="field-checkbox"
+          :disabled="!enabledMap[f.key]"
+          v-model="booleanMap[f.key]"
+        />
+        <select
+          v-else-if="f.type === 'enum'"
+          class="field-input"
+          :disabled="!enabledMap[f.key]"
+          :class="{ muted: f.key === 'reasoningEffort' && reasoningEffortMuted }"
+          v-model="valueMap[f.key]"
+        >
+          <option v-for="opt in f.options" :key="opt" :value="opt">{{ opt }}</option>
+        </select>
+        <input
+          v-else
           class="field-input"
           :type="f.type === 'number' ? 'number' : 'text'"
           :step="f.step"
@@ -273,6 +338,11 @@ defineExpose({ handleSave, handleReset, enabledMap, valueMap });
 
 .field-input:disabled {
   opacity: 0.5;
+}
+
+.muted {
+  opacity: 0.5;
+  border-color: var(--muted-color, #888);
 }
 
 .actions {

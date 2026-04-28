@@ -159,6 +159,9 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     repetitionPenalty: llmConfig.repetitionPenalty,
     minP: llmConfig.minP,
     topA: llmConfig.topA,
+    reasoningEnabled: llmConfig.reasoningEnabled,
+    reasoningEffort: llmConfig.reasoningEffort,
+    reasoningOmit: config.LLM_REASONING_OMIT,
     systemPromptLength: systemPrompt.length,
     userMessageLength: message.length,
   });
@@ -177,13 +180,38 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       repetitionPenalty: llmConfig.repetitionPenalty,
       minP: llmConfig.minP,
       topA: llmConfig.topA,
+      reasoningEnabled: llmConfig.reasoningEnabled,
+      reasoningEffort: llmConfig.reasoningEffort,
     },
+    reasoningOmit: config.LLM_REASONING_OMIT,
     systemPrompt,
     userMessage: message,
   });
 
   const llmStartTime = performance.now();
   let apiResponse: Response;
+  // Build the upstream request body. The `reasoning` block is included by
+  // default; deployments targeting strict OpenAI-compatible providers can
+  // suppress it entirely with `LLM_REASONING_OMIT=true`.
+  const requestBody: Record<string, unknown> = {
+    model: llmConfig.model,
+    messages,
+    stream: true,
+    stream_options: { include_usage: true },
+    temperature: llmConfig.temperature,
+    frequency_penalty: llmConfig.frequencyPenalty,
+    presence_penalty: llmConfig.presencePenalty,
+    top_k: llmConfig.topK,
+    top_p: llmConfig.topP,
+    repetition_penalty: llmConfig.repetitionPenalty,
+    min_p: llmConfig.minP,
+    top_a: llmConfig.topA,
+  };
+  if (!config.LLM_REASONING_OMIT) {
+    requestBody.reasoning = llmConfig.reasoningEnabled
+      ? { enabled: true, effort: llmConfig.reasoningEffort }
+      : { enabled: false };
+  }
   try {
     apiResponse = await fetch(config.LLM_API_URL, {
       method: "POST",
@@ -191,20 +219,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
         "Content-Type": "application/json",
         Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
       },
-      body: JSON.stringify({
-        model: llmConfig.model,
-        messages,
-        stream: true,
-        stream_options: { include_usage: true },
-        temperature: llmConfig.temperature,
-        frequency_penalty: llmConfig.frequencyPenalty,
-        presence_penalty: llmConfig.presencePenalty,
-        top_k: llmConfig.topK,
-        top_p: llmConfig.topP,
-        repetition_penalty: llmConfig.repetitionPenalty,
-        min_p: llmConfig.minP,
-        top_a: llmConfig.topA,
-      }),
+      body: JSON.stringify(requestBody),
       signal,
     });
   } catch (err: unknown) {
@@ -235,7 +250,16 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       latencyMs,
       errorBody,
     });
-    throw new ChatError("llm-api", "AI service request failed", apiResponse.status);
+    // Surface a truncated copy of the upstream body so the RFC 9457 detail
+    // returned to the client is diagnosable end-to-end (full body remains in
+    // the operational log entry above).
+    const truncated = errorBody.length > 2000
+      ? `${errorBody.slice(0, 2000)}…[truncated]`
+      : errorBody;
+    const detailMessage = truncated.length > 0
+      ? `AI service request failed: ${truncated}`
+      : "AI service request failed";
+    throw new ChatError("llm-api", detailMessage, apiResponse.status);
   }
 
   if (!apiResponse.body) {

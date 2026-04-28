@@ -149,6 +149,9 @@ The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on 
 | `LLM_REPETITION_PENALTY` | No | `1.2` | Repetition penalty |
 | `LLM_MIN_P` | No | `0` | Min-P sampling |
 | `LLM_TOP_A` | No | `1` | Top-A sampling |
+| `LLM_REASONING_ENABLED` | No | `true` | When true, request reasoning from the upstream LLM. Parsed as boolean. |
+| `LLM_REASONING_EFFORT` | No | `high` | Reasoning effort level: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`. |
+| `LLM_REASONING_OMIT` | No | `false` | When true, omit the `reasoning` block from upstream requests entirely (escape hatch for strict OpenAI-compatible providers that reject unknown fields). |
 | `PLUGIN_DIR` | No | — | External plugin directory (absolute path) |
 | `LOG_LEVEL` | No | `info` | Log level: debug, info, warn, error |
 | `LOG_FILE` | No | — | Path to JSON Lines log file (enables file logging with rotation) |
@@ -298,7 +301,7 @@ Key files:
 
 ### Per-Story LLM Settings
 
-Each story may carry a `_config.json` file beside its chapter files to override the server's default LLM sampling parameters for that story only. The file is a JSON object containing any subset of: `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`. Missing fields fall back to the corresponding `LLM_*` environment variable. The `LLM_API_URL` and `LLM_API_KEY` are **not** per-story configurable.
+Each story may carry a `_config.json` file beside its chapter files to override the server's default LLM sampling parameters for that story only. The file is a JSON object containing any subset of: `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort`. Missing fields fall back to the corresponding `LLM_*` environment variable. `reasoningEnabled` defaults to `true` and `reasoningEffort` defaults to `"high"`; `reasoningEffort` must be one of the 6-value enum: `"none"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`. The `LLM_API_URL` and `LLM_API_KEY` are **not** per-story configurable. `LLM_REASONING_OMIT` is a deployment-level escape hatch (for strict OpenAI-compatible providers that reject unknown fields) and is **not** exposed in `_config.json`.
 
 - **Location**: `playground/<series>/<story>/_config.json` (underscore prefix keeps it out of chapter listings)
 - **API**: `GET /api/:series/:name/config` returns overrides (`{}` when absent); `PUT /api/:series/:name/config` validates and atomically persists them. PUT returns 404 when the story directory does not exist — it never implicitly creates a story.

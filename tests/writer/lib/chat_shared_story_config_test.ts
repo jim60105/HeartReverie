@@ -39,6 +39,9 @@ function buildConfig(tmpDir: string): AppConfig {
     LLM_REPETITION_PENALTY: 1.2,
     LLM_MIN_P: 0,
     LLM_TOP_A: 1,
+    LLM_REASONING_ENABLED: true,
+    LLM_REASONING_EFFORT: "high",
+    LLM_REASONING_OMIT: false,
     llmDefaults: {
       model: "default-model",
       temperature: 0.1,
@@ -49,6 +52,8 @@ function buildConfig(tmpDir: string): AppConfig {
       repetitionPenalty: 1.2,
       minP: 0,
       topA: 1,
+      reasoningEnabled: true,
+      reasoningEffort: "high",
     },
     BACKGROUND_IMAGE: "/bg",
     PROMPT_FILE: "x",

@@ -15,6 +15,7 @@
 
 import { dirname, join } from "@std/path";
 import type { LlmConfig, StoryLlmConfigOverrides } from "../types.ts";
+import { REASONING_EFFORTS } from "../types.ts";
 
 /** Filename of the per-story LLM override file, relative to the story dir. */
 export const STORY_CONFIG_FILENAME = "_config.json";
@@ -72,6 +73,33 @@ export function validateStoryLlmConfig(input: unknown): StoryLlmConfigOverrides 
       throw new StoryConfigValidationError(`Field '${key}' must be a finite number`);
     }
     out[key] = v;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(src, "reasoningEnabled")) {
+    const v = src.reasoningEnabled;
+    if (v !== null && v !== undefined) {
+      if (typeof v !== "boolean") {
+        throw new StoryConfigValidationError(
+          "Field 'reasoningEnabled' must be a boolean",
+        );
+      }
+      out.reasoningEnabled = v;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(src, "reasoningEffort")) {
+    const v = src.reasoningEffort;
+    if (v !== null && v !== undefined) {
+      if (
+        typeof v !== "string" ||
+        !(REASONING_EFFORTS as readonly string[]).includes(v)
+      ) {
+        throw new StoryConfigValidationError(
+          "Field 'reasoningEffort' must be one of: none, minimal, low, medium, high, xhigh",
+        );
+      }
+      out.reasoningEffort = v;
+    }
   }
 
   return out as StoryLlmConfigOverrides;
