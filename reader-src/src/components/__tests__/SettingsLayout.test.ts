@@ -1,11 +1,11 @@
 import { mount } from "@vue/test-utils";
 import { defineComponent } from "vue";
 import SettingsLayout from "@/components/SettingsLayout.vue";
+import { useLastReadingRoute } from "@/composables/useLastReadingRoute";
+import type { RouteLocationNormalizedLoaded } from "vue-router";
 
 const mockRouter = {
   push: vi.fn(),
-  back: vi.fn(),
-  options: { history: { state: { back: null as string | null } } },
 };
 
 vi.mock("vue-router", () => ({
@@ -16,8 +16,6 @@ vi.mock("@/router", () => ({
   default: {
     push: vi.fn(),
     replace: vi.fn(),
-    back: vi.fn(),
-    options: { history: { state: {} } },
   },
   settingsChildren: [
     {
@@ -51,11 +49,27 @@ function mountLayout() {
   });
 }
 
+function makeRoute(
+  partial: Partial<RouteLocationNormalizedLoaded> & { path: string },
+): RouteLocationNormalizedLoaded {
+  return {
+    name: undefined,
+    params: {},
+    query: {},
+    hash: "",
+    fullPath: partial.path,
+    matched: [],
+    meta: {},
+    redirectedFrom: undefined,
+    ...partial,
+  } as RouteLocationNormalizedLoaded;
+}
+
 describe("SettingsLayout", () => {
   beforeEach(() => {
     mockRouter.push.mockReset();
-    mockRouter.back.mockReset();
-    mockRouter.options.history.state.back = null;
+    const { clear } = useLastReadingRoute();
+    clear();
   });
 
   it("renders without crashing", () => {
@@ -96,19 +110,75 @@ describe("SettingsLayout", () => {
     expect(backBtn.text()).toContain("返回閱讀");
   });
 
-  it("back button calls router.back() when history exists", async () => {
-    mockRouter.options.history.state.back = "/some-page";
+  it("back button navigates to home when no reading route was recorded", async () => {
     const wrapper = mountLayout();
     await wrapper.find(".back-btn").trigger("click");
-    expect(mockRouter.back).toHaveBeenCalled();
-    expect(mockRouter.push).not.toHaveBeenCalled();
+    expect(mockRouter.push).toHaveBeenCalledTimes(1);
+    expect(mockRouter.push).toHaveBeenCalledWith({ name: "home" });
   });
 
-  it("back button navigates to home when no history", async () => {
-    mockRouter.options.history.state.back = null;
+  it("back button navigates to the captured chapter route", async () => {
+    const { recordReadingRoute } = useLastReadingRoute();
+    recordReadingRoute(
+      makeRoute({
+        path: "/storyA/storyB/chapter/3",
+        name: "chapter",
+        params: { series: "storyA", story: "storyB", chapter: "3" },
+        query: {},
+        hash: "",
+      }),
+    );
     const wrapper = mountLayout();
     await wrapper.find(".back-btn").trigger("click");
-    expect(mockRouter.push).toHaveBeenCalledWith({ name: "home" });
-    expect(mockRouter.back).not.toHaveBeenCalled();
+    expect(mockRouter.push).toHaveBeenCalledTimes(1);
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      name: "chapter",
+      params: { series: "storyA", story: "storyB", chapter: "3" },
+      query: {},
+      hash: "",
+    });
+  });
+
+  it("multi-tab scenario: settings tab navigation does not overwrite the reading capture", async () => {
+    const { recordReadingRoute } = useLastReadingRoute();
+    recordReadingRoute(
+      makeRoute({
+        path: "/storyA/storyB/chapter/3",
+        name: "chapter",
+        params: { series: "storyA", story: "storyB", chapter: "3" },
+      }),
+    );
+    recordReadingRoute(
+      makeRoute({ path: "/settings/prompt-editor", name: "settings-prompt-editor" }),
+    );
+    recordReadingRoute(
+      makeRoute({ path: "/settings/llm", name: "settings-llm" }),
+    );
+    const wrapper = mountLayout();
+    await wrapper.find(".back-btn").trigger("click");
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      name: "chapter",
+      params: { series: "storyA", story: "storyB", chapter: "3" },
+      query: {},
+      hash: "",
+    });
+  });
+
+  it("re-entry scenario: guard re-captures on returning to a reading route after settings", async () => {
+    const { recordReadingRoute } = useLastReadingRoute();
+    recordReadingRoute(makeRoute({ path: "/", name: "home" }));
+    recordReadingRoute(makeRoute({ path: "/settings/llm", name: "settings-llm" }));
+    recordReadingRoute(
+      makeRoute({ path: "/storyA", name: "story", params: { series: "storyA" } }),
+    );
+    recordReadingRoute(makeRoute({ path: "/settings/lore", name: "settings-lore" }));
+    const wrapper = mountLayout();
+    await wrapper.find(".back-btn").trigger("click");
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      name: "story",
+      params: { series: "storyA" },
+      query: {},
+      hash: "",
+    });
   });
 });
