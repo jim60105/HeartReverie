@@ -313,6 +313,18 @@ Key files:
 - `writer/lib/story-config.ts` — validate/read/write/resolve helpers plus typed error classes
 - `writer/routes/story-config.ts` — GET/PUT route handlers
 
+### OpenRouter App Attribution
+
+Every upstream chat request carries three hard-coded OpenRouter [app-attribution headers](https://openrouter.ai/docs/app-attribution) so HeartReverie appears on OpenRouter's public rankings and per-model "Apps" tabs:
+
+- `HTTP-Referer: https://github.com/jim60105/HeartReverie`
+- `X-OpenRouter-Title: HeartReverie%20%E6%B5%AE%E5%BF%83%E5%A4%9C%E5%A4%A2` (UTF-8 percent-encoded form of `HeartReverie 浮心夜夢` — raw non-Latin-1 bytes are not valid in HTTP header values)
+- `X-OpenRouter-Categories: roleplay,creative-writing`
+
+The values live in a single frozen module-level constant `LLM_APP_ATTRIBUTION_HEADERS` near the top of `writer/lib/chat-shared.ts`. They are intentionally **not** configurable — no env vars, no `_config.json` keys, no API surface. The headers are sent on every chat request regardless of the configured `LLM_API_URL`; most non-OpenRouter providers ignore unknown headers, but strict or privacy-sensitive providers may log or reject them — those operators should fork and clear the constant.
+
+**Forks**: if you fork HeartReverie and want to attribute your usage separately, edit `LLM_APP_ATTRIBUTION_HEADERS` in `writer/lib/chat-shared.ts` (set `HTTP-Referer` to your project URL, update or clear the title and categories). Forks may also replace the constant with `{}` if they intentionally want no attribution.
+
 ### Prompt Rendering Pipeline
 
 1. `buildPromptFromStory()` reads chapters, strips tags, loads status YAML, detects first-round
