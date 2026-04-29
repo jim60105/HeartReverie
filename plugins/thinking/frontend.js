@@ -24,7 +24,7 @@ export function register(hooks) {
     for (const block of result.blocks) {
       context.placeholderMap.set(block.placeholder, block.html);
     }
-  }, 50);
+  }, 30);
 }
 
 /**
