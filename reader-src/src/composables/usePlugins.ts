@@ -2,9 +2,14 @@ import { ref } from "vue";
 import type { UsePluginsReturn, PluginDescriptor } from "@/types";
 import { FrontendHookDispatcher, frontendHooks } from "@/lib/plugin-hooks";
 import { useAuth } from "@/composables/useAuth";
+import { useNotification } from "@/composables/useNotification";
+import { renderDebug } from "@/lib/render-debug";
 
 const plugins = ref<PluginDescriptor[]>([]);
-const initialized = ref(false);
+const pluginsReady = ref(false);
+const pluginsSettled = ref(false);
+
+let initPromise: Promise<void> | null = null;
 
 let displayStripRegex: RegExp | null = null;
 
@@ -83,41 +88,89 @@ function injectPluginStyles(pluginList: PluginDescriptor[]): void {
   }
 }
 
-async function initPlugins(): Promise<void> {
-  if (initialized.value) return;
+async function doInit(): Promise<void> {
   const { getAuthHeaders } = useAuth();
 
-  try {
-    const res = await fetch("/api/plugins", { headers: { ...getAuthHeaders() } });
-    if (!res.ok) return;
-    const pluginList: PluginDescriptor[] = await res.json();
-
-    compileDisplayStripPatterns(pluginList);
-
-    injectPluginStyles(pluginList);
-
-    const frontendPlugins = pluginList.filter((p) => p.hasFrontendModule);
-
-    await Promise.all(
-      frontendPlugins.map(async (p) => {
-        try {
-          const mod = await import(
-            /* @vite-ignore */ `/plugins/${p.name}/frontend.js`
-          );
-          if (typeof mod.register === "function") {
-            mod.register(frontendHooks);
-          }
-        } catch {
-          // Failed to load plugin — silently ignore
-        }
-      }),
-    );
-
-    plugins.value = pluginList;
-    initialized.value = true;
-  } catch {
-    // Plugin loading failed — silently ignore
+  const res = await fetch("/api/plugins", { headers: { ...getAuthHeaders() } });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch /api/plugins: HTTP ${res.status}`);
   }
+  const pluginList: PluginDescriptor[] = await res.json();
+
+  compileDisplayStripPatterns(pluginList);
+  injectPluginStyles(pluginList);
+
+  const frontendPlugins = pluginList.filter((p) => p.hasFrontendModule);
+
+  // Use allSettled so every plugin gets a chance to register, but track
+  // failures so we can fail the overall init and keep pluginsReady false.
+  const results = await Promise.allSettled(
+    frontendPlugins.map(async (p) => {
+      const mod = await import(
+        /* @vite-ignore */ `/plugins/${p.name}/frontend.js`
+      );
+      if (typeof mod.register === "function") {
+        // Honor async register() functions so plugins that load resources
+        // before registering handlers complete before pluginsReady flips.
+        await Promise.resolve(mod.register(frontendHooks));
+      }
+    }),
+  );
+
+  plugins.value = pluginList;
+
+  const failures: { name: string; reason: unknown }[] = [];
+  results.forEach((res, idx) => {
+    if (res.status === "rejected") {
+      const name = frontendPlugins[idx]?.name ?? "<unknown>";
+      console.warn(
+        `Failed to load frontend plugin "${name}":`,
+        res.reason instanceof Error ? res.reason.message : res.reason,
+      );
+      failures.push({ name, reason: res.reason });
+    }
+  });
+
+  if (failures.length > 0) {
+    const names = failures.map((f) => f.name).join(", ");
+    throw new Error(`Frontend plugin initialization failed: ${names}`);
+  }
+}
+
+async function initPlugins(): Promise<void> {
+  if (pluginsSettled.value) return;
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    try {
+      await doInit();
+      pluginsReady.value = true;
+    } catch (err) {
+      console.warn(
+        "Plugin initialization failed:",
+        err instanceof Error ? err.message : err,
+      );
+      try {
+        const { notify } = useNotification();
+        notify({
+          title: "外掛載入失敗",
+          body: "部分或全部外掛無法載入，將以無外掛模式繼續顯示。",
+          level: "warning",
+        });
+      } catch {
+        // Notification system unavailable — already logged above.
+      }
+    } finally {
+      pluginsSettled.value = true;
+      renderDebug("plugins-settled", {
+        ready: pluginsReady.value,
+        settled: pluginsSettled.value,
+        pluginCount: plugins.value.length,
+      });
+    }
+  })();
+
+  return initPromise;
 }
 
 export { FrontendHookDispatcher };
@@ -125,7 +178,8 @@ export { FrontendHookDispatcher };
 export function usePlugins(): UsePluginsReturn {
   return {
     plugins,
-    initialized,
+    pluginsReady,
+    pluginsSettled,
     initPlugins,
     applyDisplayStrip,
   };

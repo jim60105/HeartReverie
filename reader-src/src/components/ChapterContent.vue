@@ -4,6 +4,7 @@ import type { ChapterContentProps } from "@/types";
 import { useMarkdownRenderer } from "@/composables/useMarkdownRenderer";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useChapterActions } from "@/composables/useChapterActions";
+import { usePlugins } from "@/composables/usePlugins";
 import router from "@/router";
 import VentoErrorCard from "./VentoErrorCard.vue";
 
@@ -16,16 +17,25 @@ const {
   mode,
   getBackendContext,
   reloadToLast,
+  refreshAfterEdit,
+  bumpRenderEpoch,
   loadFromBackend,
+  renderEpoch,
 } = useChapterNav();
 const { editChapter, rewindAfter, branchFrom } = useChapterActions();
+const { pluginsReady } = usePlugins();
 
-const tokens = computed(() =>
-  renderChapter(props.rawMarkdown, {
+const tokens = computed(() => {
+  // Track plugin readiness + render epoch so a render that happened before
+  // plugins were registered (or before the latest invalidation) self-corrects
+  // when those signals change. See design.md Decision 5.
+  void pluginsReady.value;
+  void renderEpoch.value;
+  return renderChapter(props.rawMarkdown, {
     isLastChapter: props.isLastChapter,
     stateDiff: chapters.value[currentIndex.value]?.stateDiff,
-  }),
-);
+  });
+});
 
 const showToolbar = computed(() => mode.value === "backend");
 
@@ -47,6 +57,14 @@ function beginEdit(): void {
 function cancelEdit(): void {
   isEditing.value = false;
   editBuffer.value = "";
+  // Leaving edit mode re-mounts the v-html token template, recreating any
+  // .plugin-sidebar nodes inside chapter content. ContentArea's sidebar
+  // relocation watch only fires on its tracked deps; bumping renderEpoch
+  // forces it to re-run so it clears the stale sidebar copies and moves
+  // the freshly recreated panels into place. Without this bump the user
+  // ends up with duplicated panels (originals in sidebar + new ones in
+  // content) after pressing 取消.
+  bumpRenderEpoch();
 }
 
 async function saveEdit(): Promise<void> {
@@ -57,7 +75,7 @@ async function saveEdit(): Promise<void> {
   try {
     await editChapter(ctx.series, ctx.story, currentChapterNumber.value, editBuffer.value);
     isEditing.value = false;
-    await reloadToLast();
+    await refreshAfterEdit(currentChapterNumber.value);
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : "儲存失敗";
   } finally {
@@ -175,7 +193,7 @@ async function handleBranch(): Promise<void> {
     ></textarea>
 
     <template v-else>
-      <template v-for="(token, idx) in tokens" :key="idx">
+      <template v-for="(token, idx) in tokens" :key="`${idx}-${renderEpoch}`">
         <!-- eslint-disable-next-line vue/no-v-html -->
         <div v-if="token.type === 'html'" v-html="token.content"></div>
         <VentoErrorCard v-else-if="token.type === 'vento-error'" v-bind="token.data" />

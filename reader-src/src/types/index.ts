@@ -130,7 +130,8 @@ export interface UseChapterNavReturn {
   isFirst: ComputedRef<boolean>;
   isLast: ComputedRef<boolean>;
   isLastChapter: ComputedRef<boolean>;
-  currentContent: Ref<string>;
+  currentContent: ShallowRef<string>;
+  renderEpoch: Ref<number>;
   mode: Ref<"fsa" | "backend">;
   folderName: Ref<string>;
   next: () => void;
@@ -138,6 +139,8 @@ export interface UseChapterNavReturn {
   loadFromFSA: (handle: FileSystemDirectoryHandle) => Promise<void>;
   loadFromBackend: (series: string, story: string, startChapter?: number) => Promise<void>;
   reloadToLast: () => Promise<void>;
+  refreshAfterEdit: (targetChapter: number) => Promise<void>;
+  bumpRenderEpoch: () => void;
   getBackendContext: () => {
     series: string | null;
     story: string | null;
@@ -147,7 +150,8 @@ export interface UseChapterNavReturn {
 
 export interface UsePluginsReturn {
   plugins: Ref<PluginDescriptor[]>;
-  initialized: Ref<boolean>;
+  pluginsReady: Ref<boolean>;
+  pluginsSettled: Ref<boolean>;
   initPlugins: () => Promise<void>;
   applyDisplayStrip: (text: string) => string;
 }

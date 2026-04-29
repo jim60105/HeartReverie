@@ -30,9 +30,10 @@ describe("usePlugins", () => {
     return mod.usePlugins();
   }
 
-  it("initial state: not initialized, empty plugins", async () => {
+  it("initial state: not settled, empty plugins", async () => {
     const p = await getPlugins();
-    expect(p.initialized.value).toBe(false);
+    expect(p.pluginsReady.value).toBe(false);
+    expect(p.pluginsSettled.value).toBe(false);
     expect(p.plugins.value).toEqual([]);
   });
 
@@ -44,7 +45,8 @@ describe("usePlugins", () => {
     await p.initPlugins();
     expect(fetch).toHaveBeenCalled();
     expect(p.plugins.value).toHaveLength(1);
-    expect(p.initialized.value).toBe(true);
+    expect(p.pluginsReady.value).toBe(true);
+    expect(p.pluginsSettled.value).toBe(true);
   });
 
   it("initPlugins only runs once", async () => {
@@ -104,15 +106,20 @@ describe("usePlugins", () => {
     expect(mod.FrontendHookDispatcher).toBeDefined();
   });
 
-  it("silently ignores fetch errors during initPlugins", async () => {
+  it("warns but does not throw on fetch errors during initPlugins", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.reject(new Error("network"))),
     );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const p = await getPlugins();
     // Should not throw
     await p.initPlugins();
     expect(p.plugins.value).toEqual([]);
+    expect(p.pluginsReady.value).toBe(false);
+    expect(p.pluginsSettled.value).toBe(true);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
 

@@ -1,42 +1,62 @@
 <script setup lang="ts">
-import { ref, watchPostEffect } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useChapterNav } from "@/composables/useChapterNav";
+import { usePlugins } from "@/composables/usePlugins";
 import ChapterContent from "./ChapterContent.vue";
 import Sidebar from "./Sidebar.vue";
 
 const {
   currentContent,
   isLastChapter,
+  renderEpoch,
 } = useChapterNav();
+const { pluginsReady, pluginsSettled } = usePlugins();
 
 const contentRef = ref<HTMLElement | null>(null);
 
 // Relocate plugin-rendered .plugin-sidebar elements from content to sidebar.
 // Any plugin can opt into sidebar placement by adding the .plugin-sidebar class.
-watchPostEffect(() => {
-  // Track reactive deps so the effect re-runs on chapter changes
-  currentContent.value;
-  isLastChapter.value;
+// The watch tracks renderEpoch so byte-identical content commits and
+// pluginsReady transitions both trigger a re-relocation; the sidebar is
+// always cleared first so stale panels from a previous chapter cannot leak.
+const sidebarTriggers = computed(() => [
+  currentContent.value,
+  isLastChapter.value,
+  pluginsReady.value,
+  pluginsSettled.value,
+  renderEpoch.value,
+]);
 
-  const wrapper = contentRef.value;
-  if (!wrapper) return;
+watch(
+  sidebarTriggers,
+  async () => {
+    await nextTick();
+    const wrapper = contentRef.value;
+    if (!wrapper) return;
+    const sidebar = wrapper.querySelector(".sidebar");
+    if (!sidebar) return;
 
-  const sidebar = wrapper.querySelector(".sidebar");
-  if (!sidebar) return;
+    sidebar.innerHTML = "";
 
-  sidebar.innerHTML = "";
-  const panels = wrapper.querySelectorAll(".plugin-sidebar");
-  panels.forEach((panel) => sidebar.appendChild(panel));
-});
+    if (!pluginsSettled.value || !currentContent.value) return;
+
+    const panels = wrapper.querySelectorAll(".plugin-sidebar");
+    panels.forEach((panel) => sidebar.appendChild(panel));
+  },
+  { flush: "post", immediate: true },
+);
 </script>
 
 <template>
   <div ref="contentRef" class="content-wrapper">
     <ChapterContent
-      v-if="currentContent"
+      v-if="pluginsSettled && currentContent"
       :raw-markdown="currentContent"
       :is-last-chapter="isLastChapter"
     />
+    <div v-else-if="!pluginsSettled && currentContent" class="content-loading">
+      載入中…
+    </div>
     <div v-else class="welcome-content">
       <section class="welcome-section">
         <h1 class="welcome-title">HeartReverie 浮心夜夢</h1>
@@ -74,6 +94,13 @@ watchPostEffect(() => {
 
 .welcome-content {
   padding: 0 1rem;
+}
+
+.content-loading {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-main);
+  opacity: 0.7;
 }
 
 .welcome-section {

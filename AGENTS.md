@@ -344,6 +344,8 @@ Custom XML blocks from LLM output are processed using the **Extract → Placehol
 
 This prevents markdown from mangling component HTML inside custom XML blocks.
 
+`<ChapterContent>` is gated on `pluginsSettled` (true after `usePlugins().initPlugins()` runs to completion, success or failure) so first render always sees a populated plugin hook registry; failures surface as a toast rather than a silently empty render. `currentContent` lives in `useChapterNav` as a `shallowRef<string>` and is written exclusively through the private `commitContent(next)` helper, which calls `triggerRef(currentContent)` even on byte-identical writes and bumps a sibling `renderEpoch: Ref<number>` so non-`shallowRef`-aware effects (the sidebar relocation watch in `ContentArea.vue`) also re-run. After a chapter edit, `ChapterContent.vue` calls `useChapterNav().refreshAfterEdit(targetChapter)` to reload the chapter list and stay on the edited chapter, instead of jumping to the last chapter.
+
 ### WebSocket Streaming
 
 The server exposes a WebSocket endpoint at `GET /api/ws` for real-time streaming:

@@ -4,6 +4,7 @@ import { normalizeQuotes, doubleNewlines, reinjectPlaceholders } from "@/lib/mar
 import { extractVentoErrors } from "@/lib/parsers/vento-error-parser";
 import { frontendHooks } from "@/lib/plugin-hooks";
 import { usePlugins } from "@/composables/usePlugins";
+import { renderDebug } from "@/lib/render-debug";
 import type {
   UseMarkdownRendererReturn,
   RenderOptions,
@@ -74,6 +75,10 @@ function renderChapter(
   rawMarkdown: string,
   options: RenderOptions = {},
 ): RenderToken[] {
+  renderDebug("chapter-render-dispatched", {
+    frontendRenderHandlers: frontendHooks.getHandlerCount("frontend-render"),
+    chapterRenderAfterHandlers: frontendHooks.getHandlerCount("chapter:render:after"),
+  });
   let text = rawMarkdown;
   const placeholderMap = new Map<string, string>();
   const tokenDataMap = new Map<string, TokenData>();
