@@ -13,7 +13,7 @@ The server SHALL attach exactly three OpenRouter app-attribution HTTP headers to
 The constant SHALL contain exactly the following three entries, with these exact wire values:
 
 - `HTTP-Referer: https://github.com/jim60105/HeartReverie`
-- `X-OpenRouter-Title: HeartReverie%20%E6%B5%AE%E5%BF%83%E5%A4%9C%E5%A4%A2` (the UTF-8 percent-encoded form of `HeartReverie 浮心夜夢`; raw non-Latin-1 bytes are not valid in HTTP header values per the WHATWG fetch / HTTP spec and would be rejected by `fetch()`)
+- `X-OpenRouter-Title: HeartReverie` (plain ASCII; OpenRouter's rankings UI does not render non-Latin-1 / percent-encoded titles legibly, so the project name's CJK suffix is intentionally omitted from the wire value)
 - `X-OpenRouter-Categories: roleplay,creative-writing`
 
 All three headers SHALL be present on every upstream chat `fetch()` call, alongside `Content-Type` and `Authorization`. The headers SHALL be sent regardless of the configured `LLM_API_URL`; the server SHALL NOT inspect the URL to decide whether to attach them.
@@ -23,7 +23,7 @@ The constant SHALL be defined as a frozen object (e.g., via `Object.freeze` or `
 #### Scenario: Default chat request carries all three attribution headers
 
 - **WHEN** the server dispatches a chat completion request to the configured `LLM_API_URL`
-- **THEN** the upstream `fetch` request SHALL include `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie%20%E6%B5%AE%E5%BF%83%E5%A4%9C%E5%A4%A2` (UTF-8 percent-encoded form of `HeartReverie 浮心夜夢`), and `X-OpenRouter-Categories: roleplay,creative-writing`
+- **THEN** the upstream `fetch` request SHALL include `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie`, and `X-OpenRouter-Categories: roleplay,creative-writing`
 
 #### Scenario: Headers attached even when LLM_API_URL is non-OpenRouter
 

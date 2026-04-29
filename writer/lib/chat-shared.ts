@@ -32,13 +32,12 @@ const fileLog = createLogger("file");
  * to attribute their usage separately MUST edit this constant in source — the
  * values are intentionally not configurable at runtime.
  *
- * The X-OpenRouter-Title value is the UTF-8 percent-encoded form of
- * "HeartReverie 浮心夜夢"; raw non-Latin-1 bytes are not valid in HTTP header
- * values and would be rejected by `fetch()`.
+ * The X-OpenRouter-Title is plain ASCII because OpenRouter's rankings UI does
+ * not render non-Latin-1 / percent-encoded characters legibly.
  */
 const LLM_APP_ATTRIBUTION_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   "HTTP-Referer": "https://github.com/jim60105/HeartReverie",
-  "X-OpenRouter-Title": encodeURIComponent("HeartReverie 浮心夜夢"),
+  "X-OpenRouter-Title": "HeartReverie",
   "X-OpenRouter-Categories": "roleplay,creative-writing",
 });
 

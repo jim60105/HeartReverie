@@ -318,7 +318,7 @@ Key files:
 Every upstream chat request carries three hard-coded OpenRouter [app-attribution headers](https://openrouter.ai/docs/app-attribution) so HeartReverie appears on OpenRouter's public rankings and per-model "Apps" tabs:
 
 - `HTTP-Referer: https://github.com/jim60105/HeartReverie`
-- `X-OpenRouter-Title: HeartReverie%20%E6%B5%AE%E5%BF%83%E5%A4%9C%E5%A4%A2` (UTF-8 percent-encoded form of `HeartReverie 浮心夜夢` — raw non-Latin-1 bytes are not valid in HTTP header values)
+- `X-OpenRouter-Title: HeartReverie` (plain ASCII; OpenRouter's rankings UI does not render non-Latin-1 / percent-encoded titles legibly, so the project name's CJK suffix is intentionally omitted from the wire value)
 - `X-OpenRouter-Categories: roleplay,creative-writing`
 
 The values live in a single frozen module-level constant `LLM_APP_ATTRIBUTION_HEADERS` near the top of `writer/lib/chat-shared.ts`. They are intentionally **not** configurable — no env vars, no `_config.json` keys, no API surface. The headers are sent on every chat request regardless of the configured `LLM_API_URL`; most non-OpenRouter providers ignore unknown headers, but strict or privacy-sensitive providers may log or reject them — those operators should fork and clear the constant.
