@@ -52,6 +52,10 @@ export class FrontendHookDispatcher {
     list.sort((a, b) => a.priority - b.priority);
   }
 
+  getHandlerCount(stage: HookStage): number {
+    return this.#handlers.get(stage)?.length ?? 0;
+  }
+
   dispatch<S extends HookStage>(stage: S, context: ContextMap[S]): ContextMap[S] {
     const handlers = this.#handlers.get(stage) ?? [];
     const isPipeline = stage === "chat:send:before";

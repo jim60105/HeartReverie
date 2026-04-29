@@ -1,4 +1,4 @@
-import { ref, computed, watch } from "vue";
+import { ref, shallowRef, triggerRef, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import router from "@/router";
 import type {
@@ -12,6 +12,7 @@ import { useFileReader } from "@/composables/useFileReader";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { frontendHooks } from "@/lib/plugin-hooks";
 import { isNumericMdFile, numericSort } from "@/lib/file-utils";
+import { renderDebug } from "@/lib/render-debug";
 
 const POLL_INTERVAL_BASE = 3000;
 const POLL_INTERVAL_MAX = 30000;
@@ -19,7 +20,15 @@ const POLL_INTERVAL_MAX = 30000;
 // Module-level shared refs
 const currentIndex = ref(0);
 const chapters = ref<ChapterData[]>([]);
-const currentContent = ref("");
+const currentContent = shallowRef<string>("");
+/**
+ * Render-invalidation epoch. Bumped by `commitContent()` every time chapter
+ * content is committed, regardless of byte-equality. Effects that need to
+ * re-run on any content commit (e.g. the sidebar relocation watch in
+ * `ContentArea.vue`) should track `renderEpoch` rather than `currentContent`,
+ * because Vue's `triggerRef` only signals dependents that read the ref.
+ */
+const renderEpoch = ref(0);
 const mode = ref<"fsa" | "backend">("fsa");
 const folderName = ref("");
 const fsaFiles = ref<FileSystemFileHandle[]>([]);
@@ -75,6 +84,40 @@ function dispatchChapterChange(
     mode: mode.value,
   };
   frontendHooks.dispatch("chapter:change", ctx);
+}
+
+/**
+ * Single source of truth for writes to `currentContent`. Always invalidates
+ * downstream computeds and effects, including the byte-identical case (Vue's
+ * primitive ref reactivity is `Object.is`-based and would otherwise silently
+ * skip the update). `triggerRef` re-fires consumers that read
+ * `currentContent`; `renderEpoch` re-fires consumers that don't.
+ */
+/**
+ * Bump `renderEpoch` without touching `currentContent`. Used by callers that
+ * need to re-trigger downstream effects (e.g. ContentArea's sidebar
+ * relocation watch) after a UI state change that does NOT mutate chapter
+ * content but DOES recreate DOM Vue believes is unchanged — for example,
+ * leaving edit mode where the v-html template is re-mounted.
+ */
+function bumpRenderEpoch(): void {
+  renderEpoch.value += 1;
+}
+
+function commitContent(next: string): void {
+  if (currentContent.value === next) {
+    triggerRef(currentContent);
+  } else {
+    currentContent.value = next;
+  }
+  renderEpoch.value += 1;
+  renderDebug("chapter-content-committed", {
+    series: currentSeries,
+    story: currentStory,
+    chapterIndex: currentIndex.value,
+    contentLength: next.length,
+    renderEpoch: renderEpoch.value,
+  });
 }
 
 function clearPolling(): void {
@@ -175,7 +218,7 @@ async function pollBackend(): Promise<void> {
       if (content !== chapters.value[lastIdx]?.content) {
         chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, number: lastNum as number, content, stateDiff };
         if (currentIndex.value === lastIdx) {
-          currentContent.value = content;
+          commitContent(content);
         }
       }
     }
@@ -204,7 +247,7 @@ function navigateTo(index: number): void {
   if (index < 0 || index >= chapters.value.length) return;
   const prev = currentIndex.value;
   currentIndex.value = index;
-  currentContent.value = chapters.value[index]?.content ?? "";
+  commitContent(chapters.value[index]?.content ?? "");
   dispatchChapterChange(prev, index);
 }
 
@@ -215,7 +258,7 @@ async function loadFSAChapter(index: number): Promise<void> {
   chapters.value[index] = { number: index + 1, content };
   const prev = currentIndex.value;
   currentIndex.value = index;
-  currentContent.value = content;
+  commitContent(content);
   dispatchChapterChange(prev, index);
 }
 
@@ -256,7 +299,7 @@ async function loadFromFSA(handle: FileSystemDirectoryHandle): Promise<void> {
 
   if (fileHandles.length === 0) {
     chapters.value = [];
-    currentContent.value = "";
+    commitContent("");
     currentIndex.value = 0;
     return;
   }
@@ -271,7 +314,7 @@ async function loadFromFSA(handle: FileSystemDirectoryHandle): Promise<void> {
   chapters.value = chapterData;
 
   currentIndex.value = 0;
-  currentContent.value = chapters.value[currentIndex.value]?.content ?? "";
+  commitContent(chapters.value[currentIndex.value]?.content ?? "");
   dispatchChapterChange(null, 0);
 
   // Start FSA polling (1s interval)
@@ -325,7 +368,7 @@ async function loadFromBackend(
   if (token !== loadToken) return;
 
   if (chapters.value.length === 0) {
-    currentContent.value = "";
+    commitContent("");
     currentIndex.value = 0;
     startPollingIfNeeded();
     return;
@@ -335,7 +378,7 @@ async function loadFromBackend(
     ? Math.max(0, Math.min(startChapter - 1, chapters.value.length - 1))
     : 0;
   currentIndex.value = startIdx;
-  currentContent.value = chapters.value[startIdx]?.content ?? "";
+  commitContent(chapters.value[startIdx]?.content ?? "");
   if (isTransition) {
     dispatchChapterChange(null, startIdx);
   }
@@ -361,8 +404,43 @@ async function reloadToLast(): Promise<void> {
   const prevIdx = currentIndex.value;
   const lastIdx = chapters.value.length - 1;
   currentIndex.value = lastIdx;
-  currentContent.value = chapters.value[lastIdx]?.content ?? "";
+  commitContent(chapters.value[lastIdx]?.content ?? "");
   dispatchChapterChange(prevIdx, lastIdx);
+
+  syncRoute();
+  startPollingIfNeeded();
+}
+
+/**
+ * Reload chapters after a chapter edit and stay on the chapter the user
+ * just edited (clamped into range when chapters were truncated). Forces a
+ * content invalidation via `commitContent` even when the new on-disk text
+ * is byte-identical, so the markdown renderer re-runs and
+ * `chapter:render:after` re-fires.
+ */
+async function refreshAfterEdit(targetChapter: number): Promise<void> {
+  if (!currentSeries || !currentStory) return;
+  clearPolling();
+  const token = ++loadToken;
+
+  await loadFromBackendInternal(currentSeries, currentStory);
+  if (token !== loadToken) return;
+
+  if (chapters.value.length === 0) {
+    currentIndex.value = 0;
+    commitContent("");
+    startPollingIfNeeded();
+    return;
+  }
+
+  const targetIdx = Math.max(
+    0,
+    Math.min(targetChapter - 1, chapters.value.length - 1),
+  );
+  const prevIdx = currentIndex.value;
+  currentIndex.value = targetIdx;
+  commitContent(chapters.value[targetIdx]?.content ?? "");
+  if (prevIdx !== targetIdx) dispatchChapterChange(prevIdx, targetIdx);
 
   syncRoute();
   startPollingIfNeeded();
@@ -418,7 +496,7 @@ function initRouteSync(): void {
       if (idx >= 0 && idx < chapters.value.length && idx !== currentIndex.value) {
         const prev = currentIndex.value;
         currentIndex.value = idx;
-        currentContent.value = chapters.value[idx]?.content ?? "";
+        commitContent(chapters.value[idx]?.content ?? "");
         dispatchChapterChange(prev, idx);
       }
     },
@@ -464,7 +542,7 @@ function initRouteSync(): void {
     if (msg.chapter !== chapters.value[lastIdx]!.number) return;
     chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, content: msg.content, stateDiff: msg.stateDiff };
     if (currentIndex.value === lastIdx) {
-      currentContent.value = msg.content;
+      commitContent(msg.content);
     }
   });
 
@@ -498,6 +576,7 @@ export function useChapterNav(): UseChapterNavReturn {
     isLast,
     isLastChapter,
     currentContent,
+    renderEpoch,
     mode,
     folderName,
     next,
@@ -505,6 +584,8 @@ export function useChapterNav(): UseChapterNavReturn {
     loadFromFSA,
     loadFromBackend,
     reloadToLast,
+    refreshAfterEdit,
+    bumpRenderEpoch,
     getBackendContext,
   };
 }

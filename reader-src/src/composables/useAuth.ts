@@ -1,5 +1,6 @@
 import { ref, readonly } from "vue";
 import type { UseAuthReturn, AuthHeaders } from "@/types";
+import { renderDebug } from "@/lib/render-debug";
 
 const STORAGE_KEY = "passphrase";
 
@@ -24,6 +25,7 @@ async function verify(value?: string): Promise<boolean> {
       passphrase.value = toVerify;
       isAuthenticated.value = true;
       sessionStorage.setItem(STORAGE_KEY, toVerify);
+      renderDebug("auth-verified");
       return true;
     }
     return false;
