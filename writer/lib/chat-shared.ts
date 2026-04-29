@@ -319,6 +319,59 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   }
 
   let aborted = false;
+  // Reasoning streaming state. Reasoning text from `delta.reasoning` (or the
+  // fallback `delta.reasoning_details[].text`) is framed as `<think>...</think>`
+  // blocks placed between the `<user_message>` prefix and the model content.
+  // Reasoning bytes bypass the `response-stream` hook and the `aiContent`
+  // accumulator — see openspec capability `reasoning-think-block`.
+  let inThinkBlock = false;
+  let reasoningLength = 0;
+
+  /**
+   * Extract reasoning text from a stream chunk's delta. Prefer the simple
+   * `delta.reasoning` string; otherwise concatenate `text` fields from
+   * `delta.reasoning_details` items, silently skipping any entry whose `text`
+   * is not a non-empty string. Returns `""` when no reasoning is present.
+   */
+  const extractReasoningText = (delta: unknown): string => {
+    if (!delta || typeof delta !== "object") return "";
+    const direct = (delta as { reasoning?: unknown }).reasoning;
+    if (typeof direct === "string" && direct.length > 0) return direct;
+    const details = (delta as { reasoning_details?: unknown }).reasoning_details;
+    if (!Array.isArray(details)) return "";
+    let out = "";
+    for (const item of details) {
+      if (item && typeof item === "object") {
+        const t = (item as { text?: unknown }).text;
+        if (typeof t === "string" && t.length > 0) out += t;
+      }
+    }
+    return out;
+  };
+
+  /**
+   * Persist reasoning bytes: write to chapter file FIRST, then notify
+   * `onDelta`. Callers MUST update state-machine flags AFTER `writeFile()`
+   * returns and BEFORE calling `notifyDelta()` so a thrown `onDelta` does not
+   * leave `inThinkBlock` inconsistent with what is on disk.
+   */
+  const writeFile = (bytes: string): Promise<number> => file.write(encoder.encode(bytes));
+  const notifyDelta = (bytes: string): void => { onDelta?.(bytes); };
+
+  /**
+   * Close the open `<think>` block (if any) with a single trailing newline,
+   * intended for the streaming `finally` (no content follows). State is
+   * cleared after the file write succeeds; an onDelta failure after the
+   * write is propagated by the caller's nested try/catch and does not
+   * re-open the block.
+   */
+  const closeThinkBlockOnExit = async (): Promise<void> => {
+    if (!inThinkBlock) return;
+    await writeFile("\n</think>\n");
+    inThinkBlock = false;
+    notifyDelta("\n</think>\n");
+  };
+
   let tokenUsage: {
     prompt: number | null;
     completion: number | null;
@@ -389,14 +442,41 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
           latencyMs,
           error: message,
           partialLength: aiContent.length,
+          reasoningLength,
         });
         throw new ChatError("llm-stream", message, 502);
       }
 
-      const delta = parsed.choices?.[0]?.delta?.content;
-      if (delta) {
+      const choice = parsed.choices?.[0];
+      const delta = choice?.delta;
+
+      // Reasoning text first: open `<think>` lazily, write reasoning bytes,
+      // never pass through `response-stream`, never append to `aiContent`.
+      // Order: file.write → mutate state → onDelta. A thrown `onDelta` after a
+      // successful write must NOT desynchronise inThinkBlock from disk.
+      const reasoningText = extractReasoningText(delta);
+      if (reasoningText.length > 0) {
+        if (!inThinkBlock) {
+          await writeFile("<think>\n");
+          inThinkBlock = true;
+          notifyDelta("<think>\n");
+        }
+        await writeFile(reasoningText);
+        reasoningLength += reasoningText.length;
+        notifyDelta(reasoningText);
+      }
+
+      const contentDelta = delta?.content;
+      if (contentDelta) {
+        // Closing the think block before content guarantees byte order:
+        // reasoning → close → content, even when one chunk carries both.
+        if (inThinkBlock) {
+          await writeFile("\n</think>\n\n");
+          inThinkBlock = false;
+          notifyDelta("\n</think>\n\n");
+        }
         sawModelContent = true;
-        await persistChunk(delta);
+        await persistChunk(contentDelta);
       }
       if (parsed.usage) {
         tokenUsage = {
@@ -455,10 +535,20 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     // file/hook/onDelta failures would be silently misclassified as aborts.
     const latencyMs = Math.round(performance.now() - llmStartTime);
     const errMsg = err instanceof Error ? err.message : String(err);
-    llmLog.info("LLM error", { type: "error", errorCode: "stream", latencyMs, error: errMsg, partialLength: aiContent.length });
+    llmLog.info("LLM error", { type: "error", errorCode: "stream", latencyMs, error: errMsg, partialLength: aiContent.length, reasoningLength });
     throw err;
   } finally {
-    file.close();
+    // Close any open `<think>` block before file.close(); a failure here MUST
+    // NOT mask the primary error from the streaming loop and MUST NOT prevent
+    // file.close() from running.
+    try {
+      await closeThinkBlockOnExit();
+    } catch (cleanupErr) {
+      const msg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+      reqLog.warn("close-think-block failed during streaming finally", { error: msg });
+    } finally {
+      file.close();
+    }
   }
 
   // On abort: throw ChatAbortError after file cleanup so callers can handle it
@@ -472,6 +562,8 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       chapter: targetNum,
       tokens: tokenUsage,
       aborted: true,
+      partialLength: aiContent.length,
+      reasoningLength,
     });
     throw new ChatAbortError("Generation aborted by client");
   }
@@ -484,6 +576,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       errorCode: "no-content",
       latencyMs: noContentLatency,
       model: llmConfig.model,
+      reasoningLength,
     });
     throw new ChatError("no-content", "No content in AI response", 502);
   }
@@ -503,6 +596,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     latencyMs,
     chapter: targetNum,
     tokens: tokenUsage,
+    reasoningLength,
   });
   reqFileLog.info("Chapter file written", { op: "write", path: chapterPath, bytes: encoder.encode(fullContent).length });
 

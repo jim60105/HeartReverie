@@ -384,6 +384,23 @@ export interface LLMStreamChunk {
   choices?: ReadonlyArray<{
     delta?: {
       content?: string;
+      /**
+       * OpenRouter reasoning text shortcut. Populated by reasoning-capable
+       * models when the upstream request includes `reasoning: { enabled: true }`.
+       * Treat as the next slice of human-readable scratchpad text.
+       */
+      reasoning?: string;
+      /**
+       * Structured reasoning items. Each entry MAY carry a string `text` field
+       * (extract those) plus opaque provider metadata such as `signature` or
+       * `format` (ignore those).
+       */
+      reasoning_details?: ReadonlyArray<{
+        type?: string;
+        text?: string;
+        signature?: string;
+        format?: string;
+      }>;
     };
     finish_reason?: string | null;
   }>;

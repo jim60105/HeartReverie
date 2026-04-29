@@ -186,7 +186,9 @@ Before streaming the AI response, the server SHALL write the user's chat message
 
 The server SHALL parse the SSE response by reading `data:` lines from the response body stream. Each line with a JSON payload SHALL have `choices[0].delta.content` extracted and appended to the chapter file immediately. The `data: [DONE]` sentinel SHALL signal end of stream. The server SHALL open the chapter file before streaming begins and write each content delta as it arrives, allowing the frontend auto-reload polling to display partial content during generation. After the stream completes, the server SHALL return the complete chapter content in the HTTP response.
 
-The operational debug log entry and the LLM interaction log entry produced for each chat request SHALL include the resolved values of `reasoningEnabled` and `reasoningEffort` alongside the existing sampler parameters.
+In addition to `delta.content`, the SSE parser SHALL inspect each parsed chunk for upstream reasoning text via `choices[0].delta.reasoning` (preferred) and `choices[0].delta.reasoning_details[].text` (fallback), and SHALL stream that reasoning text into the chapter file framed by `<think>` and `</think>` tags placed between the `<user_message>` block and the model content. Reasoning text SHALL NOT be appended to the `aiContent` accumulator returned in the HTTP response body's `content` field, and SHALL NOT be passed through the `response-stream` plugin hook. The chapter file on disk SHALL therefore contain a superset of the response envelope's `content` field for any turn that emitted reasoning. See the `reasoning-think-block` capability for the complete state-machine and field-extraction contract.
+
+The operational debug log entry and the LLM interaction log entry produced for each chat request SHALL include the resolved values of `reasoningEnabled` and `reasoningEffort` alongside the existing sampler parameters. The LLM interaction log entry SHALL additionally carry an optional `reasoningLength` field whose value is the total character count of reasoning text streamed during the turn (success, abort, and mid-stream-error log entries alike), per the `reasoning-think-block` capability.
 
 #### Scenario: Successful streaming chat completion
 
@@ -197,6 +199,12 @@ The operational debug log entry and the LLM interaction log entry produced for e
 
 - **WHEN** the server begins writing a new chapter file during a chat request
 - **THEN** the chapter file SHALL contain `<user_message>\n{message}\n</user_message>\n\n` at the beginning, followed by the AI response content
+
+#### Scenario: Reasoning text streamed into `<think>` block
+
+- **GIVEN** a chat request to a model that emits OpenRouter `delta.reasoning` deltas before its content deltas
+- **WHEN** the SSE stream completes
+- **THEN** the chapter file on disk SHALL contain `<user_message>\n{message}\n</user_message>\n\n<think>\n{reasoning text}\n</think>\n\n{model content}` in that exact byte order, AND the HTTP response body's `content` field SHALL contain `<user_message>\n{message}\n</user_message>\n\n{model content}` (i.e. the response envelope SHALL include the `<user_message>` block and model content but EXCLUDE the `<think>` block, while the chapter file on disk preserves all three)
 
 #### Scenario: Chapter file updated incrementally during streaming
 
