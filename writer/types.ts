@@ -385,12 +385,23 @@ export interface LLMStreamChunk {
     delta?: {
       content?: string;
     };
+    finish_reason?: string | null;
   }>;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
   };
+  /**
+   * OpenRouter mid-stream error envelope. After HTTP 200 has been sent, errors
+   * arrive as an SSE chunk with this top-level `error` field plus
+   * `choices[0].finish_reason === "error"`.
+   * See https://openrouter.ai/docs/api/reference/streaming#stream-cancellation.
+   */
+  error?: {
+    message?: string;
+    code?: number | string;
+  } | null;
 }
 
 /**

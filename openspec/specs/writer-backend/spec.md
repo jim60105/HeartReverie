@@ -174,6 +174,10 @@ Additionally, the upstream request body SHALL include a `reasoning` object on ev
 
 The upstream `fetch` call SHALL additionally attach three hard-coded OpenRouter app-attribution HTTP headers — `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie%20%E6%B5%AE%E5%BF%83%E5%A4%9C%E5%A4%A2` (the UTF-8 percent-encoded form of `HeartReverie 浮心夜夢`), and `X-OpenRouter-Categories: roleplay,creative-writing` — alongside `Content-Type` and `Authorization`, on every chat request, regardless of the configured `LLM_API_URL`. The header values SHALL come from a single module-level frozen constant in `writer/lib/chat-shared.ts` and SHALL NOT be configurable at runtime (no env vars, no `_config.json` keys, no API surface). See the `openrouter-app-attribution` capability for the complete specification.
 
+The upstream `fetch` call SHALL also accept an optional `signal: AbortSignal` parameter that is forwarded directly to `fetch()`. When the signal is aborted, both the initial fetch resolution and any in-flight SSE stream read SHALL be cancellable. The server SHALL discriminate aborts by inspecting `signal?.aborted === true` rather than by inspecting the thrown error's class or `name`, so that the dedicated abort branch (close chapter file → log abort → throw `ChatAbortError`) runs regardless of whether the abort reason is a `DOMException`, a custom `Error`, a `ChatAbortError`, or undefined. The HTTP route SHALL pass `c.req.raw.signal`; the WebSocket route SHALL pass a per-request `AbortController.signal`. See the `streaming-cancellation` capability for the complete cancellation contract.
+
+The SSE parser SHALL detect mid-stream provider errors per OpenRouter's documented format: after parsing each `data:` payload as a JSON object, the parser SHALL inspect `parsed.error` (any non-null object value) and `parsed.choices?.[0]?.finish_reason === "error"`. If either signal is present, the parser SHALL log one LLM-interaction-log entry with `errorCode: "stream-error"`, close the chapter file via the existing `finally` block (preserving any partial content), and throw `ChatError("llm-stream", <provider message>, 502)`. The HTTP route SHALL convert this into a 502 RFC 9457 Problem Details response; the WebSocket route SHALL convert it into `{ type: "chat:error", id, detail }`. Mid-stream errors SHALL NOT be silently swallowed.
+
 When the upstream provider returns a non-2xx status, the server SHALL include the upstream response body (truncated if very large) in both the operational log entry AND in the `detail` field of the RFC 9457 Problem Details response returned to the client, so that a strict provider rejecting the `reasoning` field is diagnosable end-to-end.
 
 The server SHALL stream the response using SSE and write content deltas to the chapter file in real time.
@@ -325,6 +329,24 @@ The operational debug log entry and the LLM interaction log entry produced for e
 - **GIVEN** `LLM_API_URL` is set to a non-OpenRouter endpoint
 - **WHEN** a chat request is dispatched
 - **THEN** the upstream `fetch` call SHALL still carry the three hard-coded attribution headers with the documented values
+
+#### Scenario: Abort during initial fetch resolution returns 499 (HTTP)
+
+- **GIVEN** an HTTP `POST /api/stories/:series/:name/chat` request whose underlying TCP connection is closed by the client before the upstream `fetch()` resolves
+- **WHEN** the request signal (`c.req.raw.signal`) is aborted by the runtime
+- **THEN** `executeChat()` SHALL throw `ChatAbortError`, the route handler SHALL respond with HTTP 499 (Client Closed Request) and an RFC 9457 Problem Details body, SHALL NOT respond with HTTP 502, and SHALL NOT have created any chapter file on disk (chapter file is opened only after upstream fetch validates)
+
+#### Scenario: Abort during streaming preserves partial chapter
+
+- **GIVEN** an HTTP chat request that has streamed N content deltas to the chapter file
+- **WHEN** the request signal is aborted while `await reader.read()` is pending in the SSE loop
+- **THEN** `executeChat()` SHALL throw `ChatAbortError`, the chapter file SHALL retain the leading user-message block plus exactly the N deltas already written, and the LLM interaction log SHALL include one entry with `aborted: true`
+
+#### Scenario: Mid-stream error chunk surfaces as RFC 9457 502
+
+- **GIVEN** the upstream provider streams two normal `data:` chunks followed by an error chunk `{"id":"…","error":{"message":"Provider connection lost","code":502},"choices":[{"finish_reason":"error","delta":{}}]}`
+- **WHEN** `executeChat()` parses the error chunk
+- **THEN** the route handler SHALL respond with HTTP 502 and an RFC 9457 Problem Details body whose `detail` field is `"Provider connection lost"`, the chapter file SHALL retain the user-message block plus the two streamed deltas, and the LLM interaction log SHALL include one entry with `errorCode: "stream-error"`
 
 ### Requirement: Delete last chapter
 

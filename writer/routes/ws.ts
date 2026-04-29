@@ -103,7 +103,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
       }
       // Abort all active generations on disconnect to save tokens
       for (const controller of abortControllers.values()) {
-        controller.abort(new ChatAbortError("Connection closed"));
+        controller.abort();
       }
       abortControllers.clear();
     }
@@ -349,7 +349,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
       const controller = abortControllers.get(id);
       if (!controller) return;
 
-      controller.abort(new ChatAbortError("Generation aborted by client"));
+      controller.abort();
     }
 
     // ── WebSocket event handlers ──
