@@ -136,7 +136,7 @@ Deno.test({
         );
         assertEquals(
           headers.get("X-OpenRouter-Title"),
-          encodeURIComponent("HeartReverie 浮心夜夢"),
+          "HeartReverie",
         );
         assertEquals(
           headers.get("X-OpenRouter-Categories"),
@@ -182,7 +182,7 @@ Deno.test({
         );
         assertEquals(
           headers.get("X-OpenRouter-Title"),
-          encodeURIComponent("HeartReverie 浮心夜夢"),
+          "HeartReverie",
         );
         assertEquals(
           headers.get("X-OpenRouter-Categories"),
