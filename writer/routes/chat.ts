@@ -30,6 +30,7 @@ const ERROR_TITLES: Record<string, string> = {
   "vento": "Unprocessable Entity",
   "no-prompt": "Internal Server Error",
   "llm-api": "AI Service Error",
+  "llm-stream": "Bad Gateway",
   "no-body": "Bad Gateway",
   "no-content": "Bad Gateway",
   "story-config": "Unprocessable Entity",

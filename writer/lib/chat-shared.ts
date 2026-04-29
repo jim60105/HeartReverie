@@ -72,7 +72,7 @@ export class ChatAbortError extends Error {
 export class ChatError extends Error {
   override readonly name = "ChatError";
   constructor(
-    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "no-body" | "no-content" | "story-config",
+    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "llm-stream" | "no-body" | "no-content" | "story-config",
     message: string,
     public readonly httpStatus: number = 500,
     public readonly ventoError?: VentoError,
@@ -241,7 +241,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     });
   } catch (err: unknown) {
     const latencyMs = Math.round(performance.now() - llmStartTime);
-    if (err instanceof DOMException && err.name === "AbortError") {
+    if (signal?.aborted === true) {
       llmLog.info("LLM error", { type: "error", errorCode: "aborted", latencyMs });
       throw new ChatAbortError("Generation aborted by client");
     }
@@ -353,79 +353,110 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     const decoder = new TextDecoder();
     let buffer = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    /**
+     * Parse a single SSE `data:` payload (without the `data: ` prefix) and act on it.
+     * - Skips `[DONE]` and JSON-parse failures (treated as malformed chunks).
+     * - Detects OpenRouter mid-stream errors via top-level `error` or
+     *   `choices[0].finish_reason === "error"`, logs once, and throws ChatError.
+     * - Otherwise extracts content delta and usage.
+     *
+     * Detection runs OUTSIDE the parse-catch so the throw is not swallowed.
+     */
+    const handlePayload = async (payload: string): Promise<void> => {
+      if (payload === "[DONE]") return;
+      let raw: unknown;
+      try {
+        raw = JSON.parse(payload);
+      } catch {
+        return; // Skip malformed JSON chunks
+      }
+      if (typeof raw !== "object" || raw === null) return;
+      const parsed = raw as LLMStreamChunk;
 
-      buffer += decoder.decode(value, { stream: true });
+      const errObj = parsed.error;
+      const hasErrorField = typeof errObj === "object" && errObj !== null;
+      const finishedWithError = parsed.choices?.[0]?.finish_reason === "error";
+      if (hasErrorField || finishedWithError) {
+        const messageRaw = errObj?.message;
+        const codeRaw = errObj?.code;
+        const message = (typeof messageRaw === "string" && messageRaw.length > 0)
+          ? messageRaw
+          : (codeRaw !== undefined ? String(codeRaw) : "Mid-stream provider error");
+        const latencyMs = Math.round(performance.now() - llmStartTime);
+        llmLog.info("LLM error", {
+          type: "error",
+          errorCode: "stream-error",
+          latencyMs,
+          error: message,
+          partialLength: aiContent.length,
+        });
+        throw new ChatError("llm-stream", message, 502);
+      }
+
+      const delta = parsed.choices?.[0]?.delta?.content;
+      if (delta) {
+        sawModelContent = true;
+        await persistChunk(delta);
+      }
+      if (parsed.usage) {
+        tokenUsage = {
+          prompt: parsed.usage.prompt_tokens ?? null,
+          completion: parsed.usage.completion_tokens ?? null,
+          total: parsed.usage.total_tokens ?? null,
+        };
+      }
+    };
+
+    while (true) {
+      // Narrow the abort-discriminating try around `reader.read()` only so file
+      // writes, hook dispatch, and JSON-parse failures propagate as themselves
+      // instead of being silently misclassified as aborts.
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch (err) {
+        if (signal?.aborted === true) {
+          aborted = true;
+          break;
+        }
+        throw err;
+      }
+      if (chunk.done) break;
+
+      buffer += decoder.decode(chunk.value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed || !trimmed.startsWith("data: ")) continue;
-
-        const payload = trimmed.slice(6);
-        if (payload === "[DONE]") continue;
-
-        try {
-          const raw: unknown = JSON.parse(payload);
-          if (typeof raw !== "object" || raw === null) continue;
-          const parsed = raw as LLMStreamChunk;
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            sawModelContent = true;
-            await persistChunk(delta);
-          }
-          if (parsed.usage) {
-            tokenUsage = {
-              prompt: parsed.usage.prompt_tokens ?? null,
-              completion: parsed.usage.completion_tokens ?? null,
-              total: parsed.usage.total_tokens ?? null,
-            };
-          }
-        } catch {
-          // Skip malformed JSON chunks
-        }
+        await handlePayload(trimmed.slice(6));
       }
     }
 
     // Process any remaining data in the buffer
     if (buffer.trim()) {
       const trimmed = buffer.trim();
-      if (trimmed.startsWith("data: ") && trimmed.slice(6) !== "[DONE]") {
-        try {
-          const raw: unknown = JSON.parse(trimmed.slice(6));
-          if (typeof raw === "object" && raw !== null) {
-            const parsed = raw as LLMStreamChunk;
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              sawModelContent = true;
-              await persistChunk(delta);
-            }
-            if (parsed.usage) {
-              tokenUsage = {
-                prompt: parsed.usage.prompt_tokens ?? null,
-                completion: parsed.usage.completion_tokens ?? null,
-                total: parsed.usage.total_tokens ?? null,
-              };
-            }
-          }
-        } catch {
-          // Skip malformed JSON
-        }
+      if (trimmed.startsWith("data: ")) {
+        await handlePayload(trimmed.slice(6));
       }
     }
   } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      aborted = true;
-    } else {
-      // Log unexpected stream errors before rethrowing
-      const latencyMs = Math.round(performance.now() - llmStartTime);
-      const errMsg = err instanceof Error ? err.message : String(err);
-      llmLog.info("LLM error", { type: "error", errorCode: "stream", latencyMs, error: errMsg, partialLength: aiContent.length });
+    // ChatError already logged its own `errorCode: "stream-error"` entry inside
+    // handlePayload — rethrow without adding a duplicate `"stream"` log entry.
+    if (err instanceof ChatError) {
       throw err;
     }
+    // NOTE: aborts are detected solely inside the narrow try around
+    // `reader.read()` above (which sets `aborted = true; break;`). Errors that
+    // reach this outer catch came from non-read operations (decode, parse,
+    // persistChunk, onDelta, hooks) and MUST propagate as themselves even if
+    // `signal.aborted` happens to be true concurrently — otherwise legitimate
+    // file/hook/onDelta failures would be silently misclassified as aborts.
+    const latencyMs = Math.round(performance.now() - llmStartTime);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    llmLog.info("LLM error", { type: "error", errorCode: "stream", latencyMs, error: errMsg, partialLength: aiContent.length });
+    throw err;
   } finally {
     file.close();
   }

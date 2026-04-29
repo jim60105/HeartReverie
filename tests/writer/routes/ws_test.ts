@@ -465,6 +465,68 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       await waitForClose(ws);
     });
 
+    await t.step("chat:abort during initial fetch resolves as chat:aborted (not chat:error)", async () => {
+      // Stub fetch so the upstream chat/completions request hangs until the
+      // signal aborts — this exercises the fix that abort during initial
+      // fetch resolution is no longer mis-routed to a 502 / chat:error.
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("nonexistent")) {
+          return new Promise<Response>((_resolve, reject) => {
+            const sig = init?.signal as AbortSignal | undefined;
+            if (!sig) {
+              reject(new Error("test fetch stub requires signal"));
+              return;
+            }
+            const onAbort = () => reject(sig.reason ?? new DOMException("aborted", "AbortError"));
+            if (sig.aborted) onAbort();
+            else sig.addEventListener("abort", onAbort, { once: true });
+          });
+        }
+        return originalFetch(url as string, init);
+      }) as typeof fetch;
+      try {
+        await Deno.mkdir(join(tmpDir, "abort-fetch-series", "abort-fetch-story"), { recursive: true });
+        const ws = await openWs(addr);
+        await authenticate(ws);
+        try {
+          ws.send(JSON.stringify({
+            type: "chat:send",
+            id: "abort-during-fetch-1",
+            series: "abort-fetch-series",
+            story: "abort-fetch-story",
+            message: "hi",
+          }));
+          // Yield so the server registers the AbortController in its map.
+          await new Promise((r) => setTimeout(r, 50));
+          ws.send(JSON.stringify({ type: "chat:abort", id: "abort-during-fetch-1" }));
+
+          // Read messages and explicitly fail if a chat:error arrives before
+          // chat:aborted (the bug we are guarding against).
+          let sawAborted = false;
+          for (let i = 0; i < 6 && !sawAborted; i++) {
+            const msg = await readMessage(ws, 2500);
+            if (msg.type === "chat:error") {
+              throw new Error(
+                `regression: received chat:error before chat:aborted (detail=${String(msg.detail)})`,
+              );
+            }
+            if (msg.type === "chat:aborted") {
+              assertEquals(msg.id, "abort-during-fetch-1");
+              sawAborted = true;
+              break;
+            }
+          }
+          assertEquals(sawAborted, true, "expected chat:aborted message");
+        } finally {
+          ws.close();
+          await waitForClose(ws);
+        }
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
     // ── 8.6: Connection lifecycle ──
 
     await t.step("connection closes cleanly", async () => {
