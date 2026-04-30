@@ -1,38 +1,7 @@
 import {
-  normalizeQuotes,
   doubleNewlines,
   reinjectPlaceholders,
 } from "@/lib/markdown-pipeline";
-
-describe("normalizeQuotes", () => {
-  it("normalises curly double quotes to ASCII", () => {
-    expect(normalizeQuotes("\u201cHello\u201d")).toBe('"Hello"');
-  });
-
-  it("normalises guillemets to ASCII quotes", () => {
-    expect(normalizeQuotes("\u00abHello\u00bb")).toBe('"Hello"');
-  });
-
-  it("normalises CJK corner brackets to ASCII quotes", () => {
-    expect(normalizeQuotes("\u300cHello\u300d")).toBe('"Hello"');
-  });
-
-  it("normalises halfwidth corner brackets", () => {
-    expect(normalizeQuotes("\uff62Hello\uff63")).toBe('"Hello"');
-  });
-
-  it("normalises double angle brackets", () => {
-    expect(normalizeQuotes("\u300aHello\u300b")).toBe('"Hello"');
-  });
-
-  it("normalises low-9 quotation mark", () => {
-    expect(normalizeQuotes("\u201eHello")).toBe('"Hello');
-  });
-
-  it("leaves ASCII quotes unchanged", () => {
-    expect(normalizeQuotes('"Hello"')).toBe('"Hello"');
-  });
-});
 
 describe("doubleNewlines", () => {
   it("doubles newlines for markdown paragraph breaks", () => {

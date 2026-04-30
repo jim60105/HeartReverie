@@ -1,0 +1,8 @@
+{
+  "name": "dialogue-colorize",
+  "version": "1.0.0",
+  "description": "Colourise dialogue runs (matched quote pairs) via the CSS Custom Highlight API without modifying the DOM",
+  "type": "frontend-only",
+  "frontendModule": "./frontend.js",
+  "frontendStyles": ["./styles.css"]
+}

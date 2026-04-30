@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { ChapterContentProps } from "@/types";
 import { useMarkdownRenderer } from "@/composables/useMarkdownRenderer";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useChapterActions } from "@/composables/useChapterActions";
 import { usePlugins } from "@/composables/usePlugins";
+import { frontendHooks } from "@/lib/plugin-hooks";
 import router from "@/router";
 import VentoErrorCard from "./VentoErrorCard.vue";
 
@@ -47,6 +48,49 @@ const isEditing = ref(false);
 const editBuffer = ref("");
 const isBusy = ref(false);
 const errorMessage = ref("");
+const containerRef = ref<HTMLElement | null>(null);
+
+// Dispatch `chapter:dom:ready` after Vue commits the rendered tokens to the
+// live DOM. Plugins (e.g. dialogue-colorize) walk the container's text nodes
+// and register Range objects against named Highlights. Skipped while the
+// edit textarea is shown because the rendered DOM is not present.
+function dispatchDomReady(): void {
+  if (isEditing.value) return;
+  const container = containerRef.value;
+  if (!container) return;
+  frontendHooks.dispatch("chapter:dom:ready", {
+    container,
+    tokens: tokens.value,
+    rawMarkdown: props.rawMarkdown,
+    chapterIndex: currentIndex.value,
+  });
+}
+
+// Belt-and-suspenders: dispatch once after mount when refs are guaranteed
+// populated. The post-flush watcher below handles every subsequent commit.
+onMounted(() => {
+  nextTick(dispatchDomReady);
+});
+
+watch(
+  [tokens, renderEpoch, isEditing],
+  () => {
+    dispatchDomReady();
+  },
+  { flush: "post" },
+);
+
+// Notify plugins that this container is going away so they can release any
+// retained Range objects keyed by it; otherwise long-running sessions that
+// navigate between many chapters can leak detached DOM via Highlight ranges.
+onBeforeUnmount(() => {
+  const container = containerRef.value;
+  if (!container) return;
+  frontendHooks.dispatch("chapter:dom:dispose", {
+    container,
+    chapterIndex: currentIndex.value,
+  });
+});
 
 function beginEdit(): void {
   editBuffer.value = props.rawMarkdown;
@@ -135,7 +179,7 @@ async function handleBranch(): Promise<void> {
 </script>
 
 <template>
-  <div class="chapter-content">
+  <div ref="containerRef" class="chapter-content">
     <div v-if="showToolbar" class="chapter-toolbar">
       <template v-if="!isEditing">
         <button

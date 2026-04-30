@@ -119,13 +119,14 @@ describe("useMarkdownRenderer", () => {
     expect(types).not.toContain("options");
   });
 
-  it("normalizes curly quotes in markdown text", async () => {
+  it("preserves curly quotes verbatim (no normalisation)", async () => {
     const { marked } = await import("marked");
     const { renderChapter } = await getRenderer();
     renderChapter("\u201cHello\u201d");
     const calls = (marked.parse as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const lastCall = calls[calls.length - 1]![0] as string;
-    expect(lastCall).toContain('"');
+    expect(lastCall).toContain("\u201cHello\u201d");
+    expect(lastCall).not.toContain('"Hello"');
   });
 
   it("doubles newlines for markdown paragraph breaks", async () => {

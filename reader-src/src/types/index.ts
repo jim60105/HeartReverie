@@ -220,6 +220,8 @@ export type HookStage =
   | "notification"
   | "chat:send:before"
   | "chapter:render:after"
+  | "chapter:dom:ready"
+  | "chapter:dom:dispose"
   | "story:switch"
   | "chapter:change";
 
@@ -253,6 +255,18 @@ export interface ChapterRenderAfterContext {
   tokens: RenderToken[];
   rawMarkdown: string;
   options: RenderOptions;
+}
+
+export interface ChapterDomReadyContext {
+  container: HTMLElement;
+  tokens: RenderToken[];
+  rawMarkdown: string;
+  chapterIndex: number;
+}
+
+export interface ChapterDomDisposeContext {
+  container: HTMLElement;
+  chapterIndex: number;
 }
 
 export interface StorySwitchContext {
