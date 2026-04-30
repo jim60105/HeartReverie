@@ -1,15 +1,4 @@
 /**
- * Replace Unicode quotation marks with ASCII double quote.
- * Covers: "" «» 「」 ｢｣ 《》 „
- */
-export function normalizeQuotes(text: string): string {
-  return text.replace(
-    /[\u201c\u201d\u00ab\u00bb\u300c\u300d\uff62\uff63\u300a\u300b\u201e]/g,
-    '"',
-  );
-}
-
-/**
  * Double all newlines so markdown parsers treat single newlines as paragraph breaks.
  */
 export function doubleNewlines(text: string): string {

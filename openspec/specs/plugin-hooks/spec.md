@@ -18,6 +18,8 @@ The hook system SHALL define the following ordered hook stages that plugins can 
 - `strip-tags`: Invoked during server-side chapter content stripping — plugins register tag names to strip from `previous_context` before prompt assembly
 - `chat:send:before`: Invoked in the frontend before a chat message leaves the browser — plugins can inspect and transform the outgoing message text by returning a replacement string from the handler. Dispatched from `useChatApi.sendMessage()` and `useChatApi.resendMessage()` strictly before the WebSocket `chat:send`/`chat:resend` message is sent OR before the HTTP POST body is serialised on the fallback path.
 - `chapter:render:after`: Invoked in the frontend at the end of `useMarkdownRenderer.renderChapter()`, after markdown parsing, DOMPurify sanitization, and placeholder reinjection have produced the final `RenderToken[]`. Plugins receive the tokens array by reference and can mutate it in place to add, remove, or decorate tokens. Dispatched once per chapter render, for every chapter (not just the last).
+- `chapter:dom:ready`: Invoked in the frontend AFTER Vue commits a chapter's `v-html` token render to the live DOM. Plugins receive a context object containing `container` (the chapter's root `HTMLElement`, e.g. `div.chapter-content`), `tokens` (the same `RenderToken[]` passed through `chapter:render:after`), `rawMarkdown` (the original chapter string), and `chapterIndex` (number, zero-based). Dispatched once on mount and on every subsequent render commit (e.g., when `tokens` change or `renderEpoch` bumps), for every chapter (not just the last). This stage is the canonical entry point for plugins that need to inspect, measure, or annotate live rendered DOM nodes (`Range` construction, `IntersectionObserver` attachment, computed-style reads, etc.) and MUST NOT be used for content mutation that would re-trigger a render commit cycle.
+- `chapter:dom:dispose`: Invoked in the frontend right before a `ChapterContent` instance is unmounted (e.g., navigation to a different route, story switch, or component teardown). Plugins receive a context object containing `container` (the same `HTMLElement` previously passed via `chapter:dom:ready`) and `chapterIndex` (number). Plugins SHALL use this to release any references they hold keyed by the container (e.g., `Range` objects registered against `Highlight` instances), preventing detached-DOM leaks across long sessions.
 - `story:switch`: Invoked in the frontend when the active story changes — dispatched from both `useChapterNav.loadFromBackend()` and `useChapterNav.loadFromFSA()` after the new story's metadata is committed to module state but before chapter content is displayed. Plugins can reset or initialise per-story state.
 - `chapter:change`: Invoked in the frontend whenever the currently displayed chapter index changes — dispatched from `useChapterNav.navigateTo()`, `loadFSAChapter()`, `reloadToLast()`, and the route-watcher branches inside `initRouteSync()`. The hook SHALL also be dispatched once during initial story load (with `previousIndex: null`).
 
@@ -66,6 +68,18 @@ Each stage SHALL have a well-defined context object that handlers receive and ca
 #### Scenario: chapter:render:after stage invocation
 - **WHEN** `useMarkdownRenderer.renderChapter()` has produced the final `RenderToken[]` array via markdown parsing, DOMPurify sanitization, and placeholder reinjection
 - **THEN** the hook system SHALL invoke all `chapter:render:after` handlers in priority order, passing a context object containing `tokens` (the mutable `RenderToken[]` array), `rawMarkdown` (the original chapter string), and `options` (the `RenderOptions` including `isLastChapter`), before `renderChapter()` returns
+
+#### Scenario: chapter:dom:ready stage invocation
+- **WHEN** Vue has committed a `ChapterContent` v-html token render to the live DOM (i.e. immediately after the `flush: "post"` watcher tick that follows a `tokens` or `renderEpoch` change, including the initial mount)
+- **THEN** the hook system SHALL invoke all `chapter:dom:ready` handlers in priority order, passing a context object containing `container` (the chapter root `HTMLElement`), `tokens` (the same `RenderToken[]` consumed by `v-html`), `rawMarkdown` (the original chapter string), and `chapterIndex` (zero-based number)
+
+#### Scenario: chapter:dom:ready dispatches once per render commit per chapter
+- **WHEN** the user edits a chapter, cancels the edit, navigates between chapters, or any other action that causes `ChapterContent.vue` to re-render its token list and bump `renderEpoch`
+- **THEN** `chapter:dom:ready` SHALL be dispatched exactly once for that chapter after each render commit; it SHALL NOT be dispatched in the absence of a render commit
+
+#### Scenario: chapter:dom:dispose stage invocation
+- **WHEN** a `ChapterContent.vue` instance is about to be unmounted (route change, story switch, parent re-key, etc.)
+- **THEN** the hook system SHALL invoke all `chapter:dom:dispose` handlers in priority order, passing a context object containing `container` (the same `HTMLElement` previously passed via `chapter:dom:ready`) and `chapterIndex` (zero-based number), so plugins can release container-keyed state without leaking detached DOM
 
 #### Scenario: story:switch stage invocation
 - **WHEN** `useChapterNav.loadFromBackend()` or `useChapterNav.loadFromFSA()` is called and the target story differs from the previously loaded story

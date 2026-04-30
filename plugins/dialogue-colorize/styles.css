@@ -1,0 +1,14 @@
+/* dialogue-colorize plugin — paint dialogue runs registered via
+   the CSS Custom Highlight API. Each rule targets one named registry. */
+
+::highlight(dialogue-quote-straight),
+::highlight(dialogue-quote-curly),
+::highlight(dialogue-quote-guillemet),
+::highlight(dialogue-quote-corner),
+::highlight(dialogue-quote-corner-half),
+::highlight(dialogue-quote-book) {
+  /* Default theme matches the reader's existing rose-gold palette and
+     stays well above WCAG AA contrast against the dark panel background.
+     Override per-element via `--dialogue-color`. */
+  color: var(--dialogue-color, #ff8aaa);
+}

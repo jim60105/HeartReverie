@@ -103,6 +103,7 @@ plugins/                  # Built-in plugins (manifest-driven) + shared utils
   _shared/
     utils.js              # Shared utilities (escapeHtml) used by frontend modules
   context-compaction/     # Tiered context compaction via inline chapter summaries
+  dialogue-colorize/      # Colourise dialogue quote runs via CSS Custom Highlight API (no DOM mutation)
   imgthink/               # Strip imgthink tags from display
   start-hints/            # First-round chapter opening guidance
   thinking/               # Fold <thinking>/<think> tags into collapsible details
@@ -265,7 +266,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 ### Plugin System
 
-The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 6 built-in plugins plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
+The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 7 built-in plugins plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
 
 Key classes:
 - `PluginManager` (`writer/lib/plugin-manager.ts`) — scans `plugins/` and optional `PLUGIN_DIR`, validates manifests, loads modules
@@ -281,6 +282,7 @@ Plugin interaction layers:
 6. **Frontend modules** — `frontendModule` provides browser-side rendering via `frontend-render` hook and notification handling via `notification` hook. Additional frontend hook stages are available for lifecycle integration:
    - `chat:send:before` — pipeline hook: handlers may transform the outgoing user message by returning a `string`; context is `{ message, mode: "send" | "resend" }`.
    - `chapter:render:after` — post-processing hook: handlers may mutate `tokens` after Markdown + initial DOMPurify pass; the dispatcher re-sanitizes any newly added or `.content`-mutated `html` tokens, so plugins never need to sanitize HTML themselves.
+   - `chapter:dom:ready` — DOM-commit hook: fired by `ChapterContent.vue` via a `flush: "post"` watcher after Vue applies v-html to the live DOM; context carries `{ container, tokens, rawMarkdown, chapterIndex }`. Used by plugins (e.g. `dialogue-colorize`) that need to operate on the rendered DOM (text nodes, ranges) rather than the token array. Skipped while the chapter editor textarea is shown.
    - `story:switch` / `chapter:change` — informational hooks fired on real navigation state changes (no veto). Contexts carry `previousSeries`/`previousStory` and `previousIndex` respectively.
 7. **Plugin logger** — each plugin receives a scoped logger via `PluginRegisterContext`; `HookDispatcher` injects `context.logger` during dispatch
 

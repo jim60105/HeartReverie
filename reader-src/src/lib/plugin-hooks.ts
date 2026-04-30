@@ -5,6 +5,8 @@ import type {
   NotificationContext,
   ChatSendBeforeContext,
   ChapterRenderAfterContext,
+  ChapterDomReadyContext,
+  ChapterDomDisposeContext,
   StorySwitchContext,
   ChapterChangeContext,
 } from "@/types";
@@ -14,6 +16,8 @@ type ContextMap = {
   "notification": NotificationContext;
   "chat:send:before": ChatSendBeforeContext;
   "chapter:render:after": ChapterRenderAfterContext;
+  "chapter:dom:ready": ChapterDomReadyContext;
+  "chapter:dom:dispose": ChapterDomDisposeContext;
   "story:switch": StorySwitchContext;
   "chapter:change": ChapterChangeContext;
 };
@@ -30,6 +34,8 @@ const VALID_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
   "notification",
   "chat:send:before",
   "chapter:render:after",
+  "chapter:dom:ready",
+  "chapter:dom:dispose",
   "story:switch",
   "chapter:change",
 ]);

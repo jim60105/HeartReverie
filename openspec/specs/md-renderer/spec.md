@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Processes raw markdown chapter content through a multi-stage pipeline: XML block extraction, quote normalisation, newline doubling, markdown-to-HTML conversion, hidden block removal, CJK text support, and placeholder reinsertion for specialist renderers.
+Processes raw markdown chapter content through a multi-stage pipeline: XML block extraction, newline doubling, markdown-to-HTML conversion, hidden block removal, CJK text support, and placeholder reinsertion for specialist renderers. The pipeline preserves all Unicode quote characters verbatim — visual dialogue styling is delegated to plugins.
 
 ## Requirements
 
@@ -24,12 +24,17 @@ If no plugins are registered, the pipeline SHALL extract no XML blocks and pass 
 - **WHEN** no plugins have registered `frontend-render` handlers
 - **THEN** the pipeline SHALL extract no XML blocks and all content SHALL pass through text processing as prose
 
-### Requirement: Quote character normalisation
-After XML block extraction, the renderer SHALL normalise all quote-like characters in the prose text. The characters `"`, `"`, `«`, `»`, `「`, `」`, `｢`, `｣`, `《`, `》`, and `"` SHALL all be replaced with the standard ASCII double-quote character `"`. This logic SHALL be implemented as a pure TypeScript utility function.
+### Requirement: Quote character preservation
 
-#### Scenario: Prose contains mixed quote characters
-- **WHEN** the prose text contains `「こんにちは」` and `«你好»` and `"Hello"`
-- **THEN** all quote-like characters SHALL be replaced with `"`, producing `"こんにちは"`, `"你好"`, and `"Hello"`
+The renderer SHALL preserve every Unicode quote character emitted upstream (including but not limited to ASCII straight quotes `"`, curly quotes `"` `"`, guillemets `«` `»`, CJK corner quotes `「` `」`, half-width corner quotes `｢` `｣`, book title brackets `《` `》`, and the German low quote `„`) verbatim in the rendered HTML output. No stage of the rendering pipeline SHALL substitute one quote character for another. Visual styling of dialogue runs is the exclusive responsibility of plugins subscribing to the `chapter:render:after` hook.
+
+#### Scenario: Original quote characters survive rendering
+- **WHEN** a chapter's prose contains `「こんにちは」`, `«你好»`, `"Hello"`, `"World"`, `《書名》`, and `„unfinished`
+- **THEN** the rendered HTML output SHALL contain those exact characters in the same positions and order; no quote character SHALL be substituted by any rendering stage
+
+#### Scenario: Renderer ships no quote-substitution utility
+- **WHEN** developers inspect `reader-src/src/lib/markdown-pipeline.ts`
+- **THEN** the file SHALL NOT export a `normalizeQuotes` function (or any equivalent function whose effect is to rewrite Unicode quote characters into ASCII quotes), and `useMarkdownRenderer.renderChapter()` SHALL NOT call any such function during rendering
 
 ### Requirement: Newline doubling for markdown rendering
 The renderer SHALL double all single newline characters (`\n`) in the prose text to `\n\n` so that markdown renderers treat each line break as a paragraph break. This logic SHALL be a pure TypeScript utility function.

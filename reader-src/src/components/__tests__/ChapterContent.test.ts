@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { flushPromises, mount } from "@vue/test-utils";
-import { ref } from "vue";
+import { ref, nextTick } from "vue";
 import ChapterContent from "@/components/ChapterContent.vue";
 
 const mockState = vi.hoisted(() => {
@@ -250,5 +250,71 @@ describe("ChapterContent", () => {
 
     expect(mockState.bumpRenderEpochMock).toHaveBeenCalledTimes(1);
     expect(wrapper.find("textarea.chapter-editor").exists()).toBe(false);
+  });
+
+  it("dispatches chapter:dom:ready after mount and on renderEpoch bump", async () => {
+    const { frontendHooks } = await import("@/lib/plugin-hooks");
+    const dispatchSpy = vi.spyOn(frontendHooks, "dispatch");
+    const wrapper = mountComponent();
+    await flushPromises();
+    await nextTick();
+    const readyCalls = dispatchSpy.mock.calls.filter(
+      (c) => c[0] === "chapter:dom:ready",
+    );
+    expect(readyCalls.length).toBeGreaterThanOrEqual(1);
+    const ctx = readyCalls[0]![1] as {
+      container: HTMLElement;
+      chapterIndex: number;
+    };
+    expect(ctx.container).toBe(wrapper.find(".chapter-content").element);
+    expect(ctx.chapterIndex).toBe(0);
+
+    const before = dispatchSpy.mock.calls.filter(
+      (c) => c[0] === "chapter:dom:ready",
+    ).length;
+    mockState.renderEpochRef.value += 1;
+    await flushPromises();
+    await nextTick();
+    const after = dispatchSpy.mock.calls.filter(
+      (c) => c[0] === "chapter:dom:ready",
+    ).length;
+    expect(after).toBeGreaterThan(before);
+    dispatchSpy.mockRestore();
+  });
+
+  it("does NOT dispatch chapter:dom:ready while editing", async () => {
+    const { frontendHooks } = await import("@/lib/plugin-hooks");
+    const wrapper = mountComponent();
+    await flushPromises();
+    await nextTick();
+    const dispatchSpy = vi.spyOn(frontendHooks, "dispatch");
+    await wrapper.findAll("button")[0]!.trigger("click");
+    await flushPromises();
+    await nextTick();
+    const readyCalls = dispatchSpy.mock.calls.filter(
+      (c) => c[0] === "chapter:dom:ready",
+    );
+    expect(readyCalls.length).toBe(0);
+    dispatchSpy.mockRestore();
+  });
+
+  it("dispatches chapter:dom:dispose exactly once on unmount", async () => {
+    const { frontendHooks } = await import("@/lib/plugin-hooks");
+    const wrapper = mountComponent();
+    await flushPromises();
+    const container = wrapper.find(".chapter-content").element;
+    const dispatchSpy = vi.spyOn(frontendHooks, "dispatch");
+    wrapper.unmount();
+    const disposeCalls = dispatchSpy.mock.calls.filter(
+      (c) => c[0] === "chapter:dom:dispose",
+    );
+    expect(disposeCalls.length).toBe(1);
+    const ctx = disposeCalls[0]![1] as {
+      container: HTMLElement;
+      chapterIndex: number;
+    };
+    expect(ctx.container).toBe(container);
+    expect(ctx.chapterIndex).toBe(0);
+    dispatchSpy.mockRestore();
   });
 });

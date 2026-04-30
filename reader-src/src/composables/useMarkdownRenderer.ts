@@ -1,6 +1,6 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { normalizeQuotes, doubleNewlines, reinjectPlaceholders } from "@/lib/markdown-pipeline";
+import { doubleNewlines, reinjectPlaceholders } from "@/lib/markdown-pipeline";
 import { extractVentoErrors } from "@/lib/parsers/vento-error-parser";
 import { frontendHooks } from "@/lib/plugin-hooks";
 import { usePlugins } from "@/composables/usePlugins";
@@ -109,19 +109,16 @@ function renderChapter(
   const { applyDisplayStrip } = usePlugins();
   text = applyDisplayStrip(text);
 
-  // 3. Quote normalisation
-  text = normalizeQuotes(text);
-
-  // 4. Newline doubling
+  // 3. Newline doubling
   text = doubleNewlines(text);
 
-  // 5. Markdown → HTML via marked.parse()
+  // 4. Markdown → HTML via marked.parse()
   let html = marked.parse(text, { breaks: true }) as string;
 
-  // 6. Reinject placeholders (for plugin-provided HTML content)
+  // 5. Reinject placeholders (for plugin-provided HTML content)
   html = reinjectPlaceholders(html, placeholderMap);
 
-  // 7. Split HTML on structured placeholders to create RenderToken[]
+  // 6. Split HTML on structured placeholders to create RenderToken[]
   //    This must happen BEFORE DOMPurify because DOMPurify strips
   //    HTML comment placeholders (<!--STATUS_BLOCK_0--> etc.).
   const tokens: RenderToken[] = [];
@@ -156,7 +153,7 @@ function renderChapter(
           break;
       }
     } else if (part.trim()) {
-      // 8. Sanitize HTML via DOMPurify (per-fragment, after split)
+      // 7. Sanitize HTML via DOMPurify (per-fragment, after split)
       const sanitized = sanitizeHtml(part);
       if (sanitized.trim()) {
         tokens.push({ type: "html", content: sanitized });

@@ -3,6 +3,8 @@ import type {
   ChatSendBeforeContext,
   ChatSendBeforeHandler,
   ChapterChangeContext,
+  ChapterDomReadyContext,
+  ChapterDomDisposeContext,
   StorySwitchContext,
   ChapterRenderAfterContext,
   RenderToken,
@@ -26,6 +28,8 @@ describe("FrontendHookDispatcher — new stages", () => {
     const d = new FrontendHookDispatcher();
     d.register("chat:send:before", () => {});
     d.register("chapter:render:after", () => {});
+    d.register("chapter:dom:ready", () => {});
+    d.register("chapter:dom:dispose", () => {});
     d.register("story:switch", () => {});
     d.register("chapter:change", () => {});
     expect(warn).not.toHaveBeenCalled();
@@ -148,5 +152,40 @@ describe("FrontendHookDispatcher — new stages", () => {
     d.dispatch("chapter:change", ctx);
     expect(calls.length).toBe(1);
     expect(calls[0]!.previousIndex).toBeNull();
+  });
+
+  it("chapter:dom:ready — handler receives container and tokens", () => {
+    const d = new FrontendHookDispatcher();
+    const seen: ChapterDomReadyContext[] = [];
+    d.register("chapter:dom:ready", (ctx) => {
+      seen.push(ctx);
+    });
+    const container = document.createElement("div");
+    const tokens: RenderToken[] = [{ type: "html", content: "<p>x</p>" }];
+    const ctx: ChapterDomReadyContext = {
+      container,
+      tokens,
+      rawMarkdown: "x",
+      chapterIndex: 0,
+    };
+    d.dispatch("chapter:dom:ready", ctx);
+    expect(seen.length).toBe(1);
+    expect(seen[0]!.container).toBe(container);
+    expect(seen[0]!.tokens).toBe(tokens);
+    expect(seen[0]!.chapterIndex).toBe(0);
+  });
+
+  it("chapter:dom:dispose — handler receives container and chapterIndex", () => {
+    const d = new FrontendHookDispatcher();
+    const seen: ChapterDomDisposeContext[] = [];
+    d.register("chapter:dom:dispose", (ctx) => {
+      seen.push(ctx);
+    });
+    const container = document.createElement("div");
+    const ctx: ChapterDomDisposeContext = { container, chapterIndex: 4 };
+    d.dispatch("chapter:dom:dispose", ctx);
+    expect(seen.length).toBe(1);
+    expect(seen[0]!.container).toBe(container);
+    expect(seen[0]!.chapterIndex).toBe(4);
   });
 });
