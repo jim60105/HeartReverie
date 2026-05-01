@@ -69,8 +69,11 @@ async function handleExport(format: ExportFormat) {
     :open="isOpen || undefined"
     @toggle="isOpen = ($event.target as HTMLDetailsElement).open"
   >
-    <summary class="themed-btn selector-toggle">
-      📖 故事選擇
+    <summary
+      class="themed-btn selector-toggle"
+      :aria-label="selectedStory ? '故事選擇' : null"
+    >
+      <span aria-hidden="true">📖</span><span v-if="!selectedStory"> 故事選擇</span>
     </summary>
     <div class="selector-dropdown">
       <div class="selector-fields">
@@ -148,7 +151,7 @@ async function handleExport(format: ExportFormat) {
   border: 1px solid var(--btn-border);
   color: var(--text-name);
   cursor: pointer;
-  padding: 4px 12px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -210,7 +213,7 @@ async function handleExport(format: ExportFormat) {
   background: var(--btn-bg);
   border: 1px solid var(--btn-border);
   color: var(--text-name);
-  padding: 4px 12px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 500;

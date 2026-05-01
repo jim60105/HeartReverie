@@ -6,16 +6,24 @@ Handles client-side folder selection and markdown file discovery using the brows
 
 ## Requirements
 
-### Requirement: Folder selection via File System Access API
-The application SHALL provide a UI element (button within a Vue component) that invokes `window.showDirectoryPicker()` to let the user select a local folder containing markdown story files. The File System Access API logic SHALL be encapsulated in a `useFileReader()` Vue composable that returns reactive refs for the directory handle, discovered files, and loading state. The application MUST NOT require a server or backend for FSA mode — all file access SHALL occur client-side through the browser's File System Access API.
+### Requirement: File System Access API folder selection
 
-#### Scenario: User selects a valid folder
-- **WHEN** the user clicks the folder-selection button and picks a directory containing `.md` files
-- **THEN** the `useFileReader()` composable SHALL update its reactive `files` ref with all markdown files matching the numeric naming pattern
+The application SHALL retain a `useFileReader()` Vue composable that wraps `window.showDirectoryPicker()`, returning reactive refs for the directory handle, discovered files, and loading state. The File System Access API logic SHALL remain client-side and SHALL NOT require a server or backend for FSA mode. The application SHALL NOT render a UI button or link that invokes the directory picker; FSA mode SHALL therefore be unreachable from the default reader UI until a future change re-introduces an entry point. The composable's API surface (`isSupported`, `directoryHandle`, `openDirectory`, `readFile`) SHALL remain stable so a future re-introduction does not require re-implementing the FSA flow. The header's reload control (`🔄`) SHALL continue to call `useChapterNav().loadFromFSA(directoryHandle.value)` when `mode.value === "fsa"` so that any FSA session entered programmatically (tests, dev tooling, future feature) keeps a working reload path; the reload control SHALL NOT itself open the directory picker.
 
-#### Scenario: User cancels the folder picker
-- **WHEN** the user opens the directory picker dialog but cancels without selecting a folder
-- **THEN** the composable's reactive state SHALL remain unchanged, no errors SHALL occur, and no files SHALL be loaded
+#### Scenario: Composable still exists and is importable
+
+- **WHEN** a Vue component imports `useFileReader` from `@/composables/useFileReader`
+- **THEN** the import SHALL resolve to a composable returning the same reactive refs (`isSupported`, `directoryHandle`, `openDirectory`, `readFile`, etc.) as before this change
+
+#### Scenario: No folder-picker button rendered in default UI
+
+- **WHEN** the default reader shell (`AppHeader.vue` and any other always-mounted component) renders
+- **THEN** no button or link SHALL invoke `useFileReader().openDirectory()` from that shell
+
+#### Scenario: FSA mode still functions when triggered programmatically
+
+- **WHEN** code (e.g., a future feature, a test, or a developer tool) calls `useFileReader().openDirectory()` followed by `useChapterNav().loadFromFSA(handle)`
+- **THEN** the existing FSA flow SHALL run unchanged — the composable, IndexedDB persistence, chapter loading paths, and the header reload control's FSA branch SHALL continue to function exactly as specified prior to this change
 
 ### Requirement: Numeric markdown file filtering
 The `useFileReader()` composable SHALL only recognize files whose names match the pattern of one or more leading digits followed by `.md` (e.g., `001.md`, `02.md`, `1.md`). All other files in the selected directory SHALL be ignored. The filtering logic SHALL be implemented as a pure TypeScript utility function.

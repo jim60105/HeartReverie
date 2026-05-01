@@ -201,6 +201,8 @@ export interface UseChapterNavReturn {
   folderName: Ref<string>;
   next: () => void;
   previous: () => void;
+  goToFirst: () => void;
+  goToLast: () => void;
   loadFromFSA: (handle: FileSystemDirectoryHandle) => Promise<void>;
   loadFromBackend: (series: string, story: string, startChapter?: number) => Promise<void>;
   reloadToLast: () => Promise<void>;
