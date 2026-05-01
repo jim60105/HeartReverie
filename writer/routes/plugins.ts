@@ -37,6 +37,7 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       frontendStyles: pluginManager.getPluginStyles(p.name).map(
         (cssPath) => `/plugins/${p.name}/${cssPath}`,
       ),
+      actionButtons: pluginManager.getPluginActionButtons(p.name),
     }));
     return c.json(plugins);
   });

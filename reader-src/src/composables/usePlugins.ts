@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import type { UsePluginsReturn, PluginDescriptor } from "@/types";
+import type { UsePluginsReturn, PluginDescriptor, HookStage, HookHandler } from "@/types";
 import { FrontendHookDispatcher, frontendHooks } from "@/lib/plugin-hooks";
 import { useAuth } from "@/composables/useAuth";
 import { useNotification } from "@/composables/useNotification";
@@ -102,6 +102,25 @@ async function doInit(): Promise<void> {
 
   const frontendPlugins = pluginList.filter((p) => p.hasFrontendModule);
 
+  // Build a per-plugin proxy that auto-curries `originPluginName` into
+  // `register()` (and `on()` for plugins that prefer the alias). Existing
+  // plugins that pass extra arguments keep working unchanged because the
+  // proxy forwards everything else verbatim.
+  function makePluginHooksProxy(originPluginName: string) {
+    return new Proxy(frontendHooks, {
+      get(target, prop, receiver) {
+        if (prop === "register" || prop === "on") {
+          return (
+            stage: HookStage,
+            handler: HookHandler<unknown>,
+            priority?: number,
+          ) => target.register(stage, handler, priority, originPluginName);
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  }
+
   // Use allSettled so every plugin gets a chance to register, but track
   // failures so we can fail the overall init and keep pluginsReady false.
   const results = await Promise.allSettled(
@@ -112,7 +131,7 @@ async function doInit(): Promise<void> {
       if (typeof mod.register === "function") {
         // Honor async register() functions so plugins that load resources
         // before registering handlers complete before pluginsReady flips.
-        await Promise.resolve(mod.register(frontendHooks));
+        await Promise.resolve(mod.register(makePluginHooksProxy(p.name)));
       }
     }),
   );

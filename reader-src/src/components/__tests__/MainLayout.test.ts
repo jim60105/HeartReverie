@@ -75,6 +75,7 @@ describe("MainLayout", () => {
           AppHeader: { template: "<div class='app-header-stub'></div>" },
           ContentArea: { template: "<div class='content-area-stub'></div>" },
           UsagePanel: { template: "<div class='usage-panel-stub'></div>" },
+          PluginActionBar: { template: "<div class='plugin-action-bar-stub'></div>" },
         },
       },
     });

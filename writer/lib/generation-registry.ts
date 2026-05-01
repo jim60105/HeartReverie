@@ -54,6 +54,27 @@ export function clearGenerationActive(series: string, name: string): void {
 }
 
 /**
+ * Atomically check that no generation is in flight for `<series>/<name>` and,
+ * if so, mark it active in a single synchronous step. Returns `true` when the
+ * caller acquired the lock (and MUST eventually pair with
+ * `clearGenerationActive`), `false` when the story already had at least one
+ * active generation. This is the canonical helper to use in route handlers
+ * that need to refuse concurrent generations rather than refcount them.
+ *
+ * Because JavaScript runs synchronous code in a single thread, the read +
+ * write below cannot be interleaved with another `tryMarkGenerationActive`
+ * call. Two simultaneous callers therefore see distinct outcomes (first
+ * wins, second returns false) without any explicit locking primitive.
+ */
+export function tryMarkGenerationActive(series: string, name: string): boolean {
+  const key = keyOf(series, name);
+  const prev = activeGenerations.get(key) ?? 0;
+  if (prev > 0) return false;
+  activeGenerations.set(key, 1);
+  return true;
+}
+
+/**
  * Return `true` when at least one generation is currently active against
  * `<series>/<name>`.
  */

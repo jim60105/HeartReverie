@@ -40,6 +40,71 @@ export interface PluginDescriptor {
   hasFrontendModule: boolean;
   displayStripTags?: string[];
   frontendStyles?: string[];
+  actionButtons?: ActionButtonDescriptor[];
+}
+
+// ── Plugin Action Buttons ──
+
+/**
+ * Declarative action-button entry contributed by a plugin via its
+ * `plugin.json` manifest. Defaults are filled in by the backend before the
+ * descriptor reaches the frontend, so consumers can rely on `priority` and
+ * `visibleWhen` always being present in the API payload (see
+ * `plugin-action-buttons` capability).
+ */
+export interface ActionButtonDescriptor {
+  id: string;
+  label: string;
+  icon?: string;
+  tooltip?: string;
+  priority?: number;
+  visibleWhen?: "last-chapter-backend" | "backend-only";
+}
+
+/**
+ * Options for `runPluginPrompt` — passed to a plugin's curried helper from
+ * inside an `action-button:click` handler. `pluginName` is bound by the
+ * dispatcher and is NOT exposed on this options object.
+ */
+export interface RunPluginPromptOptions {
+  series?: string;
+  name?: string;
+  append?: boolean;
+  appendTag?: string;
+  extraVariables?: Record<string, string | number | boolean>;
+}
+
+/** Final result envelope returned by `runPluginPrompt`. */
+export interface RunPluginPromptResult {
+  content: string;
+  usage: TokenUsageRecord | null;
+  chapterUpdated: boolean;
+  appendedTag: string | null;
+}
+
+/**
+ * Context passed to `action-button:click` handlers. Helpers are curried so
+ * plugins cannot trigger another plugin's prompts (`runPluginPrompt` has the
+ * owning plugin name pre-bound) and so handlers don't need to read route
+ * state themselves.
+ */
+export interface ActionButtonClickContext {
+  buttonId: string;
+  pluginName: string;
+  series: string;
+  name: string;
+  storyDir: string;
+  lastChapterIndex: number | null;
+  runPluginPrompt: (
+    promptFile: string,
+    opts?: RunPluginPromptOptions,
+  ) => Promise<RunPluginPromptResult>;
+  notify: (input: {
+    level?: "info" | "warning" | "error";
+    title?: string;
+    body: string;
+  }) => void;
+  reload: () => Promise<void>;
 }
 
 export interface PluginManifest {
@@ -228,6 +293,11 @@ export interface UseChatApiReturn {
     story: string,
     message: string,
   ) => Promise<boolean>;
+  runPluginPrompt: (
+    pluginName: string,
+    promptFile: string,
+    opts?: RunPluginPromptOptions,
+  ) => Promise<RunPluginPromptResult>;
   abortCurrentRequest: () => void;
 }
 
@@ -246,7 +316,8 @@ export type HookStage =
   | "chapter:dom:ready"
   | "chapter:dom:dispose"
   | "story:switch"
-  | "chapter:change";
+  | "chapter:change"
+  | "action-button:click";
 
 export interface HookHandler<T = Record<string, unknown>> {
   (context: T): void;
@@ -618,13 +689,34 @@ export interface WsChatAbortMessage {
   id: string;
 }
 
+/** Client-to-server: run a plugin-owned prompt. */
+export interface WsPluginActionRunMessage {
+  type: "plugin-action:run";
+  correlationId: string;
+  pluginName: string;
+  series: string;
+  name: string;
+  promptFile: string;
+  append?: boolean;
+  appendTag?: string;
+  extraVariables?: Record<string, string | number | boolean>;
+}
+
+/** Client-to-server: abort an in-flight plugin-action run. */
+export interface WsPluginActionAbortMessage {
+  type: "plugin-action:abort";
+  correlationId: string;
+}
+
 /** All client-to-server message types. */
 export type WsClientMessage =
   | WsAuthMessage
   | WsChatSendMessage
   | WsChatResendMessage
   | WsChatAbortMessage
-  | WsSubscribeMessage;
+  | WsSubscribeMessage
+  | WsPluginActionRunMessage
+  | WsPluginActionAbortMessage;
 
 /** Server-to-client: authentication successful. */
 export interface WsAuthOkMessage {
@@ -688,6 +780,36 @@ export interface WsChatAbortedMessage {
   id: string;
 }
 
+/** Server-to-client: plugin-action streaming delta chunk. */
+export interface WsPluginActionDeltaMessage {
+  type: "plugin-action:delta";
+  correlationId: string;
+  chunk: string;
+}
+
+/** Server-to-client: plugin-action run completed successfully. */
+export interface WsPluginActionDoneMessage {
+  type: "plugin-action:done";
+  correlationId: string;
+  content: string;
+  usage: TokenUsageRecord | null;
+  chapterUpdated: boolean;
+  appendedTag: string | null;
+}
+
+/** Server-to-client: plugin-action run errored. */
+export interface WsPluginActionErrorMessage {
+  type: "plugin-action:error";
+  correlationId: string;
+  problem: { type?: string; title?: string; detail?: string; status?: number };
+}
+
+/** Server-to-client: plugin-action run aborted. */
+export interface WsPluginActionAbortedMessage {
+  type: "plugin-action:aborted";
+  correlationId: string;
+}
+
 /** All server-to-client message types. */
 export type WsServerMessage =
   | WsAuthOkMessage
@@ -698,7 +820,11 @@ export type WsServerMessage =
   | WsChatAbortedMessage
   | WsChaptersUpdatedMessage
   | WsChaptersContentMessage
-  | WsErrorMessage;
+  | WsErrorMessage
+  | WsPluginActionDeltaMessage
+  | WsPluginActionDoneMessage
+  | WsPluginActionErrorMessage
+  | WsPluginActionAbortedMessage;
 
 // ── WebSocket Composable Return ──
 
