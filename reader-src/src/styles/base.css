@@ -2,6 +2,25 @@
 
 @import "tailwindcss";
 
+/* ── Settings Layout: route-scoped viewport cap ──
+   When the prompt-editor route is mounted (i.e., a descendant carries the
+   `.editor-page` class from PromptEditorPage.vue), pin the settings shell to
+   exactly the viewport so internal panes (textarea, preview) become the only
+   scroll containers and the document body never scrolls. Other settings tabs
+   (`/settings/lore`, `/settings/llm`) lack `.editor-page`, so this rule does
+   not match and they keep their existing `min-height: 100vh` page-scroll
+   behaviour. The `100vh` declaration is a fallback for browsers without
+   `dvh` support. The duplicated class chain `.settings-layout.settings-layout`
+   raises specificity above SettingsLayout.vue's scoped `.settings-layout` rule
+   (which sets `min-height: 100vh`), so the `min-height` neutralization wins
+   on mobile where `100vh > 100dvh` due to dynamic browser chrome. */
+.settings-layout.settings-layout:has(.editor-page) {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ── Body ── */
 
 body {
