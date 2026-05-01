@@ -15,7 +15,7 @@
 
 import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
-import type { AppConfig, LlmConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError, TokenUsageRecord } from "../types.ts";
+import type { AppConfig, ChatMessage, LlmConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError, TokenUsageRecord } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { resolveTargetChapterNumber } from "./story.ts";
 import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
@@ -138,7 +138,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   // 4. Build prompt
   const {
-    prompt: systemPrompt,
+    messages: templateMessages,
     ventoError,
     chapterFiles,
     chapters,
@@ -148,7 +148,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     throw new ChatError("vento", "Template rendering error", 422, ventoError);
   }
 
-  if (!systemPrompt) {
+  if (templateMessages.length === 0) {
     throw new ChatError("no-prompt", "Failed to generate prompt", 500);
   }
 
@@ -158,11 +158,13 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   markGenerationActive(series, name);
   try {
 
-  // 5. Call LLM API with streaming
-  const messages: Array<{ role: string; content: string }> = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: message },
-  ];
+  // 5. Call LLM API with streaming — the template is the authoritative
+  // source of the upstream messages array; we no longer auto-append a
+  // {role:"user"} turn here (the template's `{{ message "user" }}` block
+  // is responsible for placing the live user input).
+  const messages: ChatMessage[] = templateMessages;
+  const roleCounts: Record<ChatMessage["role"], number> = { system: 0, user: 0, assistant: 0 };
+  for (const m of messages) roleCounts[m.role]++;
 
   reqLog.debug("LLM request payload", {
     model: llmConfig.model,
@@ -178,8 +180,8 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     reasoningEffort: llmConfig.reasoningEffort,
     maxCompletionTokens: llmConfig.maxCompletionTokens,
     reasoningOmit: config.LLM_REASONING_OMIT,
-    systemPromptLength: systemPrompt.length,
-    userMessageLength: message.length,
+    messageCount: messages.length,
+    roleCounts,
   });
 
   llmLog.info("LLM request", {
@@ -201,8 +203,9 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       maxCompletionTokens: llmConfig.maxCompletionTokens,
     },
     reasoningOmit: config.LLM_REASONING_OMIT,
-    systemPrompt,
-    userMessage: message,
+    messages,
+    messageCount: messages.length,
+    roleCounts,
   });
 
   const llmStartTime = performance.now();

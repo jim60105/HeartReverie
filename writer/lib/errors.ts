@@ -33,6 +33,17 @@ export function buildVentoError(err: Error, templatePath: string, knownVariables
   const lineMatch = err.message.match(/line (\d+)/i);
   if (lineMatch) error.line = parseInt(lineMatch[1]!, 10);
 
+  // Multi-message tag error variants — recognised by tagged prefixes thrown
+  // from `vento-message-tag.ts` (compile-time `SourceError`s carry the same
+  // message prefixes via their inherited `.message`).
+  const multiMessageTag = matchMultiMessageTag(err.message);
+  if (multiMessageTag) {
+    error.type = multiMessageTag;
+    error.title = multiMessageTitle(multiMessageTag);
+    error.suggestion = multiMessageSuggestion(multiMessageTag, err.message);
+    return error;
+  }
+
   const varMatch = err.message.match(
     /(?:Variable|variable) ['"]?(\w+)['"]? (?:is )?not defined/i
   );
@@ -54,6 +65,61 @@ export function buildVentoError(err: Error, templatePath: string, knownVariables
   }
 
   return error;
+}
+
+const MULTI_MESSAGE_TAGS = [
+  "multi-message:invalid-role",
+  "multi-message:nested",
+  "multi-message:no-user-message",
+  "multi-message:empty-message",
+  "multi-message:assembly-corrupt",
+] as const;
+
+type MultiMessageTag = typeof MULTI_MESSAGE_TAGS[number];
+
+function matchMultiMessageTag(message: string): MultiMessageTag | null {
+  for (const tag of MULTI_MESSAGE_TAGS) {
+    if (message.includes(tag)) return tag;
+  }
+  return null;
+}
+
+function multiMessageTitle(tag: MultiMessageTag): string {
+  switch (tag) {
+    case "multi-message:invalid-role":
+      return "Invalid Message Role";
+    case "multi-message:nested":
+      return "Nested Message Block";
+    case "multi-message:no-user-message":
+      return "Missing User Message";
+    case "multi-message:empty-message":
+      return "Empty Message Content";
+    case "multi-message:assembly-corrupt":
+      return "Message Assembly Error";
+  }
+}
+
+function multiMessageSuggestion(
+  tag: MultiMessageTag,
+  message: string,
+): string {
+  switch (tag) {
+    case "multi-message:invalid-role": {
+      // Try to surface the offending value in the suggestion.
+      const after = message.split("multi-message:invalid-role")[1] ?? "";
+      const trimmed = after.replace(/^[\s:]+/, "").trim();
+      const detail = trimmed.length > 0 ? ` (got: ${trimmed.split("\n")[0]})` : "";
+      return `Use one of "system", "user", or "assistant" as the role of {{ message }} blocks${detail}.`;
+    }
+    case "multi-message:nested":
+      return "Split the inner {{ message }} block out to the top level — nested message blocks are not supported.";
+    case "multi-message:no-user-message":
+      return "Add a {{ message \"user\" }}{{ user_input }}{{ /message }} block (typically at the end of the template) so the request ends on a user turn.";
+    case "multi-message:empty-message":
+      return "Every {{ message }} block must contain non-whitespace content. Either add content or remove the block.";
+    case "multi-message:assembly-corrupt":
+      return "Internal error assembling the rendered messages. Please report this with the template that triggered it.";
+  }
 }
 
 export function findClosestMatch(target: string, candidates: string[]): string | null {

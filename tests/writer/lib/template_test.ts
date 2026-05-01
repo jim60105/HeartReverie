@@ -109,11 +109,11 @@ Deno.test("createTemplateEngine", async (t) => {
   await t.step("renderSystemPrompt with templateOverride renders correctly", async () => {
     const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
     const result = await renderSystemPrompt("test-series", undefined, {
-      templateOverride: "Hello {{ user_input }}!",
+      templateOverride: `{{ message "user" }}Hello {{ user_input }}!{{ /message }}`,
       userInput: "world",
     });
     assertEquals(result.error, null);
-    assertEquals(result.content, "Hello world!");
+    assertEquals(result.messages, [{ role: "user", content: "Hello world!" }]);
   });
 
   await t.step("templateOverride exceeding max length returns error", async () => {
@@ -122,7 +122,7 @@ Deno.test("createTemplateEngine", async (t) => {
     const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: longTemplate,
     });
-    assertEquals(result.content, null);
+    assertEquals(result.messages, []);
     assertEquals(result.error!.title, "Template Validation Error");
     assertEquals(result.error!.detail, "Template exceeds maximum length");
   });
@@ -132,7 +132,7 @@ Deno.test("createTemplateEngine", async (t) => {
     const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "{{ process.env.SECRET }}",
     });
-    assertEquals(result.content, null);
+    assertEquals(result.messages, []);
     assertEquals(result.error!.title, "Template Validation Error");
     assertEquals(
       result.error!.detail,
@@ -147,7 +147,7 @@ Deno.test("createTemplateEngine", async (t) => {
     const result = await renderSystemPrompt("test-series", undefined, {
       templateOverride: "{{ for x of items }}no closing tag",
     });
-    assertEquals(result.content, null);
+    assertEquals(result.messages, []);
     assertExists(result.error);
     assertEquals(result.error!.type, "vento-error");
   });
@@ -168,24 +168,26 @@ Deno.test("createTemplateEngine", async (t) => {
     } as unknown as PluginManager;
     const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
     const result = await renderSystemPrompt("test-series", undefined, {
-      templateOverride: "{{ custom_var }}",
+      templateOverride: `{{ message "user" }}{{ custom_var }}{{ /message }}`,
     });
     assertEquals(result.error, null);
-    assertEquals(result.content, "plugin_value");
+    assertEquals(result.messages, [{ role: "user", content: "plugin_value" }]);
   });
 
   await t.step("undefined variable renders as empty string in Vento", async () => {
     const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
     const result = await renderSystemPrompt("test-series", undefined, {
-      templateOverride: "before[{{ nonexistent_var }}]after",
+      templateOverride: `{{ message "user" }}before[{{ nonexistent_var }}]after{{ /message }}`,
     });
     // Vento either outputs empty or throws — capture actual behavior
     if (result.error) {
       // If Vento throws for undefined vars, this is expected
       assertExists(result.error);
     } else {
-      // If Vento renders undefined as empty, the content won't have "nonexistent_var"
-      assertExists(result.content);
+      // If Vento renders undefined as empty, the message survives without
+      // the missing-variable name leaking through.
+      assertExists(result.messages[0]);
+      assertEquals(result.messages[0]!.role, "user");
     }
   });
 
@@ -196,10 +198,11 @@ Deno.test("createTemplateEngine", async (t) => {
     } as unknown as PluginManager;
     const { renderSystemPrompt } = createTemplateEngine(emptyPluginMgr);
     const result = await renderSystemPrompt("test-series", undefined, {
-      templateOverride: "Fragments:[{{ for f of plugin_fragments }}{{ f }}{{ /for }}]",
+      templateOverride:
+        `{{ message "user" }}Fragments:[{{ for f of plugin_fragments }}{{ f }}{{ /for }}]{{ /message }}`,
     });
     assertEquals(result.error, null);
-    assertEquals(result.content, "Fragments:[]");
+    assertEquals(result.messages, [{ role: "user", content: "Fragments:[]" }]);
   });
 
   await t.step("plugin_fragments ordering preserved in template output", async () => {
@@ -212,19 +215,24 @@ Deno.test("createTemplateEngine", async (t) => {
     } as unknown as PluginManager;
     const { renderSystemPrompt } = createTemplateEngine(orderedPluginMgr);
     const result = await renderSystemPrompt("test-series", undefined, {
-      templateOverride: "{{ for f of plugin_fragments }}[{{ f }}]{{ /for }}",
+      templateOverride:
+        `{{ message "user" }}{{ for f of plugin_fragments }}[{{ f }}]{{ /for }}{{ /message }}`,
     });
     assertEquals(result.error, null);
-    assertEquals(result.content, "[AAA][BBB][CCC]");
+    assertEquals(result.messages, [{ role: "user", content: "[AAA][BBB][CCC]" }]);
   });
 
   await t.step("series_name and story_name are available in template", async () => {
     const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
     const result = await renderSystemPrompt("my-series", "my-story", {
-      templateOverride: "Series:{{ series_name }} Story:{{ story_name }}",
+      templateOverride:
+        `{{ message "user" }}Series:{{ series_name }} Story:{{ story_name }}{{ /message }}`,
     });
     assertEquals(result.error, null);
-    assertEquals(result.content, "Series:my-series Story:my-story");
+    assertEquals(result.messages, [{
+      role: "user",
+      content: "Series:my-series Story:my-story",
+    }]);
   });
 
   await t.step("renderSystemPrompt forwards rich context to getDynamicVariables", async () => {
@@ -238,7 +246,7 @@ Deno.test("createTemplateEngine", async (t) => {
     } as unknown as PluginManager;
     const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
     const result = await renderSystemPrompt("s", "n", {
-      templateOverride: "ok",
+      templateOverride: `{{ message "user" }}ok{{ /message }}`,
       userInput: "hello",
       isFirstRound: true,
       storyDir: "/dir",
@@ -268,7 +276,7 @@ Deno.test("createTemplateEngine", async (t) => {
     } as unknown as PluginManager;
     const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
     const result = await renderSystemPrompt("s", "n", {
-      templateOverride: "ok",
+      templateOverride: `{{ message "user" }}ok{{ /message }}`,
     });
     assertEquals(result.error, null);
     assertEquals(captured!.userInput, "");
@@ -296,10 +304,10 @@ Deno.test("lore Vento rendering", async (t) => {
 
     const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
     const result = await renderSystemPrompt("fantasy", undefined, {
-      templateOverride: "{{ lore_setting }}",
+      templateOverride: `{{ message "user" }}{{ lore_setting }}{{ /message }}`,
     });
     assertEquals(result.error, null);
-    assertEquals(result.content, "World of fantasy");
+    assertEquals(result.messages, [{ role: "user", content: "World of fantasy" }]);
 
     await Deno.remove(join(loreDir, "setting.md"));
   });
@@ -312,10 +320,13 @@ Deno.test("lore Vento rendering", async (t) => {
 
     const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
     const result = await renderSystemPrompt("test", undefined, {
-      templateOverride: "{{ lore_plain }}",
+      templateOverride: `{{ message "user" }}{{ lore_plain }}{{ /message }}`,
     });
     assertEquals(result.error, null);
-    assertEquals(result.content, "Plain content no templates");
+    assertEquals(result.messages, [{
+      role: "user",
+      content: "Plain content no templates",
+    }]);
 
     await Deno.remove(join(loreDir, "plain.md"));
   });
@@ -328,10 +339,11 @@ Deno.test("lore Vento rendering", async (t) => {
 
     const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
     const result = await renderSystemPrompt("test", undefined, {
-      templateOverride: "{{ lore_broken }}",
+      templateOverride: `{{ message "user" }}{{ lore_broken }}{{ /message }}`,
     });
     assertEquals(result.error, null);
-    assertMatch(result.content!, /broken syntax/);
+    assertExists(result.messages[0]);
+    assertMatch(result.messages[0]!.content, /broken syntax/);
 
     await Deno.remove(join(loreDir, "broken.md"));
   });
@@ -348,12 +360,13 @@ Deno.test("lore Vento rendering", async (t) => {
 
     const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
     const result = await renderSystemPrompt("test", undefined, {
-      templateOverride: "[{{ lore_ref_a }}][{{ lore_ref_b }}]",
+      templateOverride:
+        `{{ message "user" }}[{{ lore_ref_a }}][{{ lore_ref_b }}]{{ /message }}`,
     });
     assertEquals(result.error, null);
-    assertExists(result.content);
-    assertMatch(result.content!, /A sees B=/);
-    assertMatch(result.content!, /B sees A=/);
+    assertExists(result.messages[0]);
+    assertMatch(result.messages[0]!.content, /A sees B=/);
+    assertMatch(result.messages[0]!.content, /B sees A=/);
 
     await Deno.remove(join(loreDir, "a.md"));
     await Deno.remove(join(loreDir, "b.md"));

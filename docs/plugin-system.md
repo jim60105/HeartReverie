@@ -169,6 +169,14 @@ export async function getDynamicVariables({
 
 指定 `variable` 的片段會載入為具名變數，可在模板中以 `{{ variable_name }}` 引用。未指定 `variable` 的片段則加入 `plugin_fragments` 陣列，依 `priority` 排序後可在模板中以 `{{ for item of plugin_fragments }}` 迭代使用。
 
+### 與 `{{ message }}` 多訊息標籤的互動
+
+自從 `{{ message }}` 多訊息標籤加入後，模板可將不同片段指派到不同對話角色。Plugin 作者撰寫片段時請注意以下規則：
+
+- **片段內容以純文字插值**：Vento 將 `{{ fragment }}` 以 `output += fragment` 的形式輸出，**不會**重新解析片段內容為 Vento 原始碼。也就是說，片段檔案中即使寫入 `{{ message "user" }}…{{ /message }}`，這些字元也會原樣呈現，**不會**產生新的對話訊息。若需要將片段綁定到特定角色，請由模板作者在 `system.md` 中以 `{{ message "<role>" }}{{ for f of plugin_fragments }}{{ f }}{{ /for }}{{ /message }}` 的方式包裹。
+- **不可巢狀**：若片段內容會被插入到 `{{ message }}` 區塊之內，片段本體**不得**再寫入 `{{ message }}` 標籤——巢狀的 `{{ message }}` 區塊會在編譯期被 `multi-message:nested` 拒絕。
+- **角色變數的型別約束**：若 plugin 透過 `getDynamicVariables()` 提供的變數會在模板中作為 `{{ message <ident> }}` 的角色識別字使用，該變數的執行期值**必須**僅為 `"system"`、`"user"`、`"assistant"` 三者之一，否則會在執行期丟出 `multi-message:invalid-role`。
+
 ### 路徑安全
 
 片段檔案路徑經過 `path.resolve()` 後，必須仍在 plugin 目錄內部。嘗試透過 `../` 讀取 plugin 目錄外部的檔案會被攔截並跳過。

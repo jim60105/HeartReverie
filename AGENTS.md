@@ -60,8 +60,9 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       Sidebar.vue         # Sidebar component
       ChatInput.vue       # Chat message input and submission
       StorySelector.vue   # Series/story selection UI
-      PromptEditor.vue    # System prompt template editor
+      PromptEditor.vue    # System prompt template editor (cards mode + raw-text fallback)
       PromptEditorPage.vue # Prompt editor page wrapper
+      PromptEditorMessageCard.vue # Single message card (role select + body textarea + insert-variable helper + reorder/delete)
       PromptPreview.vue   # Rendered prompt preview
       UsagePanel.vue      # Collapsible token-usage summary + recent records table
       PassphraseGate.vue  # Authentication gate
@@ -81,7 +82,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       useLoreApi.ts       # Lore codex API client
       useMarkdownRenderer.ts  # Markdown rendering pipeline
       usePlugins.ts       # Plugin loading and hook management
-      usePromptEditor.ts  # Prompt editor state
+      usePromptEditor.ts  # Prompt editor state (MessageCard[] + parse/serialize, raw fallback toggle, originalRawSource snapshot, lossy-strip flag, pre-save validity guard)
       useStorySelector.ts # Story selector state
       useStoryExport.ts   # Story export download (Markdown/JSON/TXT)
       useUsage.ts         # Token-usage state: load records, push on chat:done, reset on story change
@@ -91,6 +92,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       markdown-pipeline.ts # Markdown processing pipeline
       plugin-hooks.ts     # Frontend hook dispatcher
       string-utils.ts     # String utilities (Levenshtein, escaping)
+      template-parser.ts  # Hand-rolled scanner for system.md: parseSystemTemplate() ↔ serializeMessageCards() (cards mode load/save)
       parsers/
         vento-error-parser.ts  # Vento error parsing
     types/
@@ -331,12 +333,15 @@ The values live in a single frozen module-level constant `LLM_APP_ATTRIBUTION_HE
 
 ### Prompt Rendering Pipeline
 
-1. `buildPromptFromStory()` reads chapters, strips tags, loads status YAML, detects first-round
-2. `renderSystemPrompt()` resolves lore variables via `resolveLoreVariables()`, collects plugin variables via `getPromptVariables()`, renders `system.md` through Vento engine
-3. Result is sent as the system message to OpenRouter, user input as the user message
-4. LLM response is streamed from OpenRouter, written incrementally to chapter file, tags stripped, post-response hooks dispatched
+1. `buildPromptFromStory()` reads chapters, strips tags, loads status YAML, detects first-round, returns `{ messages: ChatMessage[], ... }`
+2. `renderSystemPrompt()` resolves lore variables via `resolveLoreVariables()`, collects plugin variables via `getPromptVariables()`, generates a per-render `__messageState = { nonce: crypto.randomUUID(), messages: [] }`, then renders `system.md` through the Vento engine (with the `messageTagPlugin` from `writer/lib/vento-message-tag.ts` installed)
+3. After Vento returns, `splitRenderedMessages()` walks the rendered string, replaces per-render sentinels with their captured `{role, content}` entries from `__messageState.messages`, treats non-whitespace top-level text segments as `system` messages, and coalesces adjacent `system` runs
+4. `assertHasUserMessage()` rejects the render with a `multi-message:no-user-message` error (surfaced as a 422 RFC 9457 Problem Details) if no `user`-role message was emitted — **the template is the authoritative source of the upstream `messages` array; the chat layer no longer auto-appends a trailing user turn**
+5. The assembled `ChatMessage[]` is sent verbatim as the upstream LLM request body's `messages`; the LLM response is streamed back, written incrementally to the chapter file, tags stripped, post-response hooks dispatched
 
-See `docs/prompt-template.md` for the full list of template variables and Vento syntax usage.
+Error tags surfaced through `buildVentoError()` for the message-tag pipeline (grep for these to find handling sites): `multi-message:invalid-role`, `multi-message:nested`, `multi-message:no-user-message`, `multi-message:assembly-corrupt`.
+
+See `docs/prompt-template.md` for the `{{ message }}` tag syntax, role validation, ordering / coalescing semantics, worked multi-turn examples, and the Prompt Editor cards-mode UI (per-message cards, raw-text fallback toggle, lossy-strip warning, pre-save validity guard).
 
 ### Frontend Rendering Pipeline
 

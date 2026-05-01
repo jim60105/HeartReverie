@@ -74,7 +74,7 @@ Deno.test("buildPromptFromStory: chapterCount reflects true on-disk total even w
       options?: RenderOptions,
     ): Promise<RenderResult> => {
       captured = options;
-      return Promise.resolve({ content: "rendered", error: null } as RenderResult);
+      return Promise.resolve({ messages: [{ role: "user", content: "rendered" }], error: null } as RenderResult);
     };
 
     const engine = createStoryEngine(
@@ -117,7 +117,7 @@ Deno.test("buildPromptFromStory: _config.json alongside chapters is ignored in l
       dispatch: (_s: string, ctx: Record<string, unknown>) => Promise.resolve(ctx),
     } as unknown as HookDispatcher;
     const renderSystemPrompt = (): Promise<RenderResult> =>
-      Promise.resolve({ content: "rendered", error: null } as RenderResult);
+      Promise.resolve({ messages: [{ role: "user", content: "rendered" }], error: null } as RenderResult);
 
     const engine = createStoryEngine(
       pluginManagerStub,

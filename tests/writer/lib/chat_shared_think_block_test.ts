@@ -102,7 +102,7 @@ async function runChat(tmpDir: string, opts: RunOpts) {
       safePath: createSafePath(tmpDir),
       hookDispatcher: opts.hookDispatcher ?? new HookDispatcher(),
       buildPromptFromStory: (() => Promise.resolve({
-        prompt: "test prompt",
+        messages: [{ role: "user" as const, content: "test prompt" }],
         previousContext: [],
         isFirstRound: true,
         ventoError: null,
@@ -283,7 +283,7 @@ Deno.test({
             safePath: createSafePath(tmpDir),
             hookDispatcher: new HookDispatcher(),
             buildPromptFromStory: (() => Promise.resolve({
-              prompt: "p",
+              messages: [{ role: "user" as const, content: "p" }],
               previousContext: [],
               isFirstRound: true,
               ventoError: null,

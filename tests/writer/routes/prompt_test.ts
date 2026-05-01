@@ -77,7 +77,10 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async (_series, _name, _dir, _msg, _tpl) => ({
-      prompt: "rendered system prompt",
+      messages: [
+        { role: "system" as const, content: "rendered system prompt" },
+        { role: "user" as const, content: "Hello world" },
+      ],
       previousContext: [{ content: "ch1" }],
       isFirstRound: false,
       ventoError: null,
@@ -293,7 +296,10 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         { message: "Hello world" },
       );
       assertEquals(res.status, 200);
-      assertEquals(res.body.prompt, "rendered system prompt");
+      assertEquals(res.body.messages, [
+        { role: "system", content: "rendered system prompt" },
+        { role: "user", content: "Hello world" },
+      ]);
       assert(Array.isArray(res.body.fragments));
       assert(res.body.fragments.includes("testVar"));
       assertEquals(res.body.variables.isFirstRound, false);
@@ -323,7 +329,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         buildPromptFromStory: async (_series, _name, _storyDir, _message, templateOverride) => {
           capturedTemplate = templateOverride;
           return {
-            prompt: "rendered",
+            messages: [{ role: "user" as const, content: "rendered" }],
             previousContext: [],
             isFirstRound: true,
             ventoError: null,
@@ -383,7 +389,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({
-          prompt: null,
+          messages: [],
           previousContext: [],
           isFirstRound: true,
           ventoError: { stage: "prompt-assembly", message: "undefined var" },

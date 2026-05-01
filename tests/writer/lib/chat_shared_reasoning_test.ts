@@ -117,7 +117,7 @@ function captureUpstreamFetch(
 
 const buildPromptStub = () =>
   Promise.resolve({
-    prompt: "p",
+    messages: [{ role: "user" as const, content: "p" }],
     previousContext: [],
     isFirstRound: true,
     ventoError: null,

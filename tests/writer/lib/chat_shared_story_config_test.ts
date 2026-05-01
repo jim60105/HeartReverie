@@ -118,7 +118,7 @@ Deno.test({
             hookDispatcher: new HookDispatcher(),
             buildPromptFromStory: () =>
               Promise.resolve({
-                prompt: "p",
+                messages: [{ role: "user" as const, content: "p" }],
                 previousContext: [],
                 isFirstRound: true,
                 ventoError: null,
@@ -157,7 +157,7 @@ Deno.test({
             hookDispatcher: new HookDispatcher(),
             buildPromptFromStory: () =>
               Promise.resolve({
-                prompt: "p",
+                messages: [{ role: "user" as const, content: "p" }],
                 previousContext: [],
                 isFirstRound: true,
                 ventoError: null,

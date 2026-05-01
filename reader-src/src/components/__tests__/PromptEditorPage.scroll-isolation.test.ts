@@ -27,13 +27,29 @@ vi.mock("@/composables/useChapterNav", () => ({
 
 vi.mock("@/composables/usePromptEditor", () => ({
   usePromptEditor: () => ({
-    templateContent: { value: "x".repeat(10000) },
-    originalTemplate: { value: "" },
+    cards: { value: [] },
+    rawSource: { value: "x".repeat(10000) },
+    originalRawSource: { value: "" },
+    useRawFallback: { value: true },
+    mode: { value: "raw" },
     parameters: { value: [] },
-    savedTemplate: { value: undefined },
-    saveTemplate: vi.fn(),
+    isDirty: { value: false },
+    isCustom: { value: false },
+    isSaving: { value: false },
+    parseError: { value: null },
+    topLevelContentDropped: { value: false },
+    saveDisabledReason: { value: null },
+    save: vi.fn(),
     loadTemplate: vi.fn(() => Promise.resolve()),
     resetTemplate: vi.fn(),
+    toggleRawFallback: vi.fn(),
+    addCard: vi.fn(),
+    deleteCard: vi.fn(),
+    moveCardUp: vi.fn(),
+    moveCardDown: vi.fn(),
+    serializeCurrent: vi.fn(() => ""),
+    dismissParseError: vi.fn(),
+    previewTemplate: vi.fn(),
   }),
 }));
 
