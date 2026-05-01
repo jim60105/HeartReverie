@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - No unreleased changes yet.
 
+## [0.4.0] - 2026-05-01
+
+### Added
+
+- Multi-message Vento prompt template: new `{{ message "role" }}…{{ /message }}` tag lets `system.md` emit a structured `ChatMessage[]` with `system` / `user` / `assistant` roles, replacing the previous single concatenated string and removing the implicit trailing user-turn append.
+- Cards-mode Prompt Editor: per-message cards with role select, body textarea, reorder / duplicate / delete, insert-variable helper, raw-text fallback toggle with lossless cards↔raw round-trip, persistent lossy-strip warning, parser-error banner, and pre-save validity guard.
+- LLM reasoning configuration: new `LLM_REASONING_ENABLED`, `LLM_REASONING_EFFORT` (`none`/`minimal`/`low`/`medium`/`high`/`xhigh`), and `LLM_REASONING_OMIT` env vars, plus per-story overrides; reasoning content streams into a chapter `<think>` block.
+- `LLM_MAX_COMPLETION_TOKENS` env var and per-story `maxCompletionTokens` override sent as `max_completion_tokens` on every upstream request (default 4096).
+- `GET /api/llm-defaults` exposes the resolved server-side LLM defaults to the settings page so unset overrides display the value that will actually apply.
+- Dialogue-colorize built-in plugin: highlights paired dialogue quote runs via the CSS Custom Highlight API without mutating the rendered DOM.
+- OpenRouter app-attribution headers (`HTTP-Referer`, `X-OpenRouter-Title`, `X-OpenRouter-Categories`) sent on every chat request so HeartReverie appears in OpenRouter rankings.
+- Bind-mounted plugin directory support in the dev container script for editing plugin sources without rebuilding the image.
+
+### Changed
+
+- Backend prompt pipeline now consumes the template-emitted `ChatMessage[]` directly; preview endpoint returns `{ messages, fragments, variables, errors }`; `system.md` rewritten with `{{ message }}` blocks.
+- SSTI whitelist hardened to reject any identifier starting with `__`, blocking side-channel access to internal render state.
+- Streaming cancellation made reason-agnostic so mid-stream provider errors surface to the client correctly.
+- `X-OpenRouter-Title` header sends the plain ASCII project name to render legibly in OpenRouter rankings.
+- Refined scenario prompt structure for character lore and tightened plugin prompt wording for zh-TW conventions.
+
+### Fixed
+
+- Prompt-editor textarea and preview pane now scroll independently instead of sharing one viewport.
+- Plugin sidebar no longer disappears after reload or edit-cancel.
+- Settings "back to reading" button uses the destination-driven route instead of `router.back()`, avoiding navigation loops.
+- `usePromptEditor-preview` test renamed unused init param to silence unused-parameter warnings.
+
 ## [0.3.0] - 2026-04-19
 
 ### Added
@@ -111,7 +139,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jim60105/HeartReverie/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jim60105/HeartReverie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jim60105/HeartReverie/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jim60105/HeartReverie/releases/tag/v0.1.0
