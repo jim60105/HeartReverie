@@ -29,6 +29,7 @@ import { registerPluginRoutes } from "./routes/plugins.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
 import { registerConfigRoutes } from "./routes/config.ts";
 import { registerStoryConfigRoutes } from "./routes/story-config.ts";
+import { registerLlmDefaultsRoutes } from "./routes/llm-defaults.ts";
 import { registerLoreRoutes } from "./routes/lore.ts";
 import { registerWebSocketRoutes } from "./routes/ws.ts";
 import { registerUsageRoutes } from "./routes/usage.ts";
@@ -143,6 +144,7 @@ export function createApp(deps: AppDeps): Hono {
   registerExportRoutes(app, deps);
   registerChatRoutes(app, deps);
   registerStoryConfigRoutes(app, deps);
+  registerLlmDefaultsRoutes(app, deps);
   registerPluginRoutes(app, deps);
   registerPromptRoutes(app, deps);
   registerUsageRoutes(app, deps);

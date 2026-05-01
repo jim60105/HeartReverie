@@ -1,9 +1,5 @@
-# Environment Example
+## MODIFIED Requirements
 
-## Purpose
-
-Documents all environment variables recognized by the application via a `.env.example` file at the repository root, enabling new contributors to quickly set up their local environment.
-## Requirements
 ### Requirement: Environment variable documentation file
 
 The project SHALL provide a `.env.example` file at the repository root that documents every environment variable recognized by the application. Each variable entry SHALL include a comment describing its purpose and, where applicable, its default value. The file SHALL NOT contain real secrets or credentials — only placeholder values.
@@ -35,4 +31,3 @@ The project SHALL provide a `.env.example` file at the repository root that docu
 #### Scenario: LLM_REASONING_EFFORT default reflects xhigh
 - **WHEN** a contributor inspects the `.env.example` file
 - **THEN** the `LLM_REASONING_EFFORT` entry SHALL document the default value as `xhigh` and SHALL list the accepted values `none`, `minimal`, `low`, `medium`, `high`, `xhigh`
-

@@ -20,6 +20,28 @@ import { REASONING_EFFORTS } from "../types.ts";
 /** Filename of the per-story LLM override file, relative to the story dir. */
 export const STORY_CONFIG_FILENAME = "_config.json";
 
+/**
+ * Whitelist of keys recognised in `_config.json` (and accepted by `PUT
+ * /api/:series/:name/config`). Single source of truth — the `GET
+ * /api/llm-defaults` route, the frontend `LlmSettingsPage` field list, and
+ * the validator below MUST all use this exact set so backend and frontend
+ * cannot drift.
+ */
+export const STORY_LLM_CONFIG_KEYS = [
+  "model",
+  "temperature",
+  "frequencyPenalty",
+  "presencePenalty",
+  "topK",
+  "topP",
+  "repetitionPenalty",
+  "minP",
+  "topA",
+  "reasoningEnabled",
+  "reasoningEffort",
+  "maxCompletionTokens",
+] as const satisfies readonly (keyof LlmConfig)[];
+
 /** Thrown when input cannot be coerced into `Partial<LlmConfig>`. */
 export class StoryConfigValidationError extends Error {
   override readonly name = "StoryConfigValidationError";
@@ -99,6 +121,18 @@ export function validateStoryLlmConfig(input: unknown): StoryLlmConfigOverrides 
         );
       }
       out.reasoningEffort = v;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(src, "maxCompletionTokens")) {
+    const v = src.maxCompletionTokens;
+    if (v !== null && v !== undefined) {
+      if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) {
+        throw new StoryConfigValidationError(
+          "Field 'maxCompletionTokens' must be a positive integer",
+        );
+      }
+      out.maxCompletionTokens = v;
     }
   }
 

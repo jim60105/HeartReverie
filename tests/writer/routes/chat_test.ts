@@ -152,6 +152,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
     LLM_REASONING_ENABLED: true,
     LLM_REASONING_EFFORT: "high",
     LLM_REASONING_OMIT: false,
+    LLM_MAX_COMPLETION_TOKENS: 4096,
         llmDefaults: {
           model: "test-model",
           temperature: 0.1,
@@ -164,6 +165,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
           topA: 1,
           reasoningEnabled: true,
           reasoningEffort: "high",
+    maxCompletionTokens: 4096,
         },
       } as unknown as AppConfig,
       safePath: createSafePath(tmpDir),

@@ -118,9 +118,9 @@ Deno.test("LLM_REASONING_OMIT defaults to false and parses booleans", async () =
   assertEquals((await evalReasoningEnv({ LLM_REASONING_OMIT: "0" })).omit, false);
 });
 
-Deno.test("LLM_REASONING_EFFORT defaults to high when unset", async () => {
+Deno.test("LLM_REASONING_EFFORT defaults to xhigh when unset", async () => {
   const r = await evalReasoningEnv({});
-  assertEquals(r.effort, "high");
+  assertEquals(r.effort, "xhigh");
 });
 
 Deno.test("LLM_REASONING_EFFORT accepts every valid value (case-sensitive)", async () => {
@@ -132,7 +132,7 @@ Deno.test("LLM_REASONING_EFFORT accepts every valid value (case-sensitive)", asy
 
 Deno.test("LLM_REASONING_EFFORT warns and falls back on invalid value", async () => {
   const r = await evalReasoningEnv({ LLM_REASONING_EFFORT: "extreme" });
-  assertEquals(r.effort, "high");
+  assertEquals(r.effort, "xhigh");
   assert(
     r.stderr.includes("LLM_REASONING_EFFORT") && r.stderr.toLowerCase().includes("warn"),
     `Expected warn log mentioning the variable; got stderr: ${r.stderr}`,
@@ -141,5 +141,65 @@ Deno.test("LLM_REASONING_EFFORT warns and falls back on invalid value", async ()
 
 Deno.test("LLM_REASONING_EFFORT rejects mixed-case (case-sensitive)", async () => {
   const r = await evalReasoningEnv({ LLM_REASONING_EFFORT: "HIGH" });
-  assertEquals(r.effort, "high");
+  assertEquals(r.effort, "xhigh");
+});
+
+async function evalMaxTokens(env: Record<string, string>): Promise<{ value: number; stderr: string }> {
+  const script = `
+    const c = await import("./writer/lib/config.ts");
+    console.log(JSON.stringify({ value: c.LLM_MAX_COMPLETION_TOKENS }));
+  `;
+  const { stdout, stderr } = await evalScript(env, script);
+  return { value: JSON.parse(stdout).value, stderr };
+}
+
+Deno.test("LLM_MAX_COMPLETION_TOKENS defaults to 4096 when unset", async () => {
+  const r = await evalMaxTokens({});
+  assertEquals(r.value, 4096);
+});
+
+Deno.test("LLM_MAX_COMPLETION_TOKENS accepts valid positive integers", async () => {
+  for (const v of ["1", "100", "8192", "65536"]) {
+    const r = await evalMaxTokens({ LLM_MAX_COMPLETION_TOKENS: v });
+    assertEquals(r.value, Number(v));
+  }
+});
+
+Deno.test("LLM_MAX_COMPLETION_TOKENS rejects zero / negative / fractional / scientific / leading-zero / non-numeric", async () => {
+  for (const bad of ["0", "-5", "1.5", "1e3", "01024", "4096abc", "  ", "abc"]) {
+    const r = await evalMaxTokens({ LLM_MAX_COMPLETION_TOKENS: bad });
+    assertEquals(r.value, 4096, `expected fallback for input "${bad}"`);
+    if (bad.trim() !== "") {
+      // non-empty invalid values should also emit a warn log
+      assert(
+        r.stderr.includes("LLM_MAX_COMPLETION_TOKENS"),
+        `Expected warn log for "${bad}"; got stderr: ${r.stderr}`,
+      );
+    }
+  }
+});
+
+Deno.test("LLM_MAX_COMPLETION_TOKENS rejects unsafe integers", async () => {
+  // 2^53 = 9007199254740992 is *exactly* MAX_SAFE_INTEGER + 1
+  const r = await evalMaxTokens({ LLM_MAX_COMPLETION_TOKENS: "9007199254740993" });
+  assertEquals(r.value, 4096);
+  assert(r.stderr.includes("LLM_MAX_COMPLETION_TOKENS"));
+});
+
+Deno.test("LLM_MODEL defaults to deepseek/deepseek-v4-pro when unset", async () => {
+  const script = `
+    const c = await import("./writer/lib/config.ts");
+    console.log(c.LLM_MODEL);
+  `;
+  const { stdout } = await evalScript({}, script);
+  assertEquals(stdout, "deepseek/deepseek-v4-pro");
+});
+
+Deno.test("llmDefaults.maxCompletionTokens reflects env override", async () => {
+  const script = `
+    const c = await import("./writer/lib/config.ts");
+    console.log(c.llmDefaults.maxCompletionTokens);
+  `;
+  const { stdout } = await evalScript({ LLM_MAX_COMPLETION_TOKENS: "12345" }, script);
+  assertEquals(stdout, "12345");
 });

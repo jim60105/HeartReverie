@@ -140,7 +140,7 @@ The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on 
 | `LLM_API_KEY` | Yes | — | LLM provider API key (stored in `.env`) |
 | `PASSPHRASE` | Yes | — | API authentication passphrase (stored in `.env`) |
 | `PORT` | No | `8443` | Server listen port |
-| `LLM_MODEL` | No | `deepseek/deepseek-v3.2` | LLM model identifier |
+| `LLM_MODEL` | No | `deepseek/deepseek-v4-pro` | LLM model identifier |
 | `LLM_API_URL` | No | `https://openrouter.ai/api/v1/chat/completions` | LLM chat completions endpoint |
 | `LLM_TEMPERATURE` | No | `0.1` | Sampling temperature |
 | `LLM_FREQUENCY_PENALTY` | No | `0.13` | Frequency penalty |
@@ -150,8 +150,9 @@ The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on 
 | `LLM_REPETITION_PENALTY` | No | `1.2` | Repetition penalty |
 | `LLM_MIN_P` | No | `0` | Min-P sampling |
 | `LLM_TOP_A` | No | `1` | Top-A sampling |
+| `LLM_MAX_COMPLETION_TOKENS` | No | `4096` | Maximum total completion tokens (reasoning + content). Sent as `max_completion_tokens` to the upstream LLM. Must be a positive safe integer. |
 | `LLM_REASONING_ENABLED` | No | `true` | When true, request reasoning from the upstream LLM. Parsed as boolean. |
-| `LLM_REASONING_EFFORT` | No | `high` | Reasoning effort level: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`. |
+| `LLM_REASONING_EFFORT` | No | `xhigh` | Reasoning effort level: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`. |
 | `LLM_REASONING_OMIT` | No | `false` | When true, omit the `reasoning` block from upstream requests entirely (escape hatch for strict OpenAI-compatible providers that reject unknown fields). |
 | `PLUGIN_DIR` | No | — | External plugin directory (absolute path) |
 | `LOG_LEVEL` | No | `info` | Log level: debug, info, warn, error |
@@ -303,17 +304,18 @@ Key files:
 
 ### Per-Story LLM Settings
 
-Each story may carry a `_config.json` file beside its chapter files to override the server's default LLM sampling parameters for that story only. The file is a JSON object containing any subset of: `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort`. Missing fields fall back to the corresponding `LLM_*` environment variable. `reasoningEnabled` defaults to `true` and `reasoningEffort` defaults to `"high"`; `reasoningEffort` must be one of the 6-value enum: `"none"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`. The `LLM_API_URL` and `LLM_API_KEY` are **not** per-story configurable. `LLM_REASONING_OMIT` is a deployment-level escape hatch (for strict OpenAI-compatible providers that reject unknown fields) and is **not** exposed in `_config.json`.
+Each story may carry a `_config.json` file beside its chapter files to override the server's default LLM sampling parameters for that story only. The file is a JSON object containing any subset of: `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort`, `maxCompletionTokens`. The exhaustive whitelist is exported as `STORY_LLM_CONFIG_KEYS` from `writer/lib/story-config.ts` and is the single source of truth for the validator, the `GET /api/llm-defaults` route payload, and the frontend settings form. Missing fields fall back to the corresponding `LLM_*` environment variable. `reasoningEnabled` defaults to `true` and `reasoningEffort` defaults to `"xhigh"`; `reasoningEffort` must be one of the 6-value enum: `"none"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`. `maxCompletionTokens` must be a positive safe integer and is sent as `max_completion_tokens` on every upstream chat request (default `4096`). The `LLM_API_URL` and `LLM_API_KEY` are **not** per-story configurable. `LLM_REASONING_OMIT` is a deployment-level escape hatch (for strict OpenAI-compatible providers that reject unknown fields) and is **not** exposed in `_config.json`.
 
 - **Location**: `playground/<series>/<story>/_config.json` (underscore prefix keeps it out of chapter listings)
-- **API**: `GET /api/:series/:name/config` returns overrides (`{}` when absent); `PUT /api/:series/:name/config` validates and atomically persists them. PUT returns 404 when the story directory does not exist — it never implicitly creates a story.
-- **Validation**: whitelist-only parsing strips unknown keys and silently drops `null`/`undefined`; `model` must be a non-empty string, numeric fields must be finite numbers; violations return 400 Problem Details.
+- **API**: `GET /api/:series/:name/config` returns overrides (`{}` when absent); `PUT /api/:series/:name/config` validates and atomically persists them. PUT returns 404 when the story directory does not exist — it never implicitly creates a story. `GET /api/llm-defaults` (auth-required, `Cache-Control: no-store`) returns the resolved server-side defaults for every whitelisted key — used by the frontend settings page to display the value that will apply when an override is unset.
+- **Validation**: whitelist-only parsing strips unknown keys and silently drops `null`/`undefined`; `model` must be a non-empty string, numeric fields must be finite numbers, `maxCompletionTokens` must be a positive safe integer; violations return 400 Problem Details.
 - **Merge semantics**: `Object.assign({}, llmDefaults, overrides)` in `resolveStoryLlmConfig()` — applied once per chat request just after `storyDir` validation, before the upstream LLM fetch body is built.
-- **Frontend**: `/settings/llm` page with story picker + per-field override toggles (`useStoryLlmConfig` composable).
+- **Frontend**: `/settings/llm` page with story picker + per-field override toggles (`useStoryLlmConfig` composable). When an override is disabled, the field shows the resolved default (read-only) loaded from `GET /api/llm-defaults`; toggling override-on seeds the input from that default value.
 
 Key files:
-- `writer/lib/story-config.ts` — validate/read/write/resolve helpers plus typed error classes
+- `writer/lib/story-config.ts` — validate/read/write/resolve helpers plus `STORY_LLM_CONFIG_KEYS` whitelist constant and typed error classes
 - `writer/routes/story-config.ts` — GET/PUT route handlers
+- `writer/routes/llm-defaults.ts` — `GET /api/llm-defaults` route
 
 ### OpenRouter App Attribution
 

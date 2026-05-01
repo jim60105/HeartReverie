@@ -454,14 +454,41 @@ export interface StoryLlmConfig {
   topA?: number;
   reasoningEnabled?: boolean;
   reasoningEffort?: ReasoningEffort;
+  maxCompletionTokens?: number;
+}
+
+/**
+ * Frontend mirror of `LlmDefaultsResponse` from `writer/types.ts`. Returned by
+ * `GET /api/llm-defaults`. The route is contractually obligated to populate
+ * every field — `validateLlmDefaultsBody` rejects partial responses and keeps
+ * `defaults.value === null` so the page enters the "defaultsError" degraded
+ * state instead of rendering blank disabled inputs.
+ */
+export interface LlmDefaultsResponse {
+  model: string;
+  temperature: number;
+  frequencyPenalty: number;
+  presencePenalty: number;
+  topK: number;
+  topP: number;
+  repetitionPenalty: number;
+  minP: number;
+  topA: number;
+  reasoningEnabled: boolean;
+  reasoningEffort: ReasoningEffort;
+  maxCompletionTokens: number;
 }
 
 export interface UseStoryLlmConfigReturn {
   overrides: Ref<StoryLlmConfig>;
+  defaults: Ref<LlmDefaultsResponse | null>;
   loading: Ref<boolean>;
   saving: Ref<boolean>;
+  defaultsLoading: Ref<boolean>;
   error: Ref<string | null>;
+  defaultsError: Ref<string | null>;
   loadConfig: (series: string, name: string) => Promise<void>;
+  loadLlmDefaults: () => Promise<void>;
   saveConfig: (
     series: string,
     name: string,

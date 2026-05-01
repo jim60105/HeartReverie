@@ -176,6 +176,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     topA: llmConfig.topA,
     reasoningEnabled: llmConfig.reasoningEnabled,
     reasoningEffort: llmConfig.reasoningEffort,
+    maxCompletionTokens: llmConfig.maxCompletionTokens,
     reasoningOmit: config.LLM_REASONING_OMIT,
     systemPromptLength: systemPrompt.length,
     userMessageLength: message.length,
@@ -197,6 +198,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       topA: llmConfig.topA,
       reasoningEnabled: llmConfig.reasoningEnabled,
       reasoningEffort: llmConfig.reasoningEffort,
+      maxCompletionTokens: llmConfig.maxCompletionTokens,
     },
     reasoningOmit: config.LLM_REASONING_OMIT,
     systemPrompt,
@@ -221,6 +223,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     repetition_penalty: llmConfig.repetitionPenalty,
     min_p: llmConfig.minP,
     top_a: llmConfig.topA,
+    max_completion_tokens: llmConfig.maxCompletionTokens,
   };
   if (!config.LLM_REASONING_OMIT) {
     requestBody.reasoning = llmConfig.reasoningEnabled
