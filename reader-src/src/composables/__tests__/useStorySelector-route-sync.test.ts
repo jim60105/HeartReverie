@@ -34,6 +34,7 @@ vi.mock("vue-router", () => ({
 vi.mock("@/router", () => ({
   default: {
     push: routerPush,
+    currentRoute: { value: route },
   },
 }));
 
@@ -111,5 +112,37 @@ describe("useStorySelector route synchronization", () => {
 
     expect(selector.selectedStory.value).toBe("");
     expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeCalls);
+  });
+
+  it("series watcher survives across simulated component-effect-scope teardown", async () => {
+    // Regression: when useStorySelector() was first called from a component
+    // (e.g. usePromptEditor on /settings/prompt-editor) and that component
+    // later unmounted on navigation, the route-sync watchers — registered in
+    // the calling component's effect scope — were silently disposed. The
+    // module-level `initialized` guard then short-circuited subsequent calls,
+    // leaving the next StorySelector mount with no reactive series→fetch
+    // bridge: picking a series mutated `selectedSeries` but `fetchStories`
+    // was never invoked, so the story dropdown stayed empty. The fix moves
+    // the watchers into a detached effectScope; this test simulates that
+    // scenario by running the first useStorySelector() inside a disposable
+    // effectScope, disposing it, then asserting the watchers still fire on
+    // a follow-up mount outside that scope.
+    const { effectScope } = await import("vue");
+    const { useStorySelector } = await import("@/composables/useStorySelector");
+
+    const componentScope = effectScope();
+    componentScope.run(() => useStorySelector());
+    componentScope.stop();
+
+    const selector = useStorySelector();
+    const fetchMock = fetch as ReturnType<typeof vi.fn>;
+    const beforeCalls = fetchMock.mock.calls.length;
+
+    selector.selectedSeries.value = "post-unmount-series";
+    await flushRouteSync();
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeCalls);
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(String(lastCall?.[0])).toContain("/api/stories/post-unmount-series");
   });
 });
