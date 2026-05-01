@@ -14,6 +14,11 @@ vi.mock("@/router", () => ({
   default: {
     push: vi.fn(),
     replace: vi.fn(),
+    currentRoute: {
+      get value() {
+        return { params: mockRouteParams.value };
+      },
+    },
   },
 }));
 
