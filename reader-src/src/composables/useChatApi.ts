@@ -1,5 +1,11 @@
 import { ref, watch } from "vue";
-import type { UseChatApiReturn, ChatSendBeforeContext, TokenUsageRecord } from "@/types";
+import type {
+  UseChatApiReturn,
+  ChatSendBeforeContext,
+  TokenUsageRecord,
+  RunPluginPromptOptions,
+  RunPluginPromptResult,
+} from "@/types";
 import { useAuth } from "@/composables/useAuth";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useNotification } from "@/composables/useNotification";
@@ -12,6 +18,7 @@ const streamingContent = ref("");
 
 let currentRequestId: string | null = null;
 let httpAbortController: AbortController | null = null;
+let currentPluginActionId: string | null = null;
 
 function dispatchNotification(event: string, data: Record<string, unknown>): void {
   const { notify } = useNotification();
@@ -21,8 +28,13 @@ function dispatchNotification(event: string, data: Record<string, unknown>): voi
 function abortCurrentRequest(): void {
   const { isConnected, isAuthenticated, send } = useWebSocket();
 
+  if (currentPluginActionId && isConnected.value && isAuthenticated.value) {
+    // WebSocket plugin-action path: send abort envelope
+    send({ type: "plugin-action:abort", correlationId: currentPluginActionId });
+    return;
+  }
   if (currentRequestId && isConnected.value && isAuthenticated.value) {
-    // WebSocket path: send abort message
+    // WebSocket chat path: send abort message
     send({ type: "chat:abort", id: currentRequestId });
   } else if (httpAbortController) {
     // HTTP path: abort the fetch request
@@ -331,6 +343,173 @@ export function useChatApi(): UseChatApiReturn {
     streamingContent,
     sendMessage,
     resendMessage,
+    runPluginPrompt,
     abortCurrentRequest,
   };
+}
+
+async function runPluginPrompt(
+  pluginName: string,
+  promptFile: string,
+  opts: RunPluginPromptOptions = {},
+): Promise<RunPluginPromptResult> {
+  if (isLoading.value) {
+    throw new Error(
+      "Another request is already in flight; cannot start runPluginPrompt.",
+    );
+  }
+
+  const { isConnected, isAuthenticated, send, onMessage } = useWebSocket();
+
+  isLoading.value = true;
+  errorMessage.value = "";
+  streamingContent.value = "";
+
+  const series = opts.series ?? "";
+  const name = opts.name ?? "";
+
+  if (isConnected.value && isAuthenticated.value) {
+    // ── WebSocket path ──
+    const correlationId = crypto.randomUUID();
+    currentPluginActionId = correlationId;
+
+    return await new Promise<RunPluginPromptResult>((resolve, reject) => {
+      const unsubDelta = onMessage("plugin-action:delta", (msg) => {
+        if (msg.correlationId !== correlationId) return;
+        streamingContent.value += msg.chunk;
+      });
+      const unsubDone = onMessage("plugin-action:done", (msg) => {
+        if (msg.correlationId !== correlationId) return;
+        cleanup();
+        streamingContent.value = "";
+        isLoading.value = false;
+        if (msg.usage) useUsage().pushRecord(msg.usage);
+        resolve({
+          content: msg.content,
+          usage: msg.usage,
+          chapterUpdated: msg.chapterUpdated,
+          appendedTag: msg.appendedTag,
+        });
+      });
+      const unsubError = onMessage("plugin-action:error", (msg) => {
+        if (msg.correlationId !== correlationId) return;
+        cleanup();
+        streamingContent.value = "";
+        const detail = msg.problem?.detail
+          ?? msg.problem?.title
+          ?? "外掛操作失敗";
+        errorMessage.value = detail;
+        isLoading.value = false;
+        reject(new Error(detail));
+      });
+      const unsubAborted = onMessage("plugin-action:aborted", (msg) => {
+        if (msg.correlationId !== correlationId) return;
+        cleanup();
+        streamingContent.value = "";
+        isLoading.value = false;
+        const err = new DOMException(
+          "Plugin action aborted.",
+          "AbortError",
+        );
+        reject(err);
+      });
+      const stopWatchClose = watch(isConnected, (connected) => {
+        if (!connected) {
+          cleanup();
+          streamingContent.value = "";
+          errorMessage.value = "連線中斷";
+          isLoading.value = false;
+          reject(new Error("連線中斷"));
+        }
+      });
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        streamingContent.value = "";
+        errorMessage.value = "請求逾時";
+        isLoading.value = false;
+        reject(new Error("請求逾時"));
+      }, 300_000);
+
+      function cleanup(): void {
+        clearTimeout(timeout);
+        stopWatchClose();
+        unsubDelta();
+        unsubDone();
+        unsubError();
+        unsubAborted();
+        currentPluginActionId = null;
+      }
+
+      send({
+        type: "plugin-action:run",
+        correlationId,
+        pluginName,
+        series,
+        name,
+        promptFile,
+        ...(opts.append !== undefined ? { append: opts.append } : {}),
+        ...(opts.appendTag !== undefined ? { appendTag: opts.appendTag } : {}),
+        ...(opts.extraVariables !== undefined
+          ? { extraVariables: opts.extraVariables }
+          : {}),
+      });
+    });
+  }
+
+  // ── HTTP fallback ──
+  const { getAuthHeaders } = useAuth();
+  httpAbortController = new AbortController();
+
+  try {
+    const body: Record<string, unknown> = {
+      series,
+      name,
+      promptFile,
+    };
+    if (opts.append !== undefined) body.append = opts.append;
+    if (opts.appendTag !== undefined) body.appendTag = opts.appendTag;
+    if (opts.extraVariables !== undefined) {
+      body.extraVariables = opts.extraVariables;
+    }
+
+    const res = await fetch(
+      `/api/plugins/${encodeURIComponent(pluginName)}/run-prompt`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify(body),
+        signal: httpAbortController.signal,
+      },
+    );
+
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const problem = await res.json() as { detail?: string; title?: string };
+        detail = problem?.detail ?? problem?.title ?? detail;
+      } catch {
+        // Body not JSON; keep status string.
+      }
+      errorMessage.value = detail;
+      throw new Error(detail);
+    }
+
+    const result = await res.json() as RunPluginPromptResult;
+    if (result?.usage) useUsage().pushRecord(result.usage);
+    return result;
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err;
+    }
+    if (err instanceof Error) {
+      if (!errorMessage.value) errorMessage.value = err.message;
+      throw err;
+    }
+    errorMessage.value = "外掛操作失敗";
+    throw new Error("外掛操作失敗");
+  } finally {
+    httpAbortController = null;
+    isLoading.value = false;
+  }
 }

@@ -240,7 +240,97 @@ export function register(hooks) {
 
 For the full frontend hook API, read `references/hook-api.md`.
 
-## Step 8: Generate README.md
+## Step 8: Add an Action Button (optional)
+
+Action buttons let a plugin contribute an interactive button to the reader's main layout (between `UsagePanel` and `ChatInput`). Clicking the button dispatches the `action-button:click` frontend hook for the owning plugin, where the handler typically calls `context.runPluginPrompt(...)` to run a plugin-owned prompt file through the same LLM pipeline as normal chat — optionally appending the response (wrapped in a tag) to the latest chapter.
+
+Ask the user whether the plugin should expose an action button. If **no**, skip this step. If **yes**, gather:
+
+- **Button id** (kebab-case, matching `^[a-z0-9-]+$`, unique within the plugin) — e.g. `recompute-state`
+- **Label** (1..40 chars, often emoji + zh-TW text) — e.g. `🧮 重算狀態`
+- **`visibleWhen`** — choose `"last-chapter-backend"` (only on the last chapter while in backend mode; default) or `"backend-only"` (any backend-mode chapter)
+- **Prompt file name** (optional, but typical) — e.g. `recompute.md`. Required when the handler will call `runPluginPrompt`.
+- **`appendTag`** (optional) — XML tag name used when appending the response to the chapter (matching `^[a-zA-Z][a-zA-Z0-9_-]{0,30}$`). Required when the handler passes `{ append: true, ... }` to `runPluginPrompt`.
+
+Then emit the following stubs:
+
+### 8a. Manifest descriptor
+
+Add an `actionButtons` entry to `plugin.json`:
+
+```json
+{
+  "actionButtons": [
+    {
+      "id": "<button-id>",
+      "label": "<label>",
+      "tooltip": "<short tooltip>",
+      "priority": 100,
+      "visibleWhen": "last-chapter-backend"
+    }
+  ]
+}
+```
+
+The button id must be unique within the plugin; duplicates are dropped by the loader with a warning.
+
+### 8b. Click handler in `frontend.js`
+
+Extend the plugin's `register(hooks)` with an `action-button:click` handler. Always filter by `buttonId` so the handler only runs for its own button — even though the dispatcher already filters by plugin, an explicit guard keeps the code safe if the plugin later adds a second button:
+
+```javascript
+hooks.register('action-button:click', async (context) => {
+  if (context.buttonId !== '<button-id>') return;
+
+  try {
+    await context.runPluginPrompt('<prompt-file>.md', {
+      append: true,
+      appendTag: '<AppendTag>',
+    });
+    context.reload();
+    context.notify({
+      title: '<完成標題>',
+      level: 'info',
+    });
+  } catch (err) {
+    context.notify({
+      title: '<失敗標題>',
+      body: err?.message ?? String(err),
+      level: 'error',
+    });
+  }
+}, 100);
+```
+
+Notes:
+
+- The `pluginName` for `runPluginPrompt` is auto-curried into `context`; the handler MUST NOT pass it.
+- `context` does **not** expose `appendToLastChapter`. To write to the chapter file, use `runPluginPrompt({ append: true, appendTag })` and let the backend handle the atomic append + `post-response` dispatch.
+- Frontend handlers for this stage are **async** — feel free to `await` inside.
+
+### 8c. Stub prompt file
+
+Create `plugins/<name>/<prompt-file>.md`. The template MUST emit at least one `{{ message "user" }}…{{ /message }}` block (plain text in front of any `{{ message }}` block is treated as `system`). Minimal stub:
+
+```vento
+{{ message "system" }}
+<!-- Describe the task for the LLM here. -->
+{{ /message }}
+
+{{ message "user" }}
+<!-- Reference the latest chapter via {{ previous_context }} or any plugin variable. -->
+Latest chapter:
+{{ previous_context }}
+{{ /message }}
+```
+
+Available variables include the core set (`previous_context`, `user_input` (defaults to `""` for plugin actions), `isFirstRound`, `series_name`, `story_name`, `plugin_fragments`), all `lore_*` variables, and any dynamic variables exported by `getDynamicVariables()` from any plugin's backend module. If you need extra inputs from the click handler, pass them through `runPluginPrompt`'s `extraVariables: { ... }` option (scalar values only).
+
+### 8d. README mention
+
+Add a short usage paragraph to the plugin's `README.md` describing what the button does and when it appears.
+
+## Step 9: Generate README.md
 
 Create `plugins/<name>/README.md` in Traditional Chinese (zh-TW):
 
@@ -275,7 +365,7 @@ Template:
 <Usage instructions in zh-TW>
 ```
 
-## Step 9: Validate
+## Step 10: Validate
 
 Run these checks before considering the plugin complete:
 

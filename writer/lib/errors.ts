@@ -20,6 +20,43 @@ export function problemJson(title: string, status: number, detail: string, extra
   return { type: "about:blank", title, status, detail, ...extra };
 }
 
+/**
+ * RFC 9457 Problem Details factory variants for the `plugin-action:*` route
+ * family. Each helper returns a fully-formed `ProblemDetail` object ready to
+ * pass to `c.json(...)` together with its matching HTTP status. The `type`
+ * slug follows the `plugin-action:<reason>` convention so frontends can
+ * branch on the failure category without parsing English titles.
+ */
+export const pluginActionProblems = {
+  invalidPromptPath(detail = "Invalid prompt path"): ProblemDetail {
+    return { type: "plugin-action:invalid-prompt-path", title: "Bad Request", status: 400, detail };
+  },
+  nonMdPrompt(detail = "Prompt file must have a .md extension"): ProblemDetail {
+    return { type: "plugin-action:non-md-prompt", title: "Bad Request", status: 400, detail };
+  },
+  promptFileNotFound(detail = "Prompt file not found"): ProblemDetail {
+    return { type: "plugin-action:prompt-file-not-found", title: "Bad Request", status: 400, detail };
+  },
+  unknownPlugin(detail = "Plugin is not loaded"): ProblemDetail {
+    return { type: "plugin-action:unknown-plugin", title: "Not Found", status: 404, detail };
+  },
+  invalidPluginName(detail = "Plugin name is syntactically invalid"): ProblemDetail {
+    return { type: "plugin-action:invalid-plugin-name", title: "Bad Request", status: 400, detail };
+  },
+  invalidAppendTag(detail = "appendTag is missing or invalid"): ProblemDetail {
+    return { type: "plugin-action:invalid-append-tag", title: "Bad Request", status: 400, detail };
+  },
+  concurrentGeneration(detail = "Another generation is already in flight for this story"): ProblemDetail {
+    return { type: "plugin-action:concurrent-generation", title: "Conflict", status: 409, detail };
+  },
+  invalidExtraVariables(detail = "extraVariables values must be string, number, or boolean"): ProblemDetail {
+    return { type: "plugin-action:invalid-extra-variables", title: "Bad Request", status: 400, detail };
+  },
+  extraVariablesCollision(detail = "extraVariables key collides with a reserved system variable"): ProblemDetail {
+    return { type: "plugin-action:extra-variables-collision", title: "Bad Request", status: 400, detail };
+  },
+} as const;
+
 export function buildVentoError(err: Error, templatePath: string, knownVariables: { variables?: Record<string, string> }, extraKnownVars?: string[]): VentoError {
   const error: VentoError = {
     type: "vento-error",

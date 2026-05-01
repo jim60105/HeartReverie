@@ -52,3 +52,30 @@ Deno.test("generation-registry: keys are scoped by series and name", () => {
   assertEquals(isGenerationActive("series-b", "story"), false);
   clearGenerationActive("series-a", "story");
 });
+
+import { tryMarkGenerationActive } from "../../../writer/lib/generation-registry.ts";
+
+Deno.test("generation-registry: tryMarkGenerationActive acquires when free", () => {
+  assertEquals(isGenerationActive("s", "try1"), false);
+  assertEquals(tryMarkGenerationActive("s", "try1"), true);
+  assertEquals(isGenerationActive("s", "try1"), true);
+  clearGenerationActive("s", "try1");
+});
+
+Deno.test("generation-registry: tryMarkGenerationActive returns false when already active", () => {
+  markGenerationActive("s", "try2");
+  assertEquals(tryMarkGenerationActive("s", "try2"), false);
+  // Refcount should NOT have been incremented by the failed try.
+  clearGenerationActive("s", "try2");
+  assertEquals(isGenerationActive("s", "try2"), false);
+});
+
+Deno.test("generation-registry: tryMarkGenerationActive race — only first wins", () => {
+  // Synchronous "race": two simultaneous callers — JS is single-threaded so
+  // the outcomes are deterministic but the helper MUST behave that way.
+  assertEquals(tryMarkGenerationActive("s", "race"), true);
+  assertEquals(tryMarkGenerationActive("s", "race"), false);
+  assertEquals(tryMarkGenerationActive("s", "race"), false);
+  clearGenerationActive("s", "race");
+  assertEquals(isGenerationActive("s", "race"), false);
+});

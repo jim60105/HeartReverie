@@ -34,6 +34,8 @@ const ERROR_TITLES: Record<string, string> = {
   "no-body": "Bad Gateway",
   "no-content": "Bad Gateway",
   "story-config": "Unprocessable Entity",
+  "no-chapter": "Bad Request",
+  "concurrent": "Conflict",
 };
 
 export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "hookDispatcher" | "buildPromptFromStory" | "config">): void {

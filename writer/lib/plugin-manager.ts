@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join, resolve, isAbsolute, SEPARATOR } from "@std/path";
-import type { PluginManifest, DynamicVariableContext } from "../types.ts";
+import type { PluginManifest, DynamicVariableContext, ActionButtonDescriptor, ActionButtonVisibility } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { createLogger } from "./logger.ts";
 
@@ -25,6 +25,7 @@ interface PluginEntry {
   readonly dir: string;
   readonly source: string;
   readonly validatedStyles: string[];
+  readonly validatedActionButtons: ActionButtonDescriptor[];
 }
 
 interface PromptVariables {
@@ -39,7 +40,7 @@ interface ParameterInfo {
   readonly source: string;
 }
 
-function isValidPluginName(name: unknown): name is string {
+export function isValidPluginName(name: unknown): name is string {
   return (
     typeof name === "string" &&
     name.length > 0 &&
@@ -173,8 +174,120 @@ export class PluginManager {
       // Validate and normalize frontendStyles
       const validatedStyles = await this.#validateFrontendStyles(manifest, pluginDir);
 
-      this.#plugins.set(manifest.name, { manifest, dir: pluginDir, source, validatedStyles });
+      // Validate and normalize actionButtons
+      const validatedActionButtons = this.#validateActionButtons(manifest);
+
+      this.#plugins.set(manifest.name, { manifest, dir: pluginDir, source, validatedStyles, validatedActionButtons });
     }
+  }
+
+  /**
+   * Validate, default, and deduplicate a plugin's `actionButtons` entries.
+   * Returns a frozen array of fully-resolved descriptors with defaults filled
+   * (`priority: 100`, `visibleWhen: "last-chapter-backend"`). Invalid entries
+   * are dropped individually with a logged warning under the plugin's scope.
+   */
+  #validateActionButtons(manifest: PluginManifest): ActionButtonDescriptor[] {
+    const raw: unknown = manifest.actionButtons;
+    if (raw === undefined) return [];
+    const pluginLog = log.withContext({ baseData: { plugin: manifest.name } });
+    if (!Array.isArray(raw)) {
+      pluginLog.warn("Plugin has non-array actionButtons — ignoring");
+      return [];
+    }
+
+    const idRegex = /^[a-z0-9-]+$/;
+    const allowedVisibility: readonly ActionButtonVisibility[] = [
+      "last-chapter-backend",
+      "backend-only",
+    ];
+    const seenIds = new Set<string>();
+    const validated: ActionButtonDescriptor[] = [];
+
+    for (const entry of raw) {
+      if (!entry || typeof entry !== "object") {
+        pluginLog.warn("Plugin actionButtons entry is not an object — skipping");
+        continue;
+      }
+      const descriptor = entry as Record<string, unknown>;
+
+      const id = descriptor.id;
+      if (typeof id !== "string" || !idRegex.test(id)) {
+        pluginLog.warn("Plugin actionButtons entry has invalid id — skipping", { id });
+        continue;
+      }
+      if (seenIds.has(id)) {
+        pluginLog.warn("Plugin actionButtons entry has duplicate id — skipping", { id });
+        continue;
+      }
+
+      const labelRaw = descriptor.label;
+      if (typeof labelRaw !== "string") {
+        pluginLog.warn("Plugin actionButtons entry has non-string label — skipping", { id });
+        continue;
+      }
+      const label = labelRaw.trim();
+      if (label.length < 1 || label.length > 40) {
+        pluginLog.warn("Plugin actionButtons entry has out-of-range label — skipping", { id, length: label.length });
+        continue;
+      }
+
+      const iconRaw = descriptor.icon;
+      let icon: string | undefined;
+      if (iconRaw !== undefined) {
+        if (typeof iconRaw !== "string") {
+          pluginLog.warn("Plugin actionButtons entry has non-string icon — skipping", { id });
+          continue;
+        }
+        icon = iconRaw;
+      }
+
+      const tooltipRaw = descriptor.tooltip;
+      let tooltip: string | undefined;
+      if (tooltipRaw !== undefined) {
+        if (typeof tooltipRaw !== "string" || tooltipRaw.length > 200) {
+          pluginLog.warn("Plugin actionButtons entry has invalid tooltip — skipping", { id });
+          continue;
+        }
+        tooltip = tooltipRaw;
+      }
+
+      const priorityRaw = descriptor.priority;
+      let priority = 100;
+      if (priorityRaw !== undefined) {
+        if (typeof priorityRaw !== "number" || !Number.isFinite(priorityRaw)) {
+          pluginLog.warn("Plugin actionButtons entry has non-finite priority — skipping", { id, priority: priorityRaw });
+          continue;
+        }
+        priority = priorityRaw;
+      }
+
+      const visibleWhenRaw = descriptor.visibleWhen;
+      let visibleWhen: ActionButtonVisibility = "last-chapter-backend";
+      if (visibleWhenRaw !== undefined) {
+        if (
+          typeof visibleWhenRaw !== "string" ||
+          !allowedVisibility.includes(visibleWhenRaw as ActionButtonVisibility)
+        ) {
+          pluginLog.warn("Plugin actionButtons entry has unknown visibleWhen — skipping", { id, visibleWhen: visibleWhenRaw });
+          continue;
+        }
+        visibleWhen = visibleWhenRaw as ActionButtonVisibility;
+      }
+
+      seenIds.add(id);
+      const resolved: ActionButtonDescriptor = {
+        id,
+        label,
+        ...(icon !== undefined ? { icon } : {}),
+        ...(tooltip !== undefined ? { tooltip } : {}),
+        priority,
+        visibleWhen,
+      };
+      validated.push(resolved);
+    }
+
+    return validated;
   }
 
   /**
@@ -489,6 +602,15 @@ export class PluginManager {
   }
 
   /**
+   * Returns true when a plugin with the given name is in the loaded-plugin
+   * registry. Useful for distinguishing syntactically-valid-but-unknown names
+   * (HTTP 404) from syntactically-invalid names (HTTP 400).
+   */
+  hasPlugin(name: string): boolean {
+    return this.#plugins.has(name);
+  }
+
+  /**
    * Returns the absolute path to a plugin's directory.
    * @param {string} name - Plugin name
    * @returns {string|null}
@@ -506,6 +628,16 @@ export class PluginManager {
   getPluginStyles(name: string): string[] {
     const entry = this.#plugins.get(name);
     return entry ? [...entry.validatedStyles] : [];
+  }
+
+  /**
+   * Returns the validated, default-filled list of `ActionButtonDescriptor`s
+   * declared in a plugin's `actionButtons` manifest field. Returns an empty
+   * array for unknown plugins or plugins that did not declare the field.
+   */
+  getPluginActionButtons(name: string): ActionButtonDescriptor[] {
+    const entry = this.#plugins.get(name);
+    return entry ? [...entry.validatedActionButtons] : [];
   }
 
   /** Returns the absolute path to the built-in plugins directory. */

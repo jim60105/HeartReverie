@@ -106,7 +106,8 @@ export type BuildPromptFn = (
   name: string,
   storyDir: string,
   message: string,
-  template?: string
+  template?: string,
+  extraVariables?: Record<string, unknown>,
 ) => Promise<BuildPromptResult>;
 
 /** Top-level dependency bag passed to createApp and route registrars. */
@@ -140,6 +141,63 @@ export interface PluginManifest {
    * directory at load time.
    */
   readonly frontendStyles?: readonly string[];
+  /**
+   * Optional declarative action-button contributions surfaced in the reader's
+   * `PluginActionBar`. Each entry must validate against
+   * `ActionButtonDescriptor`; invalid entries are dropped individually with a
+   * logged warning. Defaults to `[]` when absent.
+   */
+  readonly actionButtons?: readonly ActionButtonDescriptor[];
+}
+
+/**
+ * Visibility predicate enum for `ActionButtonDescriptor`. Values:
+ *
+ * - `"last-chapter-backend"` (default): show only when the user is viewing
+ *   the last chapter of a story in backend mode.
+ * - `"backend-only"`: show on every chapter in backend mode (any chapter).
+ *
+ * The two-value enum is intentional in v1; FSA-mode values may be added as a
+ * non-breaking extension once their semantics are pinned down.
+ */
+export type ActionButtonVisibility = "last-chapter-backend" | "backend-only";
+
+/**
+ * Plugin-declared action button surfaced in the reader UI. Resolved defaults
+ * (`priority`, `visibleWhen`) are filled in by the manifest loader before
+ * serialisation through `GET /api/plugins`.
+ */
+export interface ActionButtonDescriptor {
+  /** Kebab-case identifier matching `^[a-z0-9-]+$`, unique within a plugin. */
+  readonly id: string;
+  /** Display label, 1..40 characters after trim. */
+  readonly label: string;
+  /** Optional emoji or short symbol prefix. */
+  readonly icon?: string;
+  /** Optional tooltip, ≤200 characters. */
+  readonly tooltip?: string;
+  /** Render order; lower first. Default 100. */
+  readonly priority: number;
+  /** Visibility predicate. Default `"last-chapter-backend"`. */
+  readonly visibleWhen: ActionButtonVisibility;
+}
+
+/** Request body for `POST /api/plugins/:pluginName/run-prompt`. */
+export interface PluginRunPromptRequest {
+  readonly series: string;
+  readonly name: string;
+  readonly promptFile: string;
+  readonly append?: boolean;
+  readonly appendTag?: string;
+  readonly extraVariables?: Record<string, string | number | boolean>;
+}
+
+/** Response body for `POST /api/plugins/:pluginName/run-prompt`. */
+export interface PluginRunPromptResponse {
+  readonly content: string;
+  readonly usage: TokenUsageRecord | null;
+  readonly chapterUpdated: boolean;
+  readonly appendedTag: string | null;
 }
 
 /** A prompt fragment declaration in a plugin manifest. */
@@ -280,6 +338,13 @@ export interface RenderOptions {
   chapterNumber?: number;
   previousContent?: string;
   chapterCount?: number;
+  /**
+   * Additional Vento variables provided by callers (e.g. plugin-action
+   * `run-prompt` requests). Spread into the render context BEFORE the built-in
+   * variables so callers cannot override reserved names — collision detection
+   * is the route's responsibility.
+   */
+  extraVariables?: Record<string, unknown>;
 }
 
 /**
@@ -532,13 +597,34 @@ export interface WsChatAbortMessage {
   readonly id: string;
 }
 
+/** Client-to-server: invoke a plugin action prompt. */
+export interface WsPluginActionRunMessage {
+  readonly type: "plugin-action:run";
+  readonly correlationId: string;
+  readonly pluginName: string;
+  readonly series: string;
+  readonly name: string;
+  readonly promptFile: string;
+  readonly append?: boolean;
+  readonly appendTag?: string;
+  readonly extraVariables?: Record<string, string | number | boolean>;
+}
+
+/** Client-to-server: abort an in-flight plugin action run. */
+export interface WsPluginActionAbortMessage {
+  readonly type: "plugin-action:abort";
+  readonly correlationId: string;
+}
+
 /** All client-to-server message types. */
 export type WsClientMessage =
   | WsAuthMessage
   | WsChatSendMessage
   | WsChatResendMessage
   | WsChatAbortMessage
-  | WsSubscribeMessage;
+  | WsSubscribeMessage
+  | WsPluginActionRunMessage
+  | WsPluginActionAbortMessage;
 
 /** Server-to-client: authentication successful. */
 export interface WsAuthOkMessage {
@@ -602,6 +688,36 @@ export interface WsChatAbortedMessage {
   readonly id: string;
 }
 
+/** Server-to-client: streaming plugin-action delta chunk. */
+export interface WsPluginActionDeltaMessage {
+  readonly type: "plugin-action:delta";
+  readonly correlationId: string;
+  readonly chunk: string;
+}
+
+/** Server-to-client: plugin action completed successfully. */
+export interface WsPluginActionDoneMessage {
+  readonly type: "plugin-action:done";
+  readonly correlationId: string;
+  readonly content: string;
+  readonly usage: TokenUsageRecord | null;
+  readonly chapterUpdated: boolean;
+  readonly appendedTag: string | null;
+}
+
+/** Server-to-client: plugin action error. Carries an RFC 9457 Problem Details body. */
+export interface WsPluginActionErrorMessage {
+  readonly type: "plugin-action:error";
+  readonly correlationId: string;
+  readonly problem: ProblemDetail;
+}
+
+/** Server-to-client: plugin action aborted by client. */
+export interface WsPluginActionAbortedMessage {
+  readonly type: "plugin-action:aborted";
+  readonly correlationId: string;
+}
+
 /** All server-to-client message types. */
 export type WsServerMessage =
   | WsAuthOkMessage
@@ -612,4 +728,8 @@ export type WsServerMessage =
   | WsChatAbortedMessage
   | WsChaptersUpdatedMessage
   | WsChaptersContentMessage
-  | WsErrorMessage;
+  | WsErrorMessage
+  | WsPluginActionDeltaMessage
+  | WsPluginActionDoneMessage
+  | WsPluginActionErrorMessage
+  | WsPluginActionAbortedMessage;

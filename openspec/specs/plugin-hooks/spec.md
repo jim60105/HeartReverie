@@ -3,16 +3,14 @@
 ## Purpose
 
 Hook system architecture that allows plugins to subscribe to ordered lifecycle stages, enabling extensible prompt assembly, response processing, and frontend rendering.
-
 ## Requirements
-
 ### Requirement: Hook stages
 
 The hook system SHALL define the following ordered hook stages that plugins can subscribe to:
 - `prompt-assembly`: Invoked during prompt construction — plugins can modify the `previousContext` array (e.g., replace full chapter text with summaries). The context object SHALL include a mutable `previousContext` (array of strings) field, a `rawChapters` (array of strings containing unstripped chapter content) field, `storyDir` (string), `series` (string), and `name` (string).
 - `response-stream`: Invoked once per content delta during streaming — plugins can observe or transform stream chunks as they arrive from the LLM. The context object SHALL include a mutable `chunk` (string) field, plus `correlationId`, `series`, `name`, `storyDir`, `chapterPath`, and `chapterNumber`. Handlers mutate `context.chunk` to transform or (by assigning `""`) drop the chunk.
 - `pre-write`: Invoked after OpenRouter response is confirmed but before chapter file writing — plugins can inject content to prepend to the chapter file (e.g., user message wrappers)
-- `post-response`: Invoked after the response stream completes — plugins can run side effects (e.g., state status update)
+- `post-response`: Invoked after the response stream completes — plugins can run side effects (e.g., state status update). The context object SHALL include `content`, `storyDir`, `series`, `name`, `rootDir`, an optional `source` (string discriminating the trigger; `"chat"` for normal chat completions and `"plugin-action"` for plugin-action runs), an optional `pluginName` (set when `source === "plugin-action"`), an optional `chapterPath` (set whenever a chapter file was written or appended to), an optional `chapterNumber` (number, set alongside `chapterPath`), and an optional `appendedTag` (set when `source === "plugin-action"` and the run appended a wrapped block). For `source === "plugin-action"` runs, `content` SHALL be the FULL chapter file content after the append (not the bare LLM response) so consumers see identical semantics whether the patch came from a normal chat completion or a plugin-action append.
 - `frontend-render`: Invoked during frontend rendering — plugins register tag extractors and custom renderers for LLM output tags
 - `notification`: Invoked when a WebSocket event or frontend action triggers a notification opportunity — plugins can call the notification composable to emit notifications to the user
 - `strip-tags`: Invoked during server-side chapter content stripping — plugins register tag names to strip from `previous_context` before prompt assembly
@@ -22,6 +20,7 @@ The hook system SHALL define the following ordered hook stages that plugins can 
 - `chapter:dom:dispose`: Invoked in the frontend right before a `ChapterContent` instance is unmounted (e.g., navigation to a different route, story switch, or component teardown). Plugins receive a context object containing `container` (the same `HTMLElement` previously passed via `chapter:dom:ready`) and `chapterIndex` (number). Plugins SHALL use this to release any references they hold keyed by the container (e.g., `Range` objects registered against `Highlight` instances), preventing detached-DOM leaks across long sessions.
 - `story:switch`: Invoked in the frontend when the active story changes — dispatched from both `useChapterNav.loadFromBackend()` and `useChapterNav.loadFromFSA()` after the new story's metadata is committed to module state but before chapter content is displayed. Plugins can reset or initialise per-story state.
 - `chapter:change`: Invoked in the frontend whenever the currently displayed chapter index changes — dispatched from `useChapterNav.navigateTo()`, `loadFSAChapter()`, `reloadToLast()`, and the route-watcher branches inside `initRouteSync()`. The hook SHALL also be dispatched once during initial story load (with `previousIndex: null`).
+- `action-button:click`: Invoked in the frontend when the user clicks a plugin-contributed button in `PluginActionBar`. The context object SHALL contain `buttonId` (string), `pluginName` (string identifying the plugin that owns the button), `series` (string), `name` (story name), `storyDir` (string), `lastChapterIndex` (number or null), and the curried helper functions `runPluginPrompt(promptFile, opts?)`, `notify(input)`, and `reload()`. The dispatcher SHALL only invoke handlers whose owning plugin matches `context.pluginName`, treat the stage as async (await all handler return values in priority order), keep the clicked button's qualified `pendingKey` (`${pluginName}:${buttonId}`) until the aggregate dispatch promise settles, and on any handler rejection surface a default error notification via the toast system unless the handler already emitted one.
 
 Each stage SHALL have a well-defined context object that handlers receive and can modify.
 
@@ -47,7 +46,11 @@ Each stage SHALL have a well-defined context object that handlers receive and ca
 
 #### Scenario: Post-response stage invocation
 - **WHEN** the OpenRouter SSE stream completes and the full chapter content is available
-- **THEN** the hook system SHALL invoke all `post-response` handlers in priority order, passing `{ content, storyDir, series, name, rootDir }` for side effects such as status patching
+- **THEN** the hook system SHALL invoke all `post-response` handlers in priority order, passing `{ content, storyDir, series, name, rootDir, source, pluginName? }` for side effects such as status patching
+
+#### Scenario: Post-response source distinguishes plugin-action runs
+- **WHEN** the plugin-action route completes a streaming response and dispatches `post-response`
+- **THEN** the context SHALL set `source: "plugin-action"` and `pluginName` SHALL be set to the plugin name from the route URL so handlers can branch on the trigger
 
 #### Scenario: Frontend-render stage invocation
 - **WHEN** the frontend `md-renderer` processes chapter content for display
@@ -58,36 +61,28 @@ Each stage SHALL have a well-defined context object that handlers receive and ca
 - **THEN** the hook system SHALL invoke all `notification` handlers in priority order, passing a context object containing `event` (string event type), `data` (event payload), and `notify` (the notification composable's notify function)
 
 #### Scenario: Strip-tags stage invocation
-- **WHEN** the server strips tags from chapter content before including it in `previous_context`
-- **THEN** the hook system SHALL invoke all `strip-tags` handlers to collect tag names that should be stripped, in addition to the default tags
+- **WHEN** chapter content is loaded for prompt assembly and tag stripping is performed
+- **THEN** the hook system SHALL invoke `strip-tags` handlers to collect the union of tag names to strip before re-rendering chapter text into `previous_context`
 
-#### Scenario: chat:send:before stage invocation
-- **WHEN** `useChatApi.sendMessage()` or `useChatApi.resendMessage()` is called with a user message
-- **THEN** the hook system SHALL invoke all `chat:send:before` handlers in priority order, passing a context object containing `message` (string, the outgoing text), `series` (string), `story` (string), and `mode` (`"send"` or `"resend"`), BEFORE the WebSocket `chat:send`/`chat:resend` message is sent or the HTTP POST body is constructed
+#### Scenario: Action-button:click stage invocation
+- **WHEN** the user clicks a plugin-contributed button in `PluginActionBar` whose owning plugin is `state` and whose `buttonId` is `recompute-state`
+- **THEN** the dispatcher SHALL invoke only handlers registered by the `state` plugin for the `action-button:click` stage, in priority order, passing a context with `buttonId: "recompute-state"`, `pluginName: "state"`, `series`, `name`, `storyDir`, `lastChapterIndex`, and the curried helpers `runPluginPrompt`, `notify`, `reload`
 
-#### Scenario: chapter:render:after stage invocation
-- **WHEN** `useMarkdownRenderer.renderChapter()` has produced the final `RenderToken[]` array via markdown parsing, DOMPurify sanitization, and placeholder reinjection
-- **THEN** the hook system SHALL invoke all `chapter:render:after` handlers in priority order, passing a context object containing `tokens` (the mutable `RenderToken[]` array), `rawMarkdown` (the original chapter string), and `options` (the `RenderOptions` including `isLastChapter`), before `renderChapter()` returns
+#### Scenario: Action-button:click handlers are filtered by owning plugin
+- **WHEN** plugin A and plugin B both register `action-button:click` handlers and the user clicks a button owned by plugin A
+- **THEN** the dispatcher SHALL invoke plugin A's handlers and SHALL NOT invoke plugin B's handlers, regardless of whether plugin B's handler internally checks `buttonId`
 
-#### Scenario: chapter:dom:ready stage invocation
-- **WHEN** Vue has committed a `ChapterContent` v-html token render to the live DOM (i.e. immediately after the `flush: "post"` watcher tick that follows a `tokens` or `renderEpoch` change, including the initial mount)
-- **THEN** the hook system SHALL invoke all `chapter:dom:ready` handlers in priority order, passing a context object containing `container` (the chapter root `HTMLElement`), `tokens` (the same `RenderToken[]` consumed by `v-html`), `rawMarkdown` (the original chapter string), and `chapterIndex` (zero-based number)
+#### Scenario: Action-button:click awaits async handlers
+- **WHEN** an `action-button:click` handler returns a promise
+- **THEN** the dispatcher SHALL await every handler's promise (in priority order) and the bar's qualified `pendingKey` (`${pluginName}:${buttonId}`) SHALL stay set until the aggregate dispatch settles
 
-#### Scenario: chapter:dom:ready dispatches once per render commit per chapter
-- **WHEN** the user edits a chapter, cancels the edit, navigates between chapters, or any other action that causes `ChapterContent.vue` to re-render its token list and bump `renderEpoch`
-- **THEN** `chapter:dom:ready` SHALL be dispatched exactly once for that chapter after each render commit; it SHALL NOT be dispatched in the absence of a render commit
+#### Scenario: Action-button:click default error notification
+- **WHEN** an `action-button:click` handler rejects without itself emitting a notification
+- **THEN** the dispatcher SHALL emit a default error toast via the notification system referencing the failed button's label and the error message, and SHALL still resolve the dispatch (no unhandled rejection)
 
-#### Scenario: chapter:dom:dispose stage invocation
-- **WHEN** a `ChapterContent.vue` instance is about to be unmounted (route change, story switch, parent re-key, etc.)
-- **THEN** the hook system SHALL invoke all `chapter:dom:dispose` handlers in priority order, passing a context object containing `container` (the same `HTMLElement` previously passed via `chapter:dom:ready`) and `chapterIndex` (zero-based number), so plugins can release container-keyed state without leaking detached DOM
-
-#### Scenario: story:switch stage invocation
-- **WHEN** `useChapterNav.loadFromBackend()` or `useChapterNav.loadFromFSA()` is called and the target story differs from the previously loaded story
-- **THEN** the hook system SHALL invoke all `story:switch` handlers in priority order, passing a context object containing `previousSeries` (string | null), `previousStory` (string | null), `series` (string | null, absent in FSA mode), `story` (string | null, absent in FSA mode), and `mode` (`"fsa"` | `"backend"`)
-
-#### Scenario: chapter:change stage invocation
-- **WHEN** the currently displayed chapter index changes in `useChapterNav` (via `navigateTo()`, `loadFSAChapter()`, `reloadToLast()`, route-watcher, or initial load)
-- **THEN** the hook system SHALL invoke all `chapter:change` handlers in priority order, passing a context object containing `previousIndex` (number | null, `null` on initial load), `index` (number, the new zero-based chapter index), `chapter` (number, the one-based chapter number), `series` (string | null), `story` (string | null), and `mode` (`"fsa"` | `"backend"`)
+#### Scenario: Post-response context for plugin-action append
+- **WHEN** a plugin-action run with `append: true` and `appendTag: "UpdateVariable"` completes successfully
+- **THEN** the `post-response` context SHALL include `source: "plugin-action"`, `pluginName`, `chapterPath`, `chapterNumber`, `appendedTag: "UpdateVariable"`, and `content` set to the full chapter file content AFTER the append
 
 ### Requirement: Notification hook context
 
@@ -601,3 +596,16 @@ Components that mount the markdown rendering pipeline (specifically `ContentArea
 #### Scenario: Chapter mounts after plugins settle, including on failure
 - **WHEN** `pluginsSettled` flips to `true` (regardless of `pluginsReady`'s value) and `currentContent.value` is non-empty
 - **THEN** `<ChapterContent>` SHALL mount and `useMarkdownRenderer` SHALL run with the currently-registered handler set
+
+### Requirement: Hook handler origin tracking
+
+The frontend `FrontendHookDispatcher.register()` SHALL accept an optional `originPluginName` parameter recording which plugin owns the handler. When `usePlugins.ts` loads each plugin's `frontend.js` and invokes its `register(hooks)`, the `hooks` object passed in SHALL be a per-plugin proxy that automatically supplies `originPluginName` so plugin authors do not need to pass it manually. For all hook stages other than `action-button:click`, the recorded origin SHALL have no effect on dispatch (existing behaviour preserved). For `action-button:click`, the dispatcher SHALL filter handlers by `originPluginName === context.pluginName`.
+
+#### Scenario: Per-plugin proxy curries origin
+- **WHEN** `usePlugins.ts` imports plugin X's `frontend.js` and calls its `register(hooks)`
+- **THEN** the `hooks` argument SHALL be a proxy whose `register(stage, handler, priority)` calls `FrontendHookDispatcher.register(stage, handler, priority, "X")` so the origin is recorded automatically
+
+#### Scenario: Origin is no-op for non-action-button stages
+- **WHEN** a plugin registers a `frontend-render` handler
+- **THEN** the dispatcher SHALL invoke that handler for every `frontend-render` dispatch regardless of the recorded origin (no filtering)
+

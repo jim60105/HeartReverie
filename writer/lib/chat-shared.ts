@@ -15,13 +15,29 @@
 
 import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
-import type { AppConfig, ChatMessage, LlmConfig, SafePathFn, BuildPromptFn, LLMStreamChunk, VentoError, TokenUsageRecord } from "../types.ts";
+import type {
+  AppConfig,
+  ChatMessage,
+  LlmConfig,
+  SafePathFn,
+  BuildPromptFn,
+  LLMStreamChunk,
+  VentoError,
+  TokenUsageRecord,
+} from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
-import { resolveTargetChapterNumber } from "./story.ts";
+import {
+  resolveTargetChapterNumber,
+  listChapterFiles,
+  atomicWriteChapter,
+} from "./story.ts";
 import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
 import { createLogger, createLlmLogger } from "./logger.ts";
 import { appendUsage, buildRecord } from "./usage.ts";
-import { markGenerationActive, clearGenerationActive } from "./generation-registry.ts";
+import {
+  tryMarkGenerationActive,
+  clearGenerationActive,
+} from "./generation-registry.ts";
 
 const log = createLogger("llm");
 const fileLog = createLogger("file");
@@ -71,7 +87,7 @@ export class ChatAbortError extends Error {
 export class ChatError extends Error {
   override readonly name = "ChatError";
   constructor(
-    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "llm-stream" | "no-body" | "no-content" | "story-config",
+    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "llm-stream" | "no-body" | "no-content" | "story-config" | "no-chapter" | "concurrent",
     message: string,
     public readonly httpStatus: number = 500,
     public readonly ventoError?: VentoError,
@@ -80,106 +96,106 @@ export class ChatError extends Error {
   }
 }
 
-/**
- * Execute a chat request: resolve template, build prompt, call LLM with streaming,
- * write to file incrementally, run post-response hooks.
- * @param options - Chat execution options including callbacks and dependencies
- * @returns The chapter number and full generated content
+/** Discriminated union describing how `streamLlmAndPersist` should persist
+ * the LLM stream output:
+ *
+ * - `write-new-chapter`: existing chat behaviour — open the next chapter file,
+ *   dispatch `pre-write`, write each delta after `response-stream` hook
+ *   transformation, and dispatch `post-response` with `source: "chat"`.
+ * - `append-to-existing-chapter`: plugin-action append mode — accumulate the
+ *   stream in memory, on success normalise wrapper layers and atomically
+ *   append `\n<{appendTag}>\n…\n</{appendTag}>\n` to the highest-numbered
+ *   chapter file, then re-read that file and dispatch `post-response` with
+ *   `source: "plugin-action"`. `pre-write` and `response-stream` are NOT
+ *   dispatched.
+ * - `discard`: plugin-action discard mode — accumulate the stream in memory
+ *   and return it; no chapter mutation, no hook dispatches.
  */
-export async function executeChat(options: ChatOptions): Promise<ChatResult> {
-  const { series, name, message, template, config, safePath, hookDispatcher, buildPromptFromStory, onDelta, signal } = options;
+export type WriteMode =
+  | { readonly kind: "write-new-chapter"; readonly userMessage: string; readonly targetChapterNumber: number }
+  | { readonly kind: "append-to-existing-chapter"; readonly appendTag: string; readonly pluginName: string }
+  | { readonly kind: "discard" };
+
+/** Arguments for `streamLlmAndPersist`. */
+export interface StreamLlmArgs {
+  readonly messages: ChatMessage[];
+  readonly llmConfig: LlmConfig;
+  readonly series: string;
+  readonly name: string;
+  readonly storyDir: string;
+  readonly rootDir: string;
+  readonly signal?: AbortSignal;
+  readonly writeMode: WriteMode;
+  readonly onDelta?: (chunk: string) => void;
+  readonly hookDispatcher: HookDispatcher;
+  readonly config: AppConfig;
+}
+
+/** Result of `streamLlmAndPersist`. */
+export interface StreamLlmResult {
+  readonly content: string;
+  readonly usage: TokenUsageRecord | null;
+  readonly chapterPath: string | null;
+  readonly chapterNumber: number | null;
+  readonly chapterContentAfter: string | null;
+  readonly aborted: boolean;
+}
+
+/**
+ * Stream the upstream LLM response and persist it according to `writeMode`.
+ *
+ * The caller is responsible for: validating the upstream API key, resolving
+ * `storyDir`, resolving `llmConfig`, building the `messages` array, and
+ * acquiring/releasing the per-story generation lock. This helper focuses on
+ * the OpenRouter request, SSE streaming, mode-specific persistence, and the
+ * lifecycle hook dispatches associated with each mode.
+ */
+export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLlmResult> {
+  const {
+    messages,
+    llmConfig,
+    series,
+    name,
+    storyDir,
+    rootDir,
+    signal,
+    writeMode,
+    onDelta,
+    hookDispatcher,
+    config,
+  } = args;
+
   const correlationId = crypto.randomUUID();
   const reqLog = log.withContext({ correlationId });
   const reqFileLog = fileLog.withContext({ correlationId });
   const llmLog = createLlmLogger().withContext({ correlationId });
 
-  reqLog.info("Chat execution started", { series, story: name, messageLength: message.length });
-
-  // 1. Validate API key
-  if (!Deno.env.get("LLM_API_KEY")) {
-    reqLog.error("LLM_API_KEY not configured");
-    throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
-  }
-
-  // 2. Resolve story directory
-  const storyDir = safePath(series, name);
-  if (!storyDir) {
-    throw new ChatError("bad-path", "Invalid path", 400);
-  }
-
-  // 2b. Load per-story LLM overrides merged over env defaults
-  let llmConfig: LlmConfig;
-  try {
-    llmConfig = await resolveStoryLlmConfig(storyDir, config.llmDefaults);
-  } catch (err) {
-    if (err instanceof StoryConfigValidationError) {
-      reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
-      throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
+  // ── Resolve target chapter info (mode-dependent) ──
+  let targetNum: number | null = null;
+  let chapterPath: string | null = null;
+  if (writeMode.kind === "write-new-chapter") {
+    targetNum = writeMode.targetChapterNumber;
+    const padded = String(targetNum).padStart(3, "0");
+    await Deno.mkdir(storyDir, { recursive: true, mode: 0o775 });
+    chapterPath = join(storyDir, `${padded}.md`);
+  } else if (writeMode.kind === "append-to-existing-chapter") {
+    const chapterFiles = await listChapterFiles(storyDir);
+    if (chapterFiles.length === 0) {
+      throw new ChatError("no-chapter", "Cannot append: no existing chapter file in story directory", 400);
     }
-    const msg = err instanceof Error ? err.message : String(err);
-    reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
-    throw new ChatError("story-config", "Failed to read story configuration", 500);
+    const lastFile = chapterFiles[chapterFiles.length - 1]!;
+    targetNum = parseInt(lastFile, 10);
+    chapterPath = join(storyDir, lastFile);
   }
 
-  // 3. Resolve template: body override > custom file > system.md
-  let templateOverride: string | undefined;
-  if (typeof template === "string") {
-    templateOverride = template;
-  } else {
-    try {
-      const tpl = await readTemplate(config);
-      if (tpl.source === "custom") {
-        templateOverride = tpl.content;
-      }
-    } catch {
-      // No custom file and no system.md readable — proceed with default rendering
-    }
-  }
-
-  // 4. Build prompt
-  const {
-    messages: templateMessages,
-    ventoError,
-    chapterFiles,
-    chapters,
-  } = await buildPromptFromStory(series, name, storyDir, message, templateOverride);
-
-  if (ventoError) {
-    throw new ChatError("vento", "Template rendering error", 422, ventoError);
-  }
-
-  if (templateMessages.length === 0) {
-    throw new ChatError("no-prompt", "Failed to generate prompt", 500);
-  }
-
-  // Mark this story as having an active generation; guard destructive
-  // edits/rewinds/branches from concurrent writers. The matching clear
-  // runs in the `finally` block at the end of this function.
-  markGenerationActive(series, name);
-  try {
-
-  // 5. Call LLM API with streaming — the template is the authoritative
-  // source of the upstream messages array; we no longer auto-append a
-  // {role:"user"} turn here (the template's `{{ message "user" }}` block
-  // is responsible for placing the live user input).
-  const messages: ChatMessage[] = templateMessages;
+  // ── Build upstream request body ──
   const roleCounts: Record<ChatMessage["role"], number> = { system: 0, user: 0, assistant: 0 };
   for (const m of messages) roleCounts[m.role]++;
 
   reqLog.debug("LLM request payload", {
+    mode: writeMode.kind,
     model: llmConfig.model,
     temperature: llmConfig.temperature,
-    frequencyPenalty: llmConfig.frequencyPenalty,
-    presencePenalty: llmConfig.presencePenalty,
-    topK: llmConfig.topK,
-    topP: llmConfig.topP,
-    repetitionPenalty: llmConfig.repetitionPenalty,
-    minP: llmConfig.minP,
-    topA: llmConfig.topA,
-    reasoningEnabled: llmConfig.reasoningEnabled,
-    reasoningEffort: llmConfig.reasoningEffort,
-    maxCompletionTokens: llmConfig.maxCompletionTokens,
-    reasoningOmit: config.LLM_REASONING_OMIT,
     messageCount: messages.length,
     roleCounts,
   });
@@ -208,11 +224,6 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     roleCounts,
   });
 
-  const llmStartTime = performance.now();
-  let apiResponse: Response;
-  // Build the upstream request body. The `reasoning` block is included by
-  // default; deployments targeting strict OpenAI-compatible providers can
-  // suppress it entirely with `LLM_REASONING_OMIT=true`.
   const requestBody: Record<string, unknown> = {
     model: llmConfig.model,
     messages,
@@ -233,6 +244,9 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       ? { enabled: true, effort: llmConfig.reasoningEffort }
       : { enabled: false };
   }
+
+  const llmStartTime = performance.now();
+  let apiResponse: Response;
   try {
     apiResponse = await fetch(config.LLM_API_URL, {
       method: "POST",
@@ -259,12 +273,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   if (!apiResponse.ok) {
     const errorBody = await apiResponse.text();
     const latencyMs = Math.round(performance.now() - llmStartTime);
-    reqLog.error("LLM API error", {
-      status: apiResponse.status,
-      latencyMs,
-      model: llmConfig.model,
-      errorBody,
-    });
+    reqLog.error("LLM API error", { status: apiResponse.status, latencyMs, model: llmConfig.model, errorBody });
     llmLog.info("LLM error", {
       type: "error",
       errorCode: "llm-api",
@@ -272,9 +281,6 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       latencyMs,
       errorBody,
     });
-    // Surface a truncated copy of the upstream body so the RFC 9457 detail
-    // returned to the client is diagnosable end-to-end (full body remains in
-    // the operational log entry above).
     const truncated = errorBody.length > 2000
       ? `${errorBody.slice(0, 2000)}…[truncated]`
       : errorBody;
@@ -286,58 +292,42 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   if (!apiResponse.body) {
     const noBodyLatency = Math.round(performance.now() - llmStartTime);
-    llmLog.info("LLM error", {
-      type: "error",
-      errorCode: "no-body",
-      latencyMs: noBodyLatency,
-    });
+    llmLog.info("LLM error", { type: "error", errorCode: "no-body", latencyMs: noBodyLatency });
     throw new ChatError("no-body", "No response body from AI service", 502);
   }
 
-  // 6. Determine target chapter: reuse last empty file or create next
-  const targetNum: number = resolveTargetChapterNumber(chapterFiles, chapters);
-  const padded = String(targetNum).padStart(3, "0");
-
-  await Deno.mkdir(storyDir, { recursive: true, mode: 0o775 });
-
-  const chapterPath = join(storyDir, `${padded}.md`);
+  // ── Mode-specific persistence setup ──
   const encoder = new TextEncoder();
   let aiContent = "";
   let sawModelContent = false;
-  reqFileLog.info("Writing chapter file", { op: "write", path: chapterPath, chapter: targetNum });
-
-  // Dispatch pre-write hook before file truncation
-  const preWriteCtx = await hookDispatcher.dispatch("pre-write", {
-    correlationId,
-    message,
-    chapterPath,
-    storyDir,
-    series,
-    name,
-    preContent: "",
-  });
-  const preContent = preWriteCtx.preContent as string;
-
-  const file = await Deno.open(chapterPath, { write: true, create: true, truncate: true, mode: 0o664 });
-  if (preContent) {
-    await file.write(encoder.encode(preContent));
-  }
-
   let aborted = false;
-  // Reasoning streaming state. Reasoning text from `delta.reasoning` (or the
-  // fallback `delta.reasoning_details[].text`) is framed as `<think>...</think>`
-  // blocks placed between the `<user_message>` prefix and the model content.
-  // Reasoning bytes bypass the `response-stream` hook and the `aiContent`
-  // accumulator — see openspec capability `reasoning-think-block`.
+
+  // write-new-chapter only: open file, dispatch pre-write, write preContent
+  let file: Deno.FsFile | null = null;
+  let preContent = "";
   let inThinkBlock = false;
   let reasoningLength = 0;
+  if (writeMode.kind === "write-new-chapter" && chapterPath !== null && targetNum !== null) {
+    reqFileLog.info("Writing chapter file", { op: "write", path: chapterPath, chapter: targetNum });
 
-  /**
-   * Extract reasoning text from a stream chunk's delta. Prefer the simple
-   * `delta.reasoning` string; otherwise concatenate `text` fields from
-   * `delta.reasoning_details` items, silently skipping any entry whose `text`
-   * is not a non-empty string. Returns `""` when no reasoning is present.
-   */
+    const preWriteCtx = await hookDispatcher.dispatch("pre-write", {
+      correlationId,
+      message: writeMode.userMessage,
+      chapterPath,
+      storyDir,
+      series,
+      name,
+      preContent: "",
+    });
+    preContent = typeof preWriteCtx.preContent === "string" ? preWriteCtx.preContent : "";
+
+    file = await Deno.open(chapterPath, { write: true, create: true, truncate: true, mode: 0o664 });
+    if (preContent) {
+      await file.write(encoder.encode(preContent));
+    }
+  }
+
+  /** Extract reasoning text from a stream chunk delta. */
   const extractReasoningText = (delta: unknown): string => {
     if (!delta || typeof delta !== "object") return "";
     const direct = (delta as { reasoning?: unknown }).reasoning;
@@ -354,79 +344,62 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     return out;
   };
 
-  /**
-   * Persist reasoning bytes: write to chapter file FIRST, then notify
-   * `onDelta`. Callers MUST update state-machine flags AFTER `writeFile()`
-   * returns and BEFORE calling `notifyDelta()` so a thrown `onDelta` does not
-   * leave `inThinkBlock` inconsistent with what is on disk.
-   */
-  const writeFile = (bytes: string): Promise<number> => file.write(encoder.encode(bytes));
+  const writeFile = (bytes: string): Promise<number> => {
+    if (!file) return Promise.resolve(0);
+    return file.write(encoder.encode(bytes));
+  };
   const notifyDelta = (bytes: string): void => { onDelta?.(bytes); };
 
-  /**
-   * Close the open `<think>` block (if any) with a single trailing newline,
-   * intended for the streaming `finally` (no content follows). State is
-   * cleared after the file write succeeds; an onDelta failure after the
-   * write is propagated by the caller's nested try/catch and does not
-   * re-open the block.
-   */
   const closeThinkBlockOnExit = async (): Promise<void> => {
-    if (!inThinkBlock) return;
+    if (!inThinkBlock || !file) return;
     await writeFile("\n</think>\n");
     inThinkBlock = false;
     notifyDelta("\n</think>\n");
   };
 
-  let tokenUsage: {
-    prompt: number | null;
-    completion: number | null;
-    total: number | null;
-  } = { prompt: null, completion: null, total: null };
+  let tokenUsage: { prompt: number | null; completion: number | null; total: number | null } = {
+    prompt: null,
+    completion: null,
+    total: null,
+  };
 
-  /**
-   * Dispatch the `response-stream` hook for a delta and persist the resulting
-   * chunk. Handlers may mutate `context.chunk` to transform or drop (via `""`)
-   * the delta; non-string values coerce to `""`.
-   */
+  /** Persist a content delta — mode-specific. */
   const persistChunk = async (delta: string): Promise<void> => {
-    const ctx = await hookDispatcher.dispatch("response-stream", {
-      correlationId,
-      chunk: delta,
-      series,
-      name,
-      storyDir,
-      chapterPath,
-      chapterNumber: targetNum,
-    });
-    const out = typeof ctx.chunk === "string" ? ctx.chunk : "";
-    if (out.length > 0) {
-      aiContent += out;
-      await file.write(encoder.encode(out));
-      onDelta?.(out);
+    if (writeMode.kind === "write-new-chapter") {
+      const ctx = await hookDispatcher.dispatch("response-stream", {
+        correlationId,
+        chunk: delta,
+        series,
+        name,
+        storyDir,
+        chapterPath,
+        chapterNumber: targetNum,
+      });
+      const out = typeof ctx.chunk === "string" ? ctx.chunk : "";
+      if (out.length > 0) {
+        aiContent += out;
+        await writeFile(out);
+        onDelta?.(out);
+      }
+    } else {
+      // append / discard: accumulate only, no hook
+      aiContent += delta;
+      onDelta?.(delta);
     }
   };
+
   try {
-    // 7. Parse SSE stream and write incrementally, calling onDelta for each chunk
     const reader = apiResponse.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
-    /**
-     * Parse a single SSE `data:` payload (without the `data: ` prefix) and act on it.
-     * - Skips `[DONE]` and JSON-parse failures (treated as malformed chunks).
-     * - Detects OpenRouter mid-stream errors via top-level `error` or
-     *   `choices[0].finish_reason === "error"`, logs once, and throws ChatError.
-     * - Otherwise extracts content delta and usage.
-     *
-     * Detection runs OUTSIDE the parse-catch so the throw is not swallowed.
-     */
     const handlePayload = async (payload: string): Promise<void> => {
       if (payload === "[DONE]") return;
       let raw: unknown;
       try {
         raw = JSON.parse(payload);
       } catch {
-        return; // Skip malformed JSON chunks
+        return;
       }
       if (typeof raw !== "object" || raw === null) return;
       const parsed = raw as LLMStreamChunk;
@@ -455,12 +428,9 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       const choice = parsed.choices?.[0];
       const delta = choice?.delta;
 
-      // Reasoning text first: open `<think>` lazily, write reasoning bytes,
-      // never pass through `response-stream`, never append to `aiContent`.
-      // Order: file.write → mutate state → onDelta. A thrown `onDelta` after a
-      // successful write must NOT desynchronise inThinkBlock from disk.
+      // Reasoning bytes — only frame as `<think>` for write-new-chapter mode.
       const reasoningText = extractReasoningText(delta);
-      if (reasoningText.length > 0) {
+      if (reasoningText.length > 0 && writeMode.kind === "write-new-chapter") {
         if (!inThinkBlock) {
           await writeFile("<think>\n");
           inThinkBlock = true;
@@ -473,9 +443,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
       const contentDelta = delta?.content;
       if (contentDelta) {
-        // Closing the think block before content guarantees byte order:
-        // reasoning → close → content, even when one chunk carries both.
-        if (inThinkBlock) {
+        if (inThinkBlock && writeMode.kind === "write-new-chapter") {
           await writeFile("\n</think>\n\n");
           inThinkBlock = false;
           notifyDelta("\n</think>\n\n");
@@ -493,9 +461,6 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     };
 
     while (true) {
-      // Narrow the abort-discriminating try around `reader.read()` only so file
-      // writes, hook dispatch, and JSON-parse failures propagate as themselves
-      // instead of being silently misclassified as aborts.
       let chunk: ReadableStreamReadResult<Uint8Array>;
       try {
         chunk = await reader.read();
@@ -519,7 +484,6 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       }
     }
 
-    // Process any remaining data in the buffer
     if (buffer.trim()) {
       const trimmed = buffer.trim();
       if (trimmed.startsWith("data: ")) {
@@ -527,36 +491,32 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       }
     }
   } catch (err: unknown) {
-    // ChatError already logged its own `errorCode: "stream-error"` entry inside
-    // handlePayload — rethrow without adding a duplicate `"stream"` log entry.
     if (err instanceof ChatError) {
       throw err;
     }
-    // NOTE: aborts are detected solely inside the narrow try around
-    // `reader.read()` above (which sets `aborted = true; break;`). Errors that
-    // reach this outer catch came from non-read operations (decode, parse,
-    // persistChunk, onDelta, hooks) and MUST propagate as themselves even if
-    // `signal.aborted` happens to be true concurrently — otherwise legitimate
-    // file/hook/onDelta failures would be silently misclassified as aborts.
     const latencyMs = Math.round(performance.now() - llmStartTime);
     const errMsg = err instanceof Error ? err.message : String(err);
-    llmLog.info("LLM error", { type: "error", errorCode: "stream", latencyMs, error: errMsg, partialLength: aiContent.length, reasoningLength });
+    llmLog.info("LLM error", {
+      type: "error",
+      errorCode: "stream",
+      latencyMs,
+      error: errMsg,
+      partialLength: aiContent.length,
+      reasoningLength,
+    });
     throw err;
   } finally {
-    // Close any open `<think>` block before file.close(); a failure here MUST
-    // NOT mask the primary error from the streaming loop and MUST NOT prevent
-    // file.close() from running.
     try {
       await closeThinkBlockOnExit();
     } catch (cleanupErr) {
       const msg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
       reqLog.warn("close-think-block failed during streaming finally", { error: msg });
     } finally {
-      file.close();
+      if (file) file.close();
     }
   }
 
-  // On abort: throw ChatAbortError after file cleanup so callers can handle it
+  // ── Abort handling ──
   if (aborted) {
     const latencyMs = Math.round(performance.now() - llmStartTime);
     reqLog.warn("Generation aborted by client", { latencyMs, contentLength: aiContent.length });
@@ -593,6 +553,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     latencyMs,
     contentLength: fullContent.length,
     chapter: targetNum,
+    mode: writeMode.kind,
   });
   reqLog.debug("LLM response content", { content: fullContent });
   llmLog.info("LLM response", {
@@ -603,40 +564,212 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     tokens: tokenUsage,
     reasoningLength,
   });
-  reqFileLog.info("Chapter file written", { op: "write", path: chapterPath, bytes: encoder.encode(fullContent).length });
 
-  // 8a. Persist token usage when the upstream provider reported complete numbers
+  // ── Build usage record (always, regardless of mode) ──
   let usage: TokenUsageRecord | null = null;
-  if (
-    tokenUsage.prompt !== null &&
-    tokenUsage.completion !== null &&
-    tokenUsage.total !== null
-  ) {
+  if (tokenUsage.prompt !== null && tokenUsage.completion !== null && tokenUsage.total !== null) {
     usage = buildRecord({
-      chapter: targetNum,
+      chapter: targetNum ?? 0,
       promptTokens: tokenUsage.prompt,
       completionTokens: tokenUsage.completion,
       totalTokens: tokenUsage.total,
       model: llmConfig.model,
     });
-    await appendUsage(storyDir, usage);
   } else {
     reqLog.debug("Usage unavailable from upstream", { chapter: targetNum, model: llmConfig.model });
   }
 
-  // 8. Run post-response hooks
-  await hookDispatcher.dispatch("post-response", {
-    correlationId,
-    content: fullContent,
-    storyDir,
+  let chapterContentAfter: string | null = null;
+
+  // ── Mode-specific finalization ──
+  if (writeMode.kind === "write-new-chapter" && chapterPath !== null && targetNum !== null) {
+    reqFileLog.info("Chapter file written", {
+      op: "write",
+      path: chapterPath,
+      bytes: encoder.encode(fullContent).length,
+    });
+
+    if (usage !== null) {
+      await appendUsage(storyDir, usage);
+    }
+
+    chapterContentAfter = fullContent;
+
+    await hookDispatcher.dispatch("post-response", {
+      correlationId,
+      content: fullContent,
+      storyDir,
+      series,
+      name,
+      rootDir,
+      chapterNumber: targetNum,
+      chapterPath,
+      source: "chat",
+    });
+  } else if (writeMode.kind === "append-to-existing-chapter" && chapterPath !== null && targetNum !== null) {
+    const { appendTag, pluginName } = writeMode;
+    const normalised = normaliseAppendContent(aiContent, appendTag);
+    const wrapped = `\n<${appendTag}>\n${normalised}\n</${appendTag}>\n`;
+
+    const existingChapter = await Deno.readTextFile(chapterPath);
+    const newChapterContent = existingChapter + wrapped;
+    const padded = String(targetNum).padStart(3, "0");
+    await atomicWriteChapter(storyDir, `${padded}.md`, newChapterContent);
+    chapterContentAfter = await Deno.readTextFile(chapterPath);
+
+    reqFileLog.info("Chapter file appended (plugin-action)", {
+      op: "append",
+      path: chapterPath,
+      appendedTag: appendTag,
+      pluginName,
+    });
+
+    await hookDispatcher.dispatch("post-response", {
+      correlationId,
+      content: chapterContentAfter,
+      storyDir,
+      series,
+      name,
+      rootDir,
+      chapterNumber: targetNum,
+      chapterPath,
+      source: "plugin-action",
+      pluginName,
+      appendedTag: appendTag,
+    });
+  }
+  // discard: no chapter mutation, no hook dispatch
+
+  return {
+    content: aiContent,
+    usage,
+    chapterPath,
+    chapterNumber: targetNum,
+    chapterContentAfter,
+    aborted: false,
+  };
+}
+
+/**
+ * Strip exactly one matching outer `<{tag}>…</{tag}>` wrapper from `content`
+ * (after trimming) when present, then re-trim. If no matching outer wrapper
+ * is present (or the wrapper is malformed), returns the trimmed content
+ * unchanged. Only ONE outer layer is ever stripped — legitimately nested
+ * same-name elements are preserved.
+ */
+export function normaliseAppendContent(content: string, appendTag: string): string {
+  const trimmed = content.trim();
+  const escaped = appendTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const wrapperRe = new RegExp(
+    `^<${escaped}\\b[^>]*>([\\s\\S]*)</${escaped}>\\s*$`,
+  );
+  const match = trimmed.match(wrapperRe);
+  if (match) {
+    return (match[1] ?? "").trim();
+  }
+  return trimmed;
+}
+
+/**
+ * Execute a chat request: resolve template, build prompt, call LLM with
+ * streaming, write to file incrementally, and run lifecycle hooks. Thin
+ * wrapper around `streamLlmAndPersist({ writeMode: { kind: "write-new-chapter" } })`
+ * that handles the chat-specific prep work (auth, story config, prompt build,
+ * generation-lock acquisition).
+ */
+export async function executeChat(options: ChatOptions): Promise<ChatResult> {
+  const {
     series,
     name,
-    rootDir: config.ROOT_DIR,
-    chapterNumber: targetNum,
-    chapterPath,
-  });
+    message,
+    template,
+    config,
+    safePath,
+    hookDispatcher,
+    buildPromptFromStory,
+    onDelta,
+    signal,
+  } = options;
+  const reqLog = log;
 
-  return { chapter: targetNum, content: fullContent, usage };
+  reqLog.info("Chat execution started", { series, story: name, messageLength: message.length });
+
+  if (!Deno.env.get("LLM_API_KEY")) {
+    reqLog.error("LLM_API_KEY not configured");
+    throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
+  }
+
+  const storyDir = safePath(series, name);
+  if (!storyDir) {
+    throw new ChatError("bad-path", "Invalid path", 400);
+  }
+
+  let llmConfig: LlmConfig;
+  try {
+    llmConfig = await resolveStoryLlmConfig(storyDir, config.llmDefaults);
+  } catch (err) {
+    if (err instanceof StoryConfigValidationError) {
+      reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
+      throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
+    throw new ChatError("story-config", "Failed to read story configuration", 500);
+  }
+
+  let templateOverride: string | undefined;
+  if (typeof template === "string") {
+    templateOverride = template;
+  } else {
+    try {
+      const tpl = await readTemplate(config);
+      if (tpl.source === "custom") {
+        templateOverride = tpl.content;
+      }
+    } catch {
+      // No custom file and no system.md readable — proceed with default rendering
+    }
+  }
+
+  const {
+    messages: templateMessages,
+    ventoError,
+    chapterFiles,
+    chapters,
+  } = await buildPromptFromStory(series, name, storyDir, message, templateOverride);
+
+  if (ventoError) {
+    throw new ChatError("vento", "Template rendering error", 422, ventoError);
+  }
+
+  if (templateMessages.length === 0) {
+    throw new ChatError("no-prompt", "Failed to generate prompt", 500);
+  }
+
+  const targetChapterNumber = resolveTargetChapterNumber(chapterFiles, chapters);
+
+  if (!tryMarkGenerationActive(series, name)) {
+    throw new ChatError("concurrent", "Another generation is already in progress for this story", 409);
+  }
+  try {
+    const result = await streamLlmAndPersist({
+      messages: templateMessages,
+      llmConfig,
+      series,
+      name,
+      storyDir,
+      rootDir: config.ROOT_DIR,
+      signal,
+      writeMode: { kind: "write-new-chapter", userMessage: message, targetChapterNumber },
+      onDelta,
+      hookDispatcher,
+      config,
+    });
+    return {
+      chapter: result.chapterNumber ?? 0,
+      content: result.chapterContentAfter ?? result.content,
+      usage: result.usage,
+    };
   } finally {
     clearGenerationActive(series, name);
   }

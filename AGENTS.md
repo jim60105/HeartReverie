@@ -38,6 +38,7 @@ writer/                   # Backend server (Hono, TypeScript ESM, Deno)
     config.ts             # GET /api/config — public configuration (background image)
     lore.ts               # Lore codex API routes (CRUD for passages)
     plugins.ts            # GET plugins — frontend module discovery
+    plugin-actions.ts     # POST /api/plugins/:pluginName/run-prompt — plugin action button LLM round (path-traversal-safe, optional atomic append)
     prompt.ts             # GET/POST prompt — template preview and file persistence
     stories.ts            # GET stories — series/story listing
     export.ts             # GET /api/stories/:series/:name/export — bundled story download (md/json/txt)
@@ -59,6 +60,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       ChapterContent.vue  # Chapter content rendering
       Sidebar.vue         # Sidebar component
       ChatInput.vue       # Chat message input and submission
+      PluginActionBar.vue # Renders plugin-contributed action buttons (between UsagePanel and ChatInput)
       StorySelector.vue   # Series/story selection UI
       PromptEditor.vue    # System prompt template editor (cards mode + raw-text fallback)
       PromptEditorPage.vue # Prompt editor page wrapper
@@ -82,6 +84,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       useLoreApi.ts       # Lore codex API client
       useMarkdownRenderer.ts  # Markdown rendering pipeline
       usePlugins.ts       # Plugin loading and hook management
+      usePluginActions.ts # Plugin action-button visibility filter + click dispatch
       usePromptEditor.ts  # Prompt editor state (MessageCard[] + parse/serialize, raw fallback toggle, originalRawSource snapshot, lossy-strip flag, pre-save validity guard)
       useStorySelector.ts # Story selector state
       useStoryExport.ts   # Story export download (Markdown/JSON/TXT)
@@ -286,8 +289,10 @@ Plugin interaction layers:
    - `chat:send:before` — pipeline hook: handlers may transform the outgoing user message by returning a `string`; context is `{ message, mode: "send" | "resend" }`.
    - `chapter:render:after` — post-processing hook: handlers may mutate `tokens` after Markdown + initial DOMPurify pass; the dispatcher re-sanitizes any newly added or `.content`-mutated `html` tokens, so plugins never need to sanitize HTML themselves.
    - `chapter:dom:ready` — DOM-commit hook: fired by `ChapterContent.vue` via a `flush: "post"` watcher after Vue applies v-html to the live DOM; context carries `{ container, tokens, rawMarkdown, chapterIndex }`. Used by plugins (e.g. `dialogue-colorize`) that need to operate on the rendered DOM (text nodes, ranges) rather than the token array. Skipped while the chapter editor textarea is shown.
+   - `action-button:click` — async dispatch hook fired when the user clicks a plugin-contributed button in `PluginActionBar`. Context exposes `{ buttonId, pluginName, series, name, storyDir, lastChapterIndex }` plus curried helpers `runPluginPrompt(promptFile, opts?)`, `notify(input)`, and `reload()`. The dispatcher only runs handlers whose owning plugin matches `context.pluginName` (origin-filtered) and awaits each handler's promise in priority order; unhandled rejections surface a default error toast.
    - `story:switch` / `chapter:change` — informational hooks fired on real navigation state changes (no veto). Contexts carry `previousSeries`/`previousStory` and `previousIndex` respectively.
-7. **Plugin logger** — each plugin receives a scoped logger via `PluginRegisterContext`; `HookDispatcher` injects `context.logger` during dispatch
+7. **Action buttons** — `actionButtons` manifest field declares `ActionButtonDescriptor` entries (`id`, `label`, `icon?`, `tooltip?`, `priority?`, `visibleWhen?` with two-value enum `"last-chapter-backend" | "backend-only"`). Descriptors render in `PluginActionBar` (mounted between `UsagePanel` and `ChatInput`) and dispatch the `action-button:click` frontend hook. Click handlers typically call the curried `runPluginPrompt(promptFile, opts?)` helper, which drives `POST /api/plugins/:pluginName/run-prompt` (path-traversal-safe via `Deno.realPath`, `.md`-only, route-rate-limited to 30/min). When called with `{ append: true, appendTag }`, the backend strips at most one outer `<{appendTag}>` wrapper from the response, atomically appends `\n<{appendTag}>\n…\n</{appendTag}>\n` to the highest-numbered chapter file, re-reads the chapter, and dispatches `post-response` with `source: "plugin-action"` and `content` set to the full chapter contents after the append. The dispatcher filters `action-button:click` handlers by `originPluginName` so plugins only see clicks on their own buttons.
+8. **Plugin logger** — each plugin receives a scoped logger via `PluginRegisterContext`; `HookDispatcher` injects `context.logger` during dispatch
 
 ### Lore Codex
 
@@ -364,6 +369,7 @@ The server exposes a WebSocket endpoint at `GET /api/ws` for real-time streaming
 - **JSON protocol** — all messages are `{ type: "...", ... }` discriminated unions defined in `writer/types.ts` (`WsClientMessage` / `WsServerMessage`)
 - **Chat streaming** — `chat:send` / `chat:resend` messages trigger LLM generation via shared `executeChat()` function in `writer/lib/chat-shared.ts`; each SSE chunk is dual-written (file + WebSocket `chat:delta`); completed with `chat:done` (includes optional `usage: TokenUsageRecord | null` field) or `chat:error`
 - **Stop generation** — `chat:abort` message cancels an active LLM generation; backend closes the upstream LLM connection via `AbortSignal`, preserves partial chapter content, and responds with `chat:aborted`
+- **Plugin action streaming** — `plugin-action:run` / `plugin-action:abort` client envelopes drive the `POST /api/plugins/:pluginName/run-prompt` route over WebSocket; the server emits `plugin-action:delta` (per-chunk progress), `plugin-action:done` (final `{ content, usage, chapterUpdated, appendedTag }` payload), `plugin-action:error` (RFC 9457 Problem Details), or `plugin-action:aborted` (skips the chapter append and the `post-response` dispatch). The HTTP fallback returns the final JSON only with no streaming progress.
 - **Story subscription** — `subscribe` message starts 1-second server-side polling of a story's chapter directory; pushes `chapters:updated` on count change and `chapters:content` on last-chapter content change
 - **Frontend composable** — `useWebSocket.ts` singleton manages connection, auth handshake, and exponential backoff reconnection (1s → 30s cap)
 - **Graceful degradation** — `useChatApi.ts` uses WebSocket when connected, falls back to HTTP POST; `useChapterNav.ts` disables polling when WebSocket is active, resumes on disconnect

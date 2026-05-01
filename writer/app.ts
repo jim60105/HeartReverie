@@ -26,6 +26,7 @@ import { registerChapterRoutes } from "./routes/chapters.ts";
 import { registerBranchRoutes } from "./routes/branch.ts";
 import { registerChatRoutes } from "./routes/chat.ts";
 import { registerPluginRoutes } from "./routes/plugins.ts";
+import { registerPluginActionRoutes } from "./routes/plugin-actions.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
 import { registerConfigRoutes } from "./routes/config.ts";
 import { registerStoryConfigRoutes } from "./routes/story-config.ts";
@@ -125,6 +126,7 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 300 }));
   app.use("/api/auth/verify", rateLimiter({ windowMs: 60_000, limit: 30 }));
   app.use("/api/stories/:series/:name/chat", rateLimiter({ windowMs: 60_000, limit: 30 }));
+  app.use("/api/plugins/:pluginName/run-prompt", rateLimiter({ windowMs: 60_000, limit: 30 }));
   app.use("/api/stories/:series/:name/preview-prompt", rateLimiter({ windowMs: 60_000, limit: 60 }));
 
   // Auth middleware for API routes (skip public endpoints and WebSocket upgrade)
@@ -146,6 +148,7 @@ export function createApp(deps: AppDeps): Hono {
   registerStoryConfigRoutes(app, deps);
   registerLlmDefaultsRoutes(app, deps);
   registerPluginRoutes(app, deps);
+  registerPluginActionRoutes(app, deps);
   registerPromptRoutes(app, deps);
   registerUsageRoutes(app, deps);
 

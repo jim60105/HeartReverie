@@ -105,6 +105,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       chapterNumber,
       previousContent,
       chapterCount,
+      extraVariables,
     }: RenderOptions = {},
   ): Promise<RenderResult> {
     const systemTemplatePath: string = join(ROOT_DIR, "system.md");
@@ -209,6 +210,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
         ...loreVars,
         ...pluginVars.variables,
         plugin_fragments: pluginVars.fragments || [],
+        ...(extraVariables ?? {}),
         __messageState: messageState,
       });
       const messages: ChatMessage[] = splitRenderedMessages(

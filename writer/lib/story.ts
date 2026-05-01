@@ -147,6 +147,7 @@ export function createStoryEngine(
     storyDir: string,
     message: string,
     template?: string,
+    extraVariables?: Record<string, unknown>,
   ): Promise<BuildPromptResult> {
     let chapterFiles: string[] = await listChapterFiles(storyDir);
     log.debug("Read story directory", { path: storyDir, chapterCount: chapterFiles.length });
@@ -221,6 +222,7 @@ export function createStoryEngine(
         chapterCount: totalChapterCount,
         templateOverride:
           typeof template === "string" ? template : undefined,
+        extraVariables,
       });
 
     return {

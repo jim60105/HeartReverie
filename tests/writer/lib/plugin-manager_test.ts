@@ -958,6 +958,154 @@ Deno.test("PluginManager", async (t) => {
         assertEquals(captured?.chapterCount, 3);
       });
     });
+    await t.step("actionButtons manifest validation", async (t) => {
+      await t.step("valid actionButtons are exposed via getPluginActionButtons", async () => {
+        const pluginDir = join(tmpDir, "ab-valid");
+        const pDir = join(pluginDir, "ab-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "ab-plugin",
+            version: "1.0.0",
+            actionButtons: [
+              {
+                id: "summarise",
+                label: "Summarise",
+                tooltip: "Summarise the last chapter",
+                promptFile: "prompts/summary.md",
+                mode: "discard",
+                priority: 50,
+                visibleWhen: "backend-only",
+              },
+            ],
+          }),
+        );
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const buttons = pm.getPluginActionButtons("ab-plugin");
+        assertEquals(buttons.length, 1);
+        assertEquals(buttons[0]?.id, "summarise");
+        assertEquals(buttons[0]?.label, "Summarise");
+        assertEquals(buttons[0]?.priority, 50);
+        assertEquals(buttons[0]?.visibleWhen, "backend-only");
+      });
+
+      await t.step("unknown visibleWhen value drops the entry", async () => {
+        const pluginDir = join(tmpDir, "ab-bad-vis");
+        const pDir = join(pluginDir, "ab-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "ab-plugin",
+            version: "1.0.0",
+            actionButtons: [
+              { id: "bad", label: "Bad", promptFile: "p.md", mode: "discard", visibleWhen: "always" },
+              { id: "good", label: "Good", promptFile: "p.md", mode: "discard" },
+            ],
+          }),
+        );
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const buttons = pm.getPluginActionButtons("ab-plugin");
+        assertEquals(buttons.length, 1);
+        assertEquals(buttons[0]?.id, "good");
+      });
+
+      await t.step("invalid id is dropped per-entry without rejecting the plugin", async () => {
+        const pluginDir = join(tmpDir, "ab-bad-id");
+        const pDir = join(pluginDir, "ab-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "ab-plugin",
+            version: "1.0.0",
+            actionButtons: [
+              { id: "BadID!", label: "x", promptFile: "p.md", mode: "discard" },
+              { id: "good-one", label: "Good", promptFile: "p.md", mode: "discard" },
+            ],
+          }),
+        );
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const buttons = pm.getPluginActionButtons("ab-plugin");
+        assertEquals(buttons.length, 1);
+        assertEquals(buttons[0]?.id, "good-one");
+      });
+
+      await t.step("duplicate ids: first wins, subsequent are dropped", async () => {
+        const pluginDir = join(tmpDir, "ab-dup");
+        const pDir = join(pluginDir, "ab-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "ab-plugin",
+            version: "1.0.0",
+            actionButtons: [
+              { id: "x", label: "First", promptFile: "p.md", mode: "discard" },
+              { id: "x", label: "Second", promptFile: "p.md", mode: "discard" },
+            ],
+          }),
+        );
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const buttons = pm.getPluginActionButtons("ab-plugin");
+        assertEquals(buttons.length, 1);
+        assertEquals(buttons[0]?.label, "First");
+      });
+
+      await t.step("defaults are applied for priority and visibleWhen", async () => {
+        const pluginDir = join(tmpDir, "ab-defaults");
+        const pDir = join(pluginDir, "ab-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "ab-plugin",
+            version: "1.0.0",
+            actionButtons: [
+              { id: "min", label: "Min", promptFile: "p.md", mode: "discard" },
+            ],
+          }),
+        );
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        const buttons = pm.getPluginActionButtons("ab-plugin");
+        assertEquals(buttons[0]?.priority, 100);
+        assertEquals(buttons[0]?.visibleWhen, "last-chapter-backend");
+      });
+
+      await t.step("missing actionButtons yields empty array", async () => {
+        const pluginDir = join(tmpDir, "ab-none");
+        const pDir = join(pluginDir, "ab-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({ name: "ab-plugin", version: "1.0.0" }),
+        );
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd);
+        await pm.init();
+
+        assertEquals(pm.getPluginActionButtons("ab-plugin"), []);
+        assertEquals(pm.getPluginActionButtons("nonexistent"), []);
+        assertTrue(pm.hasPlugin("ab-plugin"));
+        assertEquals(pm.hasPlugin("nonexistent"), false);
+      });
+    });
   } finally {
     logStub.restore();
     warnStub.restore();

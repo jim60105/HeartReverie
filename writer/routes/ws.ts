@@ -19,6 +19,7 @@ import { join } from "@std/path";
 import { parse as parseYaml } from "@std/yaml";
 import { isValidParam } from "../lib/middleware.ts";
 import { executeChat, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
+import { runPluginActionWithDeps } from "./plugin-actions.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { WSContext } from "@hono/hono/ws";
@@ -352,6 +353,81 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
       controller.abort();
     }
 
+    async function handlePluginActionRun(ws: WSContext, msg: Record<string, unknown>): Promise<void> {
+      const correlationId = msg.correlationId;
+      const pluginName = msg.pluginName;
+      const series = msg.series;
+      const story = msg.name;
+      const promptFile = msg.promptFile;
+      const append = msg.append === true;
+      const appendTag = msg.appendTag;
+      const extraVariables = msg.extraVariables;
+
+      if (typeof correlationId !== "string" || typeof pluginName !== "string") {
+        wsSend(ws, { type: "error", detail: "Invalid plugin-action:run parameters" });
+        return;
+      }
+
+      activeGenerations++;
+      const controller = new AbortController();
+      abortControllers.set(correlationId, controller);
+      try {
+        const outcome = await runPluginActionWithDeps(
+          {
+            pluginName,
+            series,
+            story,
+            promptPath: promptFile,
+            mode: append ? "append-to-existing-chapter" : "discard",
+            appendTag,
+            extraVariables,
+            signal: controller.signal,
+            onDelta: (chunk) => {
+              wsSend(ws, { type: "plugin-action:delta", correlationId, chunk });
+            },
+          },
+          { config, safePath, hookDispatcher, pluginManager: deps.pluginManager, buildPromptFromStory },
+        );
+        if (outcome.ok) {
+          wsSend(ws, {
+            type: "plugin-action:done",
+            correlationId,
+            content: outcome.response.content,
+            usage: outcome.response.usage,
+            chapterUpdated: outcome.response.chapterUpdated,
+            appendedTag: outcome.response.appendedTag,
+          });
+        } else if (outcome.aborted) {
+          wsSend(ws, { type: "plugin-action:aborted", correlationId });
+        } else {
+          wsSend(ws, {
+            type: "plugin-action:error",
+            correlationId,
+            problem: outcome.problem,
+          });
+        }
+      } catch (err: unknown) {
+        const detail = err instanceof Error ? err.message : "Plugin action failed";
+        wsSend(ws, {
+          type: "plugin-action:error",
+          correlationId,
+          problem: { type: "about:blank", title: "Internal Server Error", status: 500, detail },
+        });
+      } finally {
+        abortControllers.delete(correlationId);
+        activeGenerations--;
+        resetIdleTimer(ws);
+      }
+    }
+
+    function handlePluginActionAbort(_ws: WSContext, msg: Record<string, unknown>): void {
+      const correlationId = msg.correlationId;
+      if (typeof correlationId !== "string") return;
+      const controller = abortControllers.get(correlationId);
+      if (!controller) return;
+      controller.abort();
+    }
+
     // ── WebSocket event handlers ──
 
     return {
@@ -416,6 +492,12 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
             break;
           case "chat:abort":
             handleChatAbort(ws, msg);
+            break;
+          case "plugin-action:run":
+            await handlePluginActionRun(ws, msg);
+            break;
+          case "plugin-action:abort":
+            handlePluginActionAbort(ws, msg);
             break;
           // Unknown types: silently ignore
         }
