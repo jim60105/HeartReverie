@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Fixed release note Podman pull command owner interpolation so generated pull instructions resolve to the correct image path.
 
-## [0.2.0] - 2025-07-17
+## [0.2.0] - 2026-04-18
 
 ### Added
 
