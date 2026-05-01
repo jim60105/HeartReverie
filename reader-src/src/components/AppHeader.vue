@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useFileReader } from "@/composables/useFileReader";
@@ -24,8 +24,6 @@ const {
 } = useChapterNav();
 
 const { directoryHandle } = useFileReader();
-
-const mobileMenuOpen = ref(false);
 
 const hasChapters = computed(() => totalChapters.value > 0);
 
@@ -76,7 +74,7 @@ function openSettings() {
 
       <template v-if="hasChapters">
         <button
-          class="themed-btn header-btn header-btn--icon"
+          class="themed-btn header-btn header-btn--icon header-btn--boundary"
           :disabled="isFirst"
           title="第一章"
           aria-label="第一章"
@@ -100,7 +98,7 @@ function openSettings() {
           下一章 →
         </button>
         <button
-          class="themed-btn header-btn header-btn--icon"
+          class="themed-btn header-btn header-btn--icon header-btn--boundary"
           :disabled="isLast"
           title="最後一章"
           aria-label="最後一章"
@@ -109,14 +107,6 @@ function openSettings() {
           ⇉
         </button>
       </template>
-
-      <!-- Mobile hamburger -->
-      <button
-        class="hamburger-btn"
-        @click="mobileMenuOpen = !mobileMenuOpen"
-      >
-        ☰
-      </button>
     </div>
   </header>
 </template>
@@ -147,6 +137,7 @@ function openSettings() {
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
 }
 
@@ -175,22 +166,18 @@ function openSettings() {
 .chapter-progress {
   color: var(--text-label);
   font-size: 0.875rem;
-}
-
-.hamburger-btn {
-  display: none;
-  background: var(--btn-bg);
-  border: 1px solid var(--btn-border);
-  color: var(--text-name);
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.2rem;
+  white-space: nowrap;
 }
 
 @media (max-width: 767px) {
-  .hamburger-btn {
-    display: block;
+  .header-row {
+    flex-wrap: nowrap;
+  }
+  .folder-name {
+    display: none;
+  }
+  .header-btn--boundary {
+    display: none;
   }
 }
 </style>
