@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - No unreleased changes yet.
 
+## [0.5.0] - 2026-05-02
+
+### Added
+
+- Plugin action buttons: plugin manifests can now declare an `actionButtons` array that surfaces clickable buttons in the reader between the usage panel and chat input, dispatching a frontend `action-button:click` hook to the owning plugin and able to call a new `runPluginPrompt` helper that streams the LLM with optional append-into-chapter behaviour. Includes a new authenticated `POST /api/plugins/:pluginName/run-prompt` route with WebSocket streaming, dedicated rate limit, atomic generation lock, and HTTP fallback.
+- Chapter-jump boundary buttons (`⇇` / `⇉`) in the header that go to the first / last chapter, with disabled states at boundaries and Chinese tooltips.
+- Mobile-responsive header at viewport widths ≤ 767 px (audited 360–767 px at default text scaling): hides the folder-name breadcrumb and the boundary-jump buttons, forces the header onto a single row without wrapping, and pins button text to a single line via `white-space: nowrap`.
+
+### Changed
+
+- Reader header tightened: replaced the `📂 選擇資料夾` button with the `📖` story-selector dropdown as the single entry point for loading folders / picking stories; the story-selector summary collapses to the `📖` glyph once a story is selected. Header buttons unified to consistent compact padding for a tighter bar.
+- Story-selector route synchronization is now hosted in a detached effect scope at module lifetime, surviving component unmounts so that watcher disposal across navigations no longer breaks reactive state.
+- Plugin-core spec hardened: `frontend.js` path requirement now uses a normative `SHALL` keyword.
+
+### Fixed
+
+- Story-selector dropdown story list no longer stays empty after the user reloads on a `/settings/*` page and navigates back to the reading layout. Picking a series now reliably triggers `fetchStories` and populates the story dropdown.
+- Prompt-editor toolbar action cluster (`＋ 新增訊息`, `↻ 回復預設`, `儲存`, `預覽 Prompt`) wraps onto multiple right-aligned rows at narrow viewports instead of clipping the rightmost button past the viewport edge.
+- Removed a dead `☰` hamburger button and the unused `mobileMenuOpen` ref from the header that did nothing on mobile.
+
 ## [0.4.0] - 2026-05-01
 
 ### Added
@@ -139,7 +159,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jim60105/HeartReverie/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jim60105/HeartReverie/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jim60105/HeartReverie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jim60105/HeartReverie/compare/v0.1.0...v0.2.0
