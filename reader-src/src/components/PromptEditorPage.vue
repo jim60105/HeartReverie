@@ -29,6 +29,13 @@ function handleSaved() {
 </script>
 
 <template>
+  <!--
+    The `.editor-page` class is part of a global layout contract: the rule
+    `.settings-layout.settings-layout:has(.editor-page)` in
+    `src/styles/base.css` pins the settings shell to the viewport so the
+    textarea + preview become the only scroll containers on this route.
+    Renaming or removing this class will break independent-pane scrolling.
+  -->
   <div class="editor-page">
     <div class="editor-page-main">
       <PromptEditor @preview="togglePreview" @saved="handleSaved" />

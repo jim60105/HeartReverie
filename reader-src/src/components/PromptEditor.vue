@@ -238,6 +238,7 @@ function handlePreview() {
 .editor-textarea-wrap {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .editor-textarea {

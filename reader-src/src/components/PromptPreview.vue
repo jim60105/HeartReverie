@@ -117,6 +117,9 @@ async function fetchPreview() {
 
 .preview-content {
   flex: 1;
+  min-height: 0;
+  margin: 0;
+  box-sizing: border-box;
   padding: 16px;
   overflow: auto;
   font-size: 0.85em;
