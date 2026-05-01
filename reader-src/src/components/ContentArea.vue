@@ -61,8 +61,9 @@ watch(
       <section class="welcome-section">
         <h1 class="welcome-title">HeartReverie 浮心夜夢</h1>
         <p class="welcome-text">
-          點擊上方「選擇資料夾」按鈕，選取包含章節
-          <code class="welcome-code">.md</code> 檔案的資料夾以開始閱讀。
+          請從上方
+          <code class="welcome-code">📖 故事選擇</code>
+          載入或建立故事章節以開始閱讀。
         </p>
       </section>
     </div>

@@ -83,25 +83,32 @@ describe("StorySelector", () => {
     expect(exportStoryMock).toHaveBeenCalledWith("alpha", "story-1", "json");
   });
 
-  it("shows export fallback error and locks buttons while exporting", async () => {
-    selectedSeriesRef.value = "alpha";
-    selectedStoryRef.value = "story-1";
-    let resolveExport: (() => void) | undefined;
-    exportStoryMock.mockImplementationOnce(() => new Promise<void>((resolve) => {
-      resolveExport = resolve;
-    }));
-
+  it("shows full label and no aria-label when no story is selected", () => {
+    selectedStoryRef.value = "";
     const wrapper = mount(StorySelector);
-    await wrapper.find("[data-testid=\"export-md\"]").trigger("click");
-    await flushPromises();
-    expect(wrapper.find("[data-testid=\"export-json\"]").attributes("disabled")).toBeDefined();
+    const summary = wrapper.find("summary");
+    expect(summary.text()).toContain("📖");
+    expect(summary.text()).toContain("故事選擇");
+    expect(summary.attributes("aria-label")).toBeUndefined();
+  });
 
-    resolveExport?.();
-    await flushPromises();
+  it("collapses to glyph-only with aria-label on summary when a story is selected", async () => {
+    selectedStoryRef.value = "my-story";
+    const wrapper = mount(StorySelector);
+    const summary = wrapper.find("summary");
+    expect(summary.text().trim()).toBe("📖");
+    expect(summary.attributes("aria-label")).toBe("故事選擇");
+  });
 
-    exportStoryMock.mockRejectedValueOnce("x");
-    await wrapper.find("[data-testid=\"export-txt\"]").trigger("click");
+  it("restores full label when selectedStory is cleared", async () => {
+    selectedStoryRef.value = "my-story";
+    const wrapper = mount(StorySelector);
+    expect(wrapper.find("summary").attributes("aria-label")).toBe("故事選擇");
+
+    selectedStoryRef.value = "";
     await flushPromises();
-    expect(wrapper.find(".export-error").text()).toContain("匯出失敗");
+    const summary = wrapper.find("summary");
+    expect(summary.text()).toContain("故事選擇");
+    expect(summary.attributes("aria-label")).toBeUndefined();
   });
 });

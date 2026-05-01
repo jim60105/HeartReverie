@@ -50,7 +50,7 @@ describe("ContentArea", () => {
   it("WHEN currentContent is empty THEN welcome empty-state is rendered", () => {
     const wrapper = mount(ContentArea);
     expect(wrapper.find(".welcome-content").exists()).toBe(true);
-    expect(wrapper.text()).toContain("選擇資料夾");
+    expect(wrapper.text()).toContain("故事選擇");
     expect(wrapper.find(".sidebar").exists()).toBe(true);
   });
 

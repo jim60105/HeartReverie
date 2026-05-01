@@ -280,6 +280,25 @@ function previous(): void {
   }
 }
 
+function goToFirst(): void {
+  if (chapters.value.length === 0) return;
+  if (mode.value === "fsa") {
+    loadFSAChapter(0);
+  } else {
+    navigateTo(0);
+  }
+}
+
+function goToLast(): void {
+  const lastIdx = chapters.value.length - 1;
+  if (lastIdx < 0) return;
+  if (mode.value === "fsa") {
+    loadFSAChapter(lastIdx);
+  } else {
+    navigateTo(lastIdx);
+  }
+}
+
 async function loadFromFSA(handle: FileSystemDirectoryHandle): Promise<void> {
   clearPolling();
   mode.value = "fsa";
@@ -581,6 +600,8 @@ export function useChapterNav(): UseChapterNavReturn {
     folderName,
     next,
     previous,
+    goToFirst,
+    goToLast,
     loadFromFSA,
     loadFromBackend,
     reloadToLast,

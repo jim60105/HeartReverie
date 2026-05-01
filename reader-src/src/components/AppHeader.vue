@@ -16,12 +16,14 @@ const {
   folderName,
   next,
   previous,
+  goToFirst,
+  goToLast,
   loadFromFSA,
   reloadToLast,
   getBackendContext,
 } = useChapterNav();
 
-const { isSupported, openDirectory, directoryHandle } = useFileReader();
+const { directoryHandle } = useFileReader();
 
 const mobileMenuOpen = ref(false);
 
@@ -30,13 +32,6 @@ const hasChapters = computed(() => totalChapters.value > 0);
 const progressText = computed(() =>
   hasChapters.value ? `${currentIndex.value + 1} / ${totalChapters.value}` : "0 / 0",
 );
-
-async function handleFolderSelect() {
-  await openDirectory();
-  if (directoryHandle.value) {
-    await loadFromFSA(directoryHandle.value);
-  }
-}
 
 async function handleReload() {
   if (mode.value === "fsa" && directoryHandle.value) {
@@ -54,21 +49,13 @@ function openSettings() {
 <template>
   <header class="app-header">
     <div class="header-row">
-      <button
-        v-if="isSupported"
-        class="themed-btn header-btn"
-        @click="handleFolderSelect"
-      >
-        📂 選擇資料夾
-      </button>
-
       <StorySelector />
 
-      <span class="folder-name">{{ folderName || '尚未選擇資料夾' }}</span>
+      <span class="folder-name">{{ folderName || '尚未選擇故事' }}</span>
 
       <button
         v-if="hasChapters"
-        class="themed-btn header-btn header-btn--reload"
+        class="themed-btn header-btn header-btn--icon"
         title="重新載入資料夾"
         @click="handleReload"
       >
@@ -89,6 +76,15 @@ function openSettings() {
 
       <template v-if="hasChapters">
         <button
+          class="themed-btn header-btn header-btn--icon"
+          :disabled="isFirst"
+          title="第一章"
+          aria-label="第一章"
+          @click="goToFirst"
+        >
+          ⇇
+        </button>
+        <button
           class="themed-btn header-btn"
           :disabled="isFirst"
           @click="previous"
@@ -102,6 +98,15 @@ function openSettings() {
           @click="next"
         >
           下一章 →
+        </button>
+        <button
+          class="themed-btn header-btn header-btn--icon"
+          :disabled="isLast"
+          title="最後一章"
+          aria-label="最後一章"
+          @click="goToLast"
+        >
+          ⇉
         </button>
       </template>
 
@@ -137,7 +142,7 @@ function openSettings() {
   background: var(--btn-bg);
   border: 1px solid var(--btn-border);
   color: var(--text-name);
-  padding: 4px 12px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -150,12 +155,7 @@ function openSettings() {
   cursor: not-allowed;
 }
 
-.header-btn--reload {
-  padding: 4px 8px;
-}
-
 .header-btn--icon {
-  padding: 4px 8px;
   font-size: 1rem;
 }
 
