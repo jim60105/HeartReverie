@@ -102,7 +102,7 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({
-      prompt: "test prompt",
+      messages: [{ role: "user" as const, content: "test prompt" }],
       ventoError: null,
       chapterFiles: [],
       chapters: [],

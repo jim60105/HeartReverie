@@ -128,7 +128,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
         }
 
         const {
-          prompt,
+          messages,
           previousContext,
           isFirstRound,
           ventoError,
@@ -146,7 +146,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
 
         const pluginVars = await pluginManager.getPromptVariables();
         return c.json({
-          prompt,
+          messages,
           fragments: Object.keys(pluginVars.variables),
           variables: {
             scenario: "(loaded)",

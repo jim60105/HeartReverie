@@ -210,7 +210,7 @@ export function createStoryEngine(
     // may be empty if a chapter consisted only of stripped tags)
     const filteredContext = previousContext.filter((c) => c.length > 0);
 
-    const { content: prompt, error: ventoError } =
+    const { messages, error: ventoError } =
       await renderSystemPrompt(series, name, {
         previousContext: filteredContext,
         userInput: message,
@@ -224,7 +224,7 @@ export function createStoryEngine(
       });
 
     return {
-      prompt,
+      messages: ventoError ? [] : messages,
       previousContext: filteredContext,
       isFirstRound,
       ventoError,

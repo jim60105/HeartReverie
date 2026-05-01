@@ -90,7 +90,7 @@ function stubFetch(chunks: string[]): { restore: () => void } {
 function buildPromptStub() {
   return (): Promise<BuildPromptResult> =>
     Promise.resolve({
-      prompt: "p",
+      messages: [{ role: "user" as const, content: "p" }],
       previousContext: [],
       isFirstRound: true,
       ventoError: null,

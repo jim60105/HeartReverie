@@ -104,7 +104,7 @@ async function runChat(tmpDir: string, opts: RunOptions) {
       safePath: createSafePath(tmpDir),
       hookDispatcher: opts.hookDispatcher,
       buildPromptFromStory: (() => Promise.resolve({
-        prompt: "test prompt",
+        messages: [{ role: "user" as const, content: "test prompt" }],
         previousContext: [],
         isFirstRound: true,
         ventoError: null,

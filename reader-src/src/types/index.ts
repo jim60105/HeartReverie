@@ -168,15 +168,38 @@ export interface UseStorySelectorReturn {
 }
 
 export interface UsePromptEditorReturn {
-  templateContent: Ref<string>;
-  lastSaved: Ref<string>;
+  // Mode state
+  mode: ComputedRef<"cards" | "raw">;
+  useRawFallback: Ref<boolean>;
+
+  // Cards mode state
+  cards: Ref<MessageCard[]>;
+
+  // Raw mode state
+  rawSource: Ref<string>;
+  originalRawSource: Ref<string>;
+
+  // Variables / status
   parameters: Ref<ParameterPill[]>;
-  isDirty: ComputedRef<boolean>;
   isCustom: Ref<boolean>;
   isSaving: Ref<boolean>;
+  isDirty: ComputedRef<boolean>;
+  parseError: Ref<string | null>;
+  topLevelContentDropped: Ref<boolean>;
+  saveDisabledReason: ComputedRef<string | null>;
+
+  // Actions
   save: () => Promise<void>;
   loadTemplate: () => Promise<void>;
   resetTemplate: () => Promise<void>;
+  toggleRawFallback: () => void;
+  addCard: () => void;
+  deleteCard: (id: string) => void;
+  moveCardUp: (id: string) => void;
+  moveCardDown: (id: string) => void;
+  serializeCurrent: () => string;
+  dismissParseError: () => void;
+
   previewTemplate: (
     series: string,
     story: string,
@@ -355,11 +378,43 @@ export interface VentoErrorToken {
 
 // ── Prompt Preview ──
 
+/**
+ * Frontend mirror of the backend `ChatMessage` (writer/types.ts). Roles are
+ * constrained to the OpenAI-compatible Chat Completions allow-list supported
+ * by the `{{ message }}` Vento tag.
+ */
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+/**
+ * Response shape of `POST /api/stories/:series/:name/preview-prompt`.
+ *
+ * After the `multi-message-prompt-template` change, the preview endpoint
+ * returns the assembled `messages` array (one entry per upstream chat turn)
+ * instead of a single rendered `prompt` string. The `fragments` and
+ * `variables` fields are unchanged.
+ */
 export interface PromptPreviewResult {
-  prompt: string;
+  messages: ChatMessage[];
   fragments?: string[];
   variables?: Record<string, string>;
   errors?: VentoErrorCardProps[];
+}
+
+// ── Prompt Editor Message Cards ──
+
+/**
+ * Structured message-card representation used by the Prompt Editor cards
+ * mode (see the `prompt-editor-message-cards` capability). The `id` field is
+ * a frontend-only stable key for `<TransitionGroup>`/`v-for` and is never
+ * persisted to disk by `serializeMessageCards()`.
+ */
+export interface MessageCard {
+  id: string;
+  role: "system" | "user" | "assistant";
+  body: string;
 }
 
 export interface ParameterPill {

@@ -16,12 +16,19 @@
 import { join } from "@std/path";
 import vento from "ventojs";
 import type { Environment as VentoEnvironment } from "ventojs/core/environment";
-import type { TemplateEngine, RenderResult, RenderOptions } from "../types.ts";
+import type { ChatMessage, TemplateEngine, RenderResult, RenderOptions } from "../types.ts";
 import type { PluginManager } from "./plugin-manager.ts";
 import { PLAYGROUND_DIR, ROOT_DIR } from "./config.ts";
 import { buildVentoError } from "./errors.ts";
 import { resolveLoreVariables, generateLoreVariables } from "./lore.ts";
 import { createLogger } from "./logger.ts";
+import {
+  assertHasUserMessage,
+  assertNoEmptyMessages,
+  type MessageState,
+  messageTagPlugin,
+  splitRenderedMessages,
+} from "./vento-message-tag.ts";
 
 const log = createLogger("template");
 
@@ -42,14 +49,32 @@ export function validateTemplate(templateStr: string): string[] {
 
     // Vento comments
     if (expr.startsWith("#")) continue;
-    // End tags: /for, /if
-    if (/^\/(?:for|if)$/.test(expr)) continue;
+
+    // Reject any identifier token starting with `__` (reserved for internal
+    // side-channel state such as `__messageState`). This prevents user
+    // templates from reading or forging the per-render nonce, no matter the
+    // surrounding shape (bare var, pipe chain, if/for/message operand,
+    // index access, etc.).
+    const identifiers = expr.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) ?? [];
+    if (identifiers.some((id) => id.startsWith("__"))) {
+      errors.push(
+        `Unsafe template expression at position ${match.index}: {{ ${expr} }}`,
+      );
+      continue;
+    }
+
+    // End tags: /for, /if, /message
+    if (/^\/(?:for|if|message)$/.test(expr)) continue;
     // else
     if (expr === "else") continue;
     // for-of: for <ident> of <ident>
     if (/^for\s+[a-zA-Z_]\w*\s+of\s+[a-zA-Z_]\w*$/.test(expr)) continue;
     // if <ident>
     if (/^if\s+[a-zA-Z_]\w*$/.test(expr)) continue;
+    // message tag with string-literal role: message "system"|"user"|"assistant"
+    if (/^message\s+"(?:system|user|assistant)"$/.test(expr)) continue;
+    // message tag with bare-identifier role (runtime-validated)
+    if (/^message\s+[a-zA-Z_]\w*$/.test(expr)) continue;
     // Simple variable: <ident>
     if (/^[a-zA-Z_]\w*$/.test(expr)) continue;
     // Variable with pipe filters: <ident> |> <filter> (one or more)
@@ -66,6 +91,7 @@ export function validateTemplate(templateStr: string): string[] {
 
 export function createTemplateEngine(pluginManager: PluginManager): TemplateEngine {
   const ventoEnv: VentoEnvironment = vento();
+  ventoEnv.use(messageTagPlugin());
 
   async function renderSystemPrompt(
     series: string,
@@ -87,7 +113,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
     if (templateOverride) {
       if (templateOverride.length > 500_000) {
         return {
-          content: null,
+          messages: [],
           error: {
             title: "Template Validation Error",
             message: "Template exceeds maximum length",
@@ -98,7 +124,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       const templateErrors = validateTemplate(templateOverride);
       if (templateErrors.length > 0) {
         return {
-          content: null,
+          messages: [],
           error: {
             title: "Template Validation Error",
             message:
@@ -162,6 +188,15 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       chapterCount: chapterCount ?? 0,
     });
 
+    // Per-render side-channel state for the {{ message }} tag. Hidden behind
+    // a single nested object so the SSTI whitelist (which only accepts
+    // simple identifiers, not member access) cannot leak the nonce or let
+    // a user-supplied template forge sentinels.
+    const messageState: MessageState = {
+      nonce: crypto.randomUUID(),
+      messages: [],
+    };
+
     try {
       const startTime = performance.now();
       const result = await ventoEnv.runString(systemTemplate, {
@@ -174,23 +209,39 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
         ...loreVars,
         ...pluginVars.variables,
         plugin_fragments: pluginVars.fragments || [],
+        __messageState: messageState,
       });
+      const messages: ChatMessage[] = splitRenderedMessages(
+        result.content,
+        messageState.nonce,
+        messageState.messages,
+      );
+      assertHasUserMessage(messages);
+      assertNoEmptyMessages(messages);
       const latencyMs = Math.round(performance.now() - startTime);
       const variableCount = Object.keys(loreVars).length + Object.keys(pluginVars.variables).length + Object.keys(dynamicVars).length + 4;
-      log.info("Template rendered successfully", { latencyMs, variableCount });
+      const roleCounts: Record<ChatMessage["role"], number> = { system: 0, user: 0, assistant: 0 };
+      for (const m of messages) roleCounts[m.role]++;
+      log.info("Template rendered successfully", {
+        latencyMs,
+        variableCount,
+        messageCount: messages.length,
+        roleCounts,
+      });
       log.debug("Template render details", {
         templatePath: templateOverride ? "(override)" : systemTemplatePath,
         variableNames: [...Object.keys(loreVars), ...Object.keys(pluginVars.variables), ...Object.keys(dynamicVars)],
-        renderedLength: result.content.length,
+        messageCount: messages.length,
+        roleCounts,
       });
-      return { content: result.content, error: null };
+      return { messages, error: null };
     } catch (err: unknown) {
       log.error("Template rendering failed", {
         error: err instanceof Error ? err.message : String(err),
         templatePath: templateOverride ? "(override)" : systemTemplatePath,
       });
       return {
-        content: null,
+        messages: [],
         error: buildVentoError(
           err instanceof Error ? err : new Error(String(err)),
           systemTemplatePath,

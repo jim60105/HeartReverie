@@ -74,7 +74,7 @@ Deno.test({ name: "chat routes", sanitizeOps: false, sanitizeResources: false, f
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({
-      prompt: "test prompt",
+      messages: [{ role: "user" as const, content: "test prompt" }],
       ventoError: null,
       chapterFiles: [],
       chapters: [],
@@ -179,7 +179,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       } as unknown as PluginManager,
       hookDispatcher: hd,
       buildPromptFromStory: (overrides.buildPromptFromStory ?? (async () => ({
-        prompt: "test prompt",
+        messages: [{ role: "user" as const, content: "test prompt" }],
         ventoError: null,
         chapterFiles: [],
         chapters: [],
@@ -242,7 +242,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       const app = createApp(makeDeps({
         _tmpDir: tmpDir,
         buildPromptFromStory: async () => ({
-          prompt: "",
+          messages: [],
           ventoError: { stage: "prompt-assembly", message: "bad template" },
           chapterFiles: [],
           chapters: [],
@@ -253,6 +253,73 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       assertEquals(res.status, 422);
       assertEquals(res.body.type, "vento-error");
       assertEquals(res.body.message, "bad template");
+    } finally {
+      Deno.env.delete("LLM_API_KEY");
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("returns 422 with multi-message:no-user-message variant when template emits no user role", async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "chat-no-user-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("LLM_API_KEY", "test-key");
+    try {
+      const app = createApp(makeDeps({
+        _tmpDir: tmpDir,
+        buildPromptFromStory: async () => ({
+          messages: [],
+          ventoError: {
+            type: "multi-message:no-user-message",
+            stage: "prompt-assembly",
+            message: "multi-message:no-user-message: rendered template emitted no user-role message",
+            source: "system.md",
+            line: null,
+            suggestion:
+              `Add a {{ message "user" }}{{ user_input }}{{ /message }} block (typically at the end of the template) so the request ends on a user turn.`,
+            title: "Missing User Message",
+          },
+          chapterFiles: [],
+          chapters: [],
+        }),
+      }));
+      await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+      const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "Hello" });
+      assertEquals(res.status, 422);
+      assertEquals(res.body.type, "multi-message:no-user-message");
+    } finally {
+      Deno.env.delete("LLM_API_KEY");
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  });
+
+  await t.step("returns 422 with multi-message:empty-message variant when template emits whitespace-only message", async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "chat-empty-msg-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("LLM_API_KEY", "test-key");
+    try {
+      const app = createApp(makeDeps({
+        _tmpDir: tmpDir,
+        buildPromptFromStory: async () => ({
+          messages: [],
+          ventoError: {
+            type: "multi-message:empty-message",
+            stage: "prompt-assembly",
+            message:
+              "multi-message:empty-message: message at index 1 (role: assistant) has empty or whitespace-only content",
+            source: "system.md",
+            line: null,
+            suggestion:
+              "Every {{ message }} block must contain non-whitespace content. Either add content or remove the block.",
+            title: "Empty Message Content",
+          },
+          chapterFiles: [],
+          chapters: [],
+        }),
+      }));
+      await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+      const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "Hello" });
+      assertEquals(res.status, 422);
+      assertEquals(res.body.type, "multi-message:empty-message");
     } finally {
       Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });
@@ -355,7 +422,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       const app = createApp(makeDeps({
         _tmpDir: tmpDir,
         buildPromptFromStory: async () => ({
-          prompt: "test prompt",
+          messages: [{ role: "user" as const, content: "test prompt" }],
           ventoError: null,
           chapterFiles: ["001", "002"],
           chapters: [
@@ -392,7 +459,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       const app = createApp(makeDeps({
         _tmpDir: tmpDir,
         buildPromptFromStory: async () => ({
-          prompt: "test prompt",
+          messages: [{ role: "user" as const, content: "test prompt" }],
           ventoError: null,
           chapterFiles: ["001", "002"],
           chapters: [
@@ -571,7 +638,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
       const app = createApp(makeDeps({
         _tmpDir: tmpDir,
         buildPromptFromStory: async () => ({
-          prompt: "",
+          messages: [],
           ventoError: { stage: "prompt-assembly", message: "template error" },
           chapterFiles: [],
           chapters: [],

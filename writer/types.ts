@@ -282,14 +282,35 @@ export interface RenderOptions {
   chapterCount?: number;
 }
 
-/** Discriminated union for renderSystemPrompt return. */
-export type RenderResult =
-  | { content: string; error: null }
-  | { content: null; error: VentoError };
+/**
+ * A single chat message belonging to the upstream LLM `messages` array.
+ *
+ * Roles are constrained to the OpenAI-compatible Chat Completions allow-list
+ * supported by the `{{ message }}` Vento tag (`vento-message-tag` capability).
+ */
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
 
-/** Result of buildPromptFromStory. */
+/**
+ * Discriminated union returned by `renderSystemPrompt()`.
+ *
+ * On success, `messages` is a non-empty array (assembly guarantees at least
+ * one `user`-role message via `assertHasUserMessage`); on failure, `messages`
+ * is empty and `error` carries an RFC 9457-shaped `VentoError`.
+ */
+export type RenderResult =
+  | { messages: ChatMessage[]; error: null }
+  | { messages: []; error: VentoError };
+
+/**
+ * Result of `buildPromptFromStory()`. The legacy `prompt: string` field has
+ * been replaced by a fully assembled `messages` array — the template is now
+ * the authoritative source of the upstream `messages` payload.
+ */
 export interface BuildPromptResult {
-  prompt: string | null;
+  messages: ChatMessage[];
   previousContext: string[];
   isFirstRound: boolean;
   ventoError: VentoError | null;
