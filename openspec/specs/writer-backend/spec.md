@@ -157,15 +157,17 @@ The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JS
 
 The server SHALL resolve the effective LLM configuration for each chat request by merging an env-derived `llmDefaults` object with the target story's validated `_config.json` overrides using `Object.assign({}, llmDefaults, storyOverrides)`. Merging SHALL happen per request so that edits to a story's `_config.json` take effect on the next chat without a server restart.
 
-The `llmDefaults` object SHALL be built from the following environment variables (applied when the variable is unset or fails parsing, the field SHALL use the stated default): `LLM_MODEL` (default `deepseek/deepseek-v3.2`), `LLM_TEMPERATURE` (default `0.1`), `LLM_FREQUENCY_PENALTY` (default `0.13`), `LLM_PRESENCE_PENALTY` (default `0.52`), `LLM_TOP_K` (default `10`), `LLM_TOP_P` (default `0`), `LLM_REPETITION_PENALTY` (default `1.2`), `LLM_MIN_P` (default `0`), `LLM_TOP_A` (default `1`), `LLM_REASONING_ENABLED` (default `true`), `LLM_REASONING_EFFORT` (default `"high"`).
+The `llmDefaults` object SHALL be built from the following environment variables (applied when the variable is unset or fails parsing, the field SHALL use the stated default): `LLM_MODEL` (default `deepseek/deepseek-v4-pro`), `LLM_TEMPERATURE` (default `0.1`), `LLM_FREQUENCY_PENALTY` (default `0.13`), `LLM_PRESENCE_PENALTY` (default `0.52`), `LLM_TOP_K` (default `10`), `LLM_TOP_P` (default `0`), `LLM_REPETITION_PENALTY` (default `1.2`), `LLM_MIN_P` (default `0`), `LLM_TOP_A` (default `1`), `LLM_REASONING_ENABLED` (default `true`), `LLM_REASONING_EFFORT` (default `"xhigh"`), `LLM_MAX_COMPLETION_TOKENS` (default `4096`).
+
+`LLM_MAX_COMPLETION_TOKENS` SHALL be parsed by a dedicated positive-safe-integer parser with the rule: trim the raw string, require a full-string decimal-integer match against `^[1-9]\d*$` (no leading zeros, no sign, no decimal point, no exponent), then `Number(...)` the matched string and validate `Number.isSafeInteger(parsed) && parsed > 0`. Empty / unset / whitespace-only → fallback to `4096` with no warning. Any non-empty value that fails the regex or the safe-integer check (including `"abc"`, `"4096abc"`, `"1e3"`, `"0"`, `"-100"`, `"3.14"`, `"01024"`, and any decimal string ≥ `2^53`) SHALL fall back to `4096` AND the server SHALL emit a warning to the operational log naming the variable and the offending value.
 
 The server SHALL also read a separate, non-merged env var `LLM_REASONING_OMIT` (default `false`, parsed as a boolean per the rules below). When `LLM_REASONING_OMIT` resolves to `true`, the server SHALL omit the entire `reasoning` block from the upstream chat/completions request body, regardless of the merged `reasoningEnabled` / `reasoningEffort` values. This env var SHALL NOT be exposed in `_config.json`; it is a deployment-level switch only.
 
-`LLM_REASONING_ENABLED` and `LLM_REASONING_OMIT` SHALL be parsed by a shared boolean parser with the rule: `"true" | "1" | "yes" | "on"` (case-insensitive, trimmed) → `true`; `"false" | "0" | "no" | "off"` (case-insensitive, trimmed) → `false`; the empty string or unset → the documented default; **any other non-empty string** SHALL fall back to the default AND the server SHALL emit a warning to the operational log naming the variable and the unrecognized value. `LLM_REASONING_EFFORT` SHALL be validated against the exact set `{"none", "minimal", "low", "medium", "high", "xhigh"}` (case-sensitive); any other value SHALL fall back to the default `"high"` and the server SHALL emit a warning log on startup.
+`LLM_REASONING_ENABLED` and `LLM_REASONING_OMIT` SHALL be parsed by a shared boolean parser with the rule: `"true" | "1" | "yes" | "on"` (case-insensitive, trimmed) → `true`; `"false" | "0" | "no" | "off"` (case-insensitive, trimmed) → `false`; the empty string or unset → the documented default; **any other non-empty string** SHALL fall back to the default AND the server SHALL emit a warning to the operational log naming the variable and the unrecognized value. `LLM_REASONING_EFFORT` SHALL be validated against the exact set `{"none", "minimal", "low", "medium", "high", "xhigh"}` (case-sensitive); any other value SHALL fall back to the default `"xhigh"` and the server SHALL emit a warning log on startup.
 
-`storyOverrides` SHALL be the validated partial subset of those same fields read from `playground/<series>/<story>/_config.json` (absent file ⇒ empty overrides). Only the whitelisted keys `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort` SHALL be honoured; unknown keys SHALL be ignored. Values whose type does not match the whitelist SHALL cause the request to fail with an RFC 9457 Problem Details error.
+`storyOverrides` SHALL be the validated partial subset of those same fields read from `playground/<series>/<story>/_config.json` (absent file ⇒ empty overrides). Only the whitelisted keys `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort`, `maxCompletionTokens` SHALL be honoured; unknown keys SHALL be ignored. Values whose type does not match the whitelist SHALL cause the request to fail with an RFC 9457 Problem Details error.
 
-The merged configuration SHALL be used to populate the upstream request body (mapping camelCase fields to their OpenAI-compatible snake_case equivalents: `frequencyPenalty` → `frequency_penalty`, `presencePenalty` → `presence_penalty`, `topK` → `top_k`, `topP` → `top_p`, `repetitionPenalty` → `repetition_penalty`, `minP` → `min_p`, `topA` → `top_a`).
+The merged configuration SHALL be used to populate the upstream request body (mapping camelCase fields to their OpenAI-compatible snake_case equivalents: `frequencyPenalty` → `frequency_penalty`, `presencePenalty` → `presence_penalty`, `topK` → `top_k`, `topP` → `top_p`, `repetitionPenalty` → `repetition_penalty`, `minP` → `min_p`, `topA` → `top_a`, `maxCompletionTokens` → `max_completion_tokens`). The `max_completion_tokens` field SHALL appear in every upstream chat/completions request body (no opt-out switch).
 
 Additionally, the upstream request body SHALL include a `reasoning` object on every chat/completions request **except** when `LLM_REASONING_OMIT` is `true`, populated as follows:
 - When the merged `reasoningEnabled` is `true`: `reasoning: { enabled: true, effort: <reasoningEffort> }`.
@@ -188,7 +190,7 @@ The server SHALL parse the SSE response by reading `data:` lines from the respon
 
 In addition to `delta.content`, the SSE parser SHALL inspect each parsed chunk for upstream reasoning text via `choices[0].delta.reasoning` (preferred) and `choices[0].delta.reasoning_details[].text` (fallback), and SHALL stream that reasoning text into the chapter file framed by `<think>` and `</think>` tags placed between the `<user_message>` block and the model content. Reasoning text SHALL NOT be appended to the `aiContent` accumulator returned in the HTTP response body's `content` field, and SHALL NOT be passed through the `response-stream` plugin hook. The chapter file on disk SHALL therefore contain a superset of the response envelope's `content` field for any turn that emitted reasoning. See the `reasoning-think-block` capability for the complete state-machine and field-extraction contract.
 
-The operational debug log entry and the LLM interaction log entry produced for each chat request SHALL include the resolved values of `reasoningEnabled` and `reasoningEffort` alongside the existing sampler parameters. The LLM interaction log entry SHALL additionally carry an optional `reasoningLength` field whose value is the total character count of reasoning text streamed during the turn (success, abort, and mid-stream-error log entries alike), per the `reasoning-think-block` capability.
+The operational debug log entry and the LLM interaction log entry produced for each chat request SHALL include the resolved values of `reasoningEnabled`, `reasoningEffort`, and `maxCompletionTokens` alongside the existing sampler parameters. The LLM interaction log entry SHALL additionally carry an optional `reasoningLength` field whose value is the total character count of reasoning text streamed during the turn (success, abort, and mid-stream-error log entries alike), per the `reasoning-think-block` capability.
 
 #### Scenario: Successful streaming chat completion
 
@@ -268,7 +270,7 @@ The operational debug log entry and the LLM interaction log entry produced for e
 
 - **GIVEN** `LLM_REASONING_ENABLED` and `LLM_REASONING_EFFORT` are unset and the target story has no `_config.json`
 - **WHEN** a chat request targets that story
-- **THEN** the upstream chat completion request body SHALL contain `reasoning: { "enabled": true, "effort": "high" }`
+- **THEN** the upstream chat completion request body SHALL contain `reasoning: { "enabled": true, "effort": "xhigh" }`
 
 #### Scenario: Reasoning disabled emits explicit enabled:false
 
@@ -278,7 +280,7 @@ The operational debug log entry and the LLM interaction log entry produced for e
 
 #### Scenario: Per-story reasoning override replaces env default
 
-- **GIVEN** env default `reasoningEffort = "high"` and the target story's `_config.json` contains `{ "reasoningEffort": "low" }`
+- **GIVEN** env default `reasoningEffort = "xhigh"` and the target story's `_config.json` contains `{ "reasoningEffort": "low" }`
 - **WHEN** a chat request targets that story
 - **THEN** the upstream chat completion request body SHALL contain `reasoning: { "enabled": true, "effort": "low" }`
 
@@ -295,7 +297,7 @@ The operational debug log entry and the LLM interaction log entry produced for e
 #### Scenario: Invalid LLM_REASONING_EFFORT falls back to default
 
 - **WHEN** `LLM_REASONING_EFFORT` is set to a value outside `{ "none", "minimal", "low", "medium", "high", "xhigh" }`
-- **THEN** the env-derived `reasoningEffort` default SHALL fall back to `"high"` and a warning SHALL be emitted to the operational log
+- **THEN** the env-derived `reasoningEffort` default SHALL fall back to `"xhigh"` and a warning SHALL be emitted to the operational log
 
 #### Scenario: LLM_REASONING_OMIT suppresses the reasoning block
 
@@ -312,14 +314,59 @@ The operational debug log entry and the LLM interaction log entry produced for e
 #### Scenario: Per-story reasoningEnabled override flips env default on
 
 - **GIVEN** env default `reasoningEnabled = false` (from `LLM_REASONING_ENABLED=false`) and the target story's `_config.json` contains `{ "reasoningEnabled": true }`
-- **WHEN** a chat request targets that story (with `reasoningEffort` falling through to env default `"high"`)
-- **THEN** the upstream chat completion request body SHALL contain `reasoning: { "enabled": true, "effort": "high" }`
+- **WHEN** a chat request targets that story (with `reasoningEffort` falling through to env default `"xhigh"`)
+- **THEN** the upstream chat completion request body SHALL contain `reasoning: { "enabled": true, "effort": "xhigh" }`
 
 #### Scenario: Null reasoning fields fall through to env defaults
 
-- **GIVEN** env defaults `reasoningEnabled = true` and `reasoningEffort = "high"`, and the target story's `_config.json` contains `{ "reasoningEnabled": null, "reasoningEffort": null }`
+- **GIVEN** env defaults `reasoningEnabled = true` and `reasoningEffort = "xhigh"`, and the target story's `_config.json` contains `{ "reasoningEnabled": null, "reasoningEffort": null }`
 - **WHEN** a chat request targets that story
-- **THEN** the upstream chat completion request body SHALL contain `reasoning: { "enabled": true, "effort": "high" }` (both nulls are dropped during validation, falling through to the defaults)
+- **THEN** the upstream chat completion request body SHALL contain `reasoning: { "enabled": true, "effort": "xhigh" }` (both nulls are dropped during validation, falling through to the defaults)
+
+#### Scenario: Default model is deepseek-v4-pro when LLM_MODEL is unset
+
+- **GIVEN** `LLM_MODEL` is unset in the environment and the target story has no `_config.json` (or its `_config.json` does not override `model`)
+- **WHEN** a chat request targets that story
+- **THEN** the upstream chat completion request body SHALL contain `model: "deepseek/deepseek-v4-pro"`
+
+#### Scenario: Default max_completion_tokens is 4096 when LLM_MAX_COMPLETION_TOKENS is unset
+
+- **GIVEN** `LLM_MAX_COMPLETION_TOKENS` is unset in the environment and the target story has no `_config.json` (or its `_config.json` does not override `maxCompletionTokens`)
+- **WHEN** a chat request targets that story
+- **THEN** the upstream chat completion request body SHALL contain `max_completion_tokens: 4096`
+
+#### Scenario: Custom env LLM_MAX_COMPLETION_TOKENS applies as default
+
+- **GIVEN** `LLM_MAX_COMPLETION_TOKENS=8192` is set in the environment and the target story has no `_config.json`
+- **WHEN** a chat request targets that story
+- **THEN** the upstream chat completion request body SHALL contain `max_completion_tokens: 8192`
+
+#### Scenario: Per-story maxCompletionTokens override replaces env default
+
+- **GIVEN** env default `maxCompletionTokens=4096` (or any value) and the target story's `_config.json` contains `{ "maxCompletionTokens": 16384 }`
+- **WHEN** a chat request targets that story
+- **THEN** the upstream chat completion request body SHALL contain `max_completion_tokens: 16384`
+
+#### Scenario: Invalid LLM_MAX_COMPLETION_TOKENS falls back with warning
+
+- **WHEN** `LLM_MAX_COMPLETION_TOKENS` is set to a value that fails the positive-safe-integer regex/predicate, including `"abc"`, `"4096abc"`, `"1e3"`, `"0"`, `"-100"`, `"3.14"`, `"01024"` (leading zero), or any decimal string whose numeric value is `≥ 2^53`
+- **THEN** the env-derived `maxCompletionTokens` default SHALL fall back to `4096`, AND the server SHALL emit a warning log on startup naming the variable and the unrecognized value
+
+#### Scenario: Empty or whitespace-only LLM_MAX_COMPLETION_TOKENS falls back silently
+
+- **WHEN** `LLM_MAX_COMPLETION_TOKENS` is unset, empty, or contains only whitespace
+- **THEN** the env-derived `maxCompletionTokens` default SHALL be `4096` AND no warning log SHALL be emitted (matching the silent-fallback behaviour of the other `numEnv` fields)
+
+#### Scenario: max_completion_tokens always present in upstream body
+
+- **GIVEN** any valid combination of env vars and `_config.json` overrides
+- **WHEN** any chat request is dispatched upstream
+- **THEN** the upstream request body SHALL contain a `max_completion_tokens` key whose value is the merged `maxCompletionTokens` integer (no opt-out switch)
+
+#### Scenario: Operational and interaction logs include maxCompletionTokens
+
+- **WHEN** the server dispatches a chat request
+- **THEN** both the operational debug log entry (`LLM request payload`) and the LLM interaction log entry (`LLM request`, with the value nested under `parameters`) SHALL include the resolved `maxCompletionTokens` integer alongside the existing sampler parameters
 
 #### Scenario: Upstream provider rejection surfaces the response body
 
@@ -716,4 +763,39 @@ The backend SHALL register `GET /api/stories/:series/:name/usage` via a new `reg
 - **GIVEN** a story with no `_usage.json`
 - **WHEN** an authenticated client calls the endpoint
 - **THEN** the response SHALL be HTTP 200 with `{ records: [], totals: { promptTokens: 0, completionTokens: 0, totalTokens: 0, count: 0 } }`
+
+### Requirement: LLM defaults exposure endpoint
+
+The server SHALL register an authenticated `GET /api/llm-defaults` route that returns the env-derived `llmDefaults` filtered to exactly the keys allowed in the per-story `_config.json` whitelist. The route SHALL be registered under the same `X-Passphrase`-checking middleware as the per-story config routes; an unauthenticated request SHALL be rejected with HTTP 401 and a Problem Details body, exactly mirroring the existing per-story config route's auth behaviour.
+
+The response body SHALL be a JSON object whose top-level keys are exactly the per-story `_config.json` whitelist: `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort` (and `maxCompletionTokens` once that field is added to the whitelist by the `update-llm-defaults-and-completion-tokens` change). Every key SHALL be present and well-typed: `model` SHALL be a non-empty string, `reasoningEnabled` SHALL be a boolean, `reasoningEffort` SHALL be one of the literal `REASONING_EFFORTS` values, every other listed key SHALL be a finite number (positive safe integer for `maxCompletionTokens` once added). The response SHALL NOT include any other key — in particular the route handler SHALL NOT serialize the entire `LlmConfig` object, and SHALL NOT leak `LLM_API_URL`, `LLM_API_KEY`, `PASSPHRASE`, `BACKGROUND_IMAGE`, `PROMPT_FILE`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`, or any other non-whitelist field.
+
+The endpoint SHALL NOT depend on any URL parameters and SHALL NOT consult any per-story config — it returns the env defaults only, identical for every authenticated client.
+
+#### Scenario: Authenticated client receives whitelist-shaped defaults
+
+- **GIVEN** the server is started with `LLM_MODEL=deepseek/deepseek-v4-pro`, `LLM_TEMPERATURE=0.1`, `LLM_REASONING_ENABLED=true`, `LLM_REASONING_EFFORT=high`, and the remaining `LLM_*` env vars at their defaults
+- **WHEN** an authenticated client sends `GET /api/llm-defaults` with a valid `X-Passphrase` header
+- **THEN** the server SHALL respond `200 OK` with a JSON body containing exactly the per-story whitelist keys, including `model: "deepseek/deepseek-v4-pro"`, `temperature: 0.1`, `reasoningEnabled: true`, `reasoningEffort: "high"`, AND no other keys
+
+#### Scenario: Unauthenticated request is rejected
+
+- **WHEN** a client sends `GET /api/llm-defaults` without an `X-Passphrase` header (or with an incorrect one)
+- **THEN** the server SHALL respond with HTTP 401 and an RFC 9457 Problem Details body, identical in shape to the existing per-story config route's unauthenticated response, AND SHALL NOT include any LLM defaults in the body
+
+#### Scenario: Response excludes secrets and non-LLM config
+
+- **WHEN** an authenticated client receives a `GET /api/llm-defaults` response
+- **THEN** the response body SHALL NOT contain any of: `apiKey`, `apiUrl`, `LLM_API_KEY`, `LLM_API_URL`, `PASSPHRASE`, `BACKGROUND_IMAGE`, `PROMPT_FILE`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`, `HTTP_ONLY`, `CERT_FILE`, `KEY_FILE`, `PORT`, `PLAYGROUND_DIR`, `READER_DIR`, `PLUGIN_DIR`, AND SHALL NOT contain any key not listed in the per-story `_config.json` whitelist
+
+#### Scenario: Response keys lock-step with the per-story whitelist
+
+- **GIVEN** `writer/lib/story-config.ts` exports a single source-of-truth constant `STORY_LLM_CONFIG_KEYS` listing the whitelisted per-story `_config.json` keys
+- **WHEN** the per-story `_config.json` whitelist gains or loses a key (e.g. `maxCompletionTokens` is added by the `update-llm-defaults-and-completion-tokens` change) by editing `STORY_LLM_CONFIG_KEYS`
+- **THEN** the `GET /api/llm-defaults` response SHALL gain or lose the same key in the same shape, AND a backend test SHALL compare `Object.keys(response).sort()` against `[...STORY_LLM_CONFIG_KEYS].sort()` and fail loudly if the two sets of keys diverge
+
+#### Scenario: Response is not cached by intermediaries
+
+- **WHEN** an authenticated client receives a `GET /api/llm-defaults` response
+- **THEN** the response SHALL include a `Cache-Control: no-store` header so a deployment env change picked up by a manual server restart is reflected on the next fetch without intermediary cache hits
 

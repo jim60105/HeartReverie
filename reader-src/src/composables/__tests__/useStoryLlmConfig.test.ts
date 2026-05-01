@@ -135,4 +135,89 @@ describe("useStoryLlmConfig", () => {
     expect(typeof body.reasoningEnabled).toBe("boolean");
     expect(result).toEqual({ reasoningEnabled: true, reasoningEffort: "xhigh" });
   });
+
+  describe("loadLlmDefaults", () => {
+    const VALID_DEFAULTS = {
+      model: "deepseek/deepseek-v4-pro",
+      temperature: 0.1,
+      frequencyPenalty: 0.13,
+      presencePenalty: 0.52,
+      topK: 10,
+      topP: 0,
+      repetitionPenalty: 1.2,
+      minP: 0,
+      topA: 1,
+      reasoningEnabled: true,
+      reasoningEffort: "xhigh",
+      maxCompletionTokens: 4096,
+    };
+
+    it("populates defaults on a validated success response", async () => {
+      mockFetch(VALID_DEFAULTS);
+      const api = await getApi();
+      await api.loadLlmDefaults();
+
+      const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
+      expect(call[0]).toBe("/api/llm-defaults");
+      expect(api.defaults.value).toEqual(VALID_DEFAULTS);
+      expect(api.defaultsError.value).toBeNull();
+      expect(api.defaultsLoading.value).toBe(false);
+    });
+
+    it("leaves defaults at null and records an error on non-2xx response", async () => {
+      mockFetch({ detail: "unauthorized" }, 401);
+      const api = await getApi();
+      await api.loadLlmDefaults();
+
+      expect(api.defaults.value).toBeNull();
+      expect(api.defaultsError.value).toBeTruthy();
+    });
+
+    it("rejects a body missing a required key", async () => {
+      const body = { ...VALID_DEFAULTS } as Record<string, unknown>;
+      delete body.maxCompletionTokens;
+      mockFetch(body);
+      const api = await getApi();
+      await api.loadLlmDefaults();
+
+      expect(api.defaults.value).toBeNull();
+      expect(api.defaultsError.value).toContain("maxCompletionTokens");
+    });
+
+    it("rejects a body with the wrong type for a numeric field", async () => {
+      mockFetch({ ...VALID_DEFAULTS, temperature: "not-a-number" });
+      const api = await getApi();
+      await api.loadLlmDefaults();
+
+      expect(api.defaults.value).toBeNull();
+      expect(api.defaultsError.value).toContain("temperature");
+    });
+
+    it("rejects a body with an invalid reasoningEffort enum value", async () => {
+      mockFetch({ ...VALID_DEFAULTS, reasoningEffort: "ultraviolet" });
+      const api = await getApi();
+      await api.loadLlmDefaults();
+
+      expect(api.defaults.value).toBeNull();
+      expect(api.defaultsError.value).toContain("reasoningEffort");
+    });
+
+    it("rejects a non-positive-integer maxCompletionTokens", async () => {
+      mockFetch({ ...VALID_DEFAULTS, maxCompletionTokens: 0 });
+      const api = await getApi();
+      await api.loadLlmDefaults();
+
+      expect(api.defaults.value).toBeNull();
+      expect(api.defaultsError.value).toContain("maxCompletionTokens");
+    });
+
+    it("toggles defaultsLoading flag around the request", async () => {
+      mockFetch(VALID_DEFAULTS);
+      const api = await getApi();
+      const p = api.loadLlmDefaults();
+      expect(api.defaultsLoading.value).toBe(true);
+      await p;
+      expect(api.defaultsLoading.value).toBe(false);
+    });
+  });
 });

@@ -51,6 +51,12 @@ export interface LlmConfig {
   readonly topA: number;
   readonly reasoningEnabled: boolean;
   readonly reasoningEffort: ReasoningEffort;
+  /**
+   * Upper bound on tokens the LLM may generate (sent as `max_completion_tokens`
+   * in the OpenAI-compatible request body — covers reasoning + content combined
+   * for reasoning-capable models). Must be a positive safe integer.
+   */
+  readonly maxCompletionTokens: number;
 }
 
 /**
@@ -81,6 +87,7 @@ export interface AppConfig {
   readonly LLM_REASONING_ENABLED: boolean;
   readonly LLM_REASONING_EFFORT: ReasoningEffort;
   readonly LLM_REASONING_OMIT: boolean;
+  readonly LLM_MAX_COMPLETION_TOKENS: number;
   readonly BACKGROUND_IMAGE: string;
   readonly PROMPT_FILE: string;
   /** Defaults for per-story LLM overrides, assembled from the flat `LLM_*` env vars. */
@@ -337,6 +344,28 @@ export interface StoryExportJson {
   readonly name: string;
   readonly exportedAt: string;
   readonly chapters: readonly { readonly number: number; readonly content: string }[];
+}
+
+/**
+ * Response payload for `GET /api/llm-defaults`. The route is contractually
+ * obligated to return the full 12-key resolved-defaults snapshot (every field
+ * populated from env or hard-coded fallback). The frontend's runtime
+ * `validateLlmDefaultsBody` rejects partial responses, so making these fields
+ * required here prevents drift between the route and the client contract.
+ */
+export interface LlmDefaultsResponse {
+  readonly model: string;
+  readonly temperature: number;
+  readonly frequencyPenalty: number;
+  readonly presencePenalty: number;
+  readonly topK: number;
+  readonly topP: number;
+  readonly repetitionPenalty: number;
+  readonly minP: number;
+  readonly topA: number;
+  readonly reasoningEnabled: boolean;
+  readonly reasoningEffort: ReasoningEffort;
+  readonly maxCompletionTokens: number;
 }
 
 /** RFC 9457 Problem Details response shape. */

@@ -37,6 +37,7 @@ function buildConfig(tmpDir: string): AppConfig {
     topA: 1,
     reasoningEnabled: true,
     reasoningEffort: "high",
+    maxCompletionTokens: 4096,
   };
   return {
     ROOT_DIR: "/x",
@@ -59,6 +60,7 @@ function buildConfig(tmpDir: string): AppConfig {
     LLM_REASONING_ENABLED: true,
     LLM_REASONING_EFFORT: "high",
     LLM_REASONING_OMIT: false,
+    LLM_MAX_COMPLETION_TOKENS: 4096,
     llmDefaults,
     BACKGROUND_IMAGE: "/bg",
     PROMPT_FILE: "x",

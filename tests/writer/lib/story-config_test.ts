@@ -38,6 +38,7 @@ const defaults: LlmConfig = {
   topA: 1,
   reasoningEnabled: true,
   reasoningEffort: "high",
+    maxCompletionTokens: 4096,
 };
 
 Deno.test("validateStoryLlmConfig", async (t) => {
@@ -107,6 +108,7 @@ Deno.test("validateStoryLlmConfig", async (t) => {
       topA: 0.8,
       reasoningEnabled: false,
       reasoningEffort: "low" as const,
+    maxCompletionTokens: 4096,
     };
     assertEquals(validateStoryLlmConfig(full), full);
   });
@@ -182,6 +184,40 @@ Deno.test("validateStoryLlmConfig", async (t) => {
         bogus: 1,
       }),
       { reasoningEnabled: true, reasoningEffort: "medium" },
+    );
+  });
+
+  await t.step("accepts positive integer maxCompletionTokens", () => {
+    assertEquals(validateStoryLlmConfig({ maxCompletionTokens: 1 }), {
+      maxCompletionTokens: 1,
+    });
+    assertEquals(validateStoryLlmConfig({ maxCompletionTokens: 8192 }), {
+      maxCompletionTokens: 8192,
+    });
+  });
+
+  await t.step("rejects non-positive / fractional / non-integer maxCompletionTokens", () => {
+    for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "100"]) {
+      assertThrows(
+        () => validateStoryLlmConfig({ maxCompletionTokens: bad as unknown as number }),
+        Error,
+        "maxCompletionTokens",
+      );
+    }
+  });
+
+  await t.step("rejects unsafe-integer maxCompletionTokens", () => {
+    assertThrows(
+      () => validateStoryLlmConfig({ maxCompletionTokens: Number.MAX_SAFE_INTEGER + 1 }),
+      Error,
+      "maxCompletionTokens",
+    );
+  });
+
+  await t.step("skips maxCompletionTokens when undefined", () => {
+    assertEquals(
+      validateStoryLlmConfig({ model: "x", maxCompletionTokens: undefined }),
+      { model: "x" },
     );
   });
 });
@@ -340,5 +376,41 @@ Deno.test("resolveStoryLlmConfig merges defaults with overrides", async () => {
     assertEquals(merged.frequencyPenalty, defaults.frequencyPenalty);
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+Deno.test("STORY_LLM_CONFIG_KEYS lock-step with validator", async () => {
+  const { STORY_LLM_CONFIG_KEYS, validateStoryLlmConfig } = await import("../../../writer/lib/story-config.ts");
+  // Validator should accept every whitelisted key (with a placeholder valid value)
+  const sample: Record<string, unknown> = {
+    model: "m",
+    temperature: 0.1,
+    frequencyPenalty: 0,
+    presencePenalty: 0,
+    topK: 1,
+    topP: 0,
+    repetitionPenalty: 1,
+    minP: 0,
+    topA: 0,
+    reasoningEnabled: true,
+    reasoningEffort: "high",
+    maxCompletionTokens: 1,
+  };
+  for (const k of STORY_LLM_CONFIG_KEYS) {
+    if (!(k in sample)) {
+      throw new Error(`STORY_LLM_CONFIG_KEYS contains '${k}' but lock-step sample does not — drift detected`);
+    }
+  }
+  for (const k of Object.keys(sample)) {
+    if (!STORY_LLM_CONFIG_KEYS.includes(k as never)) {
+      throw new Error(`Sample has '${k}' but STORY_LLM_CONFIG_KEYS does not — drift detected`);
+    }
+  }
+  // Validator round-trip should preserve every key exactly
+  const result = validateStoryLlmConfig(sample);
+  for (const k of STORY_LLM_CONFIG_KEYS) {
+    if (!(k in result)) {
+      throw new Error(`validator dropped whitelisted key '${k}' — drift detected`);
+    }
   }
 });

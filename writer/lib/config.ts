@@ -31,7 +31,7 @@ const KEY_FILE: string | undefined = Deno.env.get("KEY_FILE");
 const LLM_API_URL: string =
   Deno.env.get("LLM_API_URL") || "https://openrouter.ai/api/v1/chat/completions";
 const LLM_MODEL: string =
-  Deno.env.get("LLM_MODEL") || "deepseek/deepseek-v3.2";
+  Deno.env.get("LLM_MODEL") || "deepseek/deepseek-v4-pro";
 
 /** Parse a numeric env var with a fallback default. */
 function numEnv(key: string, fallback: number): number {
@@ -39,6 +39,39 @@ function numEnv(key: string, fallback: number): number {
   if (raw === undefined) return fallback;
   const parsed = parseFloat(raw);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * Parse a positive-integer env var. Empty/unset → `fallback` silently.
+ * Accepts only `^[1-9]\d*$` (no leading zeros, no whitespace, no scientific
+ * notation, no decimals) AND must be a `Number.isSafeInteger`. Anything else
+ * (e.g., `"4096abc"`, `"1e3"`, `"01024"`, `"0"`, `"-5"`, `"1.5"`) falls back
+ * to `fallback` and emits a `warn`-level log naming the variable and the
+ * unrecognized value.
+ */
+function posIntEnv(key: string, fallback: number): number {
+  const raw = Deno.env.get(key);
+  if (raw === undefined) return fallback;
+  const trimmed = raw.trim();
+  if (trimmed === "") return fallback;
+  if (!/^[1-9]\d*$/.test(trimmed)) {
+    log.warn("Unrecognized positive-integer env value; falling back to default", {
+      variable: key,
+      value: raw,
+      fallback,
+    });
+    return fallback;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed)) {
+    log.warn("Positive-integer env value exceeds safe integer range; falling back to default", {
+      variable: key,
+      value: raw,
+      fallback,
+    });
+    return fallback;
+  }
+  return parsed;
 }
 
 const TRUE_TOKENS = new Set(["true", "1", "yes", "on"]);
@@ -94,8 +127,9 @@ const LLM_REPETITION_PENALTY: number = numEnv("LLM_REPETITION_PENALTY", 1.2);
 const LLM_MIN_P: number = numEnv("LLM_MIN_P", 0);
 const LLM_TOP_A: number = numEnv("LLM_TOP_A", 1);
 const LLM_REASONING_ENABLED: boolean = boolEnv("LLM_REASONING_ENABLED", true);
-const LLM_REASONING_EFFORT: ReasoningEffort = effortEnv("LLM_REASONING_EFFORT", "high");
+const LLM_REASONING_EFFORT: ReasoningEffort = effortEnv("LLM_REASONING_EFFORT", "xhigh");
 const LLM_REASONING_OMIT: boolean = boolEnv("LLM_REASONING_OMIT", false);
+const LLM_MAX_COMPLETION_TOKENS: number = posIntEnv("LLM_MAX_COMPLETION_TOKENS", 4096);
 const BACKGROUND_IMAGE: string =
   Deno.env.get("BACKGROUND_IMAGE") || "/assets/heart.webp";
 const LOG_LEVEL: string = Deno.env.get("LOG_LEVEL") || "info";
@@ -118,6 +152,7 @@ const llmDefaults: LlmConfig = {
   topA: LLM_TOP_A,
   reasoningEnabled: LLM_REASONING_ENABLED,
   reasoningEffort: LLM_REASONING_EFFORT,
+  maxCompletionTokens: LLM_MAX_COMPLETION_TOKENS,
 };
 
 const PROMPT_FILE: string = (() => {
@@ -148,6 +183,7 @@ export {
   LLM_REASONING_ENABLED,
   LLM_REASONING_EFFORT,
   LLM_REASONING_OMIT,
+  LLM_MAX_COMPLETION_TOKENS,
   llmDefaults,
   BACKGROUND_IMAGE,
   PROMPT_FILE,

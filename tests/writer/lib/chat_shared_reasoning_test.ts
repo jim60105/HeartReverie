@@ -49,6 +49,7 @@ function buildConfig(tmpDir: string, opts: ConfigOpts = {}): AppConfig {
     topA: 1,
     reasoningEnabled,
     reasoningEffort,
+    maxCompletionTokens: 4096,
   };
   return {
     ROOT_DIR: "/x",
@@ -71,6 +72,7 @@ function buildConfig(tmpDir: string, opts: ConfigOpts = {}): AppConfig {
     LLM_REASONING_ENABLED: reasoningEnabled,
     LLM_REASONING_EFFORT: reasoningEffort,
     LLM_REASONING_OMIT: reasoningOmit,
+    LLM_MAX_COMPLETION_TOKENS: 4096,
     llmDefaults,
     BACKGROUND_IMAGE: "/bg",
     PROMPT_FILE: "x",
@@ -156,6 +158,8 @@ Deno.test({
           cap.restore();
         }
         assertEquals(cap.captured.body!.reasoning, { enabled: true, effort: "high" });
+        // max_completion_tokens always present and reflects llmDefaults
+        assertEquals(cap.captured.body!.max_completion_tokens, 4096);
       } finally {
         await Deno.remove(tmpDir, { recursive: true });
       }
