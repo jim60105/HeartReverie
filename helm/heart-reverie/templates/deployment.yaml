@@ -1,0 +1,176 @@
+{{- /*
+Replica safety guard. HeartReverie is a single-writer filesystem-backed app;
+≥ 2 replicas sharing the same RWO PVC will corrupt story data, lore codex,
+and usage logs. Fail at template time with a clear message rather than let
+operators discover this in production.
+*/ -}}
+{{- if gt (int .Values.replicaCount) 1 }}
+{{- fail (printf "heart-reverie: replicaCount must be 1 (got %d). HeartReverie writes story data directly to the local filesystem with no inter-pod coordination; running multiple replicas WILL corrupt data. See helm/heart-reverie/README.md 'Single-replica only' section." (int .Values.replicaCount)) }}
+{{- end }}
+{{- /*
+HTTP_ONLY exact-lowercase predicate. Matches the runtime check in
+entrypoint.sh and writer/server.ts: only the literal string "true"
+(lowercase, no whitespace tolerance) skips in-pod TLS cert handling.
+*/ -}}
+{{- $httpOnlyValue := "" }}
+{{- if hasKey .Values.env "HTTP_ONLY" }}
+{{- $httpOnlyValue = toString (index .Values.env "HTTP_ONLY") }}
+{{- end }}
+{{- $httpOnly := eq $httpOnlyValue "true" }}
+{{- $saName := include "heart-reverie.serviceAccountName" . }}
+{{- /*
+Probe handler resolution. Operators may override the entire probe map to
+switch handlers (httpGet, exec, grpc) or supply a fully-specified tcpSocket;
+the chart only auto-injects `tcpSocket: { port: <app.port> }` when the user
+hasn't specified ANY handler. Timing fields (initialDelaySeconds, etc.) are
+always merged through.
+*/ -}}
+{{- $probeHandlers := list "tcpSocket" "httpGet" "exec" "grpc" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "heart-reverie.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "heart-reverie.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+  selector:
+    matchLabels:
+      {{- include "heart-reverie.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "heart-reverie.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if $saName }}
+      serviceAccountName: {{ $saName }}
+      {{- end }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: heart-reverie
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.port }}
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ include "heart-reverie.secretName" . }}
+          env:
+            # PORT is rendered as a plain container env (not via the Secret) so
+            # operators using secret.existingSecret get the chart's app.port
+            # honored without having to add PORT to their external Secret.
+            # Container `env` overrides `envFrom`, so an existing PORT key is harmless.
+            - name: PORT
+              value: {{ .Values.app.port | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            {{- $lp := .Values.livenessProbe | default dict }}
+            {{- $lpHasHandler := false }}
+            {{- range $h := $probeHandlers }}{{- if hasKey $lp $h }}{{- $lpHasHandler = true }}{{- end }}{{- end }}
+            {{- if $lpHasHandler }}
+            {{- toYaml $lp | nindent 12 }}
+            {{- else }}
+            tcpSocket:
+              port: {{ .Values.app.port }}
+            {{- with omit $lp "tcpSocket" "httpGet" "exec" "grpc" }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+          readinessProbe:
+            {{- $rp := .Values.readinessProbe | default dict }}
+            {{- $rpHasHandler := false }}
+            {{- range $h := $probeHandlers }}{{- if hasKey $rp $h }}{{- $rpHasHandler = true }}{{- end }}{{- end }}
+            {{- if $rpHasHandler }}
+            {{- toYaml $rp | nindent 12 }}
+            {{- else }}
+            tcpSocket:
+              port: {{ .Values.app.port }}
+            {{- with omit $rp "tcpSocket" "httpGet" "exec" "grpc" }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: playground
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- if not $httpOnly }}
+            - name: certs
+              mountPath: /certs
+              {{- if .Values.tls.existingSecret }}
+              readOnly: true
+              {{- end }}
+            {{- end }}
+            {{- if .Values.prompts.enabled }}
+            - name: prompts
+              mountPath: {{ .Values.prompts.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: playground
+          persistentVolumeClaim:
+            claimName: {{ include "heart-reverie.pvcName" . }}
+        {{- end }}
+        {{- if not $httpOnly }}
+        - name: certs
+          {{- if .Values.tls.existingSecret }}
+          secret:
+            secretName: {{ .Values.tls.existingSecret }}
+            items:
+              - key: {{ .Values.tls.certKey }}
+                path: cert.pem
+              - key: {{ .Values.tls.keyKey }}
+                path: key.pem
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+        {{- if .Values.prompts.enabled }}
+        - name: prompts
+          configMap:
+            name: {{ include "heart-reverie.fullname" . }}-prompts
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

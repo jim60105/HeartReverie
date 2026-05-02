@@ -1,0 +1,19 @@
+apiVersion: v2
+name: heart-reverie
+description: A Helm chart for HeartReverie 浮心夜夢 — an AI-driven interactive fiction engine
+icon: https://raw.githubusercontent.com/jim60105/HeartReverie/master/assets/heart.webp
+type: application
+home: https://github.com/jim60105/HeartReverie
+sources:
+  - https://github.com/jim60105/HeartReverie
+maintainers:
+  - name: jim60105
+    url: https://github.com/jim60105
+kubeVersion: ">=1.27.0-0"
+# This is the chart version. Increment each time the chart or its templates change.
+# Versions follow Semantic Versioning (https://semver.org/).
+version: 0.1.0
+# This is the version number of the application being deployed. It tracks the
+# HeartReverie release captured in CHANGELOG.md and is used as the default
+# image tag's reference value (the actual default tag is `latest`).
+appVersion: '0.5.0'
