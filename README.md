@@ -54,11 +54,7 @@ deno task build:reader
 ./scripts/serve.sh
 ```
 
-伺服器預設跑在 `https://localhost:8443`。首次啟動會自動產生自簽 TLS 憑證。
-設定 `HTTP_ONLY=true` 可關閉 TLS，適用於反向代理 / K8s 部署。
-
-> [!NOTE]
-> 前端使用 [File System Access API][fsa-api] 讀取本機 `.md` 檔案，需要 HTTPS 安全環境
+伺服器預設跑在 `https://localhost:8443`。首次啟動會自動產生自簽 TLS 憑證以加密 Passphrase 與章節內容的傳輸；若部署於已終結 TLS 的反向代理之後，可設定 `HTTP_ONLY=true` 改用純 HTTP。
 
 ### 環境變數
 
@@ -203,7 +199,6 @@ You should have received a copy of the GNU Affero General Public License along w
 [vue]: https://vuejs.org/
 [system-md]: system.md
 [deno]: https://deno.com/
-[fsa-api]: https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API
 [plugin-system-doc]: docs/plugin-system.md
 [heartreverie-plugins]: https://codeberg.org/jim60105/HeartReverie_Plugins
 [lore-codex-doc]: docs/lore-codex.md

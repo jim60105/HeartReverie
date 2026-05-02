@@ -2,7 +2,6 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useChapterNav } from "@/composables/useChapterNav";
-import { useFileReader } from "@/composables/useFileReader";
 import StorySelector from "./StorySelector.vue";
 
 const router = useRouter();
@@ -12,18 +11,13 @@ const {
   totalChapters,
   isFirst,
   isLast,
-  mode,
   folderName,
   next,
   previous,
   goToFirst,
   goToLast,
-  loadFromFSA,
   reloadToLast,
-  getBackendContext,
 } = useChapterNav();
-
-const { directoryHandle } = useFileReader();
 
 const hasChapters = computed(() => totalChapters.value > 0);
 
@@ -32,11 +26,7 @@ const progressText = computed(() =>
 );
 
 async function handleReload() {
-  if (mode.value === "fsa" && directoryHandle.value) {
-    await loadFromFSA(directoryHandle.value);
-  } else if (mode.value === "backend") {
-    await reloadToLast();
-  }
+  await reloadToLast();
 }
 
 function openSettings() {
@@ -62,15 +52,13 @@ function openSettings() {
 
       <span class="header-spacer"></span>
 
-      <template v-if="getBackendContext().isBackendMode">
-        <button
-          class="themed-btn header-btn header-btn--icon"
-          title="設定"
-          @click="openSettings"
-        >
-          ⚙️
-        </button>
-      </template>
+      <button
+        class="themed-btn header-btn header-btn--icon"
+        title="設定"
+        @click="openSettings"
+      >
+        ⚙️
+      </button>
 
       <template v-if="hasChapters">
         <button

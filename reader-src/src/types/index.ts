@@ -177,17 +177,6 @@ export interface UseAuthReturn {
   getAuthHeaders: () => AuthHeaders;
 }
 
-export interface UseFileReaderReturn {
-  isSupported: Ref<boolean>;
-  directoryHandle: ShallowRef<FileSystemDirectoryHandle | null>;
-  files: Ref<FileSystemFileHandle[]>;
-  hasStoredHandle: Ref<boolean>;
-  openDirectory: () => Promise<void>;
-  restoreHandle: () => Promise<boolean>;
-  readFile: (handle: FileSystemFileHandle) => Promise<string>;
-  clearStoredHandle: () => Promise<void>;
-}
-
 export interface UseChapterNavReturn {
   currentIndex: Ref<number>;
   chapters: Ref<ChapterData[]>;
@@ -197,13 +186,11 @@ export interface UseChapterNavReturn {
   isLastChapter: ComputedRef<boolean>;
   currentContent: ShallowRef<string>;
   renderEpoch: Ref<number>;
-  mode: Ref<"fsa" | "backend">;
   folderName: Ref<string>;
   next: () => void;
   previous: () => void;
   goToFirst: () => void;
   goToLast: () => void;
-  loadFromFSA: (handle: FileSystemDirectoryHandle) => Promise<void>;
   loadFromBackend: (series: string, story: string, startChapter?: number) => Promise<void>;
   reloadToLast: () => Promise<void>;
   refreshAfterEdit: (targetChapter: number) => Promise<void>;
@@ -368,18 +355,16 @@ export interface ChapterDomDisposeContext {
 export interface StorySwitchContext {
   previousSeries: string | null;
   previousStory: string | null;
-  series: string | null;
-  story: string | null;
-  mode: "fsa" | "backend";
+  series: string;
+  story: string;
 }
 
 export interface ChapterChangeContext {
   previousIndex: number | null;
   index: number;
   chapter: number;
-  series: string | null;
-  story: string | null;
-  mode: "fsa" | "backend";
+  series: string;
+  story: string;
 }
 
 // ── Notification System ──

@@ -23,7 +23,6 @@ const mockState = vi.hoisted(() => {
   return {
     chaptersRef: { value: [{ number: 2, stateDiff: { hp: "+1" } }] },
     currentIndexRef: { value: 0 },
-    modeRef: { value: "backend" as "fsa" | "backend" },
     renderEpochRef: null as unknown as { value: number },
     pluginsReadyRef: { value: true },
     pluginsSettledRef: { value: true },
@@ -59,7 +58,6 @@ vi.mock("@/composables/useChapterNav", () => ({
   useChapterNav: () => ({
     chapters: mockState.chaptersRef,
     currentIndex: mockState.currentIndexRef,
-    mode: mockState.modeRef,
     renderEpoch: mockState.renderEpochRef,
     getBackendContext: () => mockState.backendContextRef.value,
     reloadToLast: mockState.reloadToLastMock,
@@ -90,7 +88,6 @@ vi.mock("@/router", () => ({
 
 describe("ChapterContent", () => {
   beforeEach(() => {
-    mockState.modeRef.value = "backend";
     mockState.currentIndexRef.value = 0;
     mockState.renderEpochRef.value = 0;
     mockState.pluginsReadyRef.value = true;
@@ -127,7 +124,7 @@ describe("ChapterContent", () => {
     });
   }
 
-  it("renders markdown tokens and toolbar in backend mode", () => {
+  it("renders markdown tokens and toolbar", () => {
     const wrapper = mountComponent();
     expect(wrapper.find(".chapter-toolbar").exists()).toBe(true);
     expect(wrapper.html()).toContain("<p>rendered</p>");
@@ -136,12 +133,6 @@ describe("ChapterContent", () => {
       isLastChapter: true,
       stateDiff: { hp: "+1" },
     });
-  });
-
-  it("hides toolbar in fsa mode", () => {
-    mockState.modeRef.value = "fsa";
-    const wrapper = mountComponent();
-    expect(wrapper.find(".chapter-toolbar").exists()).toBe(false);
   });
 
   it("saves edited content and refreshes the edited chapter (not last)", async () => {

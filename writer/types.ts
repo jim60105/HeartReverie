@@ -154,11 +154,12 @@ export interface PluginManifest {
  * Visibility predicate enum for `ActionButtonDescriptor`. Values:
  *
  * - `"last-chapter-backend"` (default): show only when the user is viewing
- *   the last chapter of a story in backend mode.
- * - `"backend-only"`: show on every chapter in backend mode (any chapter).
+ *   the last chapter of a story.
+ * - `"backend-only"`: show on every chapter (any chapter).
  *
- * The two-value enum is intentional in v1; FSA-mode values may be added as a
- * non-breaking extension once their semantics are pinned down.
+ * The enum is kept at two values for forward-compat; additional visibility
+ * predicates may be added as a non-breaking extension once their semantics
+ * are pinned down.
  */
 export type ActionButtonVisibility = "last-chapter-backend" | "backend-only";
 

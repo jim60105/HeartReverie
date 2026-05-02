@@ -15,7 +15,6 @@ const { renderChapter } = useMarkdownRenderer();
 const {
   chapters,
   currentIndex,
-  mode,
   getBackendContext,
   reloadToLast,
   refreshAfterEdit,
@@ -37,8 +36,6 @@ const tokens = computed(() => {
     stateDiff: chapters.value[currentIndex.value]?.stateDiff,
   });
 });
-
-const showToolbar = computed(() => mode.value === "backend");
 
 const currentChapterNumber = computed(
   () => chapters.value[currentIndex.value]?.number ?? currentIndex.value + 1,
@@ -180,7 +177,7 @@ async function handleBranch(): Promise<void> {
 
 <template>
   <div ref="containerRef" class="chapter-content">
-    <div v-if="showToolbar" class="chapter-toolbar">
+    <div class="chapter-toolbar">
       <template v-if="!isEditing">
         <button
           type="button"

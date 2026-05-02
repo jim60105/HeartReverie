@@ -166,8 +166,8 @@ Frontend modules are ES modules loaded by the browser. They register synchronous
 | `notification` | Browser notification when events occur (e.g., `chat:done`) | `{ event, data, notify }` |
 | `chat:send:before` | Transform the user message just before it is sent (pipeline) | `{ message, mode }` — `mode` is `'send'` or `'resend'`. If a handler returns a `string`, it replaces `context.message` for subsequent handlers. |
 | `chapter:render:after` | Post-process the token array after Markdown + initial DOMPurify pass | `{ tokens, rawMarkdown, options }` — mutate `tokens` freely; the system re-sanitizes any newly added or `.content`-mutated `html` tokens after dispatch. |
-| `story:switch` | Informational: fires when the active series/story changes | `{ series, story, mode, previousSeries, previousStory }` — `mode` is `'backend'` or `'fsa'`; `previousSeries`/`previousStory` are `null` on first load. |
-| `chapter:change` | Informational: fires when the displayed chapter changes | `{ chapter, index, previousIndex }` — `chapter` matches `ChapterData.number` (or `null` in FSA first-load); `previousIndex` is `null` on first load. |
+| `story:switch` | Informational: fires when the active series/story changes | `{ series, story, previousSeries, previousStory }` — `previousSeries`/`previousStory` are `null` on first load; `series`/`story` are always non-null strings. |
+| `chapter:change` | Informational: fires when the displayed chapter changes | `{ chapter, index, previousIndex, series, story }` — `chapter` matches `ChapterData.number`; `previousIndex` is `null` on first load. |
 
 - `text` (`string`): The raw LLM output text before Markdown parsing
 - `placeholderMap` (`Map<string, string>`): Map of placeholder strings → rendered HTML
@@ -223,7 +223,7 @@ hooks.register('story:switch', (ctx) => {
   // ctx.previousSeries / ctx.previousStory are null on first load
 }, 100);
 hooks.register('chapter:change', (ctx) => {
-  // ctx.chapter matches ChapterData.number (null for FSA first load)
+  // ctx.chapter matches ChapterData.number
 }, 100);
 ```
 

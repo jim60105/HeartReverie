@@ -10,7 +10,7 @@ Shared reactive state SHALL be encapsulated in composable functions following th
 
 #### Scenario: useChapterNav composable manages navigation
 - **WHEN** a component calls `useChapterNav()`
-- **THEN** it SHALL receive reactive refs for `currentIndex`, `chapters`, `totalChapters`, `isLastChapter`, `currentContent` (a `shallowRef`), and `renderEpoch`, plus functions `goNext()`, `goPrev()`, `loadChapters()`, `refreshAfterEdit(targetChapter)`, and `bumpRenderEpoch()`
+- **THEN** it SHALL receive reactive refs for `currentIndex`, `chapters`, `totalChapters`, `isLastChapter`, `currentContent` (a `shallowRef`), and `renderEpoch`, plus functions `next()`, `previous()`, `loadFromBackend()`, `refreshAfterEdit(targetChapter)`, and `bumpRenderEpoch()`
 
 #### Scenario: usePlugins composable wraps hook dispatcher
 - **WHEN** a component calls `usePlugins()`

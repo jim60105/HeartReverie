@@ -80,7 +80,6 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       useChapterActions.ts # Edit / rewind / branch chapter REST API client
       useChapterNav.ts    # Chapter navigation and polling
       useChatApi.ts       # Chat API (WebSocket with HTTP fallback)
-      useFileReader.ts    # File System Access API + IndexedDB
       useLoreApi.ts       # Lore codex API client
       useMarkdownRenderer.ts  # Markdown rendering pipeline
       usePlugins.ts       # Plugin loading and hook management
@@ -136,7 +135,7 @@ assets/                   # Static assets (images)
 ./entrypoint.sh           # Production: unified startup (also used by container)
 ```
 
-The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on first run (unless `HTTP_ONLY=true` or custom certs are provided via `CERT_FILE`/`KEY_FILE`). HTTPS is required for the File System Access API used by the frontend.
+The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on first run (unless `HTTP_ONLY=true` or custom certs are provided via `CERT_FILE`/`KEY_FILE`). HTTPS is the default for transport security; `HTTP_ONLY=true` is supported for deployments behind a TLS-terminating proxy.
 
 ### Environment Variables
 
@@ -244,8 +243,6 @@ podman run -d --name heartreverie \
 - **DOMPurify** — HTML sanitization
 - **Vitest** — Frontend unit testing
 - **Google Fonts** — Iansui, Noto Sans TC/JP/SC, Noto Color Emoji
-- **File System Access API** — For reading local `.md` files (requires HTTPS secure context)
-- **IndexedDB** — Persists directory handle for session restoration
 
 ### Git Commits
 

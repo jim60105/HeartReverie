@@ -85,7 +85,7 @@ helm install hr ./helm/heart-reverie \
 
 ## TLS 憑證設定
 
-HeartReverie 前端（reader-src）使用 File System Access API 與 IndexedDB，兩者皆要求 Secure Context（HTTPS）。chart 預設以「Pod 內自簽憑證」方式提供 HTTPS。
+HeartReverie 預設啟用 TLS 以加密 Passphrase 與章節內容的傳輸；TLS 屬於建議的安全強化預設，而非任何前端功能的硬性需求。chart 預設以「Pod 內自簽憑證」方式提供 HTTPS；若部署於已終結 TLS 的反向代理之後，可改用純 HTTP（設定 `env.HTTP_ONLY=true`）。
 
 ### 模式 1：預設自簽憑證（適合測試）
 
@@ -187,7 +187,6 @@ serviceAccount:
 
 - **`stringData` 中找不到 `LLM_TEMPERATURE`**：可能是值設成空字串。chart 會把空字串視為「未設定」並省略。請確認該 key 確實有值。
 - **Pod 啟動失敗、Liveness probe 一直失敗**：檢查 `app.port` 與你實際讓 server 監聽的 port 是否一致。chart 把 `app.port` 同步到 `containerPort`、`Service.targetPort`、probe 與 Secret 中的 `PORT`，但若你又透過 `env.PORT` 覆寫了 PORT，可能造成兩端 port 不一致。
-- **瀏覽器顯示「無法存取本機檔案」**：File System Access API 需要 Secure Context。確認你是透過 HTTPS 存取（自簽或 LE 憑證皆可），而不是 HTTP。
 - **多個 Pod 同時啟動造成資料異常**：確認 `replicaCount` 為 1、`strategy.type` 為 `Recreate`。請勿改成 `RollingUpdate`。
 - **`storageClassName` 找不到**：明確設定 `persistence.storageClass=<your-class>`，或先建立叢集預設 `StorageClass`。
 

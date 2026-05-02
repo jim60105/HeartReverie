@@ -17,7 +17,6 @@ import { ref } from "vue";
 import type { PluginDescriptor } from "@/types";
 
 const pluginsRef = ref<PluginDescriptor[]>([]);
-const modeRef = ref<"fsa" | "backend">("backend");
 const isLastChapterRef = ref(true);
 const chaptersRef = ref<{ number: number }[]>([{ number: 1 }]);
 const currentIndexRef = ref(0);
@@ -41,14 +40,13 @@ vi.mock("@/composables/usePlugins", () => ({
 
 vi.mock("@/composables/useChapterNav", () => ({
   useChapterNav: () => ({
-    mode: modeRef,
     isLastChapter: isLastChapterRef,
     chapters: chaptersRef,
     currentIndex: currentIndexRef,
     getBackendContext: () => ({
       series: "series-a",
       story: "story-a",
-      isBackendMode: modeRef.value === "backend",
+      isBackendMode: true,
     }),
     reloadToLast: reloadToLastMock,
   }),
@@ -72,7 +70,6 @@ describe("usePluginActions", () => {
   beforeEach(async () => {
     vi.resetModules();
     pluginsRef.value = [];
-    modeRef.value = "backend";
     isLastChapterRef.value = true;
     chaptersRef.value = [{ number: 1 }];
     currentIndexRef.value = 0;
@@ -125,7 +122,7 @@ describe("usePluginActions", () => {
     ]);
   });
 
-  it("visibility: FSA mode hides both enum values", async () => {
+  it("visibility: non-last chapter shows backend-only only", async () => {
     pluginsRef.value = [
       {
         name: "p",
@@ -136,23 +133,6 @@ describe("usePluginActions", () => {
         ],
       },
     ] as PluginDescriptor[];
-    modeRef.value = "fsa";
-    const api = await getApi();
-    expect(api.actionButtons.value).toEqual([]);
-  });
-
-  it("visibility: backend non-last shows backend-only only", async () => {
-    pluginsRef.value = [
-      {
-        name: "p",
-        hasFrontendModule: true,
-        actionButtons: [
-          { id: "lc", label: "LC", visibleWhen: "last-chapter-backend" },
-          { id: "bo", label: "BO", visibleWhen: "backend-only" },
-        ],
-      },
-    ] as PluginDescriptor[];
-    modeRef.value = "backend";
     isLastChapterRef.value = false;
     chaptersRef.value = [{ number: 1 }, { number: 2 }];
     currentIndexRef.value = 0;
@@ -161,7 +141,7 @@ describe("usePluginActions", () => {
     expect(ids).toEqual(["bo"]);
   });
 
-  it("visibility: backend last shows both", async () => {
+  it("visibility: last chapter shows both", async () => {
     pluginsRef.value = [
       {
         name: "p",
@@ -172,7 +152,6 @@ describe("usePluginActions", () => {
         ],
       },
     ] as PluginDescriptor[];
-    modeRef.value = "backend";
     isLastChapterRef.value = true;
     const api = await getApi();
     const ids = api.actionButtons.value.map((b) => b.id);

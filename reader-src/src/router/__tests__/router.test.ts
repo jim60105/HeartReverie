@@ -89,24 +89,6 @@ describe("router integration with useChapterNav", () => {
     );
   });
 
-  it("router is NOT called in FSA mode", async () => {
-    const routerMod = await import("@/router");
-    const navMod = await import("@/composables/useChapterNav");
-    const nav = navMod.useChapterNav();
-
-    // In FSA mode (default), changing currentIndex should not trigger router
-    nav.chapters.value = [
-      { number: 1, content: "a" },
-      { number: 2, content: "b" },
-    ];
-    nav.currentIndex.value = 1;
-
-    // Wait for watcher to fire
-    await new Promise((r) => setTimeout(r, 10));
-
-    expect(routerMod.default.replace).not.toHaveBeenCalled();
-  });
-
   it("loadFromBackend accepts optional startChapter", async () => {
     const fetchMock = vi
       .fn()

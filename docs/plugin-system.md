@@ -322,8 +322,8 @@ logger.error('Operation failed', { error: err.message });
 | `notification` | 通知觸發（LLM 回應完成/錯誤時由核心派發） | `{ event, data, notify }` — `event` 為 `'chat:done'` 或 `'chat:error'`，`notify` 為通知函式 |
 | `chat:send:before` | 使用者送出訊息前，允許 plugin 改寫將送出的文字 | `{ message, mode }` — `mode` 為 `'send'` 或 `'resend'`；若 handler `return` 一個字串，該字串將覆蓋 `context.message`（pipeline 行為） |
 | `chapter:render:after` | 章節 Markdown 渲染完成後，允許 plugin 後處理 token 陣列 | `{ tokens, rawMarkdown, options }` — 可直接變更 `tokens`（push/replace/mutate `.content`）；任何新增或 `.content` 變動的 `html` token 會被系統再次以 DOMPurify 重新消毒 |
-| `story:switch` | 使用者切換系列／故事時觸發 | `{ series, story, mode, previousSeries, previousStory }` — `mode` 為 `'backend'` 或 `'fsa'`，首次載入時 `previousSeries`／`previousStory` 為 `null`；資訊用途，不可取消 |
-| `chapter:change` | 目前顯示的章節變動時觸發（包含跳章、翻頁、重新載入至最後一章） | `{ chapter, index, previousIndex }` — `chapter` 為對應 `ChapterData.number`（FSA 模式首次載入時為 `null`），`previousIndex` 為 `null` 代表首次載入；資訊用途，不可取消 |
+| `story:switch` | 使用者切換系列／故事時觸發 | `{ series, story, previousSeries, previousStory }` — 首次載入時 `previousSeries`／`previousStory` 為 `null`；資訊用途，不可取消 |
+| `chapter:change` | 目前顯示的章節變動時觸發（包含跳章、翻頁、重新載入至最後一章） | `{ chapter, index, previousIndex }` — `chapter` 為對應 `ChapterData.number`，`previousIndex` 為 `null` 代表首次載入；資訊用途，不可取消 |
 | `action-button:click` | 使用者點擊 `PluginActionBar` 中由 plugin 貢獻的按鈕時觸發；async dispatch 並依 `originPluginName` 過濾 | `{ buttonId, pluginName, series, name, storyDir, lastChapterIndex, runPluginPrompt, notify, reload }`，詳見「[動作按鈕（Action Buttons）](#動作按鈕action-buttons)」 |
 
 前端的標籤清除已改為宣告式設定，透過 `displayStripTags` manifest 欄位處理，不再需要前端模組。
@@ -505,10 +505,10 @@ v1 版本僅提供兩個值，未來可在不破壞相容的前提下擴充：
 
 | 值 | 何時顯示 |
 |----|----------|
-| `"last-chapter-backend"`（預設） | 後端模式（連線 writer 後端）且目前顯示的章節為故事最後一章時 |
-| `"backend-only"` | 後端模式中任何章節（包含非最後一章），但 FSA／檔案閱讀模式下不顯示 |
+| `"last-chapter-backend"`（預設） | 目前顯示的章節為故事最後一章時 |
+| `"backend-only"` | 任何章節（包含非最後一章） |
 
-兩個值在 FSA 模式下都不會渲染——v1 不存在會在 FSA 模式可見的選項。可見性會在路由、模式、章節索引變化時自動重新計算。
+兩個值皆會渲染——保留雙值列舉以維持與未來顯示模式擴充的相容性。可見性會在路由、章節索引變化時自動重新計算。
 
 範例：
 

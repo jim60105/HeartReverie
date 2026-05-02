@@ -10,9 +10,7 @@ const currentIndexRef = ref(0);
 const totalChaptersRef = ref(3);
 const isFirstRef = ref(true);
 const isLastRef = ref(false);
-const modeRef = ref<"fsa" | "backend">("backend");
 const folderNameRef = ref("test-folder");
-const directoryHandleRef = ref<FileSystemDirectoryHandle | null>(null);
 const backendContextRef = ref({
   series: "test-series" as string | null,
   story: "test-story" as string | null,
@@ -23,7 +21,6 @@ const nextMock = vi.fn();
 const previousMock = vi.fn();
 const goToFirstMock = vi.fn();
 const goToLastMock = vi.fn();
-const loadFromFSAMock = vi.fn().mockResolvedValue(undefined);
 const reloadToLastMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("vue-router", () => ({
@@ -36,21 +33,13 @@ vi.mock("@/composables/useChapterNav", () => ({
     totalChapters: totalChaptersRef,
     isFirst: isFirstRef,
     isLast: isLastRef,
-    mode: modeRef,
     folderName: folderNameRef,
     next: nextMock,
     previous: previousMock,
     goToFirst: goToFirstMock,
     goToLast: goToLastMock,
-    loadFromFSA: loadFromFSAMock,
     reloadToLast: reloadToLastMock,
     getBackendContext: () => backendContextRef.value,
-  }),
-}));
-
-vi.mock("@/composables/useFileReader", () => ({
-  useFileReader: () => ({
-    directoryHandle: directoryHandleRef,
   }),
 }));
 
@@ -64,9 +53,7 @@ describe("AppHeader", () => {
     totalChaptersRef.value = 3;
     isFirstRef.value = true;
     isLastRef.value = false;
-    modeRef.value = "backend";
     folderNameRef.value = "test-folder";
-    directoryHandleRef.value = null;
     backendContextRef.value = {
       series: "test-series",
       story: "test-story",
@@ -77,7 +64,6 @@ describe("AppHeader", () => {
     previousMock.mockReset();
     goToFirstMock.mockReset();
     goToLastMock.mockReset();
-    loadFromFSAMock.mockReset();
     reloadToLastMock.mockReset();
   });
 
@@ -97,17 +83,11 @@ describe("AppHeader", () => {
     expect(mockRouter.push).toHaveBeenCalledWith({ name: "settings-prompt-editor" });
   });
 
-  it("reloads from FSA or backend based on mode", async () => {
+  it("reload button calls reloadToLast", async () => {
     const wrapper = mount(AppHeader);
     const reloadBtn = wrapper.findAll("button").find((b) => b.text() === "🔄");
     expect(reloadBtn).toBeTruthy();
 
-    modeRef.value = "fsa";
-    directoryHandleRef.value = { name: "dir" } as unknown as FileSystemDirectoryHandle;
-    await reloadBtn!.trigger("click");
-    expect(loadFromFSAMock).toHaveBeenCalledTimes(1);
-
-    modeRef.value = "backend";
     await reloadBtn!.trigger("click");
     expect(reloadToLastMock).toHaveBeenCalledTimes(1);
   });

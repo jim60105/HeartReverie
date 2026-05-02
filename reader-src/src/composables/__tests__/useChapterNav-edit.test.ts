@@ -40,19 +40,6 @@ vi.mock("@/composables/useAuth", () => ({
   useAuth: () => ({ getAuthHeaders: () => ({}) }),
 }));
 
-vi.mock("@/composables/useFileReader", () => ({
-  useFileReader: () => ({
-    isSupported: ref(true),
-    directoryHandle: ref(null),
-    files: ref([]),
-    hasStoredHandle: ref(false),
-    openDirectory: vi.fn(),
-    restoreHandle: vi.fn(),
-    readFile: vi.fn(),
-    clearStoredHandle: vi.fn(),
-  }),
-}));
-
 vi.mock("@/composables/useWebSocket", () => ({
   useWebSocket: () => ({
     isConnected: wsConnected,

@@ -1,17 +1,5 @@
-import { flushPromises } from "@vue/test-utils";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { frontendHooks } from "@/lib/plugin-hooks";
-
-const readFileMock = vi.fn();
-
-vi.mock("@/composables/useFileReader", () => ({
-  useFileReader: () => ({
-    isSupported: { value: true },
-    directoryHandle: { value: null },
-    openDirectory: vi.fn(),
-    readFile: readFileMock,
-  }),
-}));
 
 vi.mock("@/composables/useAuth", () => ({
   useAuth: () => ({
@@ -55,8 +43,6 @@ describe("useChapterNav boundary jumps", () => {
     const nav = useChapterNav();
     nav.chapters.value = [];
     nav.currentIndex.value = 0;
-    nav.mode.value = "backend";
-    readFileMock.mockReset();
   });
 
   it("goToFirst is a no-op when chapter list is empty", () => {
@@ -79,13 +65,18 @@ describe("useChapterNav boundary jumps", () => {
     dispatch.mockRestore();
   });
 
-  it("goToFirst from index 5 in backend mode lands on index 0 and dispatches chapter:change", () => {
-    const nav = useChapterNav();
-    nav.mode.value = "backend";
-    nav.chapters.value = Array.from({ length: 11 }, (_, i) => ({
+  it("goToFirst from index 5 lands on index 0 and dispatches chapter:change", async () => {
+    const chapters = Array.from({ length: 11 }, (_, i) => ({
       number: i + 1,
       content: `c${i + 1}`,
     }));
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(chapters),
+    }) as unknown as typeof fetch;
+
+    const nav = useChapterNav();
+    await nav.loadFromBackend("S", "T");
     nav.currentIndex.value = 5;
 
     const dispatch = vi.spyOn(frontendHooks, "dispatch");
@@ -98,13 +89,18 @@ describe("useChapterNav boundary jumps", () => {
     dispatch.mockRestore();
   });
 
-  it("goToLast from index 2 with 11 chapters in backend mode lands on index 10", () => {
-    const nav = useChapterNav();
-    nav.mode.value = "backend";
-    nav.chapters.value = Array.from({ length: 11 }, (_, i) => ({
+  it("goToLast from index 2 with 11 chapters lands on index 10", async () => {
+    const chapters = Array.from({ length: 11 }, (_, i) => ({
       number: i + 1,
       content: `c${i + 1}`,
     }));
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(chapters),
+    }) as unknown as typeof fetch;
+
+    const nav = useChapterNav();
+    await nav.loadFromBackend("S2", "T2");
     nav.currentIndex.value = 2;
 
     const dispatch = vi.spyOn(frontendHooks, "dispatch");
@@ -115,78 +111,5 @@ describe("useChapterNav boundary jumps", () => {
       expect.objectContaining({ previousIndex: 2, index: 10 }),
     );
     dispatch.mockRestore();
-  });
-
-  it("goToLast in FSA mode invokes loadFSAChapter, which reads the last file via useFileReader.readFile", async () => {
-    const nav = useChapterNav();
-
-    const fileHandles = Array.from({ length: 5 }, (_, i) => ({
-      kind: "file",
-      name: `${i + 1}.md`,
-    })) as unknown as FileSystemFileHandle[];
-
-    const dirHandle = {
-      name: "fake-dir",
-      [Symbol.asyncIterator]: async function* () {
-        for (const fh of fileHandles) {
-          yield [fh.name, fh] as [string, FileSystemFileHandle];
-        }
-      },
-    } as unknown as FileSystemDirectoryHandle;
-
-    readFileMock.mockImplementation(
-      (h: FileSystemFileHandle) => Promise.resolve(`content for ${h.name}`),
-    );
-
-    await nav.loadFromFSA(dirHandle);
-    await flushPromises();
-
-    expect(nav.mode.value).toBe("fsa");
-    expect(nav.chapters.value.length).toBe(5);
-
-    nav.currentIndex.value = 1;
-    readFileMock.mockClear();
-
-    nav.goToLast();
-    await flushPromises();
-
-    expect(readFileMock).toHaveBeenCalledTimes(1);
-    expect(readFileMock).toHaveBeenLastCalledWith(fileHandles[4]);
-    expect(nav.currentIndex.value).toBe(4);
-  });
-
-  it("goToFirst in FSA mode invokes loadFSAChapter for index 0 (does not fall through to navigateTo)", async () => {
-    const nav = useChapterNav();
-
-    const fileHandles = Array.from({ length: 5 }, (_, i) => ({
-      kind: "file",
-      name: `${i + 1}.md`,
-    })) as unknown as FileSystemFileHandle[];
-
-    const dirHandle = {
-      name: "fake-dir",
-      [Symbol.asyncIterator]: async function* () {
-        for (const fh of fileHandles) {
-          yield [fh.name, fh] as [string, FileSystemFileHandle];
-        }
-      },
-    } as unknown as FileSystemDirectoryHandle;
-
-    readFileMock.mockImplementation(
-      (h: FileSystemFileHandle) => Promise.resolve(`content for ${h.name}`),
-    );
-
-    await nav.loadFromFSA(dirHandle);
-    await flushPromises();
-
-    nav.currentIndex.value = 3;
-    readFileMock.mockClear();
-
-    nav.goToFirst();
-    await flushPromises();
-
-    expect(readFileMock).toHaveBeenCalledTimes(1);
-    expect(readFileMock).toHaveBeenLastCalledWith(fileHandles[0]);
-    expect(nav.currentIndex.value).toBe(0);
   });
 });
