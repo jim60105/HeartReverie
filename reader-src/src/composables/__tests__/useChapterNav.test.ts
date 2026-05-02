@@ -60,7 +60,7 @@ describe("useChapterNav", () => {
   });
 
   async function getNav() {
-    // useChapterNav depends on useAuth & useFileReader (module-level singletons)
+    // useChapterNav module-level singletons
     const mod = await import("@/composables/useChapterNav");
     return mod.useChapterNav();
   }
@@ -125,18 +125,13 @@ describe("useChapterNav", () => {
     expect(nav.isLastChapter.value).toBe(false);
   });
 
-  it("mode defaults to fsa", async () => {
+  it("mode defaults to backend (single mode)", async () => {
     const nav = await getNav();
-    expect(nav.mode.value).toBe("fsa");
+    // After FSA removal, the composable is backend-only and exposes no `mode` field.
+    expect("mode" in nav).toBe(false);
   });
 
-  it("mode can be switched to backend", async () => {
-    const nav = await getNav();
-    nav.mode.value = "backend";
-    expect(nav.mode.value).toBe("backend");
-  });
-
-  it("loadFromBackend calls fetch and sets mode", async () => {
+  it("loadFromBackend calls fetch", async () => {
     // Mock fetch to return batch chapter response
     const fetchMock = vi
       .fn()
@@ -151,7 +146,6 @@ describe("useChapterNav", () => {
     const nav = await getNav();
     await nav.loadFromBackend("series1", "story1");
     expect(fetchMock).toHaveBeenCalled();
-    expect(nav.mode.value).toBe("backend");
   });
 
   it("getBackendContext returns current state", async () => {

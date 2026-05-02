@@ -75,7 +75,6 @@ describe("useChapterNav — story:switch and chapter:change hooks", () => {
     expect(events[0]!.previousStory).toBeNull();
     expect(events[0]!.series).toBe("A");
     expect(events[0]!.story).toBe("X");
-    expect(events[0]!.mode).toBe("backend");
 
     expect(chapterEvents.length).toBe(1);
     expect(chapterEvents[0]!.previousIndex).toBeNull();
@@ -168,7 +167,6 @@ describe("useChapterNav — story:switch and chapter:change hooks", () => {
     expect(events.length).toBe(2);
     expect(events[1]!.previousIndex).toBe(0);
     expect(events[1]!.index).toBe(1);
-    expect(events[1]!.mode).toBe("backend");
   });
 
   it("chapter:change does NOT fire for no-op navigation to same index", async () => {

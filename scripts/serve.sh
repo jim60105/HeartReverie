@@ -15,7 +15,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # ==================================================================
 #
-# Start the story writer HTTPS backend server for local development.
+# Start the story writer backend server for local development.
+# Defaults to HTTPS with auto-generated self-signed certs; set HTTP_ONLY=true
+# to serve plain HTTP (e.g. behind a TLS-terminating reverse proxy).
 # Thin wrapper around entrypoint.sh that sets project-relative paths.
 #
 # Usage:
@@ -29,8 +31,9 @@
 #   - deno     (for the backend server)
 #
 # Examples:
-#   ./scripts/serve.sh          # Serve on https://localhost:8443
-#   ./scripts/serve.sh 9000     # Serve on https://localhost:9000
+#   ./scripts/serve.sh                       # Serve on https://localhost:8443
+#   ./scripts/serve.sh 9000                  # Serve on https://localhost:9000
+#   HTTP_ONLY=true ./scripts/serve.sh 9000   # Serve on http://localhost:9000
 
 set -euo pipefail
 
@@ -51,7 +54,13 @@ export READER_DIR="${PROJECT_DIR}/reader-dist"
 export CERT_DIR="${PROJECT_DIR}/.certs"
 export PLUGIN_DIR="${PLUGINS_DIR}"
 
-echo "🚀 Story writer starting on https://localhost:${PORT}"
+if [[ "${HTTP_ONLY:-}" == "true" ]]; then
+    SCHEME="http"
+else
+    SCHEME="https"
+fi
+
+echo "🚀 Story writer starting on ${SCHEME}://localhost:${PORT}"
 echo "   Project: ${PROJECT_DIR}"
 echo "   Press Ctrl+C to stop"
 

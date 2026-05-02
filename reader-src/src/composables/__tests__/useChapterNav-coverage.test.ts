@@ -26,9 +26,6 @@ const wsOnMessage = vi.fn((type: string, handler: (msg: any) => void) => {
   return vi.fn(() => wsHandlers.delete(type));
 });
 
-const directoryHandleRef = ref<FileSystemDirectoryHandle | null>(null);
-const readFileMock = vi.fn(async (handle: any) => String(handle.__content ?? ""));
-
 vi.mock("vue-router", () => ({
   useRoute: () => ({ params: routeParams }),
 }));
@@ -42,19 +39,6 @@ vi.mock("@/router", () => ({
 vi.mock("@/composables/useAuth", () => ({
   useAuth: () => ({
     getAuthHeaders: () => ({}),
-  }),
-}));
-
-vi.mock("@/composables/useFileReader", () => ({
-  useFileReader: () => ({
-    isSupported: ref(true),
-    directoryHandle: directoryHandleRef,
-    files: ref([]),
-    hasStoredHandle: ref(false),
-    openDirectory: vi.fn(),
-    restoreHandle: vi.fn(),
-    readFile: readFileMock,
-    clearStoredHandle: vi.fn(),
   }),
 }));
 
@@ -94,27 +78,6 @@ function chapterContentResponse(content: string, chapter: number) {
   };
 }
 
-function createFsaHandle(entries: Array<{ name: string; kind: "file" | "directory"; content?: string }>) {
-  return {
-    name: "local-story",
-    async *[Symbol.asyncIterator]() {
-      for (const entry of entries) {
-        if (entry.kind === "file") {
-          yield [
-            entry.name,
-            { kind: "file", __content: entry.content ?? "" } as unknown as FileSystemFileHandle,
-          ] as [string, FileSystemFileHandle];
-        } else {
-          yield [
-            entry.name,
-            { kind: "directory" } as unknown as FileSystemDirectoryHandle,
-          ] as [string, FileSystemDirectoryHandle];
-        }
-      }
-    },
-  } as unknown as FileSystemDirectoryHandle;
-}
-
 describe("useChapterNav coverage branches", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -127,8 +90,6 @@ describe("useChapterNav coverage branches", () => {
     wsSend.mockReset();
     wsHandlers.clear();
     wsOnMessage.mockClear();
-    readFileMock.mockClear();
-    directoryHandleRef.value = null;
     vi.spyOn(globalThis, "setInterval").mockReturnValue(1 as unknown as ReturnType<typeof setInterval>);
     vi.spyOn(globalThis, "clearInterval").mockImplementation(() => {});
   });
@@ -149,28 +110,6 @@ describe("useChapterNav coverage branches", () => {
     await Promise.resolve();
   }
 
-  it("loadFromFSA builds chapters, dispatches initial state and starts directory polling", async () => {
-    const nav = await getNav();
-    const handle = createFsaHandle([
-      { name: "2.md", kind: "file", content: "second" },
-      { name: "1.md", kind: "file", content: "first" },
-      { name: "note.txt", kind: "file", content: "ignored" },
-    ]);
-    directoryHandleRef.value = handle;
-
-    await nav.loadFromFSA(handle);
-
-    expect(nav.mode.value).toBe("fsa");
-    expect(nav.folderName.value).toBe("local-story");
-    expect(nav.chapters.value).toEqual([
-      { number: 1, content: "first" },
-      { number: 2, content: "second" },
-    ]);
-    expect(nav.currentIndex.value).toBe(0);
-    expect(nav.currentContent.value).toBe("first");
-    expect(setInterval).toHaveBeenCalled();
-  });
-
   it("loadFromBackend handles empty chapter list and starts polling fallback", async () => {
     vi.stubGlobal(
       "fetch",
@@ -180,7 +119,6 @@ describe("useChapterNav coverage branches", () => {
     const nav = await getNav();
     await nav.loadFromBackend("series-a", "story-a");
 
-    expect(nav.mode.value).toBe("backend");
     expect(nav.currentIndex.value).toBe(0);
     expect(nav.currentContent.value).toBe("");
     expect(setInterval).toHaveBeenCalled();

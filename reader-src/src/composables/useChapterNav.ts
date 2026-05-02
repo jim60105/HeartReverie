@@ -8,10 +8,8 @@ import type {
   ChapterChangeContext,
 } from "@/types";
 import { useAuth } from "@/composables/useAuth";
-import { useFileReader } from "@/composables/useFileReader";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { frontendHooks } from "@/lib/plugin-hooks";
-import { isNumericMdFile, numericSort } from "@/lib/file-utils";
 import { renderDebug } from "@/lib/render-debug";
 
 const POLL_INTERVAL_BASE = 3000;
@@ -29,9 +27,7 @@ const currentContent = shallowRef<string>("");
  * because Vue's `triggerRef` only signals dependents that read the ref.
  */
 const renderEpoch = ref(0);
-const mode = ref<"fsa" | "backend">("fsa");
 const folderName = ref("");
-const fsaFiles = ref<FileSystemFileHandle[]>([]);
 
 // Private state
 let currentSeries: string | null = null;
@@ -51,17 +47,12 @@ const isLastChapter = computed(
   () => chapters.value.length > 0 && currentIndex.value === chapters.value.length - 1,
 );
 
-function dispatchStorySwitch(
-  nextMode: "fsa" | "backend",
-  nextSeries: string | null,
-  nextStory: string | null,
-): void {
+function dispatchStorySwitch(nextSeries: string, nextStory: string): void {
   const ctx: StorySwitchContext = {
     previousSeries,
     previousStory,
     series: nextSeries,
     story: nextStory,
-    mode: nextMode,
   };
   frontendHooks.dispatch("story:switch", ctx);
   previousSeries = nextSeries;
@@ -73,6 +64,7 @@ function dispatchChapterChange(
   nextIndex: number,
 ): void {
   if (prevIndex === nextIndex) return;
+  if (!currentSeries || !currentStory) return;
   const chapterNumber =
     chapters.value[nextIndex]?.number ?? nextIndex + 1;
   const ctx: ChapterChangeContext = {
@@ -81,18 +73,10 @@ function dispatchChapterChange(
     chapter: chapterNumber,
     series: currentSeries,
     story: currentStory,
-    mode: mode.value,
   };
   frontendHooks.dispatch("chapter:change", ctx);
 }
 
-/**
- * Single source of truth for writes to `currentContent`. Always invalidates
- * downstream computeds and effects, including the byte-identical case (Vue's
- * primitive ref reactivity is `Object.is`-based and would otherwise silently
- * skip the update). `triggerRef` re-fires consumers that read
- * `currentContent`; `renderEpoch` re-fires consumers that don't.
- */
 /**
  * Bump `renderEpoch` without touching `currentContent`. Used by callers that
  * need to re-trigger downstream effects (e.g. ContentArea's sidebar
@@ -104,6 +88,13 @@ function bumpRenderEpoch(): void {
   renderEpoch.value += 1;
 }
 
+/**
+ * Single source of truth for writes to `currentContent`. Always invalidates
+ * downstream computeds and effects, including the byte-identical case (Vue's
+ * primitive ref reactivity is `Object.is`-based and would otherwise silently
+ * skip the update). `triggerRef` re-fires consumers that read
+ * `currentContent`; `renderEpoch` re-fires consumers that don't.
+ */
 function commitContent(next: string): void {
   if (currentContent.value === next) {
     triggerRef(currentContent);
@@ -131,37 +122,6 @@ function restartPollInterval(interval: number): void {
   clearPolling();
   currentPollInterval = interval;
   pollIntervalId = setInterval(pollBackend, currentPollInterval);
-}
-
-async function listChapterFiles(
-  dirHandle: FileSystemDirectoryHandle,
-): Promise<FileSystemFileHandle[]> {
-  const entries: { name: string; handle: FileSystemFileHandle }[] = [];
-  for await (const [name, handle] of dirHandle) {
-    if (handle.kind === "file" && isNumericMdFile(name)) {
-      entries.push({ name, handle: handle as FileSystemFileHandle });
-    }
-  }
-  entries.sort((a, b) => numericSort(a.name, b.name));
-  return entries.map((e) => e.handle);
-}
-
-async function pollDirectory(): Promise<void> {
-  const { directoryHandle } = useFileReader();
-  if (!directoryHandle.value) return;
-  try {
-    const newFiles = await listChapterFiles(directoryHandle.value);
-    if (newFiles.length !== fsaFiles.value.length) {
-      fsaFiles.value = newFiles;
-      // Update chapters array to reflect new file count
-      chapters.value = newFiles.map((_, i) => ({
-        number: i + 1,
-        content: i === currentIndex.value ? currentContent.value : "",
-      }));
-    }
-  } catch {
-    // Directory may have been removed or permission revoked
-  }
 }
 
 async function pollBackend(): Promise<void> {
@@ -229,9 +189,9 @@ async function pollBackend(): Promise<void> {
   }
 }
 
-/** Push the current chapter to the URL in backend mode. */
+/** Push the current chapter to the URL. */
 function syncRoute(): void {
-  if (mode.value !== "backend" || !currentSeries || !currentStory) return;
+  if (!currentSeries || !currentStory) return;
   if (chapters.value.length === 0) return;
   router.replace({
     name: "chapter",
@@ -251,93 +211,23 @@ function navigateTo(index: number): void {
   dispatchChapterChange(prev, index);
 }
 
-async function loadFSAChapter(index: number): Promise<void> {
-  if (index < 0 || index >= fsaFiles.value.length) return;
-  const { readFile } = useFileReader();
-  const content = await readFile(fsaFiles.value[index]!);
-  chapters.value[index] = { number: index + 1, content };
-  const prev = currentIndex.value;
-  currentIndex.value = index;
-  commitContent(content);
-  dispatchChapterChange(prev, index);
-}
-
 function next(): void {
-  const nextIdx = currentIndex.value + 1;
-  if (mode.value === "fsa") {
-    loadFSAChapter(nextIdx);
-  } else {
-    navigateTo(nextIdx);
-  }
+  navigateTo(currentIndex.value + 1);
 }
 
 function previous(): void {
-  const prevIdx = currentIndex.value - 1;
-  if (mode.value === "fsa") {
-    loadFSAChapter(prevIdx);
-  } else {
-    navigateTo(prevIdx);
-  }
+  navigateTo(currentIndex.value - 1);
 }
 
 function goToFirst(): void {
   if (chapters.value.length === 0) return;
-  if (mode.value === "fsa") {
-    loadFSAChapter(0);
-  } else {
-    navigateTo(0);
-  }
+  navigateTo(0);
 }
 
 function goToLast(): void {
   const lastIdx = chapters.value.length - 1;
   if (lastIdx < 0) return;
-  if (mode.value === "fsa") {
-    loadFSAChapter(lastIdx);
-  } else {
-    navigateTo(lastIdx);
-  }
-}
-
-async function loadFromFSA(handle: FileSystemDirectoryHandle): Promise<void> {
-  clearPolling();
-  mode.value = "fsa";
-  currentSeries = null;
-  currentStory = null;
-  folderName.value = handle.name;
-  router.replace({ name: "home" }).catch(() => {});
-
-  // Always dispatch story:switch for FSA loads. When switching between
-  // local folders (FSA → FSA), series/story are both null so the old
-  // identity check missed these transitions. Each loadFromFSA call
-  // represents a distinct story.
-  dispatchStorySwitch("fsa", null, null);
-
-  const fileHandles = await listChapterFiles(handle);
-  fsaFiles.value = fileHandles;
-
-  if (fileHandles.length === 0) {
-    chapters.value = [];
-    commitContent("");
-    currentIndex.value = 0;
-    return;
-  }
-
-  // Build initial chapter data
-  const { readFile } = useFileReader();
-  const chapterData: ChapterData[] = [];
-  for (let i = 0; i < fileHandles.length; i++) {
-    const content = await readFile(fileHandles[i]!);
-    chapterData.push({ number: i + 1, content });
-  }
-  chapters.value = chapterData;
-
-  currentIndex.value = 0;
-  commitContent(chapters.value[currentIndex.value]?.content ?? "");
-  dispatchChapterChange(null, 0);
-
-  // Start FSA polling (1s interval)
-  pollIntervalId = setInterval(pollDirectory, 1000);
+  navigateTo(lastIdx);
 }
 
 async function loadFromBackendInternal(
@@ -363,23 +253,17 @@ async function loadFromBackend(
 ): Promise<void> {
   clearPolling();
   const token = ++loadToken;
-  const priorMode = mode.value;
   const priorSeries = currentSeries;
   const priorStory = currentStory;
-  mode.value = "backend";
-  fsaFiles.value = [];
   currentSeries = series;
   currentStory = story;
   folderName.value = `${series} / ${story}`;
 
-  // Dispatch story:switch only for real transitions (different series/story
-  // or mode change). Reloads of the same story MUST NOT fire the hook.
-  const isTransition =
-    priorMode !== "backend" ||
-    priorSeries !== series ||
-    priorStory !== story;
+  // Dispatch story:switch only for real transitions (different series/story).
+  // Reloads of the same story MUST NOT fire the hook.
+  const isTransition = priorSeries !== series || priorStory !== story;
   if (isTransition) {
-    dispatchStorySwitch("backend", series, story);
+    dispatchStorySwitch(series, story);
   }
 
   await loadFromBackendInternal(series, story);
@@ -473,7 +357,7 @@ function getBackendContext(): {
   return {
     series: currentSeries,
     story: currentStory,
-    isBackendMode: mode.value === "backend",
+    isBackendMode: currentSeries !== null && currentStory !== null,
   };
 }
 
@@ -488,7 +372,6 @@ function sendSubscribeIfConnected(): void {
 
 /** Start polling only when WebSocket is not connected. */
 function startPollingIfNeeded(): void {
-  if (mode.value !== 'backend') return;
   const { isConnected } = useWebSocket();
   if (!isConnected.value) {
     pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
@@ -501,7 +384,7 @@ function initRouteSync(): void {
 
   const route = useRoute();
 
-  // Sync URL when chapter changes in backend mode
+  // Sync URL when chapter changes
   watch(currentIndex, () => {
     syncRoute();
   });
@@ -510,7 +393,7 @@ function initRouteSync(): void {
   watch(
     () => route.params.chapter,
     (newChapter) => {
-      if (!newChapter || mode.value !== "backend") return;
+      if (!newChapter) return;
       const idx = parseInt(newChapter as string, 10) - 1;
       if (idx >= 0 && idx < chapters.value.length && idx !== currentIndex.value) {
         const prev = currentIndex.value;
@@ -541,9 +424,8 @@ function initRouteSync(): void {
 
   const { isConnected, onMessage: wsOnMessage } = useWebSocket();
 
-  // Task 7.1: chapters:updated — reload chapters when count changes
+  // chapters:updated — reload chapters when count changes
   wsOnMessage('chapters:updated', async (msg) => {
-    if (mode.value !== 'backend') return;
     if (msg.series !== currentSeries || msg.story !== currentStory) return;
     const prevLen = chapters.value.length;
     await loadFromBackendInternal(msg.series, msg.story);
@@ -552,9 +434,8 @@ function initRouteSync(): void {
     }
   });
 
-  // Task 7.2: chapters:content — update chapter content in-place
+  // chapters:content — update chapter content in-place
   wsOnMessage('chapters:content', (msg) => {
-    if (mode.value !== 'backend') return;
     if (msg.series !== currentSeries || msg.story !== currentStory) return;
     const lastIdx = chapters.value.length - 1;
     if (lastIdx < 0) return;
@@ -565,14 +446,13 @@ function initRouteSync(): void {
     }
   });
 
-  // Task 7.5: Re-subscribe on reconnect
+  // Re-subscribe on reconnect
   wsOnMessage('auth:ok', () => {
     sendSubscribeIfConnected();
   });
 
-  // Task 7.4: Toggle polling based on WebSocket connection state
+  // Toggle polling based on WebSocket connection state
   watch(isConnected, (connected) => {
-    if (mode.value !== 'backend') return;
     if (connected) {
       clearPolling();
       sendSubscribeIfConnected();
@@ -596,13 +476,11 @@ export function useChapterNav(): UseChapterNavReturn {
     isLastChapter,
     currentContent,
     renderEpoch,
-    mode,
     folderName,
     next,
     previous,
     goToFirst,
     goToLast,
-    loadFromFSA,
     loadFromBackend,
     reloadToLast,
     refreshAfterEdit,

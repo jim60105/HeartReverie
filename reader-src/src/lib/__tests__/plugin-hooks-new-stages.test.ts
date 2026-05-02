@@ -129,7 +129,6 @@ describe("FrontendHookDispatcher — new stages", () => {
       previousStory: "b",
       series: "c",
       story: "d",
-      mode: "backend",
     };
     d.dispatch("story:switch", ctx);
     expect(received).toBe(ctx);
@@ -147,7 +146,6 @@ describe("FrontendHookDispatcher — new stages", () => {
       chapter: 1,
       series: "s",
       story: "st",
-      mode: "backend",
     };
     d.dispatch("chapter:change", ctx);
     expect(calls.length).toBe(1);

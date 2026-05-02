@@ -47,11 +47,9 @@ function resolveVisibleWhen(
 
 function descriptorMatches(
   d: ActionButtonDescriptor,
-  mode: "fsa" | "backend",
   isLastChapter: boolean,
   hasChapters: boolean,
 ): boolean {
-  if (mode !== "backend") return false;
   const v = resolveVisibleWhen(d);
   if (v === "backend-only") return true;
   // "last-chapter-backend" — mirror MainLayout.showChatInput predicate so the
@@ -63,14 +61,13 @@ function descriptorMatches(
 export function usePluginActions() {
   const { plugins } = usePlugins();
   const chapterNav = useChapterNav();
-  const { mode, isLastChapter, chapters, currentIndex, getBackendContext, reloadToLast } =
+  const { isLastChapter, chapters, currentIndex, getBackendContext, reloadToLast } =
     chapterNav;
 
   const actionButtons = computed<VisibleActionButton[]>(() => {
     // Reactivity: read currentIndex so visibility recomputes on chapter change.
     void currentIndex.value;
     void chapters.value.length;
-    void mode.value;
 
     const visible: VisibleActionButton[] = [];
     const pluginList = plugins.value as PluginDescriptor[];
@@ -82,7 +79,6 @@ export function usePluginActions() {
         if (
           descriptorMatches(
             desc,
-            mode.value,
             isLastChapter.value,
             chapters.value.length > 0,
           )

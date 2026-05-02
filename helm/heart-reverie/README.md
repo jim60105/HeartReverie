@@ -99,7 +99,7 @@ The full annotated `env:` map (every key documented in `AGENTS.md`) lives at the
 
 ## TLS
 
-HeartReverie's frontend uses the File System Access API + IndexedDB, both of which require a Secure Context. The chart defaults to end-to-end HTTPS. You have three options:
+TLS is a recommended hardening default for HeartReverie deployments — it encrypts the passphrase header and chapter content in transit. The chart defaults to end-to-end HTTPS, but plain HTTP behind a TLS-terminating reverse proxy (set `env.HTTP_ONLY=true`) is also fully supported. You have three options:
 
 ### 1. Default — self-signed in-pod cert
 

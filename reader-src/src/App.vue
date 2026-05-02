@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { usePlugins } from "@/composables/usePlugins";
 import { useBackground } from "@/composables/useBackground";
-import { useFileReader } from "@/composables/useFileReader";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useAuth } from "@/composables/useAuth";
@@ -13,8 +12,7 @@ import "@/styles/base.css";
 const route = useRoute();
 const { initPlugins } = usePlugins();
 const { applyBackground } = useBackground();
-const { restoreHandle } = useFileReader();
-const { loadFromFSA, loadFromBackend } = useChapterNav();
+const { loadFromBackend } = useChapterNav();
 const { connect } = useWebSocket();
 const { passphrase } = useAuth();
 
@@ -32,16 +30,6 @@ async function handleUnlocked() {
     const chapterParam = route.params.chapter as string | undefined;
     const startChapter = chapterParam ? parseInt(chapterParam, 10) : undefined;
     await loadFromBackend(series, story, startChapter);
-    return;
-  }
-
-  // Otherwise, restore previously saved FSA directory handle
-  const restored = await restoreHandle();
-  if (restored) {
-    const { directoryHandle } = useFileReader();
-    if (directoryHandle.value) {
-      await loadFromFSA(directoryHandle.value);
-    }
   }
 }
 </script>

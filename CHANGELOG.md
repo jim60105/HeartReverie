@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- File System Access API reader mode and IndexedDB directory-handle persistence have been removed. The reader now exclusively loads stories from the writer backend over HTTP/WebSocket; HTTPS is no longer strictly required for any frontend feature, though it remains the default for transport security.
+
 ### Added
 
-- No unreleased changes yet.
+- No other unreleased changes yet.
 
 ## [0.5.0] - 2026-05-02
 
@@ -131,8 +135,7 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 - Lore Codex CRUD UI and API routes under `/api/lore/`
 - Series and story selection UI with server-side listing
 - `HTTP_ONLY=true` mode for reverse-proxy and Kubernetes deployments
-- Auto-generated self-signed TLS certificates on first run (HTTPS required for File System Access API)
-- File System Access API support for reading local `.md` story files; IndexedDB persistence for directory handles across sessions
+- Auto-generated self-signed TLS certificates on first run
 - Regex pattern support in plugin `stripTags` manifest fields
 - Containerfile with Deno-only multi-stage build; published to GHCR at `ghcr.io/jim60105/heartreverie:latest`
 - GitHub Actions CI, multi-arch container publish (GHCR/DockerHub/Quay.io), and release workflows
