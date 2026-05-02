@@ -1,0 +1,25 @@
+# Example values for deploying HeartReverie behind ingress-nginx
+# (in-pod HTTPS with self-signed cert, controller talks HTTPS upstream).
+#
+# ingress-nginx supports `proxy-ssl-verify: off` directly via annotation, so
+# it can verify-skip a self-signed pod cert without any CRD wiring.
+
+env:
+  LLM_API_KEY: "REPLACE-ME"
+  PASSPHRASE: "REPLACE-ME"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: "off"
+  hosts:
+    - host: heart-reverie.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - heart-reverie.example.com
+      secretName: heart-reverie-tls

@@ -167,6 +167,22 @@ podman run -d --name heartreverie \
 podman build -t heartreverie:latest .
 ```
 
+## ☸️ Helm 部署
+
+Kubernetes 使用者可透過內附的 Helm chart 一鍵部署：
+
+```bash
+helm install hr ./helm/heart-reverie \
+  --namespace heart-reverie --create-namespace \
+  --set env.LLM_API_KEY=sk-... \
+  --set env.PASSPHRASE=open-sesame
+```
+
+完整安裝指南、Ingress 範例（Traefik／nginx）、TLS／持續性／提示詞覆寫等進階情境請見：
+
+- 中文指南：[`docs/helm-deployment.md`](docs/helm-deployment.md)
+- Chart README（英文）：[`helm/heart-reverie/README.md`](helm/heart-reverie/README.md)
+
 ## 📄 授權
 
 <img src="assets/AGPLv3_Logo.svg" alt="agplv3" width="300" />

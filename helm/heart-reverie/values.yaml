@@ -1,0 +1,241 @@
+# Default values for heart-reverie.
+# This is a YAML-formatted file.
+
+image:
+  repository: ghcr.io/jim60105/heartreverie
+  tag: latest
+  pullPolicy: Always
+
+# Override the chart name (default: chart name from Chart.yaml).
+nameOverride: ""
+# Override the fully-qualified release name (default: <release>-<chart>).
+fullnameOverride: ""
+
+# Number of pod replicas. HeartReverie writes story files directly on disk;
+# running >1 replica against the same RWO claim WILL corrupt data. Keep at 1.
+replicaCount: 1
+
+# Update strategy. Recreate is required because the pod holds a RWO PVC.
+strategy:
+  type: Recreate
+
+# Application listening port — single source of truth.
+# Drives: container.ports[].containerPort, Service.targetPort, both probe ports,
+# and the PORT env var injected into the rendered Secret. Override this ONE
+# value if you need a different listening port.
+app:
+  port: 8443
+
+# ─────────────────────────────────────────────────────────────────
+# Environment variables
+# ─────────────────────────────────────────────────────────────────
+# These are rendered into a single Kubernetes Secret (named
+# <fullname>-secret) and consumed by the pod via envFrom: secretRef:.
+# Add new keys with --set env.SOME_KEY=value (no template edit required).
+#
+# Values are string-coerced via `toString | quote` so booleans (false) and
+# numbers (0) survive --set parsing as the literal strings "false"/"0".
+# Empty-string values are dropped from the rendered Secret.
+#
+# DO NOT set `PORT` here — the chart auto-injects PORT=<app.port> into the
+# Secret. If you really need a Kubernetes-side / app-side port mismatch, set
+# both `app.port` and `env.PORT` explicitly.
+env:
+  # ── Required ─────────────────────────────────────────────────────
+  LLM_API_KEY: ""
+  PASSPHRASE: ""
+
+  # ── LLM provider / sampling (all optional; see AGENTS.md) ────────
+  # LLM_MODEL: "deepseek/deepseek-v4-pro"
+  # LLM_API_URL: "https://openrouter.ai/api/v1/chat/completions"
+  # LLM_TEMPERATURE: "0.1"
+  # LLM_FREQUENCY_PENALTY: "0.13"
+  # LLM_PRESENCE_PENALTY: "0.52"
+  # LLM_TOP_K: "10"
+  # LLM_TOP_P: "0"
+  # LLM_REPETITION_PENALTY: "1.2"
+  # LLM_MIN_P: "0"
+  # LLM_TOP_A: "1"
+  # LLM_MAX_COMPLETION_TOKENS: "4096"
+  # LLM_REASONING_ENABLED: "true"
+  # LLM_REASONING_EFFORT: "xhigh"
+  # LLM_REASONING_OMIT: "false"
+
+  # ── Plugin / playground / paths ──────────────────────────────────
+  # PLUGIN_DIR: ""
+  # PLAYGROUND_DIR: "./playground"
+  # READER_DIR: "./reader-dist"
+  # PROMPT_FILE: ""        # auto-injected when prompts.enabled=true; do NOT set both
+  # BACKGROUND_IMAGE: "/assets/heart.webp"
+
+  # ── Logging ──────────────────────────────────────────────────────
+  # LOG_LEVEL: "info"
+  # LOG_FILE: ""
+  # LLM_LOG_FILE: "playground/_logs/llm.jsonl"
+
+  # ── TLS / HTTP ────────────────────────────────────────────────────
+  # HTTP_ONLY: "true"      # exact lowercase; skip in-pod TLS, serve plain HTTP
+  # CERT_FILE: ""          # set ONLY if you bind-mount certs at unusual paths
+  # KEY_FILE: ""
+
+# Extra env entries that should NOT go into the Secret (e.g. references to
+# other Secrets via valueFrom). Appended verbatim to the container's `env:`.
+extraEnv: []
+# - name: SOMETHING
+#   valueFrom:
+#     secretKeyRef:
+#       name: other-secret
+#       key: thing
+
+# Use an externally-managed Secret for envFrom (e.g. ExternalSecrets, sealed-secrets,
+# vault-injectors). When set, the chart skips rendering its own Secret.
+secret:
+  existingSecret: ""
+
+# ─────────────────────────────────────────────────────────────────
+# Service
+# ─────────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 8443
+  # targetPort is ALWAYS taken from .Values.app.port — not configurable here.
+
+# ─────────────────────────────────────────────────────────────────
+# Ingress (annotations are passed through verbatim — see examples/)
+# ─────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  # - host: heart-reverie.example.com
+  #   paths:
+  #     - path: /
+  #       pathType: Prefix
+  tls: []
+  # - hosts:
+  #     - heart-reverie.example.com
+  #   secretName: heart-reverie-tls
+
+# ─────────────────────────────────────────────────────────────────
+# Persistence (story chapters, lore codex, usage logs)
+# PVC carries helm.sh/resource-policy: keep so `helm uninstall` does NOT
+# destroy story data. Delete the PVC manually if you really want to nuke it.
+# ─────────────────────────────────────────────────────────────────
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""        # empty → cluster default StorageClass
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  mountPath: /app/playground
+
+# ─────────────────────────────────────────────────────────────────
+# Optional system prompt overrides (read-only ConfigMap mount)
+# ─────────────────────────────────────────────────────────────────
+# When enabled, the chart materialises files in `prompts.files` as a ConfigMap
+# and mounts it at `prompts.mountPath` (OUTSIDE the playground PVC). It also
+# auto-injects PROMPT_FILE=<mountPath>/<first-filename> into the Secret.
+#
+# Caveat: ConfigMap mounts are READ-ONLY. The in-app Prompt Editor's save
+# endpoint will fail at runtime when this is enabled. Operators who want an
+# editable prompt should leave this off and seed the prompt by `kubectl cp`-ing
+# a system.md into the playground PVC after first install.
+prompts:
+  enabled: false
+  mountPath: /app/prompt-overrides
+  files: {}
+  # files:
+  #   system.md: |
+  #     ... vento template content ...
+
+# ─────────────────────────────────────────────────────────────────
+# TLS (in-pod cert handling)
+# ─────────────────────────────────────────────────────────────────
+# When `tls.existingSecret` is set, the chart projects two specific keys from
+# that Secret as /certs/cert.pem and /certs/key.pem (the paths entrypoint.sh
+# expects). The defaults (tls.crt / tls.key) match what cert-manager and any
+# kubernetes.io/tls Secret produces, so you can wire a stock TLS Secret in
+# directly without renaming keys.
+#
+# When unset, the chart mounts an emptyDir at /certs and entrypoint.sh
+# generates self-signed certs at boot.
+#
+# When env.HTTP_ONLY="true" (exact lowercase, matching the runtime contract
+# in entrypoint.sh and writer/server.ts), the /certs mount is skipped entirely.
+tls:
+  existingSecret: ""
+  certKey: tls.crt
+  keyKey: tls.key
+
+# ─────────────────────────────────────────────────────────────────
+# ServiceAccount
+# ─────────────────────────────────────────────────────────────────
+# The pod does not call the Kubernetes API; defaults skip SA creation entirely
+# and disable token automount. Enable `create` only if you need pod-identity
+# annotations (IRSA, Workload Identity, etc.) for outbound calls.
+serviceAccount:
+  create: false
+  name: ""
+  automount: false
+
+# ─────────────────────────────────────────────────────────────────
+# Pod / container security context
+# ─────────────────────────────────────────────────────────────────
+# Image declares USER 1000:0; defaults match.
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 0
+  fsGroup: 0
+  fsGroupChangePolicy: OnRootMismatch
+
+securityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+
+# ─────────────────────────────────────────────────────────────────
+# Probes
+# ─────────────────────────────────────────────────────────────────
+# By default the chart auto-injects `tcpSocket: { port: .Values.app.port }`
+# (no auth-free HTTP health endpoint exists yet). Set ANY handler key
+# (`tcpSocket`, `httpGet`, `exec`, `grpc`) to a non-empty value here to
+# fully override — your map is rendered verbatim and the chart will not
+# inject the default tcpSocket. Empty/absent handlers fall back to the
+# default; only the timing fields are merged through.
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# ─────────────────────────────────────────────────────────────────
+# Pod scheduling and resources
+# ─────────────────────────────────────────────────────────────────
+resources: {}
+  # limits:
+  #   cpu: 1000m
+  #   memory: 1Gi
+  # requests:
+  #   cpu: 200m
+  #   memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podAnnotations: {}
+podLabels: {}
+
+# Extra volumes / mounts (advanced — appended after chart-rendered ones)
+extraVolumes: []
+extraVolumeMounts: []
