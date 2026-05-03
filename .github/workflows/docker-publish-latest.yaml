@@ -171,6 +171,8 @@ jobs:
           TRIGGER_RUN_ID: ${{ github.run_id }}
           TRIGGER_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
+
           PAYLOAD=$(jq -n \
             --arg ref "${FORGEJO_PLUGINS_REF:-refs/heads/master}" \
             --arg trigger_source "github-docker-publish-latest" \
