@@ -29,7 +29,7 @@ PASSPHRASE=your-passphrase-here
 EOF
 
 podman run -d --name heartreverie \
-  -p 8443:8443 \
+  -p 8080:8080 \
   --env-file .env \
   -v ./playground:/app/playground:z \
   ghcr.io/jim60105/heartreverie:latest
@@ -54,7 +54,7 @@ deno task build:reader
 ./scripts/serve.sh
 ```
 
-伺服器預設跑在 `https://localhost:8443`。首次啟動會自動產生自簽 TLS 憑證以加密 Passphrase 與章節內容的傳輸；若部署於已終結 TLS 的反向代理之後，可設定 `HTTP_ONLY=true` 改用純 HTTP。
+伺服器預設跑在 `http://localhost:8080`，僅提供純 HTTP；若需要 TLS，請於上游反向代理或 Ingress controller 終結。
 
 ### 環境變數
 
@@ -62,7 +62,7 @@ deno task build:reader
 |------|:---:|--------|------|
 | `LLM_API_KEY` | ✅ | — | LLM 提供者 API 金鑰 |
 | `PASSPHRASE` | ✅ | — | 前端驗證用通關密語 |
-| `PORT` | — | `8443` | 監聽埠號 |
+| `PORT` | — | `8080` | 監聽埠號 |
 | `LLM_MODEL` | — | `deepseek/deepseek-v3.2` | LLM 模型 |
 | `LLM_API_URL` | — | `https://openrouter.ai/api/v1/chat/completions` | LLM 聊天完成端點 |
 | `LLM_TEMPERATURE` | — | `0.1` | 取樣溫度 |
@@ -80,9 +80,6 @@ deno task build:reader
 | `LOG_LEVEL` | — | `info` | 日誌等級：debug、info、warn、error |
 | `LOG_FILE` | — | — | JSON Lines 日誌檔案路徑（啟用檔案日誌與自動輪替） |
 | `PROMPT_FILE` | — | `playground/_prompts/system.md` | 自訂提示詞模板檔案路徑 |
-| `HTTP_ONLY` | — | — | 設為 `true` 關閉 TLS（反向代理部署） |
-| `CERT_FILE` | — | — | 自訂 TLS 憑證路徑 |
-| `KEY_FILE` | — | — | 自訂 TLS 金鑰路徑 |
 
 ## 🔌 外掛系統
 
@@ -150,7 +147,7 @@ deno task test:frontend                           # 僅前端
 
 ```bash
 podman run -d --name heartreverie \
-  -p 8443:8443 \
+  -p 8080:8080 \
   -e LLM_API_KEY=your-api-key \
   -e PASSPHRASE=your-passphrase \
   -v ./playground:/app/playground:z \

@@ -72,8 +72,6 @@ export interface AppConfig {
   readonly READER_DIR: string;
   readonly PLUGINS_DIR: string;
   readonly PORT: number;
-  readonly CERT_FILE: string | undefined;
-  readonly KEY_FILE: string | undefined;
   readonly LLM_API_URL: string;
   readonly LLM_MODEL: string;
   readonly LLM_TEMPERATURE: number;

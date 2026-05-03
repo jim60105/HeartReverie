@@ -27,8 +27,6 @@ function buildConfig(tmpDir: string): AppConfig {
     READER_DIR: "/nonexistent-reader",
     PLUGINS_DIR: "/nonexistent-plugins",
     PORT: 0,
-    CERT_FILE: undefined,
-    KEY_FILE: undefined,
     LLM_API_URL: "https://openrouter.ai/api/v1/chat/completions",
     LLM_MODEL: "test-model",
     LLM_TEMPERATURE: 0.1,

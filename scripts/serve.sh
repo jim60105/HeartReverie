@@ -16,26 +16,23 @@
 # ==================================================================
 #
 # Start the story writer backend server for local development.
-# Defaults to HTTPS with auto-generated self-signed certs; set HTTP_ONLY=true
-# to serve plain HTTP (e.g. behind a TLS-terminating reverse proxy).
-# Thin wrapper around entrypoint.sh that sets project-relative paths.
+# Speaks plain HTTP only — terminate TLS at an upstream proxy if needed.
 #
 # Usage:
 #   serve.sh [port]
 #
 # Arguments:
-#   port  Port number to listen on (default: 8443)
-#
-# Requirements:
-#   - openssl  (for certificate generation)
-#   - deno     (for the backend server)
+#   port  Port number to listen on (default: 8080)
 #
 # Examples:
-#   ./scripts/serve.sh                       # Serve on https://localhost:8443
-#   ./scripts/serve.sh 9000                  # Serve on https://localhost:9000
-#   HTTP_ONLY=true ./scripts/serve.sh 9000   # Serve on http://localhost:9000
+#   ./scripts/serve.sh        # Serve on http://localhost:8080
+#   ./scripts/serve.sh 9000   # Serve on http://localhost:9000
 
 set -euo pipefail
+# umask 0002 is load-bearing: matches the container's `sh -c` CMD shim so
+# that directories created at runtime via Deno.mkdir({ mode: 0o775 }) are
+# group-writable (Deno honours the inherited process umask on mkdir).
+umask 0002
 
 readonly PROJECT_DIR="$HOME/repos/HeartReverie"
 readonly PLUGINS_DIR="$HOME/repos/HeartReverie_Plugins"
@@ -48,20 +45,22 @@ if [[ -n "${1:-}" ]]; then
     fi
 fi
 
-export PORT="${1:-8443}"
+export PORT="${1:-8080}"
 export PLAYGROUND_DIR="${PROJECT_DIR}/playground"
 export READER_DIR="${PROJECT_DIR}/reader-dist"
-export CERT_DIR="${PROJECT_DIR}/.certs"
 export PLUGIN_DIR="${PLUGINS_DIR}"
 
-if [[ "${HTTP_ONLY:-}" == "true" ]]; then
-    SCHEME="http"
-else
-    SCHEME="https"
-fi
-
-echo "🚀 Story writer starting on ${SCHEME}://localhost:${PORT}"
+echo "🚀 Story writer starting on http://localhost:${PORT}"
 echo "   Project: ${PROJECT_DIR}"
 echo "   Press Ctrl+C to stop"
 
-exec "${PROJECT_DIR}/entrypoint.sh" "${PROJECT_DIR}/writer/server.ts"
+cd "$PROJECT_DIR"
+
+if ! command -v deno >/dev/null 2>&1; then
+    echo "❌ deno is required but was not found in PATH" >&2
+    exit 1
+fi
+
+exec deno run \
+    --allow-net --allow-read --allow-write --allow-env --allow-run \
+    writer/server.ts

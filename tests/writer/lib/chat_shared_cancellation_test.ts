@@ -52,8 +52,6 @@ function buildConfig(tmpDir: string): AppConfig {
     READER_DIR: "/x",
     PLUGINS_DIR: "/x",
     PORT: 0,
-    CERT_FILE: undefined,
-    KEY_FILE: undefined,
     LLM_API_URL: "https://example.test/chat/completions",
     LLM_MODEL: "default-model",
     LLM_TEMPERATURE: 0.1,

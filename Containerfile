@@ -72,13 +72,6 @@ RUN deno run -A npm:vue-tsc@^2.2.8 --noEmit && \
 FROM docker.io/denoland/deno:debian AS final
 
 ARG UID
-ARG TARGETARCH
-ARG TARGETVARIANT
-
-# Install openssl (required by entrypoint for TLS cert generation)
-RUN --mount=type=cache,id=apt-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/apt \
-    --mount=type=cache,id=aptlists-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/lib/apt/lists \
-    apt-get update && apt-get install -y --no-install-recommends openssl
 
 # Create non-root user (OpenShift compatible: UID:GID 0)
 RUN useradd -l -u $UID -g 0 -m -s /bin/sh -N appuser
@@ -86,7 +79,6 @@ RUN useradd -l -u $UID -g 0 -m -s /bin/sh -N appuser
 # Create directories with proper permissions
 RUN install -d -m 775 -o $UID -g 0 /app && \
     install -d -m 775 -o $UID -g 0 /licenses && \
-    install -d -m 775 -o $UID -g 0 /certs && \
     install -d -m 775 -o $UID -g 0 /deno-dir/ && \
     install -d -m 775 -o $UID -g 0 /app/playground
 
@@ -106,23 +98,25 @@ COPY --link --chown=$UID:0 --chmod=775 --from=frontend-build /app/reader-dist/ /
 COPY --link --chown=$UID:0 --chmod=775 assets/ /app/assets/
 COPY --link --chown=$UID:0 --chmod=775 plugins/ /app/plugins/
 
-# Copy entrypoint script
-COPY --link --chown=$UID:0 --chmod=775 entrypoint.sh /app/entrypoint.sh
-
 ENV DENO_DIR=/deno-dir
 
 WORKDIR /app
 
 VOLUME ["/app/playground"]
 
-EXPOSE 8443
+EXPOSE 8080
 
 USER $UID:0
 
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["writer/server.ts"]
+# `dumb-init` forwards signals as PID 1; the inline `sh -c` shim sets
+# `umask 0002` so directories Deno creates at runtime via Deno.mkdir
+# (which honours the inherited umask) preserve OpenShift arbitrary-UID
+# + shared-GID-0 group-write semantics. The trailing `exec` replaces the
+# shell with Deno so signal forwarding from dumb-init reaches it directly.
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["sh", "-c", "umask 0002 && exec deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts"]
 
 ARG VERSION
 ARG RELEASE

@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
-- File System Access API reader mode and IndexedDB directory-handle persistence have been removed. The reader now exclusively loads stories from the writer backend over HTTP/WebSocket; HTTPS is no longer strictly required for any frontend feature, though it remains the default for transport security.
+- TLS support has been removed from the application container and Helm chart. The server now only listens on plain HTTP (default port `8080`, previously `8443`). The `entrypoint.sh` script has been deleted; `scripts/serve.sh` and the `Containerfile` start `deno run` directly. The `HTTP_ONLY`, `CERT_FILE`, and `KEY_FILE` environment variables are no longer recognized. The Helm chart's top-level `tls.*` values, the `/certs` volume mount, and self-signed certificate generation have all been removed. **Operators are now responsible for terminating TLS at an upstream reverse proxy or Kubernetes Ingress controller.**
+- File System Access API reader mode and IndexedDB directory-handle persistence have been removed. The reader now exclusively loads stories from the writer backend over HTTP/WebSocket.
 
 ### Added
 

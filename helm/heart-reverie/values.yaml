@@ -24,7 +24,7 @@ strategy:
 # and the PORT env var injected into the rendered Secret. Override this ONE
 # value if you need a different listening port.
 app:
-  port: 8443
+  port: 8080
 
 # ─────────────────────────────────────────────────────────────────
 # Environment variables
@@ -73,11 +73,6 @@ env:
   # LOG_FILE: ""
   # LLM_LOG_FILE: "playground/_logs/llm.jsonl"
 
-  # ── TLS / HTTP ────────────────────────────────────────────────────
-  # HTTP_ONLY: "true"      # exact lowercase; skip in-pod TLS, serve plain HTTP
-  # CERT_FILE: ""          # set ONLY if you bind-mount certs at unusual paths
-  # KEY_FILE: ""
-
 # Extra env entries that should NOT go into the Secret (e.g. references to
 # other Secrets via valueFrom). Appended verbatim to the container's `env:`.
 extraEnv: []
@@ -97,7 +92,7 @@ secret:
 # ─────────────────────────────────────────────────────────────────
 service:
   type: ClusterIP
-  port: 8443
+  port: 8080
   # targetPort is ALWAYS taken from .Values.app.port — not configurable here.
 
 # ─────────────────────────────────────────────────────────────────
@@ -149,25 +144,6 @@ prompts:
   # files:
   #   system.md: |
   #     ... vento template content ...
-
-# ─────────────────────────────────────────────────────────────────
-# TLS (in-pod cert handling)
-# ─────────────────────────────────────────────────────────────────
-# When `tls.existingSecret` is set, the chart projects two specific keys from
-# that Secret as /certs/cert.pem and /certs/key.pem (the paths entrypoint.sh
-# expects). The defaults (tls.crt / tls.key) match what cert-manager and any
-# kubernetes.io/tls Secret produces, so you can wire a stock TLS Secret in
-# directly without renaming keys.
-#
-# When unset, the chart mounts an emptyDir at /certs and entrypoint.sh
-# generates self-signed certs at boot.
-#
-# When env.HTTP_ONLY="true" (exact lowercase, matching the runtime contract
-# in entrypoint.sh and writer/server.ts), the /certs mount is skipped entirely.
-tls:
-  existingSecret: ""
-  certKey: tls.crt
-  keyKey: tls.key
 
 # ─────────────────────────────────────────────────────────────────
 # ServiceAccount

@@ -29,15 +29,6 @@ import { createApp } from "./app.ts";
 await initLogger();
 const log = createLogger("system");
 
-const certFile = config.CERT_FILE;
-const keyFile = config.KEY_FILE;
-const httpOnly = Deno.env.get("HTTP_ONLY") === "true";
-
-if (!httpOnly && (!certFile || !keyFile)) {
-  log.error("CERT_FILE and KEY_FILE environment variables are required (set HTTP_ONLY=true to disable TLS)");
-  Deno.exit(1);
-}
-
 if (!Deno.env.get("LLM_API_KEY")) {
   log.warn("LLM_API_KEY is not set — chat functionality will not work");
 }
@@ -61,24 +52,17 @@ const app = createApp({
   verifyPassphrase,
 });
 
-// ── Start server (HTTPS by default, HTTP when HTTP_ONLY=true) ───
-const protocol = httpOnly ? "http" : "https";
-/** @type {Deno.ServeOptions} */
-const serveOptions = {
+// ── Start server (plain HTTP only — TLS is the operator's job) ──
+const serveOptions: Deno.ServeTcpOptions = {
   port: config.PORT,
   hostname: "::",
   onListen({ port }) {
-    log.info(`${protocol.toUpperCase()} server listening on ${protocol}://localhost:${port}`, {
-      protocol,
+    log.info(`HTTP server listening on http://localhost:${port}`, {
       port,
       readerDir: config.READER_DIR,
       playgroundDir: config.PLAYGROUND_DIR,
     });
   },
-  ...(httpOnly ? {} : {
-    cert: Deno.readTextFileSync(certFile!),
-    key: Deno.readTextFileSync(keyFile!),
-  }),
 };
 
 Deno.serve(serveOptions, (req, info) => app.fetch(req, info));
