@@ -66,19 +66,18 @@ The application SHALL display a chapter progress indicator in the header compone
 - **THEN** the chapter progress indicator SHALL not be visible, controlled by a Vue directive bound to the composable's reactive state
 
 ### Requirement: Current chapter state tracking
-The `useChapterNav()` composable SHALL synchronize the current chapter index with the Vue Router route params when in backend mode. When `currentIndex` changes, the composable SHALL call `router.replace()` to update the URL to `/:series/:story/chapter/:chapter` (1-indexed). On initialization, the composable SHALL read the `:chapter` route param (if present) and set `currentIndex` accordingly. In FSA mode, the composable SHALL NOT interact with the router — URL state is not tracked for local file reading.
 
-#### Scenario: URL updates on navigation in backend mode
-- **WHEN** the user navigates to the third chapter in backend mode (composable's `currentIndex` becomes `2`)
+The `useChapterNav()` composable SHALL synchronize the current chapter index with the Vue Router route params. When `currentIndex` changes, the composable SHALL call `router.replace()` to update the URL to `/:series/:story/chapter/:chapter` (1-indexed). On initialization, the composable SHALL read the `:chapter` route param (if present) and set `currentIndex` accordingly.
+
+#### Scenario: URL updates on navigation
+
+- **WHEN** the user navigates to the third chapter (composable's `currentIndex` becomes `2`)
 - **THEN** the composable SHALL call `router.replace()` to update the URL to `/:series/:story/chapter/3`
 
 #### Scenario: Route param sets initial chapter
+
 - **WHEN** the page is loaded with route `/my-series/my-story/chapter/5` and the story contains at least 5 chapters
 - **THEN** the composable SHALL read the `:chapter` route param, parse it as an integer, and set `currentIndex` to `4`
-
-#### Scenario: FSA mode ignores router
-- **WHEN** the composable is in FSA mode
-- **THEN** chapter navigation SHALL NOT call `router.replace()` or read route params; the URL SHALL remain at `/`
 
 ### Requirement: Scroll to top on chapter change
 The `useChapterNav()` composable SHALL use a `watch` effect on `currentIndex` to scroll the viewport to the top of the content area when the chapter changes. The scroll position SHALL be offset by the height of the sticky header component and the padding-top of the `<main>` element so that the first line of chapter content is not covered.
@@ -127,17 +126,6 @@ The rendering pipeline SHALL strip `<user_message>…</user_message>` blocks and
 - **WHEN** a chapter's raw content contains a `<user_message>…</user_message>` block
 - **THEN** the rendering pipeline SHALL remove the block and its content so that only the AI-generated story content is displayed to the reader
 
-### Requirement: Session restoration error handling
-The `useChapterNav()` composable's session restoration logic SHALL wrap `handleDirectorySelected` in a try/catch block. If a `NotFoundError` or any other error occurs (stale/deleted directory), it SHALL silently clear the stored handle from IndexedDB and return without crashing.
-
-#### Scenario: Stale directory handle
-- **WHEN** a previously saved directory handle points to a directory that no longer exists
-- **THEN** the composable's session restoration logic SHALL catch the `NotFoundError`, clear the stale handle from IndexedDB, and return gracefully without console errors
-
-#### Scenario: Valid directory handle
-- **WHEN** a previously saved directory handle is still valid
-- **THEN** the composable SHALL restore the session normally as before
-
 ### Requirement: Single chapter display
 The application SHALL display only one chapter at a time. The Vue component SHALL reactively render only the content corresponding to `currentIndex`. When navigating to a new chapter, Vue's reactivity SHALL replace the displayed content without manual DOM manipulation.
 
@@ -167,13 +155,13 @@ The `useChapterNav()` composable SHALL expose a reactive computed property `isLa
 
 ### Requirement: Vue composable API contract
 
-The `useChapterNav()` composable SHALL return a well-typed interface including at minimum: `currentIndex` (Ref<number>), `chapters` (Ref<ChapterData[]>), `totalChapters` (ComputedRef<number>), `isFirst` (ComputedRef<boolean>), `isLast` (ComputedRef<boolean>), `isLastChapter` (ComputedRef<boolean>), **`currentContent` (`ShallowRef<string>`)**, **`renderEpoch` (Ref<number>)**, `mode` (Ref<"fsa" | "backend">), `folderName` (Ref<string>), `next()`, `previous()`, `reloadToLast(): Promise<void>`, **`refreshAfterEdit(targetChapter: number): Promise<void>`**, `loadFromFSA(dirHandle)`, `loadFromBackend(series, story, startChapter?)`, and `getBackendContext()`.
+The `useChapterNav()` composable SHALL return a well-typed interface including at minimum: `currentIndex` (Ref<number>), `chapters` (Ref<ChapterData[]>), `totalChapters` (ComputedRef<number>), `isFirst` (ComputedRef<boolean>), `isLast` (ComputedRef<boolean>), `isLastChapter` (ComputedRef<boolean>), **`currentContent` (`ShallowRef<string>`)**, **`renderEpoch` (Ref<number>)**, `folderName` (Ref<string>), `next()`, `previous()`, `reloadToLast(): Promise<void>`, **`refreshAfterEdit(targetChapter: number): Promise<void>`**, `loadFromBackend(series, story, startChapter?)`, and `getBackendContext()`.
 
 `currentContent` SHALL be implemented as a `shallowRef<string>` so the composable can use `triggerRef` to invalidate dependents when committing a string that is `===` to the previous value. All writes to `currentContent` from inside `useChapterNav` SHALL go through a private `commitContent(next: string): void` helper which (a) assigns `next` if different OR calls `triggerRef(currentContent)` if equal, and (b) always increments `renderEpoch`. Direct `currentContent.value = ...` assignments SHALL NOT exist outside `commitContent`. Consumers outside `useChapterNav` SHALL treat `currentContent` as read-only.
 
 `renderEpoch` SHALL be a `ref<number>` exposed on the return value, monotonically non-decreasing for the lifetime of the page, used by other composables and components (notably the sidebar relocation watch in `ContentArea.vue` and the `tokens` computed in `ChapterContent.vue`) to react to render-invalidation events that don't surface as a `currentContent` reference change.
 
-The `next()` and `previous()` methods SHALL update `currentIndex`, which triggers a `watch` effect that calls `syncRoute()` to update the URL via `router.replace()` in backend mode. The `loadFromBackend(series, story, startChapter?)` method SHALL load chapter data from the backend API, set `currentIndex` to `startChapter` (clamped to valid range) or 0, and call `syncRoute()` to update the URL. Story-level navigation (e.g., from the story selector) SHALL use `navigateToStory()` in `useStorySelector` which calls `router.push()`, and the route watcher in `useChapterNav` SHALL react to load the new story.
+The `next()` and `previous()` methods SHALL update `currentIndex`, which triggers a `watch` effect that calls `syncRoute()` to update the URL via `router.replace()`. The `loadFromBackend(series, story, startChapter?)` method SHALL load chapter data from the backend API, set `currentIndex` to `startChapter` (clamped to valid range) or 0, and call `syncRoute()` to update the URL. Story-level navigation (e.g., from the story selector) SHALL use `navigateToStory()` in `useStorySelector` which calls `router.push()`, and the route watcher in `useChapterNav` SHALL react to load the new story.
 
 The `reloadToLast()` method SHALL reload chapters and update the route to the **new last chapter**. It is reserved for callers whose semantics genuinely are "go to the new last chapter": post-LLM-stream navigation in `MainLayout`, the rewind toolbar action, and the branch toolbar action. **The edit-save flow SHALL NOT use `reloadToLast()`; it SHALL use `refreshAfterEdit(targetChapter)` instead so the user stays on the chapter they edited.**
 
@@ -183,11 +171,11 @@ This change does NOT relocate ownership of the initial deep-link backend load aw
 
 #### Scenario: Composable returns typed reactive interface
 - **WHEN** a Vue component calls `useChapterNav()`
-- **THEN** the returned object SHALL contain typed reactive refs (`currentIndex`, `chapters`, `currentContent` as `ShallowRef<string>`, `renderEpoch`, `mode`, `folderName`), computed properties (`totalChapters`, `isFirst`, `isLast`, `isLastChapter`), and methods (`next`, `previous`, `loadFromFSA`, `loadFromBackend`, `reloadToLast`, `refreshAfterEdit`, `getBackendContext`)
+- **THEN** the returned object SHALL contain typed reactive refs (`currentIndex`, `chapters`, `currentContent` as `ShallowRef<string>`, `renderEpoch`, `folderName`), computed properties (`totalChapters`, `isFirst`, `isLast`, `isLastChapter`), and methods (`next`, `previous`, `loadFromBackend`, `reloadToLast`, `refreshAfterEdit`, `getBackendContext`)
 
 #### Scenario: reloadToLast navigates to the newest chapter
 - **WHEN** the chat input component calls `reloadToLast()` after sending a message
-- **THEN** the composable SHALL reload chapters from the current source (backend API or FSA), set `currentIndex` to the last chapter, commit the new content via `commitContent`, and call `syncRoute()` to update the URL in backend mode
+- **THEN** the composable SHALL reload chapters from the backend API, set `currentIndex` to the last chapter, commit the new content via `commitContent`, and call `syncRoute()` to update the URL
 
 #### Scenario: refreshAfterEdit stays on the edited chapter
 - **WHEN** `ChapterContent.vue#saveEdit` calls `refreshAfterEdit(targetChapter)`
@@ -197,8 +185,8 @@ This change does NOT relocate ownership of the initial deep-link backend load aw
 - **WHEN** the prompt preview component calls `useChapterNav()`
 - **THEN** it SHALL have access to `getBackendContext()` which returns `{ series, story, isBackendMode }` to construct API requests for prompt rendering
 
-#### Scenario: next() updates route in backend mode
-- **WHEN** the user clicks the Next button in backend mode viewing chapter 3 of 10
+#### Scenario: next() updates route
+- **WHEN** the user clicks the Next button viewing chapter 3 of 10
 - **THEN** `next()` SHALL increment `currentIndex` to `3`, and the `watch(currentIndex)` effect SHALL call `syncRoute()` → `router.replace()` to update the URL to `/:series/:story/chapter/4`
 
 #### Scenario: Story loading triggers via route watcher
@@ -245,13 +233,6 @@ The `useChapterNav()` composable SHALL expose `refreshAfterEdit(targetChapter: n
 #### Scenario: Concurrent edit refreshes are token-protected
 - **WHEN** `refreshAfterEdit(2)` is in flight and the user triggers a second save before the first completes
 - **THEN** the second call SHALL increment `loadToken` and the first call's results SHALL be discarded, leaving the composable in a consistent state aligned with the second call
-
-### Requirement: Dual-mode preserved via composable
-The `useChapterNav()` composable SHALL support both FSA mode and backend mode. The active mode SHALL be tracked as a reactive ref (e.g., `mode: Ref<'fsa' | 'backend'>`). Switching modes SHALL clear previous state and load from the new source.
-
-#### Scenario: Mode switching clears state
-- **WHEN** the user switches from FSA mode to backend mode (or vice versa)
-- **THEN** the composable SHALL reset `chapters`, `currentIndex`, and cached content before loading from the new source
 
 ### Requirement: Singleton initialization guard for side effects
 The `useChapterNav()` composable SHALL initialize side effects (polling intervals, route param watchers, `watch` effects for scroll-to-top) exactly once on the first invocation, using a module-level `initialized` flag as a guard. Subsequent calls to `useChapterNav()` from other components SHALL return the shared reactive state and methods without creating duplicate polling timers, event listeners, or watchers. The composable SHALL set up a `watch` on the route's `:chapter` param to sync `currentIndex` when the route changes externally (e.g., browser back/forward). This follows the standard Vue singleton composable pattern.
@@ -368,7 +349,7 @@ The button SHALL carry a stable CSS class hook (`header-btn--boundary`) on its r
 
 ### Requirement: Boundary jump helpers in useChapterNav
 
-The `useChapterNav()` composable SHALL expose two new public functions, `goToFirst(): void` and `goToLast(): void`. Both SHALL be no-ops when `chapters.value.length === 0`. Both SHALL route through the existing `loadFSAChapter(index)` helper when `mode.value === "fsa"` and through `navigateTo(index)` when `mode.value === "backend"`. Both SHALL therefore inherit the existing `chapter:change` hook dispatch and `commitContent()` semantics — neither helper SHALL bypass those side-effects by mutating `currentIndex` directly.
+The `useChapterNav()` composable SHALL expose two new public functions, `goToFirst(): void` and `goToLast(): void`. Both SHALL be no-ops when `chapters.value.length === 0`. Both SHALL route through `navigateTo(index)` and SHALL therefore inherit the existing `chapter:change` hook dispatch and `commitContent()` semantics — neither helper SHALL bypass those side-effects by mutating `currentIndex` directly.
 
 #### Scenario: goToFirst is a no-op on empty chapter list
 
@@ -379,16 +360,6 @@ The `useChapterNav()` composable SHALL expose two new public functions, `goToFir
 
 - **WHEN** `chapters.value.length === 0` and `goToLast()` is invoked
 - **THEN** the function SHALL return without dispatching any hook or mutating any reactive ref
-
-#### Scenario: Boundary helpers route through FSA path in FSA mode
-
-- **WHEN** `mode.value === "fsa"`, `chapters.value.length === 5`, and `goToLast()` is invoked
-- **THEN** the helper SHALL call `loadFSAChapter(4)` (not `navigateTo(4)`) so the FSA file-read pathway runs and chapter `4`'s content is freshly read from the local file handle
-
-#### Scenario: goToFirst routes through FSA path in FSA mode
-
-- **WHEN** `mode.value === "fsa"`, `chapters.value.length === 5`, `currentIndex.value === 3`, and `goToFirst()` is invoked
-- **THEN** the helper SHALL call `loadFSAChapter(0)` (not `navigateTo(0)`)
 
 #### Scenario: Single-chapter story disables both boundary buttons
 

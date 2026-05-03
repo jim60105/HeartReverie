@@ -18,8 +18,8 @@ The hook system SHALL define the following ordered hook stages that plugins can 
 - `chapter:render:after`: Invoked in the frontend at the end of `useMarkdownRenderer.renderChapter()`, after markdown parsing, DOMPurify sanitization, and placeholder reinjection have produced the final `RenderToken[]`. Plugins receive the tokens array by reference and can mutate it in place to add, remove, or decorate tokens. Dispatched once per chapter render, for every chapter (not just the last).
 - `chapter:dom:ready`: Invoked in the frontend AFTER Vue commits a chapter's `v-html` token render to the live DOM. Plugins receive a context object containing `container` (the chapter's root `HTMLElement`, e.g. `div.chapter-content`), `tokens` (the same `RenderToken[]` passed through `chapter:render:after`), `rawMarkdown` (the original chapter string), and `chapterIndex` (number, zero-based). Dispatched once on mount and on every subsequent render commit (e.g., when `tokens` change or `renderEpoch` bumps), for every chapter (not just the last). This stage is the canonical entry point for plugins that need to inspect, measure, or annotate live rendered DOM nodes (`Range` construction, `IntersectionObserver` attachment, computed-style reads, etc.) and MUST NOT be used for content mutation that would re-trigger a render commit cycle.
 - `chapter:dom:dispose`: Invoked in the frontend right before a `ChapterContent` instance is unmounted (e.g., navigation to a different route, story switch, or component teardown). Plugins receive a context object containing `container` (the same `HTMLElement` previously passed via `chapter:dom:ready`) and `chapterIndex` (number). Plugins SHALL use this to release any references they hold keyed by the container (e.g., `Range` objects registered against `Highlight` instances), preventing detached-DOM leaks across long sessions.
-- `story:switch`: Invoked in the frontend when the active story changes — dispatched from both `useChapterNav.loadFromBackend()` and `useChapterNav.loadFromFSA()` after the new story's metadata is committed to module state but before chapter content is displayed. Plugins can reset or initialise per-story state.
-- `chapter:change`: Invoked in the frontend whenever the currently displayed chapter index changes — dispatched from `useChapterNav.navigateTo()`, `loadFSAChapter()`, `reloadToLast()`, and the route-watcher branches inside `initRouteSync()`. The hook SHALL also be dispatched once during initial story load (with `previousIndex: null`).
+- `story:switch`: Invoked in the frontend when the active story changes — dispatched from `useChapterNav.loadFromBackend()` after the new story's metadata is committed to module state but before chapter content is displayed. Plugins can reset or initialise per-story state.
+- `chapter:change`: Invoked in the frontend whenever the currently displayed chapter index changes — dispatched from `useChapterNav.navigateTo()`, `reloadToLast()`, and the route-watcher branches inside `initRouteSync()`. The hook SHALL also be dispatched once during initial story load (with `previousIndex: null`).
 - `action-button:click`: Invoked in the frontend when the user clicks a plugin-contributed button in `PluginActionBar`. The context object SHALL contain `buttonId` (string), `pluginName` (string identifying the plugin that owns the button), `series` (string), `name` (story name), `storyDir` (string), `lastChapterIndex` (number or null), and the curried helper functions `runPluginPrompt(promptFile, opts?)`, `notify(input)`, and `reload()`. The dispatcher SHALL only invoke handlers whose owning plugin matches `context.pluginName`, treat the stage as async (await all handler return values in priority order), keep the clicked button's qualified `pendingKey` (`${pluginName}:${buttonId}`) until the aggregate dispatch promise settles, and on any handler rejection surface a default error notification via the toast system unless the handler already emitted one.
 
 Each stage SHALL have a well-defined context object that handlers receive and can modify.
@@ -462,27 +462,22 @@ Handler return values SHALL be ignored (informational stage).
 The `story:switch` frontend hook stage SHALL pass a context object with the following shape:
 - `previousSeries: string | null` — the series name that was active before this switch, or `null` if no story was previously loaded.
 - `previousStory: string | null` — the story name that was active before this switch, or `null` if no story was previously loaded.
-- `series: string | null` — the new series name, or `null` when switching into FSA (local file) mode.
-- `story: string | null` — the new story name, or `null` when switching into FSA mode.
-- `mode: "fsa" | "backend"` — the new reader mode after the switch.
+- `series: string` — the new series name.
+- `story: string` — the new story name.
 
-The hook SHALL be dispatched from both `useChapterNav.loadFromBackend()` and `useChapterNav.loadFromFSA()` after the module's internal `currentSeries`, `currentStory`, and `mode` state has been updated, and before the first `chapter:change` dispatch for the new story.
+The hook SHALL be dispatched from `useChapterNav.loadFromBackend()` after the module's internal `currentSeries` and `currentStory` state has been updated, and before the first `chapter:change` dispatch for the new story.
 
 The hook SHALL NOT fire when `loadFromBackend()` is called with the same series and story already loaded (i.e., only real transitions dispatch). Reloads of the same story (e.g., `reloadToLast()`) SHALL NOT dispatch `story:switch`.
 
 Handler return values SHALL be ignored (informational stage).
 
-#### Scenario: Switch from no story to backend story
+#### Scenario: Switch from no story to a backend story
 - **WHEN** `loadFromBackend("seriesA", "storyA")` is called as the first load
-- **THEN** the hook SHALL dispatch with `previousSeries: null, previousStory: null, series: "seriesA", story: "storyA", mode: "backend"`
+- **THEN** the hook SHALL dispatch with `previousSeries: null, previousStory: null, series: "seriesA", story: "storyA"`
 
 #### Scenario: Switch between two backend stories
 - **WHEN** `loadFromBackend("seriesB", "storyB")` is called while `seriesA/storyA` is active
-- **THEN** the hook SHALL dispatch with `previousSeries: "seriesA", previousStory: "storyA", series: "seriesB", story: "storyB", mode: "backend"`
-
-#### Scenario: Switch into FSA mode
-- **WHEN** `loadFromFSA(handle)` is called while a backend story was active
-- **THEN** the hook SHALL dispatch with `previousSeries` and `previousStory` set to the prior backend values, `series: null, story: null, mode: "fsa"`
+- **THEN** the hook SHALL dispatch with `previousSeries: "seriesA", previousStory: "storyA", series: "seriesB", story: "storyB"`
 
 #### Scenario: Reloading the same story does not fire story:switch
 - **WHEN** `reloadToLast()` is called for the currently active story
@@ -493,20 +488,19 @@ Handler return values SHALL be ignored (informational stage).
 The `chapter:change` frontend hook stage SHALL pass a context object with the following shape:
 - `previousIndex: number | null` — the zero-based index of the chapter previously visible, or `null` on the initial dispatch immediately following a `story:switch`.
 - `index: number` — the zero-based index of the newly visible chapter.
-- `chapter: number` — the one-based chapter number (typically `index + 1`, or the `ChapterData.number` field for backend mode).
-- `series: string | null` — the active series, or `null` in FSA mode.
-- `story: string | null` — the active story, or `null` in FSA mode.
-- `mode: "fsa" | "backend"` — the current reader mode.
+- `chapter: number` — the one-based chapter number (typically `index + 1`, or the `ChapterData.number` field).
+- `series: string` — the active series.
+- `story: string` — the active story.
 
-The hook SHALL be dispatched from exactly one canonical site per state transition to avoid duplicate dispatches. The canonical dispatch sites are: `navigateTo()`, `loadFSAChapter()`, `reloadToLast()`, the chapter-param branch of the route watcher inside `initRouteSync()`, and once during initial story load in `loadFromBackend()` / `loadFromFSA()` after `story:switch` has fired.
+The hook SHALL be dispatched from exactly one canonical site per state transition to avoid duplicate dispatches. The canonical dispatch sites are: `navigateTo()`, `reloadToLast()`, the chapter-param branch of the route watcher inside `initRouteSync()`, and once during initial story load in `loadFromBackend()` after `story:switch` has fired.
 
 The hook SHALL NOT fire when the new index equals the current index (no-op navigation).
 
 Handler return values SHALL be ignored (informational stage).
 
-#### Scenario: Navigate next in backend mode
-- **WHEN** `next()` is called while `currentIndex === 2` in backend mode for `series/story`
-- **THEN** the hook SHALL dispatch with `previousIndex: 2, index: 3, chapter: 3 or matching ChapterData.number, series, story, mode: "backend"`
+#### Scenario: Navigate next
+- **WHEN** `next()` is called while `currentIndex === 2` for `series/story`
+- **THEN** the hook SHALL dispatch with `previousIndex: 2, index: 3, chapter: 3 or matching ChapterData.number, series, story`
 
 #### Scenario: Initial load after story:switch
 - **WHEN** `loadFromBackend("s", "st")` has just dispatched `story:switch` and committed the initial chapter index
@@ -515,10 +509,6 @@ Handler return values SHALL be ignored (informational stage).
 #### Scenario: No-op navigation does not fire
 - **WHEN** a route watcher triggers with a chapter param equal to the current `currentIndex + 1`
 - **THEN** the `chapter:change` hook SHALL NOT be dispatched
-
-#### Scenario: FSA mode dispatch
-- **WHEN** `loadFSAChapter(1)` is called from index 0 in FSA mode
-- **THEN** the hook SHALL dispatch with `series: null, story: null, mode: "fsa", previousIndex: 0, index: 1, chapter: 2`
 
 ### Requirement: TypeScript type extensions for new frontend hook stages
 

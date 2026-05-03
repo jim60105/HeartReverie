@@ -66,7 +66,7 @@ All Vue components SHALL use the `<script setup lang="ts">` syntax with the Comp
 
 ### Requirement: Composables for shared state
 
-Shared reactive state SHALL be encapsulated in composable functions following the `use*()` naming convention. The following composables SHALL be implemented: `useAuth()` (passphrase state and verification), `useChapterNav()` (chapter index, content, navigation, polling, **`renderEpoch` invalidation counter, `refreshAfterEdit(targetChapter)` entry point**), `usePlugins()` (plugin loading, hook dispatcher initialization, **`pluginsReady` and `pluginsSettled` reactive readiness flags**), `useFileReader()` (File System Access API handles, IndexedDB persistence), `useStorySelector()` (series/story reactive selection state), and `usePromptEditor()` (template content, localStorage sync). Composable files SHALL reside in `reader-src/src/composables/` and SHALL export typed return interfaces.
+Shared reactive state SHALL be encapsulated in composable functions following the `use*()` naming convention. The following composables SHALL be implemented: `useAuth()` (passphrase state and verification), `useChapterNav()` (chapter index, content, navigation, polling, **`renderEpoch` invalidation counter, `refreshAfterEdit(targetChapter)` entry point**), `usePlugins()` (plugin loading, hook dispatcher initialization, **`pluginsReady` and `pluginsSettled` reactive readiness flags**), `useStorySelector()` (series/story reactive selection state), and `usePromptEditor()` (template content, localStorage sync). Composable files SHALL reside in `reader-src/src/composables/` and SHALL export typed return interfaces.
 
 #### Scenario: useAuth composable provides reactive auth state
 - **WHEN** a component calls `useAuth()`
@@ -74,15 +74,11 @@ Shared reactive state SHALL be encapsulated in composable functions following th
 
 #### Scenario: useChapterNav composable manages navigation
 - **WHEN** a component calls `useChapterNav()`
-- **THEN** it SHALL receive reactive refs for `currentIndex`, `chapters`, `totalChapters`, `isLastChapter`, `currentContent` (a `shallowRef`), and `renderEpoch`, plus functions `goNext()`, `goPrev()`, `loadChapters()`, `refreshAfterEdit(targetChapter)`, and `bumpRenderEpoch()`
+- **THEN** it SHALL receive reactive refs for `currentIndex`, `chapters`, `totalChapters`, `isLastChapter`, `currentContent` (a `shallowRef`), and `renderEpoch`, plus functions `next()`, `previous()`, `loadFromBackend()`, `refreshAfterEdit(targetChapter)`, and `bumpRenderEpoch()`
 
 #### Scenario: usePlugins composable wraps hook dispatcher
 - **WHEN** a component calls `usePlugins()`
 - **THEN** it SHALL receive a `hookDispatcher` instance (FrontendHookDispatcher), a reactive `plugins` ref listing loaded plugins, an `initPlugins()` function, and reactive `pluginsReady: Ref<boolean>` and `pluginsSettled: Ref<boolean>` flags
-
-#### Scenario: useFileReader composable wraps FSA and IndexedDB
-- **WHEN** a component calls `useFileReader()`
-- **THEN** it SHALL receive reactive refs for `directoryHandle` and `files`, and functions `openDirectory()`, `tryRestoreSession()`, `readFile()`
 
 #### Scenario: useStorySelector composable provides cascading state
 - **WHEN** a component calls `useStorySelector()`
@@ -105,7 +101,7 @@ All mutable UI state SHALL use Vue reactivity primitives: `ref()` for scalar val
 - **THEN** it SHALL be declared with `computed()` and SHALL automatically update when dependencies change
 
 #### Scenario: Module-level reactive singletons are the approved shared state pattern
-- **WHEN** a composable needs to share state across multiple components (e.g., `useAuth`, `useFileReader`, `usePlugins`, `useChapterNav`)
+- **WHEN** a composable needs to share state across multiple components (e.g., `useAuth`, `usePlugins`, `useChapterNav`)
 - **THEN** it SHALL declare module-scoped `ref()` or `reactive()` instances outside the composable function body, and the composable function SHALL return references to these module-level reactive objects — this is the approved singleton pattern replacing vanilla JS module-scoped `let` variables
 
 #### Scenario: No non-reactive module-scoped mutable state
@@ -280,7 +276,7 @@ The component SHALL NOT import or branch on plugin-specific Vue components (such
 
 ### Requirement: ContentArea gates ChapterContent on pluginsSettled
 
-`reader-src/src/components/ContentArea.vue` SHALL render `<ChapterContent>` only when both `currentContent` (from `useChapterNav()`) is non-empty AND `pluginsSettled` (from `usePlugins()`) is `true`. When `currentContent` is non-empty but `pluginsSettled` is `false`, `ContentArea` SHALL render a minimal loading placeholder so the reader does not show a half-rendered chapter. When `currentContent` is empty, the existing welcome content SHALL render unchanged. The gate SHALL apply uniformly to backend mode and FSA mode. Note that the gate intentionally uses `pluginsSettled` (not `pluginsReady`) so that a plugin-load failure still allows chapter content to render against the empty handler set.
+`reader-src/src/components/ContentArea.vue` SHALL render `<ChapterContent>` only when both `currentContent` (from `useChapterNav()`) is non-empty AND `pluginsSettled` (from `usePlugins()`) is `true`. When `currentContent` is non-empty but `pluginsSettled` is `false`, `ContentArea` SHALL render a minimal loading placeholder so the reader does not show a half-rendered chapter. When `currentContent` is empty, the existing welcome content SHALL render unchanged. Note that the gate intentionally uses `pluginsSettled` (not `pluginsReady`) so that a plugin-load failure still allows chapter content to render against the empty handler set.
 
 #### Scenario: ChapterContent waits for pluginsSettled on initial load
 - **WHEN** the user reloads the page at a chapter URL and `currentContent` becomes non-empty before `pluginsSettled` is `true`

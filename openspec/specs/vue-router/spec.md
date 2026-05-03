@@ -22,7 +22,7 @@ The application SHALL create a Vue Router instance using `createRouter()` with `
 
 The router SHALL define the following routes with resource-oriented paths:
 
-1. `/` — Root route, renders the main reader view (story selector / FSA chooser)
+1. `/` — Root route, renders the main reader view (story selector)
 2. `/:series/:story` — Story route, loads the specified story and navigates to chapter 1
 3. `/:series/:story/chapter/:chapter` — Chapter route, loads the specified story and navigates to the specified chapter (1-indexed)
 4. `/settings` — Settings parent route, renders `SettingsLayout` as its component. SHALL redirect to `/settings/prompt-editor`. `SettingsLayout` SHALL be lazy-loaded via dynamic `import()`.
