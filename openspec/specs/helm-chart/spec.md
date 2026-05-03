@@ -5,19 +5,17 @@ TBD - created by archiving change add-helm-chart. Update Purpose after archive.
 ## Requirements
 ### Requirement: Chart Metadata and Layout
 
-The repository SHALL ship a Helm chart at `helm/heart-reverie/` with the standard Helm chart layout: `Chart.yaml`, `values.yaml`, `.helmignore`, `README.md`, `templates/` directory, and an `examples/` directory containing controller-specific values overlays. `Chart.yaml` SHALL declare `apiVersion: v2`, `name: heart-reverie`, `version: 0.1.0`, an `appVersion` matching the current application release, and `kubeVersion: ">=1.27.0-0"`.
+The chart SHALL live at `helm/heart-reverie/` and SHALL include `Chart.yaml` (apiVersion v2, type application, semver `version`/`appVersion`), a `templates/` directory with the resource files (`deployment.yaml`, `service.yaml`, `ingress.yaml`, `secret.yaml`, `configmap-prompts.yaml`, `serviceaccount.yaml`, `pvc.yaml`, `_helpers.tpl`, `NOTES.txt`), a `values.yaml`, an `examples/` directory, and a chart-local `README.md`. The chart MAY include a `values.schema.json` (not required by this change; schema authoring is out of scope).
 
-#### Scenario: helm lint passes on the bare chart
-- **WHEN** an operator runs `helm lint helm/heart-reverie`
-- **THEN** the command exits 0 with no errors and at most informational warnings
+#### Scenario: chart files exist
 
-#### Scenario: chart metadata is parseable
-- **WHEN** an operator runs `helm show chart helm/heart-reverie`
-- **THEN** the output contains `apiVersion: v2`, `name: heart-reverie`, `version: 0.1.0`, and an `appVersion` field
+- **WHEN** the contents of `helm/heart-reverie/` are listed
+- **THEN** the listing includes `Chart.yaml`, `values.yaml`, `README.md`, `templates/`, and `examples/`
 
-#### Scenario: examples directory ships at least Traefik and nginx recipes
-- **WHEN** an operator inspects `helm/heart-reverie/examples/`
-- **THEN** the directory contains `values-traefik.yaml` and `values-nginx.yaml`, each a valid YAML file that demonstrates the controller-specific upstream-HTTPS ingress annotations
+#### Scenario: examples directory carries ingress recipes
+
+- **WHEN** the contents of `helm/heart-reverie/examples/` are listed
+- **THEN** the directory contains `values-traefik.yaml` and `values-nginx.yaml`, each a valid YAML file that demonstrates a controller-specific plain-HTTP ingress configuration
 
 ### Requirement: Default Image Reference
 
@@ -93,11 +91,11 @@ The chart SHALL render a PersistentVolumeClaim named `<fullname>-data` when `.Va
 
 ### Requirement: Service
 
-The chart SHALL render a Kubernetes Service of type `ClusterIP` (default; configurable via `.Values.service.type`) that exposes the container port. `.Values.service.port` (default `8443`) SHALL control the Service `port`; the Service `targetPort` SHALL ALWAYS equal the value of `.Values.app.port` (the single source of truth for the listening port — see the "Single Source of Truth for Listening Port" requirement below). The Service selector SHALL match the Deployment's pod labels.
+The chart SHALL render a Kubernetes Service of type `ClusterIP` (default; configurable via `.Values.service.type`) that exposes the container port. `.Values.service.port` (default `8080`) SHALL control the Service `port`; the Service `targetPort` SHALL ALWAYS equal the value of `.Values.app.port` (the single source of truth for the listening port — see the "Single Source of Truth for Listening Port" requirement below). The Service selector SHALL match the Deployment's pod labels.
 
-#### Scenario: default service exposes 8443
+#### Scenario: default service exposes 8080
 - **WHEN** an operator runs `helm template hr helm/heart-reverie` with required env values
-- **THEN** the rendered Service has `type: ClusterIP`, one port with `port: 8443` and `targetPort: 8443`
+- **THEN** the rendered Service has `type: ClusterIP`, one port with `port: 8080` and `targetPort: 8080`
 
 #### Scenario: service type override
 - **WHEN** an operator runs `helm template hr helm/heart-reverie --set service.type=NodePort` with required env values
@@ -105,7 +103,7 @@ The chart SHALL render a Kubernetes Service of type `ClusterIP` (default; config
 
 ### Requirement: Single Source of Truth for Listening Port
 
-The chart SHALL define `.Values.app.port` (default `8443`) as the single authoritative listening-port value. The Deployment's container `ports[].containerPort`, the Service's `targetPort`, the `livenessProbe.tcpSocket.port`, and the `readinessProbe.tcpSocket.port` SHALL all derive from `.Values.app.port`. The chart SHALL render `PORT=<app.port>` as a plain container `env` entry on the Deployment (NOT through the Secret), so it always applies regardless of `secret.existingSecret`. Because container `env` takes precedence over `envFrom`, an operator who explicitly sets `env.PORT` in `.Values.env` (rendered into the chart-managed Secret) does NOT override the chart-rendered `PORT` plain-env; operators wanting a deliberate Kubernetes-side / app-side mismatch must override `app.port` instead. Setting `app.port` is therefore the single supported way to change the listening port.
+The chart SHALL define `.Values.app.port` (default `8080`) as the single authoritative listening-port value. The Deployment's container `ports[].containerPort`, the Service's `targetPort`, the `livenessProbe.tcpSocket.port`, and the `readinessProbe.tcpSocket.port` SHALL all derive from `.Values.app.port`. The chart SHALL render `PORT=<app.port>` as a plain container `env` entry on the Deployment (NOT through the Secret), so it always applies regardless of `secret.existingSecret`. Because container `env` takes precedence over `envFrom`, an operator who explicitly sets `env.PORT` in `.Values.env` (rendered into the chart-managed Secret) does NOT override the chart-rendered `PORT` plain-env; operators wanting a deliberate Kubernetes-side / app-side mismatch must override `app.port` instead. Setting `app.port` is therefore the single supported way to change the listening port.
 
 #### Scenario: app.port flows to every port surface
 - **WHEN** an operator runs `helm template hr helm/heart-reverie --set app.port=9000` with required env values
@@ -113,7 +111,7 @@ The chart SHALL define `.Values.app.port` (default `8443`) as the single authori
 
 #### Scenario: PORT env is rendered as plain container env, not in Secret
 - **WHEN** an operator runs `helm template hr helm/heart-reverie` with required env values
-- **THEN** the rendered Secret's `stringData` does NOT contain a `PORT` key, AND the Deployment's container `env` list contains `{ name: PORT, value: "8443" }`
+- **THEN** the rendered Secret's `stringData` does NOT contain a `PORT` key, AND the Deployment's container `env` list contains `{ name: PORT, value: "8080" }`
 
 #### Scenario: PORT plain-env survives existingSecret with custom app.port
 - **WHEN** an operator runs `helm template hr helm/heart-reverie --set secret.existingSecret=ext --set app.port=9000`
@@ -121,7 +119,7 @@ The chart SHALL define `.Values.app.port` (default `8443`) as the single authori
 
 ### Requirement: Optional Ingress
 
-When `.Values.ingress.enabled` is `true`, the chart SHALL render a `networking.k8s.io/v1` Ingress whose `spec.ingressClassName` comes from `.Values.ingress.className`, whose `metadata.annotations` are copied verbatim from `.Values.ingress.annotations` (no chart-injected annotations), whose `spec.rules` is built from `.Values.ingress.hosts` (each entry has `host` and a list of `paths` with `path` and `pathType`), and whose `spec.tls` is built from `.Values.ingress.tls`. When `.Values.ingress.enabled` is `false` (the default), no Ingress SHALL be rendered.
+When `.Values.ingress.enabled` is `true`, the chart SHALL render a `networking.k8s.io/v1` Ingress whose `spec.ingressClassName` comes from `.Values.ingress.className`, whose `metadata.annotations` are copied verbatim from `.Values.ingress.annotations` (no chart-injected annotations), whose `spec.rules` is built from `.Values.ingress.hosts` (each entry has `host` and a list of `paths` with `path` and `pathType`), and whose `spec.tls` is built from `.Values.ingress.tls`. When `.Values.ingress.enabled` is `false` (the default), no Ingress SHALL be rendered. The chart SHALL NOT inject any upstream-HTTPS annotation (e.g., `nginx.ingress.kubernetes.io/backend-protocol: HTTPS` or Traefik `ServersTransport`); the upstream Service speaks plain HTTP, and any controller talking to it does the same by default.
 
 #### Scenario: ingress disabled by default
 - **WHEN** an operator runs `helm template hr helm/heart-reverie` with required env values
@@ -131,13 +129,15 @@ When `.Values.ingress.enabled` is `true`, the chart SHALL render a `networking.k
 - **WHEN** an operator runs `helm template hr helm/heart-reverie -f helm/heart-reverie/examples/values-traefik.yaml` with required env values
 - **THEN** the rendered Ingress has `spec.ingressClassName: traefik`, the host(s) from the example file appear under `spec.rules`, and `spec.tls` carries the configured `secretName`
 
-#### Scenario: traefik example uses HTTP_ONLY mode
-- **WHEN** an operator runs `helm template hr -f helm/heart-reverie/examples/values-traefik.yaml helm/heart-reverie` with required env values
-- **THEN** the rendered Secret contains `HTTP_ONLY: "true"` (the Traefik recipe terminates TLS at the controller and runs the pod over plain HTTP, avoiding the need to manage a Traefik `ServersTransport` CRD for self-signed-cert verification)
+#### Scenario: traefik example does not set HTTP_ONLY
 
-#### Scenario: nginx example produces the nginx upstream-HTTPS annotation
+- **WHEN** an operator runs `helm template hr -f helm/heart-reverie/examples/values-traefik.yaml helm/heart-reverie` with required env values
+- **THEN** the rendered Secret does NOT contain an `HTTP_ONLY` key (the application now always speaks plain HTTP, so the toggle no longer exists)
+
+#### Scenario: nginx example does not inject backend-protocol annotation
+
 - **WHEN** an operator runs `helm template hr helm/heart-reverie -f helm/heart-reverie/examples/values-nginx.yaml` with required env values
-- **THEN** the rendered Ingress's `metadata.annotations` contains `nginx.ingress.kubernetes.io/backend-protocol: HTTPS`
+- **THEN** the rendered Ingress's `metadata.annotations` does NOT contain `nginx.ingress.kubernetes.io/backend-protocol` (the upstream is plain HTTP; the annotation defaults to HTTP and is unnecessary)
 
 ### Requirement: Single-Replica Deployment with Recreate Strategy
 
@@ -185,39 +185,25 @@ The Deployment's container SHALL define `livenessProbe` and `readinessProbe` blo
 
 #### Scenario: default probes are tcpSocket
 - **WHEN** an operator runs `helm template hr helm/heart-reverie` with required env values
-- **THEN** the Deployment's container `livenessProbe` and `readinessProbe` each contain a `tcpSocket` field whose `port` matches the configured container port
+- **THEN** the Deployment's container `livenessProbe` and `readinessProbe` each contain a `tcpSocket` field whose `port` matches the configured container port (`8080` by default)
 
 #### Scenario: probe override switches to httpGet
-- **WHEN** an operator runs `helm template hr helm/heart-reverie --set 'livenessProbe.httpGet.path=/healthz' --set livenessProbe.httpGet.port=8443` with required env values
-- **THEN** the Deployment's `livenessProbe` contains `httpGet.path: /healthz` and `httpGet.port: 8443` AND does NOT contain a `tcpSocket` field
+- **WHEN** an operator runs `helm template hr helm/heart-reverie --set 'livenessProbe.httpGet.path=/healthz' --set livenessProbe.httpGet.port=8080` with required env values
+- **THEN** the Deployment's `livenessProbe` contains `httpGet.path: /healthz` and `httpGet.port: 8080` AND does NOT contain a `tcpSocket` field
 
-### Requirement: TLS Cert Directory
+### Requirement: Deployment has no /certs surface
 
-When the value of `.Values.env.HTTP_ONLY` (string-coerced) is exactly `"true"` (lowercase, identical to the runtime check in `entrypoint.sh` and `writer/server.ts`), the chart MAY omit the `/certs` mount. For any other `HTTP_ONLY` value (including unset, `"TRUE"`, `"True"`, `"1"`, `"yes"`, `"false"`), the Deployment SHALL mount a volume at `/certs` so `entrypoint.sh` can either read pre-supplied certs or write self-signed ones. The mount source SHALL be selected as follows:
+The rendered Deployment SHALL NOT contain any `/certs` `volumeMount`, any `certs`-named `volume`, or any reference to TLS certificate files. The chart SHALL NOT expose a top-level `tls` value group, and `helm/heart-reverie/values.yaml` SHALL NOT define `tls.existingSecret`, `tls.certKey`, or `tls.keyKey`.
 
-1. When `.Values.tls.existingSecret` is non-empty: a `secret`-typed volume that projects two specific keys from the named Secret as the files `cert.pem` and `key.pem`. The source key for the certificate is `.Values.tls.certKey` (default `tls.crt`, matching `kubernetes.io/tls` Secrets) and the source key for the private key is `.Values.tls.keyKey` (default `tls.key`). The mount SHALL be `readOnly: true`.
-2. Otherwise: an `emptyDir` volume.
+#### Scenario: default install has no /certs mount
 
-#### Scenario: default install mounts an emptyDir at /certs
 - **WHEN** an operator runs `helm template hr helm/heart-reverie` with required env values
-- **THEN** the Deployment's pod spec contains a volume of type `emptyDir` whose mount target on the container is `/certs`
+- **THEN** the Deployment's pod spec contains no volume targeting `/certs` and no volume named `certs`
 
-#### Scenario: HTTP_ONLY=true omits the /certs mount
-- **WHEN** an operator runs `helm template hr helm/heart-reverie --set env.HTTP_ONLY=true` with required env values
-- **THEN** the Deployment's pod spec contains no volume targeting `/certs`
+#### Scenario: tls.* values are not part of the chart surface
 
-#### Scenario: HTTP_ONLY with non-lowercase value still mounts /certs
-- **WHEN** an operator runs `helm template hr helm/heart-reverie --set-string env.HTTP_ONLY=TRUE` with required env values
-- **THEN** the Deployment's pod spec STILL mounts a volume at `/certs` (because the runtime accepts only lowercase `"true"`, the chart matches that contract)
-- **NOTE**: `--set-string` is required because Helm's `--set` parser folds bare `TRUE` into the YAML boolean `true`, which renders as the lowercase string `"true"` and would skip the mount. Operators who want a literal non-lowercase value in the Secret must use `--set-string`.
-
-#### Scenario: tls.existingSecret projects standard kubernetes.io/tls keys
-- **WHEN** an operator runs `helm template hr helm/heart-reverie --set tls.existingSecret=hr-tls` with required env values (default `tls.certKey=tls.crt`, `tls.keyKey=tls.key`)
-- **THEN** the Deployment mounts a `secret`-typed volume sourced from Secret `hr-tls` at `/certs` with `readOnly: true`, AND the volume's `items` projects key `tls.crt` to path `cert.pem` and key `tls.key` to path `key.pem`, AND no `emptyDir` volume targets `/certs`
-
-#### Scenario: custom cert key names are honoured
-- **WHEN** an operator runs `helm template hr helm/heart-reverie --set tls.existingSecret=hr-tls --set tls.certKey=server.crt --set tls.keyKey=server.key` with required env values
-- **THEN** the projected volume `items` use source keys `server.crt`/`server.key` mapped to paths `cert.pem`/`key.pem`
+- **WHEN** an operator runs `helm template hr helm/heart-reverie --set tls.existingSecret=hr-tls`
+- **THEN** the chart MAY render the same Deployment as without that flag (the `tls` value group is not consumed by any template), AND the Deployment's pod spec STILL contains no `/certs` volume — the value is silently ignored
 
 ### Requirement: Optional Prompt-Overrides ConfigMap
 

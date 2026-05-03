@@ -56,7 +56,7 @@ The root `Containerfile` MUST use a multi-stage build with these stages:
 3. **`frontend-build`** — Base `docker.io/denoland/deno:debian`, copies cached dependencies from the `deno-cache` stage at `/deno-dir/`, copies `deno.json`, `deno.lock`, and the full `reader-src/` directory. Uses `WORKDIR` to set the working directory to `reader-src/`, then runs `deno run -A npm:vue-tsc@^2.2.8 --noEmit` for type checking followed by `deno run -A npm:vite@^6.3.2 build --outDir ../reader-dist` for the production build. This stage MUST NOT use Node.js or npm — all build tooling SHALL be invoked via version-pinned `deno run -A npm:` specifiers.
 
 **Final stage:**
-4. **`final`** — Base `docker.io/denoland/deno:debian`, installs `openssl` (not pre-installed in the deno:debian image, required by entrypoint.sh for TLS cert generation), assembles the runtime image with all application files. Copies the built frontend from the `frontend-build` stage.
+4. **`final`** — Base `docker.io/denoland/deno:debian`. The stage assembles the runtime image with all application files and copies the built frontend from the `frontend-build` stage. The stage MUST NOT install `openssl` (no longer needed — there is no in-pod TLS cert generation) and MUST NOT create a `/certs` directory. The stage MUST NOT copy any `entrypoint.sh` (the file does not exist in the repository).
 
 The `final` stage MUST be the last stage in the root Containerfile.
 
@@ -71,6 +71,11 @@ The `final` stage MUST be the last stage in the root Containerfile.
 #### Scenario: Four stages present
 - **WHEN** the root `Containerfile` stages are listed
 - **THEN** there SHALL be exactly four named stages: `download`, `deno-cache`, `frontend-build`, and `final`
+
+#### Scenario: openssl is not installed in the final stage
+
+- **WHEN** the root `Containerfile` final-stage `RUN` instructions are examined
+- **THEN** there SHALL be no `apt-get install` line that installs `openssl` and no `/certs` directory creation
 
 ### R5: Containerfile Syntax and Structure
 
@@ -139,6 +144,8 @@ The final image MUST contain all files required for the application to function:
 
 All copied files MUST use `--link --chown=$UID:0 --chmod=775` for OpenShift compatibility.
 
+The image MUST NOT contain `entrypoint.sh` (the file is deleted from the repository as part of removing in-application TLS).
+
 Note: `plugins/state/rust/` (Rust source) does NOT need to be included in the root container image. The `.containerignore` SHOULD exclude it. Only the pre-built binary at `plugins/state/state-patches` needs to be present.
 
 Note: `reader-src/package.json` no longer exists — the frontend build stage uses Deno with `npm:` specifiers. The frontend built output directory is `reader-dist/`.
@@ -154,6 +161,11 @@ Note: `reader-src/package.json` no longer exists — the frontend build stage us
 #### Scenario: Rust source excluded from image
 - **WHEN** the container image is built
 - **THEN** `plugins/state/rust/` SHALL NOT be present in the image, but `plugins/state/state-patches` SHALL be present
+
+#### Scenario: No entrypoint.sh in image
+
+- **WHEN** the final container image is inspected
+- **THEN** there SHALL be no `/app/entrypoint.sh` file (the file does not exist in the source repository)
 
 ### R10: Non-Root User Execution
 
@@ -171,33 +183,27 @@ Note: `reader-src/package.json` no longer exists — the frontend build stage us
 
 ### R11: dumb-init as PID 1
 
-- The `download` stage MUST download the `dumb-init` static binary appropriate for the target architecture
-- Architecture mapping MUST handle at least `amd64` → `x86_64` and `arm64` → `aarch64`
-- The download MUST include SHA256 checksum verification for integrity
-- The binary MUST be COPYd from the `download` stage into the `final` stage (since `deno:debian` lacks `curl`)
-- `dumb-init` MUST be used as PID 1 in the container `ENTRYPOINT` to ensure proper signal forwarding and zombie reaping
-- In local development, the entrypoint script MUST gracefully skip `dumb-init` when it is not available
+The `download` stage MUST download the `dumb-init` static binary appropriate for the target architecture. Architecture mapping MUST handle at least `amd64` → `x86_64` and `arm64` → `aarch64`. The download MUST include SHA256 checksum verification for integrity. The binary MUST be COPYd from the `download` stage into the `final` stage (since `deno:debian` lacks `curl`). The container `ENTRYPOINT` MUST be `["dumb-init", "--"]` and the `CMD` MUST be a `sh -c` shim of the form `["sh", "-c", "umask 0002 && exec deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts"]`. The `umask 0002` inside the shim is load-bearing — it preserves OpenShift arbitrary-UID + shared-GID-0 group-write semantics for directories the application creates at runtime (Deno's `Deno.mkdir({ mode })` honours the inherited process umask). The `exec` ensures `deno` replaces the shell so signal forwarding from `dumb-init` reaches Deno directly.
 
-### R12: TLS Certificate Handling and HTTP_ONLY Mode
+#### Scenario: dumb-init is the container ENTRYPOINT
 
-- An `entrypoint.sh` script MUST be provided that handles both container and local development startup
-- When `HTTP_ONLY=true` environment variable is set, the entrypoint MUST skip TLS certificate generation entirely and the server MUST start in plain HTTP mode. This supports Kubernetes deployments where TLS termination is handled at the ingress/reverse-proxy level (e.g., Traefik, Nginx Ingress).
-- If `CERT_FILE` and `KEY_FILE` environment variables are set and point to existing files, the entrypoint MUST use them directly
-- If either is not set or the files don't exist, the entrypoint MUST auto-detect the certificate directory: `/certs/` in container (when the directory exists), or `$CERT_DIR` / `.certs/` for local development
-- The entrypoint MUST reuse existing certificates if they already exist in the cert directory, only generating new ones when missing
-- Certificate generation MUST use `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1` and set `CERT_FILE`/`KEY_FILE` accordingly
-- The `openssl` package MUST be explicitly installed in the final stage (it is NOT pre-installed in `deno:debian`)
-- The generated certificates MUST be placed in a directory writable by the non-root user
-- The entrypoint MUST use `dumb-init` as PID 1 when available (container), or `exec deno run` directly when `dumb-init` is not present (local dev)
-- The entrypoint MUST `exec` the final command to ensure proper signal handling
-- The script MUST use `#!/bin/sh` and `set -eu` for POSIX portability
-- The server MUST listen on `::` (dual-stack IPv4+IPv6) instead of `0.0.0.0` (IPv4-only) to support clients that connect via IPv6
+- **WHEN** the final-stage `ENTRYPOINT` instruction is examined
+- **THEN** it SHALL be exactly `["dumb-init", "--"]`
 
-### R12a: Unified Startup Scripts
+#### Scenario: CMD is the umask + deno run shell shim
 
-- The `entrypoint.sh` MUST work for both container and local development environments
-- A thin wrapper script (`scripts/serve.sh`) MAY exist for local development convenience, setting project-relative environment variables (`PORT`, `PLAYGROUND_DIR`, `READER_DIR`, `CERT_DIR`) and delegating to `entrypoint.sh`
-- The wrapper script MUST NOT duplicate any cert generation or server startup logic — all such logic MUST be in `entrypoint.sh`
+- **WHEN** the final-stage `CMD` instruction is examined
+- **THEN** it SHALL be a JSON-array of exactly three elements: `"sh"`, `"-c"`, and a single shell command string that contains `umask 0002`, the `exec` builtin, `deno run`, the explicit permission flags `--allow-net`, `--allow-read`, `--allow-write`, `--allow-env`, `--allow-run`, and the `writer/server.ts` entry path
+
+#### Scenario: Container runs dumb-init as PID 1
+
+- **WHEN** the container starts
+- **THEN** PID 1 inside the container SHALL be `dumb-init` and the Deno process SHALL be a (grand)child of PID 1, with the intervening `sh` having `exec`d into `deno`
+
+#### Scenario: Runtime-created directories are group-writable
+
+- **WHEN** the running container creates a new directory at runtime via `Deno.mkdir(path, { recursive: true, mode: 0o775 })`
+- **THEN** the resulting directory mode SHALL be `0o775` (NOT `0o755`), because the `umask 0002` shim preserves the group-write bit
 
 ### R13: OCI Labels
 
@@ -211,7 +217,7 @@ The root Containerfile's `final` stage MUST follow this instruction order:
 1. Cleanup and dependency installation (dumb-init download)
 2. User creation
 3. Directory creation
-4. `COPY` instructions (deps cache, binary, app files, entrypoint, license)
+4. `COPY` instructions (deps cache, binary, app files, license) — `entrypoint.sh` is NOT part of this list (the file does not exist in the repository)
 5. `ENV` instructions
 6. `WORKDIR`
 7. `VOLUME`
@@ -221,6 +227,16 @@ The root Containerfile's `final` stage MUST follow this instruction order:
 11. `ENTRYPOINT` / `CMD`
 12. `ARG VERSION` + `ARG RELEASE`
 13. `LABEL` (very last)
+
+#### Scenario: COPY list does not include entrypoint
+
+- **WHEN** the root `Containerfile` final-stage `COPY` instructions are examined
+- **THEN** there SHALL be no `COPY entrypoint.sh …` instruction (the file does not exist in the repository)
+
+#### Scenario: Instruction order is preserved
+
+- **WHEN** the root `Containerfile` final-stage instructions are read top-to-bottom
+- **THEN** they SHALL appear in the order listed above, with `LABEL` last
 
 ### R15: .containerignore
 
@@ -236,8 +252,17 @@ A `.containerignore` file MUST exclude at minimum:
 
 ### R16: Exposed Port and Signal
 
-- The root Containerfile MUST declare `EXPOSE 8443`
-- The root Containerfile MUST declare `STOPSIGNAL SIGTERM`
+The root Containerfile MUST declare `EXPOSE 8080` and `STOPSIGNAL SIGTERM`.
+
+#### Scenario: Containerfile EXPOSEs 8080
+
+- **WHEN** the root `Containerfile`'s `EXPOSE` directive is examined
+- **THEN** the value SHALL be `8080`
+
+#### Scenario: Containerfile sets STOPSIGNAL SIGTERM
+
+- **WHEN** the root `Containerfile`'s `STOPSIGNAL` directive is examined
+- **THEN** the value SHALL be `SIGTERM`
 
 ### R17: BuildKit Cache Mounts
 
@@ -262,25 +287,55 @@ The `plugins/state/README.md` MUST be updated to:
 
 The project's `AGENTS.md` MUST be updated to include:
 - Container build commands for both Containerfiles (Rust binary builder + main app)
-- Container run command with required environment variables
-- Volume mount instructions for `playground/` and optional TLS certs
+- Container run command with required environment variables (no `HTTP_ONLY`, `CERT_FILE`, or `KEY_FILE`)
+- Volume mount instructions for `playground/` only (no optional TLS cert mount — the application no longer terminates TLS in-pod)
+- The published container port SHALL be documented as `8080`, NOT `8443`
+- The local default URL SHALL be documented as `http://localhost:8080`, NOT `https://localhost:8443`
+
+#### Scenario: AGENTS.md no longer documents TLS cert mount
+
+- **WHEN** `AGENTS.md` is searched for `HTTP_ONLY`, `CERT_FILE`, `KEY_FILE`, `/certs`, `https://localhost:8443`, or `8443`
+- **THEN** none of those strings SHALL appear (except where part of an unrelated outbound URL like `https://openrouter.ai`)
+
+#### Scenario: AGENTS.md documents plain-HTTP defaults
+
+- **WHEN** `AGENTS.md`'s container-run example is examined
+- **THEN** it SHALL reference port `8080` and `http://localhost:8080`, AND its volume-mount section SHALL only list `playground/` (no optional `/certs` mount)
 
 ### R21: .gitignore Update
 
 The `.gitignore` MUST be updated to ensure `plugins/state/state-patches` (the pre-built binary) is NOT ignored. If there is a pattern that would match it, an explicit negation (`!plugins/state/state-patches`) MUST be added.
+
+### Requirement: Containerization acceptance criteria
+
+The containerization capability's acceptance criteria SHALL reflect the plain-HTTP-only contract:
+
+- The built image SHALL listen on port `8080` after start (NOT `8443`)
+- There SHALL be no acceptance criterion that requires "auto-generated TLS certificates allow HTTPS connections" — auto-generated TLS is removed from the application
+- All other acceptance criteria (`dumb-init` is PID 1, non-root UID 1001 + GID 0, `LABEL` last, no playground/`.env`/`.certs/`/Rust source / dev files in image, `handler.js` resolves the binary, READMEs do not require Rust toolchain for quick start, plugin README documents Containerfile build) SHALL remain in force
+
+#### Scenario: Built image listens on 8080
+
+- **WHEN** the built image is started without env overrides for `PORT`
+- **THEN** the running container SHALL listen on TCP port `8080` and SHALL respond to plain-HTTP requests
+
+#### Scenario: No HTTPS acceptance criterion remains
+
+- **WHEN** the containerization spec's acceptance-criteria section is examined
+- **THEN** there SHALL be no acceptance criterion that requires HTTPS connections, self-signed cert generation, or `/certs` directory existence
 
 ## Acceptance Criteria
 
 1. `podman build --output=. --target=binary -f plugins/state/rust/Containerfile plugins/state/rust/` produces a working static binary
 2. The binary at `plugins/state/state-patches` can be committed to git
 3. `podman build -t heartreverie:latest .` completes successfully (Deno-only, no Rust build)
-4. The built image starts and the Deno server listens on port 8443
+4. The built image starts and the Deno server listens on port 8080
 5. The `state-patches` binary is executable and at `/app/plugins/state/state-patches` inside the container
-6. Auto-generated TLS certificates allow HTTPS connections
-7. The container runs as non-root (UID 1001, GID 0)
-8. `dumb-init` is PID 1 inside the running container
-9. `LABEL` is the last instruction in the root Containerfile
-10. The image does not contain playground data, `.env`, `.certs/`, Rust source code, or development-only files
-11. `handler.js` correctly resolves the binary at `plugins/state/state-patches`
-12. Root `README.md` does not require Rust toolchain for quick start
-13. Plugin `README.md` documents the Containerfile build workflow
+6. The container runs as non-root (UID 1001, GID 0)
+7. `dumb-init` is PID 1 inside the running container
+8. `LABEL` is the last instruction in the root Containerfile
+9. The image does not contain playground data, `.env`, `.certs/`, Rust source code, or development-only files
+10. `handler.js` correctly resolves the binary at `plugins/state/state-patches`
+11. Root `README.md` does not require Rust toolchain for quick start
+12. Plugin `README.md` documents the Containerfile build workflow
+

@@ -6,11 +6,11 @@ Deno application using Hono framework with TypeScript that serves the reader fro
 ## Requirements
 ### Requirement: Server initialization
 
-The writer backend SHALL be a Deno application using Hono framework with TypeScript ESM modules. Route handlers SHALL be organized into separate module files under `writer/routes/`. Middleware functions SHALL be extracted into `writer/lib/middleware.ts`. Configuration SHALL be centralized in `writer/lib/config.ts`. Error response construction SHALL use a shared `problemJson()` helper from `writer/lib/errors.ts`. The server SHALL also register the lore CRUD routes from `writer/routes/lore.ts` alongside other core routes during initialization.
+The writer backend SHALL be a Deno application using Hono framework with TypeScript ESM modules. Route handlers SHALL be organized into separate module files under `writer/routes/`. Middleware functions SHALL be extracted into `writer/lib/middleware.ts`. Configuration SHALL be centralized in `writer/lib/config.ts`. Error response construction SHALL use a shared `problemJson()` helper from `writer/lib/errors.ts`. The server SHALL also register the lore CRUD routes from `writer/routes/lore.ts` alongside other core routes during initialization. The server SHALL listen on plain HTTP with no in-application TLS support; operators are expected to terminate TLS at an upstream reverse proxy or ingress controller.
 
 #### Scenario: Server starts and serves static frontend
-- **WHEN** the server process is started with valid TLS certificates via `deno run`
-- **THEN** the server SHALL listen on HTTPS and serve files from the `reader/` directory at the root path `/`
+- **WHEN** the server process is started via `deno run`
+- **THEN** the server SHALL listen on plain HTTP and serve files from the `reader/` directory at the root path `/`
 
 #### Scenario: API routes are mounted
 - **WHEN** the server starts
@@ -23,6 +23,11 @@ The writer backend SHALL be a Deno application using Hono framework with TypeScr
 #### Scenario: TypeScript type checking passes
 - **WHEN** a developer runs `deno check` on the writer backend entry point
 - **THEN** all TypeScript files under `writer/` SHALL pass type checking without errors
+
+#### Scenario: No TLS code paths remain
+
+- **WHEN** a developer greps the `writer/` source tree for `cert`, `key`, `tls`, `https`, `HTTP_ONLY`, `CERT_FILE`, or `KEY_FILE`
+- **THEN** there SHALL be no occurrences other than (a) comments or documentation strings, (b) the `Cache-Control: no-store` header, (c) unrelated identifiers like `apiKey`, `tlsCertKey`-style ConfigMap keys, or (d) the `LLM_*` configuration knobs — i.e. the server SHALL contain no code path that constructs `Deno.serveTls`, reads cert/key files, generates self-signed certificates, or branches on `HTTP_ONLY`
 
 ### Requirement: Type-safe dependency injection
 
@@ -803,7 +808,7 @@ The endpoint SHALL NOT depend on any URL parameters and SHALL NOT consult any pe
 #### Scenario: Response excludes secrets and non-LLM config
 
 - **WHEN** an authenticated client receives a `GET /api/llm-defaults` response
-- **THEN** the response body SHALL NOT contain any of: `apiKey`, `apiUrl`, `LLM_API_KEY`, `LLM_API_URL`, `PASSPHRASE`, `BACKGROUND_IMAGE`, `PROMPT_FILE`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`, `HTTP_ONLY`, `CERT_FILE`, `KEY_FILE`, `PORT`, `PLAYGROUND_DIR`, `READER_DIR`, `PLUGIN_DIR`, AND SHALL NOT contain any key not listed in the per-story `_config.json` whitelist
+- **THEN** the response body SHALL NOT contain any of: `apiKey`, `apiUrl`, `LLM_API_KEY`, `LLM_API_URL`, `PASSPHRASE`, `BACKGROUND_IMAGE`, `PROMPT_FILE`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`, `PORT`, `PLAYGROUND_DIR`, `READER_DIR`, `PLUGIN_DIR`, AND SHALL NOT contain any key not listed in the per-story `_config.json` whitelist
 
 #### Scenario: Response keys lock-step with the per-story whitelist
 
