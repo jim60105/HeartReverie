@@ -142,6 +142,44 @@ Deno.test("Logger", async (t) => {
         _resetLogger();
       }
     });
+
+    await t.step("omits ANSI escapes when stdout is not a TTY", async () => {
+      _resetLogger();
+      const ttyStub = stub(Deno.stdout, "isTerminal", () => false);
+      const logStub = stub(console, "log", () => {});
+      try {
+        await initLogger({ level: "info", filePath: null, llmFilePath: null });
+        const log = createLogger("system");
+        log.info("No ANSI", { key: "value" });
+
+        assertEquals(logStub.calls.length, 1);
+        const output = String(logStub.calls[0]!.args[0]);
+        assertEquals(output.includes("\x1b["), false);
+      } finally {
+        logStub.restore();
+        ttyStub.restore();
+        _resetLogger();
+      }
+    });
+
+    await t.step("omits ANSI escapes for warn/error when stderr is not a TTY", async () => {
+      _resetLogger();
+      const ttyStub = stub(Deno.stderr, "isTerminal", () => false);
+      const warnStub = stub(console, "warn", () => {});
+      try {
+        await initLogger({ level: "info", filePath: null, llmFilePath: null });
+        const log = createLogger("system");
+        log.warn("No ANSI warn");
+
+        assertEquals(warnStub.calls.length, 1);
+        const output = String(warnStub.calls[0]!.args[0]);
+        assertEquals(output.includes("\x1b["), false);
+      } finally {
+        warnStub.restore();
+        ttyStub.restore();
+        _resetLogger();
+      }
+    });
   });
 
   await t.step("correlation ID isolation", async (t) => {

@@ -195,13 +195,26 @@ async function writeToLlmFile(entry: LogEntry): Promise<void> {
 
 // ── Console formatting ──────────────────────────────────────────
 
-function formatConsole(entry: LogEntry): string {
+function shouldUseAnsiColors(stream: "stdout" | "stderr"): boolean {
+  if (Deno.noColor) return false;
+  try {
+    return stream === "stderr" ? Deno.stderr.isTerminal() : Deno.stdout.isTerminal();
+  } catch {
+    return false;
+  }
+}
+
+function formatConsole(entry: LogEntry, useAnsiColors: boolean): string {
   const color = LEVEL_COLORS[entry.level];
-  const levelTag = `${color}${entry.level.toUpperCase().padEnd(5)}${RESET}`;
+  const plainLevel = entry.level.toUpperCase().padEnd(5);
+  const levelTag = useAnsiColors ? `${color}${plainLevel}${RESET}` : plainLevel;
   const time = entry.timestamp.slice(11, 23); // HH:MM:SS.mmm
-  const cat = `${DIM}[${entry.category}]${RESET}`;
-  const corrId = entry.correlationId ? ` ${DIM}(${entry.correlationId.slice(0, 8)})${RESET}` : "";
-  const dataStr = entry.data ? ` ${DIM}${JSON.stringify(entry.data)}${RESET}` : "";
+  const categoryLabel = `[${entry.category}]`;
+  const cat = useAnsiColors ? `${DIM}${categoryLabel}${RESET}` : categoryLabel;
+  const corrIdBody = entry.correlationId ? `(${entry.correlationId.slice(0, 8)})` : "";
+  const corrId = corrIdBody ? (useAnsiColors ? ` ${DIM}${corrIdBody}${RESET}` : ` ${corrIdBody}`) : "";
+  const dataBody = entry.data ? JSON.stringify(entry.data) : "";
+  const dataStr = dataBody ? (useAnsiColors ? ` ${DIM}${dataBody}${RESET}` : ` ${dataBody}`) : "";
   return `${time} ${levelTag} ${cat}${corrId} ${entry.message}${dataStr}`;
 }
 
@@ -210,8 +223,12 @@ function formatConsole(entry: LogEntry): string {
 function emit(entry: LogEntry): void {
   if (LEVEL_ORDER[entry.level] < LEVEL_ORDER[configuredLevel]) return;
 
+  const stream: "stdout" | "stderr" = (entry.level === "warn" || entry.level === "error")
+    ? "stderr"
+    : "stdout";
+
   // Console output
-  const formatted = formatConsole(entry);
+  const formatted = formatConsole(entry, shouldUseAnsiColors(stream));
   if (entry.level === "error") {
     console.error(formatted);
   } else if (entry.level === "warn") {
