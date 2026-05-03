@@ -6,7 +6,7 @@
 
 | 名稱 | 類型 | 說明 |
 |------|------|------|
-| `FORGEJO_API_TOKEN` | secret | Forgejo 個人存取權杖，須具備觸發 Actions 的寫入權限 |
+| `FORGEJO_API_TOKEN` | secret | Forgejo 個人存取權杖，需具備 **`write:repository`** 範圍（Dispatch Workflow API 屬於 `/repos/*` 路由，對應 repository 範圍） |
 | `FORGEJO_BASE_URL` | variable | Forgejo 實例 API 基底 URL（例如 `https://codeberg.org/api/v1`） |
 | `FORGEJO_PLUGINS_REPO` | variable | 目標儲存庫路徑（例如 `jim60105/HeartReverie_Plugins`） |
 | `FORGEJO_PLUGINS_WORKFLOW` | variable | 工作流程檔名（例如 `build-push.yaml`） |
