@@ -1,34 +1,12 @@
-# Example values for deploying HeartReverie behind Traefik (HTTP_ONLY mode).
+# Example values for deploying HeartReverie behind Traefik.
 #
-# This recipe terminates TLS at the Traefik ingress controller and runs the
-# pod over plain HTTP. It avoids the need to manage a Traefik
-# `ServersTransport` CRD for trusting HeartReverie's self-signed pod cert.
-#
-# Why HTTP_ONLY: HeartReverie auto-generates self-signed certs at boot. To
-# have Traefik talk HTTPS to the pod with that self-signed cert, you would
-# normally need a `ServersTransport` resource with `insecureSkipVerify: true`
-# AND a `traefik.ingress.kubernetes.io/service.serverstransport` annotation.
-# The chart does not render `ServersTransport` because it is a Traefik-CRD
-# coupling. Operators who prefer in-pod TLS can use the alternative below
-# after installing Traefik with the CRDs enabled.
-#
-# Alternative (in-pod HTTPS, requires the Traefik ServersTransport CRD):
-# 1. Apply this once per namespace:
-#      apiVersion: traefik.io/v1alpha1
-#      kind: ServersTransport
-#      metadata:
-#        name: heart-reverie-skip-verify
-#      spec:
-#        insecureSkipVerify: true
-# 2. Replace the env block below with `env: { LLM_API_KEY: "...", PASSPHRASE: "..." }`
-# 3. Add to ingress.annotations:
-#      traefik.ingress.kubernetes.io/service.serversscheme: https
-#      traefik.ingress.kubernetes.io/service.serverstransport: <namespace>-heart-reverie-skip-verify@kubernetescrd
+# Traefik terminates TLS at the ingress; the chart now always speaks plain
+# HTTP upstream, so no `ServersTransport` CRD or `serversscheme: https`
+# annotation is required.
 
 env:
   LLM_API_KEY: "REPLACE-ME"
   PASSPHRASE: "REPLACE-ME"
-  HTTP_ONLY: "true"
 
 ingress:
   enabled: true

@@ -17,7 +17,7 @@ helm install hr ./helm/heart-reverie \
   --set env.PASSPHRASE=open-sesame
 ```
 
-The default install creates a Deployment + Service + Secret + 10 GiB PVC and serves HTTPS on port 8443 with a self-signed cert auto-generated at boot.
+The default install creates a Deployment + Service + Secret + 10 GiB PVC and serves plain HTTP on port 8080. Terminate TLS at an upstream proxy or ingress controller — HeartReverie no longer ships any in-application TLS support.
 
 To enable an Ingress, copy one of the example values files and edit the host:
 
@@ -62,9 +62,9 @@ Three ways to supply `LLM_API_KEY` and `PASSPHRASE`, in order of preference:
 | `image.pullPolicy` | `Always` | Image pull policy |
 | `replicaCount` | `1` | Pod replica count — **must remain 1** |
 | `strategy.type` | `Recreate` | Required because the pod holds a RWO PVC |
-| `app.port` | `8443` | **Single source of truth** for the listening port — drives `containerPort`, `Service.targetPort`, probe ports, and auto-injected `PORT` env |
+| `app.port` | `8080` | **Single source of truth** for the listening port — drives `containerPort`, `Service.targetPort`, probe ports, and auto-injected `PORT` env |
 | `service.type` | `ClusterIP` | Service type |
-| `service.port` | `8443` | Service port |
+| `service.port` | `8080` | Service port |
 | `ingress.enabled` | `false` | Enable Ingress (see examples for Traefik/nginx) |
 | `ingress.className` | `""` | IngressClass name |
 | `ingress.annotations` | `{}` | Verbatim copy into `metadata.annotations` |
@@ -79,9 +79,6 @@ Three ways to supply `LLM_API_KEY` and `PASSPHRASE`, in order of preference:
 | `prompts.enabled` | `false` | Render prompt-override ConfigMap (read-only) |
 | `prompts.mountPath` | `/app/prompt-overrides` | Mount path (intentionally outside playground PVC) |
 | `prompts.files` | `{}` | `{ filename: contents }` map |
-| `tls.existingSecret` | `""` | When set, project keys from this Secret as `/certs/cert.pem`/`/certs/key.pem` |
-| `tls.certKey` | `tls.crt` | Source key for the certificate (matches `kubernetes.io/tls`) |
-| `tls.keyKey` | `tls.key` | Source key for the private key |
 | `secret.existingSecret` | `""` | Use an externally-managed Secret for `envFrom` |
 | `serviceAccount.create` | `false` | Render a ServiceAccount |
 | `serviceAccount.name` | `""` | SA name (chart fullname when empty + create=true) |
@@ -99,40 +96,11 @@ The full annotated `env:` map (every key documented in `AGENTS.md`) lives at the
 
 ## TLS
 
-TLS is a recommended hardening default for HeartReverie deployments — it encrypts the passphrase header and chapter content in transit. The chart defaults to end-to-end HTTPS, but plain HTTP behind a TLS-terminating reverse proxy (set `env.HTTP_ONLY=true`) is also fully supported. You have three options:
-
-### 1. Default — self-signed in-pod cert
-
-`entrypoint.sh` generates a self-signed cert into an `emptyDir`-mounted `/certs` at boot. Works for laptop/kind/staging clusters and for ingress controllers that can be told to skip upstream TLS verification (see the [nginx example](examples/values-nginx.yaml)).
-
-### 2. Operator-supplied cert (e.g. cert-manager)
-
-Set `tls.existingSecret` to a `kubernetes.io/tls` Secret. The chart projects the standard `tls.crt`/`tls.key` keys to `/certs/cert.pem`/`/certs/key.pem`, which is what `entrypoint.sh` expects. With cert-manager:
-
-```yaml
-# Apply a Certificate that creates a Secret named hr-tls:
-# kubectl apply -f your-certificate.yaml
-
-tls:
-  existingSecret: hr-tls
-  # certKey: tls.crt   # default
-  # keyKey: tls.key    # default
-```
-
-### 3. Terminate at the ingress controller, run pod plain HTTP
-
-```yaml
-env:
-  HTTP_ONLY: "true"
-```
-
-Skips the `/certs` mount entirely. The chart's `HTTP_ONLY` check is **case-sensitive lowercase** — only the literal string `"true"` matches, identical to the runtime contract in `entrypoint.sh` and `writer/server.ts`.
+HeartReverie speaks plain HTTP only; TLS is the operator's job. Terminate TLS at your ingress controller or reverse proxy and point it at the chart's plain-HTTP Service on port 8080. The two example values files (Traefik and ingress-nginx) show standard TLS-at-the-ingress recipes.
 
 ## Ingress recipes
 
-### Traefik (HTTP_ONLY mode)
-
-The default Traefik recipe terminates TLS at the controller and runs the pod plain-HTTP, avoiding the need for a `ServersTransport` CRD just to skip self-signed-cert verification.
+### Traefik
 
 ```bash
 helm install hr ./helm/heart-reverie \
@@ -141,11 +109,7 @@ helm install hr ./helm/heart-reverie \
   --set env.PASSPHRASE=open-sesame
 ```
 
-The example file's header comment includes the alternative `ServersTransport`-based approach for operators who prefer in-pod TLS.
-
-### ingress-nginx (upstream HTTPS with self-signed cert)
-
-ingress-nginx supports skipping upstream TLS verification via annotation, so it can talk HTTPS to a self-signed pod cert without any CRD wiring.
+### ingress-nginx
 
 ```bash
 helm install hr ./helm/heart-reverie \

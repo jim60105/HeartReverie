@@ -7,16 +7,6 @@ operators discover this in production.
 {{- if gt (int .Values.replicaCount) 1 }}
 {{- fail (printf "heart-reverie: replicaCount must be 1 (got %d). HeartReverie writes story data directly to the local filesystem with no inter-pod coordination; running multiple replicas WILL corrupt data. See helm/heart-reverie/README.md 'Single-replica only' section." (int .Values.replicaCount)) }}
 {{- end }}
-{{- /*
-HTTP_ONLY exact-lowercase predicate. Matches the runtime check in
-entrypoint.sh and writer/server.ts: only the literal string "true"
-(lowercase, no whitespace tolerance) skips in-pod TLS cert handling.
-*/ -}}
-{{- $httpOnlyValue := "" }}
-{{- if hasKey .Values.env "HTTP_ONLY" }}
-{{- $httpOnlyValue = toString (index .Values.env "HTTP_ONLY") }}
-{{- end }}
-{{- $httpOnly := eq $httpOnlyValue "true" }}
 {{- $saName := include "heart-reverie.serviceAccountName" . }}
 {{- /*
 Probe handler resolution. Operators may override the entire probe map to
@@ -119,13 +109,6 @@ spec:
             - name: playground
               mountPath: {{ .Values.persistence.mountPath }}
             {{- end }}
-            {{- if not $httpOnly }}
-            - name: certs
-              mountPath: /certs
-              {{- if .Values.tls.existingSecret }}
-              readOnly: true
-              {{- end }}
-            {{- end }}
             {{- if .Values.prompts.enabled }}
             - name: prompts
               mountPath: {{ .Values.prompts.mountPath }}
@@ -139,20 +122,6 @@ spec:
         - name: playground
           persistentVolumeClaim:
             claimName: {{ include "heart-reverie.pvcName" . }}
-        {{- end }}
-        {{- if not $httpOnly }}
-        - name: certs
-          {{- if .Values.tls.existingSecret }}
-          secret:
-            secretName: {{ .Values.tls.existingSecret }}
-            items:
-              - key: {{ .Values.tls.certKey }}
-                path: cert.pem
-              - key: {{ .Values.tls.keyKey }}
-                path: key.pem
-          {{- else }}
-          emptyDir: {}
-          {{- end }}
         {{- end }}
         {{- if .Values.prompts.enabled }}
         - name: prompts

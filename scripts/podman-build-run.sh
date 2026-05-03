@@ -10,7 +10,7 @@ PLUGINS_DIR="$HOME/repos/HeartReverie_Plugins"
 BASE_IMAGE="heartreverie:latest"
 PLUGINS_IMAGE="heartreverie-plugins:latest"
 CONTAINER_NAME="heartreverie"
-PORT="${PORT:-8443}"
+PORT="${PORT:-8080}"
 
 echo "=== Building base image: $BASE_IMAGE ==="
 podman build --jobs 0 -t "$BASE_IMAGE" "$PROJECT_DIR"
@@ -33,7 +33,7 @@ echo "=== Running container: $CONTAINER_NAME ==="
 # container context (use :Z for a private label if no other container needs them).
 podman run -d \
   --name "$CONTAINER_NAME" \
-  -p "${PORT}:8443" \
+  -p "${PORT}:8080" \
   --userns=keep-id \
   --env-file "$PROJECT_DIR/.env" \
   -v "$PROJECT_DIR/playground:/app/playground:z" \
@@ -47,4 +47,4 @@ sleep 3
 podman logs "$CONTAINER_NAME" 2>&1 | grep -E "Loaded|listening"
 
 echo ""
-echo "✅ Container '$CONTAINER_NAME' running on https://localhost:${PORT}"
+echo "✅ Container '$CONTAINER_NAME' running on http://localhost:${PORT}"

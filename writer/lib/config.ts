@@ -25,9 +25,7 @@ const PLAYGROUND_DIR: string =
   Deno.env.get("PLAYGROUND_DIR") || join(ROOT_DIR, "playground");
 const READER_DIR: string = Deno.env.get("READER_DIR") || join(ROOT_DIR, "reader-dist");
 const PLUGINS_DIR: string = join(ROOT_DIR, "plugins");
-const PORT: number = parseInt(Deno.env.get("PORT") || "8443", 10);
-const CERT_FILE: string | undefined = Deno.env.get("CERT_FILE");
-const KEY_FILE: string | undefined = Deno.env.get("KEY_FILE");
+const PORT: number = parseInt(Deno.env.get("PORT") || "8080", 10);
 const LLM_API_URL: string =
   Deno.env.get("LLM_API_URL") || "https://openrouter.ai/api/v1/chat/completions";
 const LLM_MODEL: string =
@@ -168,8 +166,6 @@ export {
   READER_DIR,
   PLUGINS_DIR,
   PORT,
-  CERT_FILE,
-  KEY_FILE,
   LLM_API_URL,
   LLM_MODEL,
   LLM_TEMPERATURE,

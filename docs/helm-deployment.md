@@ -25,10 +25,9 @@ helm install hr ./helm/heart-reverie \
 預設會建立：
 
 - Deployment（單一 Pod，運行 `ghcr.io/jim60105/heartreverie:latest`）
-- Service（ClusterIP，port 8443）
+- Service（ClusterIP，port 8080）
 - Secret（包含 `LLM_API_KEY`、`PASSPHRASE`、自動注入的 `PORT`）
 - PersistentVolumeClaim（10 GiB，存放 `playground/` 故事資料）
-- 自簽 TLS 憑證於 Pod 內 `/certs` 自動產生（除非設定 `HTTP_ONLY=true`）
 
 ## 為何只允許單一 Pod
 
@@ -83,41 +82,21 @@ helm install hr ./helm/heart-reverie \
 
 布林（`false`）與數值（`0`）會以字串形式（`"false"`、`"0"`）保留，不會被誤判為空值。空字串會從 Secret 中省略。
 
-## TLS 憑證設定
+## TLS 終結
 
-HeartReverie 預設啟用 TLS 以加密 Passphrase 與章節內容的傳輸；TLS 屬於建議的安全強化預設，而非任何前端功能的硬性需求。chart 預設以「Pod 內自簽憑證」方式提供 HTTPS；若部署於已終結 TLS 的反向代理之後，可改用純 HTTP（設定 `env.HTTP_ONLY=true`）。
+HeartReverie 容器只提供純 HTTP（預設 port 8080），**不**內建 TLS。請於上游元件終結 TLS：
 
-### 模式 1：預設自簽憑證（適合測試）
+- **Ingress controller**（推薦）：在 `ingress.tls` 中設定憑證來源（例如 cert-manager 簽發的 Secret），由 Ingress controller 對外提供 HTTPS、對內以 HTTP 連向 Service。
+- **Service mesh**：若使用 Istio／Linkerd 等 mesh，可由 sidecar 提供 mTLS。
+- **外部 Load Balancer**：在雲端 LB（ALB／GCLB）終結 TLS 後再轉發到 Service。
 
-`entrypoint.sh` 啟動時會在 `emptyDir` 掛載點 `/certs` 自動產生自簽憑證。Ingress controller 必須能容忍上游自簽憑證（見下方 ingress-nginx 範例）。
-
-### 模式 2：使用 cert-manager 簽發的真實憑證
-
-設定 `tls.existingSecret` 指向一個 `kubernetes.io/tls` 型別的 Secret。chart 會把該 Secret 的 `tls.crt`／`tls.key` 投影到 `/certs/cert.pem`／`/certs/key.pem`：
-
-```yaml
-tls:
-  existingSecret: hr-tls
-  # certKey: tls.crt   # 預設值
-  # keyKey: tls.key    # 預設值
-```
-
-若你的 Secret 使用其他 key 名稱（例如 `server.crt`／`server.key`），請覆寫 `tls.certKey`／`tls.keyKey`。
-
-### 模式 3：在 Ingress 終止 TLS、Pod 內走純 HTTP
-
-設定 `env.HTTP_ONLY=true`（**完全小寫**，與 `entrypoint.sh` 與 `writer/server.ts` 的執行期判斷一致）。chart 會跳過 `/certs` 掛載：
-
-```yaml
-env:
-  HTTP_ONLY: "true"
-```
+chart 不再提供任何 `tls.*` values 或 `/certs` 掛載。憑證／金鑰一律透過上述上游元件管理。
 
 ## Ingress 設定範例
 
 chart 內附兩份範例 values 檔，可直接以 `-f` 套用後再以 `--set` 帶入金鑰。
 
-### Traefik（HTTP_ONLY 模式，推薦）
+### Traefik
 
 ```bash
 helm install hr ./helm/heart-reverie \
@@ -127,11 +106,7 @@ helm install hr ./helm/heart-reverie \
   --set env.PASSPHRASE=open-sesame
 ```
 
-範例採用 HTTP_ONLY 模式，避免為了讓 Traefik 信任 Pod 自簽憑證而需要建立 `ServersTransport` CRD。範例檔開頭的註解區塊提供了「在 Pod 內保留 HTTPS」的替代方案。
-
-### ingress-nginx（上游 HTTPS）
-
-ingress-nginx 透過 annotation 即可跳過上游 TLS 驗證：
+### ingress-nginx
 
 ```bash
 helm install hr ./helm/heart-reverie \
@@ -194,4 +169,4 @@ serviceAccount:
 
 - 完整 values 表：[`helm/heart-reverie/README.md`](../helm/heart-reverie/README.md)
 - 環境變數總表：專案根目錄的 `AGENTS.md` 「Environment Variables」章節
-- 應用本身的設定載入邏輯：`writer/lib/config.ts`、`entrypoint.sh`
+- 應用本身的設定載入邏輯：`writer/lib/config.ts`、`writer/server.ts`、`scripts/serve.sh`

@@ -8,12 +8,11 @@
 
 ```
 system.md                 # Main Vento prompt template (entry point for LLM system prompt)
-entrypoint.sh             # Unified startup script: generates TLS certs, launches Deno server
 scripts/
-  serve.sh                # Dev startup script (calls entrypoint.sh)
+  serve.sh                # Dev startup script (sets umask 0002, execs deno run)
 writer/                   # Backend server (Hono, TypeScript ESM, Deno)
   app.ts                  # Hono app setup: middleware, route registration, static serving
-  server.ts               # Server entry: TLS/HTTP listener startup
+  server.ts               # Server entry: plain HTTP listener startup
   types.ts                # Shared TypeScript interfaces and types
   vendor/
     ventojs.d.ts          # Ambient type declarations for ventojs
@@ -131,11 +130,10 @@ assets/                   # Static assets (images)
 ## Running the Server
 
 ```bash
-./scripts/serve.sh        # Dev: starts HTTPS server at https://localhost:8443
-./entrypoint.sh           # Production: unified startup (also used by container)
+./scripts/serve.sh        # Dev: starts plain-HTTP server at http://localhost:8080
 ```
 
-The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on first run (unless `HTTP_ONLY=true` or custom certs are provided via `CERT_FILE`/`KEY_FILE`). HTTPS is the default for transport security; `HTTP_ONLY=true` is supported for deployments behind a TLS-terminating proxy.
+HeartReverie speaks plain HTTP only. For production, terminate TLS at an upstream reverse proxy or Kubernetes Ingress controller.
 
 ### Environment Variables
 
@@ -143,7 +141,7 @@ The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on 
 |----------|----------|---------|-------------|
 | `LLM_API_KEY` | Yes | — | LLM provider API key (stored in `.env`) |
 | `PASSPHRASE` | Yes | — | API authentication passphrase (stored in `.env`) |
-| `PORT` | No | `8443` | Server listen port |
+| `PORT` | No | `8080` | Server listen port |
 | `LLM_MODEL` | No | `deepseek/deepseek-v4-pro` | LLM model identifier |
 | `LLM_API_URL` | No | `https://openrouter.ai/api/v1/chat/completions` | LLM chat completions endpoint |
 | `LLM_TEMPERATURE` | No | `0.1` | Sampling temperature |
@@ -166,9 +164,6 @@ The `entrypoint.sh` script auto-generates self-signed TLS certs in `.certs/` on 
 | `READER_DIR` | No | `./reader-dist` | Frontend static files root |
 | `BACKGROUND_IMAGE` | No | `/assets/heart.webp` | Background image URL path for the web reader |
 | `PROMPT_FILE` | No | `playground/_prompts/system.md` | Custom prompt template file path |
-| `HTTP_ONLY` | No | — | Set to `true` to skip TLS (for reverse-proxy deployments) |
-| `CERT_FILE` | No | — | Custom TLS certificate file path |
-| `KEY_FILE` | No | — | Custom TLS private key file path |
 
 The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_API_KEY` and `PASSPHRASE`.
 
@@ -184,23 +179,9 @@ podman build -t heartreverie:latest .
 
 # Run
 podman run -d --name heartreverie \
-  -p 8443:8443 \
+  -p 8080:8080 \
   -e LLM_API_KEY=your-api-key \
   -e PASSPHRASE=your-passphrase \
-  -v ./playground:/app/playground:z \
-  heartreverie:latest
-```
-
-Optional: mount TLS certificates instead of using auto-generated ones:
-
-```bash
-podman run -d --name heartreverie \
-  -p 8443:8443 \
-  -e LLM_API_KEY=your-api-key \
-  -e PASSPHRASE=your-passphrase \
-  -e CERT_FILE=/certs/cert.pem \
-  -e KEY_FILE=/certs/key.pem \
-  -v ./certs:/certs:z \
   -v ./playground:/app/playground:z \
   heartreverie:latest
 ```

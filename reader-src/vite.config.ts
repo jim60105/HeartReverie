@@ -17,23 +17,19 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://localhost:8443",
-        secure: false,
+        target: "http://localhost:8080",
         changeOrigin: true,
       },
       "/plugins": {
-        target: "https://localhost:8443",
-        secure: false,
+        target: "http://localhost:8080",
         changeOrigin: true,
       },
       "/assets": {
-        target: "https://localhost:8443",
-        secure: false,
+        target: "http://localhost:8080",
         changeOrigin: true,
       },
       "/js": {
-        target: "https://localhost:8443",
-        secure: false,
+        target: "http://localhost:8080",
         changeOrigin: true,
       },
     },
