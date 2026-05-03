@@ -155,3 +155,55 @@ jobs:
         with:
           subject-name: quay.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.get_digest.outputs.manifest_digest }}
+
+  dispatch-forgejo-plugins:
+    name: Dispatch Forgejo Plugins Build
+    runs-on: ubuntu-latest
+    needs: merge
+    steps:
+      - name: Dispatch Forgejo workflow
+        env:
+          FORGEJO_API_TOKEN: ${{ secrets.FORGEJO_API_TOKEN }}
+          FORGEJO_BASE_URL: ${{ vars.FORGEJO_BASE_URL }}
+          FORGEJO_PLUGINS_REPO: ${{ vars.FORGEJO_PLUGINS_REPO }}
+          FORGEJO_PLUGINS_WORKFLOW: ${{ vars.FORGEJO_PLUGINS_WORKFLOW }}
+          FORGEJO_PLUGINS_REF: ${{ vars.FORGEJO_PLUGINS_REF }}
+          TRIGGER_RUN_ID: ${{ github.run_id }}
+          TRIGGER_SHA: ${{ github.sha }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg ref "${FORGEJO_PLUGINS_REF:-refs/heads/master}" \
+            --arg trigger_source "github-docker-publish-latest" \
+            --arg release_version "" \
+            --arg trigger_tag "latest" \
+            --arg trigger_run_id "${TRIGGER_RUN_ID}" \
+            --arg trigger_sha "${TRIGGER_SHA}" \
+            '{
+              ref: $ref,
+              inputs: {
+                trigger_source: $trigger_source,
+                release_version: $release_version,
+                trigger_tag: $trigger_tag,
+                trigger_run_id: $trigger_run_id,
+                trigger_sha: $trigger_sha
+              }
+            }')
+
+          ENDPOINT="${FORGEJO_BASE_URL}/repos/${FORGEJO_PLUGINS_REPO}/actions/workflows/${FORGEJO_PLUGINS_WORKFLOW}/dispatches"
+          echo "Dispatching to: ${ENDPOINT}"
+
+          HTTP_STATUS=$(curl -s -o /tmp/dispatch_response.json -w "%{http_code}" \
+            -X POST "${ENDPOINT}" \
+            -H "Authorization: token ${FORGEJO_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${PAYLOAD}")
+
+          echo "HTTP status: ${HTTP_STATUS}"
+          cat /tmp/dispatch_response.json
+
+          if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+            echo "::error::Forgejo dispatch failed with HTTP ${HTTP_STATUS}. Endpoint: ${ENDPOINT}"
+            exit 1
+          fi
+
+          echo "Forgejo workflow dispatch successful"
