@@ -44,7 +44,7 @@ The `StorySelector.vue` component SHALL allow the user to create a new story by 
 
 ### Requirement: Story loading
 
-When a story is selected (either from the dropdown or after creation), the `StorySelector.vue` component SHALL navigate to the story route `/:series/:story` using `router.push()` instead of emitting a `load` event. The router navigation SHALL trigger `useChapterNav()` to load chapters from the backend via route param watching. This replaces the event-based loading pattern with route-based navigation. In FSA mode (no backend story), the existing `loadFromFSA()` flow SHALL remain unchanged since it does not involve routing.
+When a story is selected (either from the dropdown or after creation), the `StorySelector.vue` component SHALL navigate to the story route `/:series/:story` using `router.push()` instead of emitting a `load` event. The router navigation SHALL trigger `useChapterNav()` to load chapters from the backend via route param watching. This replaces the event-based loading pattern with route-based navigation.
 
 #### Scenario: Load story from backend via router
 - **WHEN** the user selects a story from the story selector

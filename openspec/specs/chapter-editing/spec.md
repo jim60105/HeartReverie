@@ -124,7 +124,7 @@ The reader frontend SHALL provide UI controls to invoke the three mutation endpo
 
 **After a successful edit the frontend SHALL call `useChapterNav().refreshAfterEdit(targetChapter)` (NOT `reloadToLast()`), where `targetChapter` is the chapter number the user edited. This guarantees the user stays on the chapter they just modified instead of being teleported to the last chapter of the story. `refreshAfterEdit` SHALL invalidate the rendered chapter view such that, when `<ChapterContent>` next renders, the markdown rendering pipeline re-runs and plugin `frontend-render` and `chapter:render:after` hooks are dispatched for that render — even when the new content is byte-identical to the old content. The `ContentArea.vue` sidebar relocation watch (defined in the `vue-component-architecture` spec) SHALL re-run as part of the same render-invalidation cycle so any newly-produced `.plugin-sidebar` panels are moved into `<Sidebar>`.**
 
-After a successful rewind the frontend SHALL reload the chapter list and navigate to the new last chapter (`reloadToLast()`). After a successful branch the frontend SHALL navigate to the newly created story via Vue Router. These controls SHALL only be visible in backend mode (`useChapterNav().mode.value === "backend"`) — the File System Access mode does not support server-side mutations.
+After a successful rewind the frontend SHALL reload the chapter list and navigate to the new last chapter (`reloadToLast()`). After a successful branch the frontend SHALL navigate to the newly created story via Vue Router. These controls SHALL be unconditionally available — backend mode is the only reader mode and supports all three mutations.
 
 #### Scenario: Edit flow updates content and stays on the edited chapter
 - **WHEN** the user clicks "Edit" on chapter 2, modifies the text, and clicks "Save"
@@ -145,7 +145,3 @@ After a successful rewind the frontend SHALL reload the chapter list and navigat
 #### Scenario: Branch navigates to the new story
 - **WHEN** the user clicks "Branch from here" on chapter 3 and submits the dialog
 - **THEN** the frontend SHALL call `POST /api/stories/:series/:name/branch` with `fromChapter: 3`, and on HTTP 201 SHALL navigate via Vue Router to the named `chapter` route `/:series/:story/chapter/:chapter` (resolving to `/:series/<newName>/chapter/3` — the actual path pattern registered in `reader-src/src/router/index.ts`)
-
-#### Scenario: Controls are hidden in FSA mode
-- **WHEN** `useChapterNav().mode.value === "fsa"`
-- **THEN** `ChapterContent.vue` SHALL NOT render the edit, rewind, or branch controls

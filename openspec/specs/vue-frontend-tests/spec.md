@@ -148,19 +148,11 @@ The migrated test suite SHALL contain at least 113 test cases (matching the curr
 
 ### Requirement: Mock patterns for browser APIs
 
-Tests requiring browser APIs SHALL use Vitest mocking utilities (`vi.fn()`, `vi.mock()`, `vi.stubGlobal()`) to provide test doubles. The following browser APIs SHALL have mock implementations: File System Access API (`window.showDirectoryPicker`, `FileSystemDirectoryHandle`, `FileSystemFileHandle`), IndexedDB (via `fake-indexeddb` or manual mock), `fetch` (via `vi.fn()` returning mock Response objects), `navigator.clipboard` (via `vi.stubGlobal`), `localStorage` (via `vi.stubGlobal` or jsdom built-in), and `window.location` (hash manipulation for chapter state).
+Tests requiring browser APIs SHALL use Vitest mocking utilities (`vi.fn()`, `vi.mock()`, `vi.stubGlobal()`) to provide test doubles. The following browser APIs SHALL have mock implementations: `fetch` (via `vi.fn()` returning mock Response objects), `navigator.clipboard` (via `vi.stubGlobal`), `localStorage` (via `vi.stubGlobal` or jsdom built-in), and `window.location` (hash manipulation for chapter state).
 
 #### Scenario: Fetch mock for API calls
 - **WHEN** a composable test calls a function that invokes `fetch('/api/auth', ...)`
 - **THEN** `fetch` SHALL be mocked with `vi.fn()` returning a controlled `Response` object, and the test SHALL verify the request URL, method, and headers
-
-#### Scenario: File System Access API mock
-- **WHEN** `useFileReader()` tests call `openDirectory()`
-- **THEN** `window.showDirectoryPicker` SHALL be mocked to return a fake `FileSystemDirectoryHandle` with controllable `entries()` and `getFileHandle()` methods
-
-#### Scenario: IndexedDB mock for session persistence
-- **WHEN** `useFileReader()` tests verify session restore/save
-- **THEN** IndexedDB operations SHALL be mocked (via `fake-indexeddb` or manual stubs) to simulate storing and retrieving directory handles
 
 #### Scenario: localStorage mock for prompt editor
 - **WHEN** `usePromptEditor()` tests verify template persistence
