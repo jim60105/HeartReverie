@@ -60,11 +60,10 @@ COPY reader-src/ ./reader-src/
 
 ENV DENO_DIR=/deno-dir
 
-WORKDIR /app/reader-src
+WORKDIR /app
 
-# Type-check and build the frontend
-RUN deno run -A npm:vue-tsc@^2.2.8 --noEmit && \
-    deno run -A npm:vite@^6.3.2 build --outDir ../reader-dist
+# Type-check and build the frontend using the project task versions.
+RUN deno task build:reader
 
 ########################################
 # Final stage
