@@ -7,11 +7,11 @@ Migration of the writer backend from Node.js to Deno 2.x runtime with Hono frame
 ## Requirements
 
 ### Requirement: Deno runtime
-The writer backend SHALL run on Deno 2.x with explicit permission flags (`--allow-net`, `--allow-read`, `--allow-write`, `--allow-env`).
+The writer backend SHALL run on Deno 2.x with explicit permission flags (`--allow-net`, `--allow-read`, `--allow-write`, `--allow-env`, `--allow-run`).
 
 #### Scenario: Server startup on Deno
 - **WHEN** the developer runs `deno run` with appropriate permissions
-- **THEN** the server starts and accepts HTTPS connections
+- **THEN** the server starts and accepts plain HTTP connections
 
 ### Requirement: Deno dependency management
 All dependencies SHALL be managed via `deno.json` import map using `jsr:` or `npm:` specifiers. No `package.json` or `node_modules` directory.
@@ -48,13 +48,6 @@ Environment variables SHALL be accessed via `Deno.env.get()`. Timing-safe compar
 - **WHEN** reading configuration from environment
 - **THEN** the code uses `Deno.env.get("VAR_NAME")` (not `process.env.VAR_NAME`)
 
-### Requirement: Deno TLS server
-The HTTPS server SHALL use Deno's native TLS support via `Deno.serve()` with `cert` and `key` options.
-
-#### Scenario: TLS server startup
-- **WHEN** the server starts with cert and key file paths
-- **THEN** it listens on HTTPS using Deno's built-in TLS (not Node.js `https.createServer`)
-
 ### Requirement: Vento template engine compatibility
 The Vento template engine SHALL be imported as `npm:ventojs` and function identically to the Node.js version.
 
@@ -70,8 +63,13 @@ All tests SHALL be migrated to Deno's built-in test runner using `Deno.test()` a
 - **THEN** all backend and frontend tests execute and pass
 
 ### Requirement: serve.sh update
-The `scripts/serve.sh` script SHALL invoke `deno` instead of `node`, with appropriate permission flags.
+The `scripts/serve.sh` script SHALL invoke `deno` instead of `node`, with appropriate permission flags. The script SHALL exec `deno run` directly (no `entrypoint.sh` delegation) and SHALL NOT contain any TLS / cert-generation logic.
 
 #### Scenario: Script invocation
 - **WHEN** the developer runs `./scripts/serve.sh`
-- **THEN** the script checks for `deno` (not `node`), and execs `deno run` with `--allow-net --allow-read --allow-write --allow-env`
+- **THEN** the script checks for `deno` (not `node`), and execs `deno run` with `--allow-net --allow-read --allow-write --allow-env --allow-run`
+
+#### Scenario: No cert handling in serve.sh
+
+- **WHEN** `scripts/serve.sh` is examined
+- **THEN** it SHALL NOT invoke `openssl`, SHALL NOT mention `CERT_FILE` / `KEY_FILE` / `HTTP_ONLY`, and SHALL NOT exec any `entrypoint.sh`

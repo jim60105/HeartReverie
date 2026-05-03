@@ -60,34 +60,34 @@ Affected files:
 - **WHEN** `writer/routes/prompt.ts` calls `Deno.writeTextFile()` to save a prompt template
 - **THEN** the call MUST include `{ mode: 0o664 }` in its options
 
-### Requirement: Entrypoint umask
+### Requirement: Process umask is set at startup
 
-`entrypoint.sh` MUST set `umask 002` immediately after the shebang line and `set -eu`, before any file-creating operations. This ensures that all child processes create files with group-writable permissions by default (directories: 775, files: 664).
+The container `CMD` and `scripts/serve.sh` MUST set `umask 0002` at process-start time, before the Deno server begins serving requests. In the Containerfile this is done by setting `CMD` to `["sh", "-c", "umask 0002 && exec deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts"]`. In `scripts/serve.sh` it is done by inserting a `umask 0002` line at the top of the script (after `set -euo pipefail`, before `exec deno run …`). The umask discipline preserves OpenShift arbitrary-UID + shared-GID-0 group-write semantics on directories the application creates at runtime via `Deno.mkdir({ recursive: true, mode: 0o775 })`, since Deno's `mkdir` honours the inherited process umask.
 
-#### Scenario: umask set early in entrypoint
-- **WHEN** `entrypoint.sh` is examined
-- **THEN** `umask 002` SHALL appear after `#!/bin/sh` and `set -eu` but before any `openssl`, `mkdir`, or other file-creating commands
+#### Scenario: Containerfile CMD includes umask 0002
 
-### Requirement: TLS certificate file permissions
+- **WHEN** the root `Containerfile` final-stage `CMD` JSON array is examined
+- **THEN** the `sh -c` argument string SHALL contain the substring `umask 0002` followed by `exec deno run`
 
-After generating self-signed TLS certificates, `entrypoint.sh` MUST explicitly set file permissions: `chmod 664` for the certificate (group-rw, other-r) and `chmod 660` for the private key (group-rw, no other access). This is necessary because OpenSSL hardcodes private key files to mode 0600 regardless of the process umask, which would prevent a subsequent container restart under a different arbitrary UID (still in GID 0) from reading the key. The private key MUST NOT be world-readable.
+#### Scenario: scripts/serve.sh sets umask 0002
 
-#### Scenario: Generated TLS cert is group-readable
-- **WHEN** `entrypoint.sh` generates self-signed TLS certificates via `openssl`
-- **THEN** the entrypoint MUST run `chmod 664` on the certificate file and `chmod 660` on the private key file after generation, ensuring the key is not world-readable
+- **WHEN** `scripts/serve.sh` is read top-to-bottom
+- **THEN** there SHALL be a `umask 0002` line that runs before the final `exec deno run …` line
 
-#### Scenario: Existing TLS certs remain accessible
-- **WHEN** the container restarts with a different arbitrary UID (same GID 0) and TLS certs already exist
-- **THEN** the key and cert files SHALL be readable by the new UID because they have group-read permissions
+#### Scenario: Runtime-created directory is group-writable
+
+- **WHEN** the running container creates a directory at runtime via code that calls `Deno.mkdir(path, { recursive: true, mode: 0o775 })`
+- **THEN** the resulting directory mode SHALL include the group-write bit (`0o775`, NOT `0o755`)
 
 ### Requirement: Git executable permissions
 
-Shell scripts `entrypoint.sh` and `scripts/serve.sh` MUST be tracked in git with the executable permission bit set (filemode `100755`), not `100644`. This ensures the scripts are executable when checked out and when copied into the container image.
-
-#### Scenario: entrypoint.sh is executable in git
-- **WHEN** `git ls-files -s entrypoint.sh` is examined
-- **THEN** the filemode SHALL be `100755`
+`scripts/serve.sh` MUST be tracked in git with the executable permission bit set (filemode `100755`), not `100644`. This ensures the script is executable when checked out and when copied into the container image. The `entrypoint.sh` script no longer exists in the repository (deleted as part of removing in-application TLS), so its filemode requirement is dropped.
 
 #### Scenario: serve.sh is executable in git
 - **WHEN** `git ls-files -s scripts/serve.sh` is examined
 - **THEN** the filemode SHALL be `100755`
+
+#### Scenario: entrypoint.sh does not exist
+
+- **WHEN** the repository root is examined
+- **THEN** there SHALL be no file at `entrypoint.sh` (`ls entrypoint.sh` returns "No such file or directory")

@@ -83,4 +83,4 @@
 
 ## 12. Archive workflow (post-implementation)
 
-- [ ] 12.1 After all tasks 1–10 are done and `openspec validate remove-tls-from-application --strict` passes, run the archive workflow per the `openspec-archive-change` skill: sync delta specs to main, `git mv` change dir under `openspec/changes/archive/<date>-remove-tls-from-application/`, single commit with `Co-authored-by: Copilot <…>` trailer.
+- [x] 12.1 After all tasks 1–10 are done and `openspec validate remove-tls-from-application --strict` passes, run the archive workflow per the `openspec-archive-change` skill: sync delta specs to main, `git mv` change dir under `openspec/changes/archive/<date>-remove-tls-from-application/`, single commit with `Co-authored-by: Copilot <…>` trailer.
