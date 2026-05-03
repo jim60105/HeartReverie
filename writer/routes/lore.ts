@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { dirname, join } from "@std/path";
-import { isValidParam } from "../lib/middleware.ts";
+import { isReservedDirectoryName, isValidParam } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
 import {
   collectPassagesFromScope,
@@ -132,7 +132,7 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
         for await (const seriesEntry of Deno.readDir(playgroundDir)) {
           if (
             seriesEntry.isDirectory && !seriesEntry.name.startsWith(".")
-            && !seriesEntry.name.startsWith("_")
+            && !isReservedDirectoryName(seriesEntry.name)
           ) {
             // Series-level lore
             allPassages.push(
@@ -149,7 +149,7 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
               ) {
                 if (
                   storyEntry.isDirectory && !storyEntry.name.startsWith(".")
-                  && !storyEntry.name.startsWith("_")
+                  && !isReservedDirectoryName(storyEntry.name)
                 ) {
                   allPassages.push(
                     ...await collectPassagesFromScope(

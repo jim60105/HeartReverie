@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { validateParams } from "../lib/middleware.ts";
+import { isReservedDirectoryName, validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
@@ -33,7 +33,7 @@ export function registerStoriesRoutes(app: Hono, deps: Pick<AppDeps, "safePath" 
           (e) =>
             e.isDirectory &&
             !e.name.startsWith(".") &&
-            !e.name.startsWith("_")
+            !isReservedDirectoryName(e.name)
         )
         .map((e) => e.name);
       return c.json(dirs);
@@ -55,7 +55,7 @@ export function registerStoriesRoutes(app: Hono, deps: Pick<AppDeps, "safePath" 
         entries.push(entry);
       }
       const dirs = entries
-        .filter((e) => e.isDirectory && !e.name.startsWith(".") && !e.name.startsWith("_"))
+        .filter((e) => e.isDirectory && !e.name.startsWith(".") && !isReservedDirectoryName(e.name))
         .map((e) => e.name);
       return c.json(dirs);
     } catch (err: unknown) {

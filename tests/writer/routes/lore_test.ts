@@ -251,6 +251,52 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
       await makeRequest(app, "DELETE", "/api/lore/story/s1/t1/sp.md");
     });
 
+    await t.step("GET /api/lore/tags skips reserved platform directories during traversal", async () => {
+      const reservedPassage = "---\ntags: [forbidden]\npriority: 0\nenabled: true\n---\n\nreserved";
+      await Deno.mkdir(join(tmpDir, "lost+found", "_lore"), { recursive: true });
+      await Deno.writeTextFile(join(tmpDir, "lost+found", "_lore", "x.md"), reservedPassage);
+      await Deno.mkdir(join(tmpDir, "$RECYCLE.BIN", "_lore"), { recursive: true });
+      await Deno.writeTextFile(join(tmpDir, "$RECYCLE.BIN", "_lore", "x.md"), reservedPassage);
+      await Deno.mkdir(join(tmpDir, "System Volume Information", "_lore"), { recursive: true });
+      await Deno.writeTextFile(join(tmpDir, "System Volume Information", "_lore", "x.md"), reservedPassage);
+      await Deno.mkdir(join(tmpDir, ".Spotlight-V100", "_lore"), { recursive: true });
+      await Deno.writeTextFile(join(tmpDir, ".Spotlight-V100", "_lore", "x.md"), reservedPassage);
+      await Deno.mkdir(join(tmpDir, ".Trashes", "_lore"), { recursive: true });
+      await Deno.writeTextFile(join(tmpDir, ".Trashes", "_lore", "x.md"), reservedPassage);
+      await Deno.mkdir(join(tmpDir, ".fseventsd", "_lore"), { recursive: true });
+      await Deno.writeTextFile(join(tmpDir, ".fseventsd", "_lore", "x.md"), reservedPassage);
+      await Deno.mkdir(join(tmpDir, "normalSeries", "lost+found", "_lore"), { recursive: true });
+      await Deno.writeTextFile(join(tmpDir, "normalSeries", "lost+found", "_lore", "x.md"), reservedPassage);
+      await Deno.mkdir(join(tmpDir, "normalSeries", "$RECYCLE.BIN", "_lore"), { recursive: true });
+      await Deno.writeTextFile(join(tmpDir, "normalSeries", "$RECYCLE.BIN", "_lore", "x.md"), reservedPassage);
+      await Deno.mkdir(join(tmpDir, "normalSeries", "System Volume Information", "_lore"), {
+        recursive: true,
+      });
+      await Deno.writeTextFile(
+        join(tmpDir, "normalSeries", "System Volume Information", "_lore", "x.md"),
+        reservedPassage,
+      );
+      await Deno.mkdir(join(tmpDir, "normalSeries", ".Spotlight-V100", "_lore"), { recursive: true });
+      await Deno.writeTextFile(
+        join(tmpDir, "normalSeries", ".Spotlight-V100", "_lore", "x.md"),
+        reservedPassage,
+      );
+      await Deno.mkdir(join(tmpDir, "normalSeries", ".Trashes", "_lore"), { recursive: true });
+      await Deno.writeTextFile(
+        join(tmpDir, "normalSeries", ".Trashes", "_lore", "x.md"),
+        reservedPassage,
+      );
+      await Deno.mkdir(join(tmpDir, "normalSeries", ".fseventsd", "_lore"), { recursive: true });
+      await Deno.writeTextFile(
+        join(tmpDir, "normalSeries", ".fseventsd", "_lore", "x.md"),
+        reservedPassage,
+      );
+
+      const res = await makeRequest(app, "GET", "/api/lore/tags");
+      assertEquals(res.status, 200);
+      assertEquals(res.body.includes("forbidden"), false);
+    });
+
     // ── Subdirectory Passages ────────────────────────────────────────────
 
     await t.step("PUT creates a passage in a subdirectory", async () => {
@@ -345,6 +391,37 @@ Deno.test({ name: "lore routes", sanitizeOps: false, sanitizeResources: false, f
     await t.step("DELETE with invalid story param → 400", async () => {
       const res = await makeRequest(app, "DELETE", "/api/lore/story/ok/bad..param/test.md");
       assertEquals(res.status, 400);
+    });
+
+    await t.step("story routes reject reserved story directory names → 400", async () => {
+      const reservedNames = [
+        "lost+found",
+        "$RECYCLE.BIN",
+        "System Volume Information",
+        ".Spotlight-V100",
+        ".Trashes",
+        ".fseventsd",
+      ];
+
+      for (const name of reservedNames) {
+        const encoded = encodeURIComponent(name);
+        const getRes = await makeRequest(app, "GET", `/api/lore/story/ok/${encoded}`);
+        assertEquals(getRes.status, 400);
+        assertEquals(getRes.body?.detail, "Invalid parameter: story");
+
+        const putRes = await makeRequest(
+          app,
+          "PUT",
+          `/api/lore/story/ok/${encoded}/test.md`,
+          passageBody([], "content"),
+        );
+        assertEquals(putRes.status, 400);
+        assertEquals(putRes.body?.detail, "Invalid parameter: story");
+
+        const deleteRes = await makeRequest(app, "DELETE", `/api/lore/story/ok/${encoded}/test.md`);
+        assertEquals(deleteRes.status, 400);
+        assertEquals(deleteRes.body?.detail, "Invalid parameter: story");
+      }
     });
 
     await t.step("GET list with invalid series param → 400", async () => {
