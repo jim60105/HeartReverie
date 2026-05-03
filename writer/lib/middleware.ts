@@ -22,8 +22,21 @@ import { createLogger } from "./logger.ts";
 
 const log = createLogger("auth");
 
+const RESERVED_PLATFORM_DIRECTORY_NAMES = new Set<string>([
+  "lost+found",
+  "$RECYCLE.BIN",
+  "System Volume Information",
+  ".Spotlight-V100",
+  ".Trashes",
+  ".fseventsd",
+]);
+
+export function isReservedDirectoryName(value: string): boolean {
+  return value.startsWith("_") || RESERVED_PLATFORM_DIRECTORY_NAMES.has(value);
+}
+
 export function isValidParam(value: string): boolean {
-  return !/\.\.|\x00|[/\\]/.test(value) && !value.startsWith("_");
+  return !/\.\.|\x00|[/\\]/.test(value) && !isReservedDirectoryName(value);
 }
 
 export function createSafePath(playgroundDir: string): SafePathFn {

@@ -59,6 +59,16 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
   await Deno.mkdir(join(tmpDir, ".hidden"), { recursive: true });
   await Deno.mkdir(join(tmpDir, "_lore"), { recursive: true });
   await Deno.mkdir(join(tmpDir, "_prompts"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "lost+found"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "$RECYCLE.BIN"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "System Volume Information"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, ".Spotlight-V100"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, ".Trashes"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, ".fseventsd"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "scifi", "lost+found"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "scifi", "$RECYCLE.BIN"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "scifi", "System Volume Information"), { recursive: true });
+  await Deno.mkdir(join(tmpDir, "scifi", ".Trashes"), { recursive: true });
 
   const safePath = createSafePath(tmpDir);
   const app = createApp({
@@ -91,6 +101,12 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
       assert(!res.body.includes(".hidden"));
       assert(!res.body.includes("_lore"));
       assert(!res.body.includes("_prompts"));
+      assert(!res.body.includes("lost+found"));
+      assert(!res.body.includes("$RECYCLE.BIN"));
+      assert(!res.body.includes("System Volume Information"));
+      assert(!res.body.includes(".Spotlight-V100"));
+      assert(!res.body.includes(".Trashes"));
+      assert(!res.body.includes(".fseventsd"));
     });
 
     await t.step("GET /api/stories/:series lists subdirectories excluding underscore-prefixed", async () => {
@@ -99,11 +115,21 @@ Deno.test({ name: "stories routes", sanitizeOps: false, sanitizeResources: false
       assert(Array.isArray(res.body));
       assert(res.body.includes("story1"));
       assert(!res.body.includes("_lore"));
+      assert(!res.body.includes("lost+found"));
+      assert(!res.body.includes("$RECYCLE.BIN"));
+      assert(!res.body.includes("System Volume Information"));
+      assert(!res.body.includes(".Trashes"));
     });
 
     await t.step("GET /api/stories/:series returns 404 for nonexistent series", async () => {
       const res = await makeRequest(app, "GET", "/api/stories/nonexistent");
       assertEquals(res.status, 404);
+    });
+
+    await t.step("GET /api/stories/:series rejects reserved platform directory names", async () => {
+      const res = await makeRequest(app, "GET", "/api/stories/lost%2Bfound");
+      assertEquals(res.status, 400);
+      assertEquals(res.body?.detail, "Invalid parameter: series");
     });
 
     await t.step("WHEN readDir throws on GET /api/stories THEN returns 500", async () => {

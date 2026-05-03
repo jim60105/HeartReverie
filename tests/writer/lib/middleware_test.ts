@@ -200,4 +200,50 @@ Deno.test("validateParams", async (t) => {
     assertEquals(res.status, 400);
     assertMatch(body.detail, /Invalid parameter/);
   });
+
+  await t.step("returns 400 for reserved platform directory names", async () => {
+    const app = new Hono();
+    app.use("/:series", validateParams);
+    app.all("/:series", (c) => c.json({ ok: true }));
+
+    const reservedNames = [
+      "lost+found",
+      "$RECYCLE.BIN",
+      "System Volume Information",
+      ".Spotlight-V100",
+      ".Trashes",
+      ".fseventsd",
+    ];
+
+    for (const name of reservedNames) {
+      const encoded = encodeURIComponent(name);
+      const res = await app.fetch(new Request(`http://localhost/${encoded}`));
+      const body = await res.json();
+      assertEquals(res.status, 400);
+      assertMatch(body.detail, /Invalid parameter/);
+    }
+  });
+
+  await t.step("returns 400 for reserved platform names in story param", async () => {
+    const app = new Hono();
+    app.use("/:series/:name", validateParams);
+    app.all("/:series/:name", (c) => c.json({ ok: true }));
+
+    const reservedNames = [
+      "lost+found",
+      "$RECYCLE.BIN",
+      "System Volume Information",
+      ".Spotlight-V100",
+      ".Trashes",
+      ".fseventsd",
+    ];
+
+    for (const name of reservedNames) {
+      const encoded = encodeURIComponent(name);
+      const res = await app.fetch(new Request(`http://localhost/ok-series/${encoded}`));
+      const body = await res.json();
+      assertEquals(res.status, 400);
+      assertMatch(body.detail, /Invalid parameter/);
+    }
+  });
 });
