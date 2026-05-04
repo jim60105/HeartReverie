@@ -85,6 +85,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
       isFirstRound: false,
       ventoError: null,
     }) as unknown as BuildPromptResult,
+    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     verifyPassphrase,
   } as AppDeps);
 
@@ -128,6 +129,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         verifyPassphrase,
       } as AppDeps);
       const res = await makeRequest(appNoTemplate, "GET", "/api/template");
@@ -155,6 +157,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         verifyPassphrase,
       } as AppDeps);
 
@@ -203,6 +206,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         verifyPassphrase,
       } as AppDeps);
 
@@ -235,6 +239,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         verifyPassphrase,
       } as AppDeps);
 
@@ -266,6 +271,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         verifyPassphrase,
       } as AppDeps);
 
@@ -335,6 +341,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
             ventoError: null,
           } as unknown as BuildPromptResult;
         },
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         verifyPassphrase,
       } as AppDeps);
 
@@ -394,6 +401,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
           isFirstRound: true,
           ventoError: { stage: "prompt-assembly", message: "undefined var" },
         }) as unknown as BuildPromptResult,
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         verifyPassphrase,
       } as AppDeps);
       const res = await makeRequest(
@@ -427,6 +435,7 @@ Deno.test({ name: "prompt routes", sanitizeOps: false, sanitizeResources: false,
         buildPromptFromStory: async () => {
           throw new Error("boom");
         },
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         verifyPassphrase,
       } as AppDeps);
 

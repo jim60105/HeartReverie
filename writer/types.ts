@@ -108,6 +108,14 @@ export type BuildPromptFn = (
   extraVariables?: Record<string, unknown>,
 ) => Promise<BuildPromptResult>;
 
+/** Function signature for buildContinuePromptFromStory. */
+export type BuildContinuePromptFn = (
+  series: string,
+  name: string,
+  storyDir: string,
+  template?: string,
+) => Promise<ContinuePromptResult>;
+
 /** Top-level dependency bag passed to createApp and route registrars. */
 export interface AppDeps {
   readonly config: AppConfig;
@@ -115,6 +123,7 @@ export interface AppDeps {
   readonly pluginManager: PluginManager;
   readonly hookDispatcher: HookDispatcher;
   readonly buildPromptFromStory: BuildPromptFn;
+  readonly buildContinuePromptFromStory: BuildContinuePromptFn;
   readonly verifyPassphrase: MiddlewareHandler;
 }
 
@@ -314,6 +323,7 @@ export type HookHandler = (context: Record<string, unknown>) => Promise<void>;
 export interface StoryEngine {
   stripPromptTags: (content: string) => string;
   buildPromptFromStory: BuildPromptFn;
+  buildContinuePromptFromStory: BuildContinuePromptFn;
 }
 
 /** Return type of createTemplateEngine(). */
@@ -380,6 +390,26 @@ export interface BuildPromptResult {
   ventoError: VentoError | null;
   chapterFiles: string[];
   chapters: ChapterEntry[];
+}
+
+/**
+ * Result of `buildContinuePromptFromStory()`. Carries the rendered
+ * `messages` (with the optional trailing assistant prefill already
+ * appended), plus the metadata required by `streamLlmAndPersist` to operate
+ * on the existing latest chapter file (`targetChapterNumber`,
+ * `existingContent` for the snapshot guard).
+ *
+ * On Vento failure `messages` is empty and `ventoError` carries the
+ * RFC 9457-shaped error.
+ */
+export interface ContinuePromptResult {
+  messages: ChatMessage[];
+  ventoError: VentoError | null;
+  targetChapterNumber: number;
+  /** Unstripped chapter-n bytes captured at parse time. */
+  existingContent: string;
+  userMessageText: string;
+  assistantPrefill: string;
 }
 
 /** A chapter entry with number and content. */

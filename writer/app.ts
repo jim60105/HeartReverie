@@ -126,6 +126,7 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 300 }));
   app.use("/api/auth/verify", rateLimiter({ windowMs: 60_000, limit: 30 }));
   app.use("/api/stories/:series/:name/chat", rateLimiter({ windowMs: 60_000, limit: 30 }));
+  app.use("/api/stories/:series/:name/chat/continue", rateLimiter({ windowMs: 60_000, limit: 30 }));
   app.use("/api/plugins/:pluginName/run-prompt", rateLimiter({ windowMs: 60_000, limit: 30 }));
   app.use("/api/stories/:series/:name/preview-prompt", rateLimiter({ windowMs: 60_000, limit: 60 }));
 

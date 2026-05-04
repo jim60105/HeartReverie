@@ -10,8 +10,8 @@ import PluginActionBar from "./PluginActionBar.vue";
 import { useChatApi } from "@/composables/useChatApi";
 
 const route = useRoute();
-const { isLastChapter, chapters, getBackendContext, reloadToLast } = useChapterNav();
-const { sendMessage, resendMessage } = useChatApi();
+const { isLastChapter, chapters, chapterCount, latestChapterIsEmpty, getBackendContext, reloadToLast } = useChapterNav();
+const { sendMessage, resendMessage, continueLastChapter } = useChatApi();
 
 const chatInputKey = computed(() =>
   `${route.params.series ?? ""}:${route.params.story ?? ""}`
@@ -44,6 +44,16 @@ async function handleResend(message: string) {
   }
 }
 
+async function handleContinue() {
+  const ctx = getBackendContext();
+  if (!ctx.series || !ctx.story) return;
+
+  const success = await continueLastChapter(ctx.series, ctx.story);
+  if (success) {
+    await reloadToLast();
+  }
+}
+
 function handleOptionSelect(text: string) {
   chatInputRef.value?.appendText(text);
 }
@@ -69,8 +79,11 @@ onMounted(() => {
         v-if="showChatInput"
         :key="chatInputKey"
         ref="chatInputRef"
+        :chapter-count="chapterCount"
+        :latest-chapter-is-empty="latestChapterIsEmpty"
         @send="handleSend"
         @resend="handleResend"
+        @continue="handleContinue"
       >
         <template #tools>
           <!-- Tool buttons can be slotted here by parent -->

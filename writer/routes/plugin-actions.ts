@@ -390,6 +390,13 @@ export async function runPluginActionWithDeps(
       return { ok: false, aborted: true };
     }
     if (err instanceof ChatError) {
+      log.error("Plugin action chat error", {
+        plugin: pluginName,
+        code: err.code,
+        httpStatus: err.httpStatus,
+        detail: err.message,
+        ventoError: err.ventoError,
+      });
       // Map specific codes to plugin-action problems where the spec demands
       // a distinct error type.
       if (err.code === "no-chapter") {

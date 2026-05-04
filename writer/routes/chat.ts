@@ -15,7 +15,7 @@
 
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
-import { executeChat, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
+import { executeChat, executeContinue, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
@@ -36,10 +36,11 @@ const ERROR_TITLES: Record<string, string> = {
   "story-config": "Unprocessable Entity",
   "no-chapter": "Bad Request",
   "concurrent": "Conflict",
+  "conflict": "Conflict",
 };
 
-export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "hookDispatcher" | "buildPromptFromStory" | "config">): void {
-  const { safePath, hookDispatcher, buildPromptFromStory, config } = deps;
+export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "hookDispatcher" | "buildPromptFromStory" | "buildContinuePromptFromStory" | "config">): void {
+  const { safePath, hookDispatcher, buildPromptFromStory, buildContinuePromptFromStory, config } = deps;
 
   app.post(
     "/api/stories/:series/:name/chat",
@@ -80,6 +81,13 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           return c.json(problemJson("Client Closed Request", 499, "Generation aborted by client"), 499 as ContentfulStatusCode);
         }
         if (err instanceof ChatError) {
+          log.error("Chat request failed", {
+            path: c.req.path,
+            code: err.code,
+            httpStatus: err.httpStatus,
+            detail: err.message,
+            ventoError: err.ventoError,
+          });
           if (err.code === "vento" && err.ventoError) {
             return c.json({ type: "vento-error", ...err.ventoError }, 422);
           }
@@ -89,6 +97,59 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
         }
         log.error("Unexpected chat error", { error: err instanceof Error ? err.message : String(err), path: c.req.path });
         return c.json(problemJson("Internal Server Error", 500, "Failed to process chat request"), 500);
+      }
+    }
+  );
+
+  app.post(
+    "/api/stories/:series/:name/chat/continue",
+    validateParams,
+    async (c) => {
+      // Body is ignored per spec — continue always uses the resolved
+      // server-side template / system.md. Drain it harmlessly to avoid
+      // hanging clients that send a payload anyway.
+      await c.req.json().catch(() => ({}));
+
+      const series = c.req.param("series")!;
+      const name = c.req.param("name")!;
+
+      try {
+        const result = await executeContinue({
+          series,
+          name,
+          config,
+          safePath,
+          hookDispatcher,
+          buildContinuePromptFromStory,
+          signal: c.req.raw.signal,
+        });
+
+        // IMPORTANT: `result.content` is the FULL chapter content
+        // (re-read from disk after the stream finished), not just the
+        // newly streamed bytes. The HTTP response carries the complete
+        // chapter so the client can replace its local copy in one shot.
+        return c.json(result);
+      } catch (err: unknown) {
+        if (err instanceof ChatAbortError) {
+          return c.json(problemJson("Client Closed Request", 499, "Generation aborted by client"), 499 as ContentfulStatusCode);
+        }
+        if (err instanceof ChatError) {
+          log.error("Continue request failed", {
+            path: c.req.path,
+            code: err.code,
+            httpStatus: err.httpStatus,
+            detail: err.message,
+            ventoError: err.ventoError,
+          });
+          if (err.code === "vento" && err.ventoError) {
+            return c.json({ type: "vento-error", ...err.ventoError }, 422);
+          }
+          const status = err.httpStatus as ContentfulStatusCode;
+          const title = ERROR_TITLES[err.code] ?? "Internal Server Error";
+          return c.json(problemJson(title, err.httpStatus, err.message), status);
+        }
+        log.error("Unexpected continue error", { error: err instanceof Error ? err.message : String(err), path: c.req.path });
+        return c.json(problemJson("Internal Server Error", 500, "Failed to process continue request"), 500);
       }
     }
   );

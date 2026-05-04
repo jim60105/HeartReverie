@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import type { ChatInputProps } from "@/types";
 import { useChatApi } from "@/composables/useChatApi";
 import { useChapterNav } from "@/composables/useChapterNav";
 
-defineProps<ChatInputProps>();
+const props = withDefaults(defineProps<ChatInputProps>(), {
+  disabled: false,
+  chapterCount: 0,
+  latestChapterIsEmpty: true,
+});
 
 const emit = defineEmits<{
   send: [message: string];
   resend: [message: string];
+  continue: [];
 }>();
 
 const { isLoading, errorMessage, streamingContent, abortCurrentRequest } = useChatApi();
@@ -71,6 +76,25 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+const continueDisabled = computed(() =>
+  props.disabled || isLoading.value || props.chapterCount === 0 || props.latestChapterIsEmpty,
+);
+
+const continueTooltip = computed(() => {
+  if (isLoading.value) return "生成進行中…";
+  if (props.disabled) return "目前無法續寫";
+  if (props.chapterCount === 0) return "尚無章節可續寫";
+  if (props.latestChapterIsEmpty) return "最後一章為空，無法續寫";
+  return "從最後一章繼續往下生成";
+});
+
+function handleContinue() {
+  if (continueDisabled.value) return;
+  errorMessage.value = "";
+  // Do NOT clear inputText — user may have typed a future message.
+  emit("continue");
+}
+
 function appendText(text: string) {
   const current = inputText.value;
   inputText.value = current ? `${current}\n${text}` : text;
@@ -94,6 +118,14 @@ defineExpose({ appendText });
         <slot name="tools" />
         <span class="chat-spacer"></span>
         <span v-if="errorMessage" class="chat-error">{{ errorMessage }}</span>
+        <button
+          class="themed-btn chat-btn chat-btn-continue"
+          :disabled="continueDisabled"
+          :title="continueTooltip"
+          @click="handleContinue"
+        >
+          ⏭ 續寫
+        </button>
         <button
           class="themed-btn chat-btn"
           :disabled="disabled || isLoading"

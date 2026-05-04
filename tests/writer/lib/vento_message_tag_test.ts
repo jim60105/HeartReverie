@@ -19,6 +19,7 @@ import {
   ALLOWED_MESSAGE_ROLES,
   assertHasUserMessage,
   assertNoEmptyMessages,
+  filterEmptyMessages,
   splitRenderedMessages,
 } from "../../../writer/lib/vento-message-tag.ts";
 import type { ChatMessage, RenderResult } from "../../../writer/types.ts";
@@ -611,28 +612,51 @@ Deno.test("vento-message-tag: simple template with no message blocks → single 
   assertEquals(r.error?.type, "multi-message:no-user-message");
 });
 
-Deno.test("vento-message-tag: empty / whitespace-only message content rejected", async (t) => {
-  await t.step("empty user content → multi-message:empty-message", async () => {
+Deno.test("vento-message-tag: empty / whitespace-only message content silently dropped at render time", async (t) => {
+  await t.step("sole empty user message → no messages, render fails no-user-message", async () => {
     const r = await render(`{{ message "user" }}{{ /message }}`);
     assertExists(r.error);
-    assertEquals(r.error?.type, "multi-message:empty-message");
+    assertEquals(r.error?.type, "multi-message:no-user-message");
     assertEquals(r.messages, []);
   });
 
-  await t.step("whitespace-only assistant content → multi-message:empty-message", async () => {
+  await t.step("whitespace-only assistant alongside valid user → assistant dropped, user kept", async () => {
     const r = await render(
       `{{ message "user" }}u{{ /message }}{{ message "assistant" }}\n  \n{{ /message }}`,
     );
-    assertExists(r.error);
-    assertEquals(r.error?.type, "multi-message:empty-message");
+    assertEquals(r.error, null);
+    assertEquals(r.messages.length, 1);
+    assertEquals(r.messages[0]?.role, "user");
   });
 
-  await t.step("mix: valid user + whitespace-only user → rejected", async () => {
+  await t.step("mix: valid user + whitespace-only user → empty dropped, valid kept", async () => {
     const r = await render(
       `{{ message "user" }}u{{ /message }}{{ message "user" }}   {{ /message }}`,
     );
-    assertExists(r.error);
-    assertEquals(r.error?.type, "multi-message:empty-message");
+    assertEquals(r.error, null);
+    assertEquals(r.messages.length, 1);
+    assertEquals(r.messages[0]?.content, "u");
+  });
+
+  await t.step("direct unit: filterEmptyMessages drops whitespace-only entries", () => {
+    const result = filterEmptyMessages([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "   " },
+      { role: "system", content: "" },
+      { role: "user", content: "ok" },
+    ]);
+    assertEquals(result.droppedCount, 2);
+    assertEquals(result.kept.length, 2);
+    assertEquals(result.kept[0]?.content, "hi");
+    assertEquals(result.kept[1]?.content, "ok");
+  });
+
+  await t.step("direct unit: assertNoEmptyMessages still throws for empty content (opt-in strict check)", () => {
+    assertThrows(
+      () => assertNoEmptyMessages([{ role: "user", content: "   " }]),
+      Error,
+      "multi-message:empty-message",
+    );
   });
 
   await t.step("direct unit: assertNoEmptyMessages passes for non-empty content", () => {
@@ -640,13 +664,5 @@ Deno.test("vento-message-tag: empty / whitespace-only message content rejected",
       { role: "user", content: "hi" },
       { role: "system", content: "ok" },
     ]);
-  });
-
-  await t.step("direct unit: assertNoEmptyMessages throws for empty content", () => {
-    assertThrows(
-      () => assertNoEmptyMessages([{ role: "user", content: "   " }]),
-      Error,
-      "multi-message:empty-message",
-    );
   });
 });

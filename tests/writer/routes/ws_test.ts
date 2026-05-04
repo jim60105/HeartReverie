@@ -109,6 +109,7 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       previousContext: [],
       isFirstRound: true,
     }) as unknown as BuildPromptResult,
+    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     verifyPassphrase,
   } as AppDeps);
 

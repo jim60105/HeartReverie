@@ -14,10 +14,76 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join } from "@std/path";
-import type { SafePathFn, StoryEngine, BuildPromptResult, RenderResult, RenderOptions, ChapterEntry } from "../types.ts";
+import type {
+  SafePathFn,
+  StoryEngine,
+  BuildPromptResult,
+  ContinuePromptResult,
+  RenderResult,
+  RenderOptions,
+  ChapterEntry,
+  ChatMessage,
+} from "../types.ts";
 import type { PluginManager } from "./plugin-manager.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { createLogger } from "./logger.ts";
+
+/**
+ * Internal error thrown by `buildContinuePromptFromStory` to signal a
+ * user-facing failure. `executeContinue` translates this into a `ChatError`.
+ * Defined here (rather than importing `ChatError` from `chat-shared.ts`) to
+ * avoid a circular import — `chat-shared.ts` already imports helpers from
+ * this module.
+ */
+export class ContinuePromptError extends Error {
+  override readonly name = "ContinuePromptError";
+  constructor(
+    public readonly code: "no-chapter" | "no-content",
+    message: string,
+    public readonly httpStatus: number,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Parse a chapter file content for the continue flow, splitting it into the
+ * (first) `<user_message>` body and the surrounding prose that becomes the
+ * assistant prefill.
+ *
+ * Behaviour:
+ *  - The match is **case-insensitive** and **non-greedy**, so manually-edited
+ *    tag variants like `<USER_MESSAGE>` are still recognised (mirrors
+ *    `stripPromptTags()` semantics) and only the FIRST block is treated as
+ *    the user input. Subsequent `<user_message>` blocks remain in the
+ *    prefill remainder and are removed by `stripPromptTags`.
+ *  - When the first block is found, `userMessageText` is its inner content
+ *    (trimmed), and `assistantPrefill` is the rest of the chapter with that
+ *    match removed, then run through `stripPromptTags` and trimmed.
+ *  - When no block is present, `userMessageText = ""` and
+ *    `assistantPrefill = stripPromptTags(rawContent).trim()`.
+ *  - A literal `</user_message>` inside the user-message body is **not**
+ *    supported: the regex stops at the first close tag, so the remainder
+ *    leaks into `assistantPrefill`. This is intentional and pinned by tests.
+ */
+export function parseChapterForContinue(
+  rawContent: string,
+  stripPromptTags: (s: string) => string,
+): { userMessageText: string; assistantPrefill: string } {
+  const re = /<user_message>([\s\S]*?)<\/user_message>/i;
+  const m = rawContent.match(re);
+  if (m) {
+    const userMessageText = (m[1] ?? "").trim();
+    const remainder = rawContent.slice(0, m.index ?? 0)
+      + rawContent.slice((m.index ?? 0) + m[0].length);
+    const assistantPrefill = stripPromptTags(remainder).trim();
+    return { userMessageText, assistantPrefill };
+  }
+  return {
+    userMessageText: "",
+    assistantPrefill: stripPromptTags(rawContent).trim(),
+  };
+}
 
 const log = createLogger("file");
 
@@ -235,5 +301,135 @@ export function createStoryEngine(
     };
   }
 
-  return { stripPromptTags, buildPromptFromStory };
+  /**
+   * Build the prompt for a continue-last-chapter request. Re-reads the
+   * latest chapter from disk on every call, parses it via
+   * `parseChapterForContinue`, and routes the extracted user_message text
+   * into the trailing user turn (`userInput`). When the parsed assistant
+   * prefill is non-empty, an extra `{ role: "assistant", content: prefill }`
+   * entry is appended after the rendered messages so the upstream LLM
+   * continues from where the chapter left off; otherwise the rendered array
+   * is returned unchanged (an empty assistant message would be rejected by
+   * `assertNoEmptyMessages` and by some providers).
+   */
+  async function buildContinuePromptFromStory(
+    series: string,
+    name: string,
+    storyDir: string,
+    template?: string,
+  ): Promise<ContinuePromptResult> {
+    let chapterFiles: string[] = await listChapterFiles(storyDir);
+    log.debug("Read story directory (continue)", { path: storyDir, chapterCount: chapterFiles.length });
+
+    if (chapterFiles.length === 0) {
+      throw new ContinuePromptError("no-chapter", "Cannot continue: no existing chapter file", 400);
+    }
+
+    const totalChapterCount = chapterFiles.length;
+
+    const MAX_CHAPTERS: number = 200;
+    if (chapterFiles.length > MAX_CHAPTERS) {
+      chapterFiles = chapterFiles.slice(-MAX_CHAPTERS);
+    }
+
+    // Read all retained chapters fresh from disk on every call (no caching).
+    const chapters: ChapterEntry[] = [];
+    for (const f of chapterFiles) {
+      const content = await Deno.readTextFile(join(storyDir, f));
+      chapters.push({ number: parseInt(f, 10), content });
+    }
+
+    const lastFile = chapterFiles[chapterFiles.length - 1]!;
+    const targetChapterNumber = parseInt(lastFile, 10);
+    const lastChapter = chapters[chapters.length - 1]!;
+    const existingContent = lastChapter.content;
+
+    const { userMessageText, assistantPrefill } = parseChapterForContinue(
+      existingContent,
+      stripPromptTags,
+    );
+
+    if (userMessageText.trim() === "" && assistantPrefill.trim() === "") {
+      throw new ContinuePromptError(
+        "no-content",
+        "Latest chapter is empty; nothing to continue",
+        400,
+      );
+    }
+
+    // previousContext = chapters 1..n-1 (exclude the chapter we are continuing).
+    const priorChapters = chapters.slice(0, -1);
+    const nonEmptyPrior = priorChapters.filter((ch) => ch.content.trim().length > 0);
+    const previousContext: string[] = nonEmptyPrior.map((ch) => stripPromptTags(ch.content));
+    const rawChapters: string[] = nonEmptyPrior.map((ch) => ch.content);
+
+    const hookContext: Record<string, unknown> = {
+      previousContext,
+      rawChapters,
+      storyDir,
+      series,
+      name,
+    };
+    await hookDispatcher.dispatch("prompt-assembly", hookContext);
+
+    const filteredContext = previousContext.filter((c) => c.length > 0);
+
+    // previousContent for the renderer is the chapter immediately preceding
+    // the target — same shape as buildPromptFromStory uses for chapter N's
+    // context when the target reuses an empty trailing file. For continue,
+    // chapter n-1 (last non-empty prior chapter) is the natural choice.
+    const lastPriorNonEmpty = [...priorChapters].reverse().find((ch) => ch.content.trim().length > 0);
+    const previousContent = lastPriorNonEmpty ? lastPriorNonEmpty.content : "";
+
+    // `isFirstRound` mirrors the semantics of `buildPromptFromStory`: it is
+    // true when there is no previous narrative context to display. Custom
+    // system.md templates commonly gate the "previous context" assistant
+    // message on `!isFirstRound`; without this flag the template would emit
+    // an empty assistant message (e.g. when continuing the very first
+    // chapter, or when all prior chapters contain only stripped-away tags
+    // like `<user_message>`). `assertNoEmptyMessages` would then reject the
+    // render with `multi-message:empty-message`.
+    const isFirstRound = filteredContext.length === 0;
+
+    const { messages: renderedMessages, error: ventoError } =
+      await renderSystemPrompt(series, name, {
+        previousContext: filteredContext,
+        userInput: userMessageText,
+        isFirstRound,
+        storyDir,
+        chapterNumber: targetChapterNumber,
+        previousContent,
+        chapterCount: totalChapterCount,
+        templateOverride: typeof template === "string" ? template : undefined,
+      });
+
+    if (ventoError) {
+      return {
+        messages: [],
+        ventoError,
+        targetChapterNumber,
+        existingContent,
+        userMessageText,
+        assistantPrefill,
+      };
+    }
+
+    // Append trailing assistant prefill ONLY when non-empty — empty
+    // assistant messages are rejected by `assertNoEmptyMessages` and by
+    // strict providers.
+    const messages: ChatMessage[] = assistantPrefill.trim().length > 0
+      ? [...renderedMessages, { role: "assistant", content: assistantPrefill }]
+      : renderedMessages;
+
+    return {
+      messages,
+      ventoError: null,
+      targetChapterNumber,
+      existingContent,
+      userMessageText,
+      assistantPrefill,
+    };
+  }
+
+  return { stripPromptTags, buildPromptFromStory, buildContinuePromptFromStory };
 }

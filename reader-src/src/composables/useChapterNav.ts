@@ -41,6 +41,30 @@ let isPolling = false;
 let loadToken = 0;
 
 const totalChapters = computed(() => chapters.value.length);
+const chapterCount = totalChapters;
+
+/**
+ * Client-side equivalent of the backend `parseChapterForContinue` empty-check.
+ * Returns true when there are no chapters OR the latest chapter has no
+ * meaningful content. Mirrors backend semantics: a chapter is considered
+ * empty only when BOTH the `<user_message>` body and the prose outside it
+ * are empty/whitespace.
+ */
+const latestChapterIsEmpty = computed(() => {
+  if (chapters.value.length === 0) return true;
+  const last = chapters.value[chapters.value.length - 1];
+  const raw = last?.content ?? "";
+  // Extract first <user_message>…</user_message> body (case-insensitive,
+  // matching the backend regex).
+  const match = raw.match(/<user_message>([\s\S]*?)<\/user_message>/i);
+  const userMessageText = (match?.[1] ?? "").trim();
+  // Remove all <user_message>…</user_message> blocks (any case) from the
+  // prose so the prefill check matches what the backend would compute via
+  // `stripPromptTags()` for this tag.
+  const prose = raw.replace(/<user_message>[\s\S]*?<\/user_message>/gi, "").trim();
+  return userMessageText === "" && prose === "";
+});
+
 const isFirst = computed(() => currentIndex.value <= 0);
 const isLast = computed(() => currentIndex.value >= chapters.value.length - 1);
 const isLastChapter = computed(
@@ -471,6 +495,8 @@ export function useChapterNav(): UseChapterNavReturn {
     currentIndex,
     chapters,
     totalChapters,
+    chapterCount,
+    latestChapterIsEmpty,
     isFirst,
     isLast,
     isLastChapter,
