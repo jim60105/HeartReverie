@@ -14,11 +14,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import type { Hono } from "@hono/hono";
-import { resolve } from "@std/path";
+import { join, resolve } from "@std/path";
 import { pluginActionProblems, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { isValidParam } from "../lib/middleware.ts";
 import { isValidPluginName } from "../lib/plugin-manager.ts";
+import { listChapterFiles } from "../lib/story.ts";
 import {
   tryMarkGenerationActive,
   clearGenerationActive,
@@ -54,6 +55,7 @@ const RESERVED_VARIABLE_NAMES: readonly string[] = [
   "series_name",
   "story_name",
   "plugin_fragments",
+  "draft",
 ];
 
 const APPEND_TAG_RE = /^[a-zA-Z][a-zA-Z0-9_-]{0,30}$/;
@@ -83,6 +85,7 @@ export interface PluginActionRequestArgs {
   readonly promptPath: unknown;
   readonly mode: unknown;
   readonly appendTag?: unknown;
+  readonly replace?: unknown;
   readonly extraVariables?: unknown;
   readonly signal?: AbortSignal;
   readonly onDelta?: (chunk: string) => void;
@@ -183,7 +186,7 @@ export async function runPluginActionWithDeps(
   args: PluginActionRequestArgs,
   deps: Pick<AppDeps, "config" | "safePath" | "hookDispatcher" | "pluginManager" | "buildPromptFromStory">,
 ): Promise<PluginActionOutcome> {
-  const { pluginName, series, story, promptPath, mode, appendTag, extraVariables, signal, onDelta } = args;
+  const { pluginName, series, story, promptPath, mode, appendTag, replace, extraVariables, signal, onDelta } = args;
   const { config, safePath, hookDispatcher, pluginManager, buildPromptFromStory } = deps;
 
   if (!isValidPluginName(pluginName)) {
@@ -246,11 +249,41 @@ export async function runPluginActionWithDeps(
   }
   const resolvedPromptPath = promptResolution.path;
 
-  if (mode !== "append-to-existing-chapter" && mode !== "discard") {
+  if (mode !== "append-to-existing-chapter" && mode !== "discard" && mode !== "replace-last-chapter") {
     return {
       ok: false,
       aborted: false,
-      problem: problemJson("Bad Request", 400, "mode must be 'append-to-existing-chapter' or 'discard'"),
+      problem: problemJson(
+        "Bad Request",
+        400,
+        "mode must be 'append-to-existing-chapter', 'replace-last-chapter', or 'discard'",
+      ),
+      status: 400,
+    };
+  }
+  // Tri-state mode/replace/append validation. The route translates
+  // (append, replace) → mode, but a caller could (in theory) send raw modes
+  // bypassing that translation. Reject contradictory combinations centrally.
+  if (mode === "replace-last-chapter" && replace === false) {
+    return { ok: false, aborted: false, problem: pluginActionProblems.invalidReplaceCombo(), status: 400 };
+  }
+  if (mode === "replace-last-chapter" && appendTag !== undefined) {
+    return {
+      ok: false,
+      aborted: false,
+      problem: pluginActionProblems.invalidReplaceCombo(
+        "replace mode cannot be combined with appendTag",
+      ),
+      status: 400,
+    };
+  }
+  if (mode === "append-to-existing-chapter" && replace === true) {
+    return {
+      ok: false,
+      aborted: false,
+      problem: pluginActionProblems.invalidReplaceCombo(
+        "append and replace are mutually exclusive",
+      ),
       status: 400,
     };
   }
@@ -303,64 +336,88 @@ export async function runPluginActionWithDeps(
     };
   }
 
-  // Build messages via the shared prompt-assembly pipeline. Pass the plugin
-  // prompt content as `templateOverride` and the validated extras as
-  // `extraVariables`. Plugin actions render with empty user input — the
-  // prompt template is itself the user's intent.
-  const buildResult = await buildPromptFromStory(
-    series,
-    story,
-    storyDir,
-    "",
-    promptContent,
-    extraResult.value,
-  );
-  if (buildResult.ventoError) {
-    const vErr = buildResult.ventoError;
-    // Spec: missing user-message must surface as top-level RFC 9457 problem
-    // type slug "multi-message:no-user-message" so clients can branch on it.
-    if (vErr.type === "multi-message:no-user-message") {
-      return {
-        ok: false,
-        aborted: false,
-        problem: {
-          type: "multi-message:no-user-message",
-          title: vErr.title ?? "Missing User Message",
-          status: 422,
-          detail: vErr.message,
-          ventoError: vErr,
-        },
-        status: 422,
-      };
-    }
-    return {
-      ok: false,
-      aborted: false,
-      problem: problemJson("Unprocessable Entity", 422, "Template rendering error", { ventoError: vErr }),
-      status: 422,
-    };
-  }
-  if (buildResult.messages.length === 0) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: problemJson("Internal Server Error", 500, "Failed to generate prompt"),
-      status: 500,
-    };
-  }
-
-  // Acquire the per-story generation lock atomically.
+  // Acquire the per-story generation lock atomically BEFORE prompt render so
+  // that replace mode can safely read the on-disk chapter under the lock and
+  // inject it as the `draft` variable. For non-replace modes, the lock just
+  // happens slightly earlier than before — semantically identical (the lock
+  // is held for the entire LLM call regardless).
   if (!tryMarkGenerationActive(series, story)) {
     return { ok: false, aborted: false, problem: pluginActionProblems.concurrentGeneration(), status: 409 };
   }
 
-  // Append mode requires an existing chapter file BEFORE we hold the lock for
-  // the duration of the LLM call, but the existence check is cheap and we
-  // intentionally do it inside the lock so we can release on failure.
   try {
-    const writeMode: WriteMode = mode === "append-to-existing-chapter"
-      ? { kind: "append-to-existing-chapter", appendTag: validatedAppendTag!, pluginName }
-      : { kind: "discard" };
+    // Replace mode: load highest-numbered chapter under the lock, run through
+    // the plugin-manager's strip-tag patterns to scrub `<user_message>` and
+    // similar prompt envelopes, and inject as the reserved `draft` Vento
+    // variable. Done HERE (after lock, before prompt render) so the on-disk
+    // bytes the LLM sees are guaranteed to match the bytes we'll later
+    // overwrite atomically.
+    const renderVariables: Record<string, unknown> = { ...extraResult.value };
+    if (mode === "replace-last-chapter") {
+      const chapterFiles = await listChapterFiles(storyDir);
+      if (chapterFiles.length === 0) {
+        return { ok: false, aborted: false, problem: pluginActionProblems.noChapter(), status: 400 };
+      }
+      const lastFile = chapterFiles[chapterFiles.length - 1]!;
+      const lastChapterPath = join(storyDir, lastFile);
+      const rawDraft = await Deno.readTextFile(lastChapterPath);
+      const stripRegex = pluginManager.getStripTagPatterns();
+      const cleanDraft = stripRegex ? rawDraft.replace(stripRegex, "").trim() : rawDraft.trim();
+      renderVariables.draft = cleanDraft;
+    }
+
+    // Build messages via the shared prompt-assembly pipeline. Pass the plugin
+    // prompt content as `templateOverride` and the validated extras as
+    // `extraVariables`. Plugin actions render with empty user input — the
+    // prompt template is itself the user's intent.
+    const buildResult = await buildPromptFromStory(
+      series,
+      story,
+      storyDir,
+      "",
+      promptContent,
+      renderVariables,
+    );
+    if (buildResult.ventoError) {
+      const vErr = buildResult.ventoError;
+      if (vErr.type === "multi-message:no-user-message") {
+        return {
+          ok: false,
+          aborted: false,
+          problem: {
+            type: "multi-message:no-user-message",
+            title: vErr.title ?? "Missing User Message",
+            status: 422,
+            detail: vErr.message,
+            ventoError: vErr,
+          },
+          status: 422,
+        };
+      }
+      return {
+        ok: false,
+        aborted: false,
+        problem: problemJson("Unprocessable Entity", 422, "Template rendering error", { ventoError: vErr }),
+        status: 422,
+      };
+    }
+    if (buildResult.messages.length === 0) {
+      return {
+        ok: false,
+        aborted: false,
+        problem: problemJson("Internal Server Error", 500, "Failed to generate prompt"),
+        status: 500,
+      };
+    }
+
+    let writeMode: WriteMode;
+    if (mode === "append-to-existing-chapter") {
+      writeMode = { kind: "append-to-existing-chapter", appendTag: validatedAppendTag!, pluginName };
+    } else if (mode === "replace-last-chapter") {
+      writeMode = { kind: "replace-last-chapter", pluginName };
+    } else {
+      writeMode = { kind: "discard" };
+    }
 
     const result = await streamLlmAndPersist({
       messages: buildResult.messages,
@@ -377,11 +434,12 @@ export async function runPluginActionWithDeps(
     });
 
     const response: PluginRunPromptResponse = {
-      content: writeMode.kind === "append-to-existing-chapter"
+      content: writeMode.kind === "append-to-existing-chapter" || writeMode.kind === "replace-last-chapter"
         ? (result.chapterContentAfter ?? result.content)
         : result.content,
       usage: result.usage,
       chapterUpdated: writeMode.kind === "append-to-existing-chapter",
+      chapterReplaced: writeMode.kind === "replace-last-chapter",
       appendedTag: validatedAppendTag,
     };
     return { ok: true, response };
@@ -400,7 +458,7 @@ export async function runPluginActionWithDeps(
       // Map specific codes to plugin-action problems where the spec demands
       // a distinct error type.
       if (err.code === "no-chapter") {
-        return { ok: false, aborted: false, problem: problemJson("Bad Request", 400, err.message), status: 400 };
+        return { ok: false, aborted: false, problem: pluginActionProblems.noChapter(err.message), status: 400 };
       }
       return {
         ok: false,
@@ -440,14 +498,33 @@ export function registerPluginActionRoutes(
       else reqSignal.addEventListener("abort", () => controller.abort(), { once: true });
     }
 
+    // Reject early when both `append` and `replace` are explicitly true so the
+    // caller gets a clean RFC 9457 problem instead of an ambiguous mode
+    // string. The body→mode translation below picks `append` if both are set,
+    // but we want to refuse rather than silently prefer one.
+    const wantAppend = body.append === true;
+    const wantReplace = body.replace === true;
+    if (wantAppend && wantReplace) {
+      return c.json(pluginActionProblems.invalidReplaceCombo(), 400);
+    }
+    if (wantReplace && body.appendTag !== undefined) {
+      return c.json(pluginActionProblems.invalidReplaceCombo("replace mode cannot be combined with appendTag"), 400);
+    }
+    const resolvedMode = wantAppend
+      ? "append-to-existing-chapter"
+      : wantReplace
+      ? "replace-last-chapter"
+      : "discard";
+
     const outcome = await runPluginActionWithDeps(
       {
         pluginName,
         series: body.series,
         story: body.name,
         promptPath: body.promptFile,
-        mode: body.append === true ? "append-to-existing-chapter" : "discard",
+        mode: resolvedMode,
         appendTag: body.appendTag,
+        replace: body.replace,
         extraVariables: body.extraVariables,
         signal: controller.signal,
       },

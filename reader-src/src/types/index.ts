@@ -71,6 +71,7 @@ export interface RunPluginPromptOptions {
   name?: string;
   append?: boolean;
   appendTag?: string;
+  replace?: boolean;
   extraVariables?: Record<string, string | number | boolean>;
 }
 
@@ -79,6 +80,7 @@ export interface RunPluginPromptResult {
   content: string;
   usage: TokenUsageRecord | null;
   chapterUpdated: boolean;
+  chapterReplaced: boolean;
   appendedTag: string | null;
 }
 
@@ -801,6 +803,7 @@ export interface WsPluginActionDoneMessage {
   content: string;
   usage: TokenUsageRecord | null;
   chapterUpdated: boolean;
+  chapterReplaced: boolean;
   appendedTag: string | null;
 }
 

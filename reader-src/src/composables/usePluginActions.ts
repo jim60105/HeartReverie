@@ -22,6 +22,7 @@ import type {
 } from "@/types";
 import { usePlugins } from "@/composables/usePlugins";
 import { useChapterNav } from "@/composables/useChapterNav";
+import { useChapterEditor } from "@/composables/useChapterEditor";
 import { useChatApi } from "@/composables/useChatApi";
 import { useNotification } from "@/composables/useNotification";
 import { frontendHooks } from "@/lib/plugin-hooks";
@@ -118,6 +119,19 @@ export function usePluginActions() {
       const lastChapterIndex = chapters.value.length > 0
         ? chapters.value.length - 1
         : null;
+
+      // Gate replace-mode buttons when editor has unsaved buffer
+      const { hasUnsavedBufferForChapter, forceCloseEditor } = useChapterEditor();
+      if (buttonId === "polish" && lastChapterIndex !== null && hasUnsavedBufferForChapter(lastChapterIndex)) {
+        const { notify } = useNotification();
+        notify({
+          title: "潤飾暫時無法使用",
+          body: "請先儲存或捨棄章節編輯內容後再潤飾",
+          level: "warning",
+        });
+        return;
+      }
+
       const series = ctx.series ?? "";
       const name = ctx.story ?? "";
       const storyDir = series && name ? `${series}/${name}` : "";
@@ -132,12 +146,18 @@ export function usePluginActions() {
         name,
         storyDir,
         lastChapterIndex,
-        runPluginPrompt: (promptFile: string, opts?: RunPluginPromptOptions) =>
-          chatApi.runPluginPrompt(pluginName, promptFile, {
+        runPluginPrompt: async (promptFile: string, opts?: RunPluginPromptOptions) => {
+          const result = await chatApi.runPluginPrompt(pluginName, promptFile, {
             series,
             name,
             ...(opts ?? {}),
-          }),
+          });
+          // Force-close editor on successful replace before settling promise
+          if (result.chapterReplaced) {
+            forceCloseEditor();
+          }
+          return result;
+        },
         notify: (input) => {
           notify({
             title: input.title ?? "外掛通知",

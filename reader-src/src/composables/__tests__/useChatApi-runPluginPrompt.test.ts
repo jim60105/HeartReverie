@@ -114,6 +114,7 @@ describe("useChatApi.runPluginPrompt", () => {
         content: "Hello world",
         usage: null,
         chapterUpdated: true,
+        chapterReplaced: false,
         appendedTag: null,
       });
 
@@ -183,6 +184,50 @@ describe("useChatApi.runPluginPrompt", () => {
       expect(api.isLoading.value).toBe(false);
     });
 
+    it("forwards replace: true on the WS envelope and surfaces chapterReplaced from done", async () => {
+      const handlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation(
+        (type: string, h: (msg: unknown) => void) => {
+          handlers[type] = h;
+          return vi.fn();
+        },
+      );
+
+      const api = await getApi();
+      const promise = api.runPluginPrompt("polish", "polish-instruction.md", {
+        replace: true,
+      });
+
+      expect(mockWsSendFn).toHaveBeenCalledTimes(1);
+      const sent = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      expect(sent.replace).toBe(true);
+      expect(sent).not.toHaveProperty("append");
+      expect(sent).not.toHaveProperty("appendTag");
+
+      const correlationId = sent.correlationId as string;
+      handlers["plugin-action:done"]!({
+        type: "plugin-action:done",
+        correlationId,
+        content: "polished",
+        usage: null,
+        chapterUpdated: false,
+        chapterReplaced: true,
+        appendedTag: null,
+      });
+
+      const result = await promise;
+      expect(result.chapterReplaced).toBe(true);
+    });
+
+    it("does not include replace field when replace is not set", async () => {
+      mockWsOnMessageFn.mockImplementation(() => vi.fn());
+      const api = await getApi();
+      void api.runPluginPrompt("p", "x.md", { append: true }).catch(() => {});
+
+      const sent = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      expect(sent).not.toHaveProperty("replace");
+    });
+
     it("rejects when isLoading is already true", async () => {
       mockWsOnMessageFn.mockImplementation(() => vi.fn());
       const api = await getApi();
@@ -249,6 +294,38 @@ describe("useChatApi.runPluginPrompt", () => {
       );
       expect(api.errorMessage.value).toContain("invalid");
       expect(api.isLoading.value).toBe(false);
+    });
+
+    it("forwards replace: true in the HTTP POST body", async () => {
+      const final = {
+        content: "polished",
+        usage: null,
+        chapterUpdated: false,
+        chapterReplaced: true,
+        appendedTag: null,
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(final),
+            headers: new Headers(),
+          }),
+        ),
+      );
+      const api = await getApi();
+      const result = await api.runPluginPrompt("polish", "polish-instruction.md", {
+        replace: true,
+      });
+      expect(result.chapterReplaced).toBe(true);
+      const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+      const init = fetchMock.mock.calls[0]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      expect(body.replace).toBe(true);
+      expect(body).not.toHaveProperty("append");
+      expect(body).not.toHaveProperty("appendTag");
     });
 
     it("abortCurrentRequest aborts the underlying fetch", async () => {

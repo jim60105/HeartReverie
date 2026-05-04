@@ -197,6 +197,7 @@ export interface PluginRunPromptRequest {
   readonly promptFile: string;
   readonly append?: boolean;
   readonly appendTag?: string;
+  readonly replace?: boolean;
   readonly extraVariables?: Record<string, string | number | boolean>;
 }
 
@@ -205,6 +206,7 @@ export interface PluginRunPromptResponse {
   readonly content: string;
   readonly usage: TokenUsageRecord | null;
   readonly chapterUpdated: boolean;
+  readonly chapterReplaced: boolean;
   readonly appendedTag: string | null;
 }
 
@@ -731,6 +733,7 @@ export interface WsPluginActionDoneMessage {
   readonly content: string;
   readonly usage: TokenUsageRecord | null;
   readonly chapterUpdated: boolean;
+  readonly chapterReplaced: boolean;
   readonly appendedTag: string | null;
 }
 

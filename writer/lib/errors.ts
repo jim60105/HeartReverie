@@ -55,6 +55,12 @@ export const pluginActionProblems = {
   extraVariablesCollision(detail = "extraVariables key collides with a reserved system variable"): ProblemDetail {
     return { type: "plugin-action:extra-variables-collision", title: "Bad Request", status: 400, detail };
   },
+  invalidReplaceCombo(detail = "append and replace are mutually exclusive; replace cannot be combined with appendTag"): ProblemDetail {
+    return { type: "plugin-action:invalid-replace-combo", title: "Bad Request", status: 400, detail };
+  },
+  noChapter(detail = "Story directory contains no chapter file"): ProblemDetail {
+    return { type: "plugin-action:no-chapter", title: "Bad Request", status: 400, detail };
+  },
 } as const;
 
 export function buildVentoError(err: Error, templatePath: string, knownVariables: { variables?: Record<string, string> }, extraKnownVars?: string[]): VentoError {

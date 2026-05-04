@@ -4,6 +4,7 @@ import type { ChapterContentProps } from "@/types";
 import { useMarkdownRenderer } from "@/composables/useMarkdownRenderer";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useChapterActions } from "@/composables/useChapterActions";
+import { useChapterEditor } from "@/composables/useChapterEditor";
 import { usePlugins } from "@/composables/usePlugins";
 import { frontendHooks } from "@/lib/plugin-hooks";
 import router from "@/router";
@@ -23,6 +24,7 @@ const {
   renderEpoch,
 } = useChapterNav();
 const { editChapter, rewindAfter, branchFrom } = useChapterActions();
+const { isEditing, editBuffer, beginEdit, cancelEdit: cancelEditState, editingChapterIndex } = useChapterEditor();
 const { pluginsReady } = usePlugins();
 
 const tokens = computed(() => {
@@ -41,8 +43,6 @@ const currentChapterNumber = computed(
   () => chapters.value[currentIndex.value]?.number ?? currentIndex.value + 1,
 );
 
-const isEditing = ref(false);
-const editBuffer = ref("");
 const isBusy = ref(false);
 const errorMessage = ref("");
 const containerRef = ref<HTMLElement | null>(null);
@@ -89,15 +89,13 @@ onBeforeUnmount(() => {
   });
 });
 
-function beginEdit(): void {
-  editBuffer.value = props.rawMarkdown;
+function beginEditAction(): void {
   errorMessage.value = "";
-  isEditing.value = true;
+  beginEdit(currentIndex.value, props.rawMarkdown);
 }
 
-function cancelEdit(): void {
-  isEditing.value = false;
-  editBuffer.value = "";
+function cancelEditAction(): void {
+  cancelEditState();
   // Leaving edit mode re-mounts the v-html token template, recreating any
   // .plugin-sidebar nodes inside chapter content. ContentArea's sidebar
   // relocation watch only fires on its tracked deps; bumping renderEpoch
@@ -115,7 +113,7 @@ async function saveEdit(): Promise<void> {
   errorMessage.value = "";
   try {
     await editChapter(ctx.series, ctx.story, currentChapterNumber.value, editBuffer.value);
-    isEditing.value = false;
+    cancelEditState();
     await refreshAfterEdit(currentChapterNumber.value);
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : "儲存失敗";
@@ -183,7 +181,7 @@ async function handleBranch(): Promise<void> {
           type="button"
           class="toolbar-btn"
           :disabled="isBusy"
-          @click="beginEdit"
+          @click="beginEditAction"
         >
           編輯
         </button>
@@ -217,7 +215,7 @@ async function handleBranch(): Promise<void> {
           type="button"
           class="toolbar-btn"
           :disabled="isBusy"
-          @click="cancelEdit"
+          @click="cancelEditAction"
         >
           取消
         </button>

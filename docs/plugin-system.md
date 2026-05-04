@@ -26,7 +26,7 @@ plugins/                       ← 內建 plugin 目錄
 │   ├── frontend.js
 │   └── prompt-fragments/
 │       └── think-before-reply.md
-└── ...（共 6 個 plugin）
+└── ...（共 7 個 plugin）
 ```
 
 Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不同欄位：
@@ -141,7 +141,7 @@ export async function getDynamicVariables({
 
 **衝突處理規則：**
 
-- 動態變數不得覆寫核心變數（`previous_context`、`user_input`、`isFirstRound`、`series_name`、`story_name`、`plugin_fragments`），否則記錄警告並忽略
+- 動態變數不得覆寫核心變數（`previous_context`、`user_input`、`isFirstRound`、`series_name`、`story_name`、`plugin_fragments`、`draft`），否則記錄警告並忽略
 - 多個 plugin 提供相同鍵時，先載入的 plugin 優先（first-loaded wins），記錄警告
 - 動態變數的優先順序低於核心變數與典籍變數（spread 在最前方）
 
@@ -538,7 +538,7 @@ Context 物件：
 | `notify` | `function` | 通知 helper（同 `notification` hook 中之 `notify`） |
 | `reload` | `function` | 觸發章節重新載入的便捷函式（內部呼叫 `useChapterNav.reloadToLast()`） |
 
-> **注意**：v1 **不**提供 `appendToLastChapter` helper。需要把 LLM 回應寫入章節時，請於呼叫 `runPluginPrompt` 時帶 `{ append: true, appendTag: "..." }`，由後端統一在伺服器端執行 atomic append、章節重讀、`post-response` 派發等流程。
+> **注意**：v1 **不**提供 `appendToLastChapter` helper。需要把 LLM 回應寫入章節時，請於呼叫 `runPluginPrompt` 時帶 `{ append: true, appendTag: "..." }` 或 `{ replace: true }`，由後端統一在伺服器端執行 atomic append／replace、章節重讀、`post-response` 派發等流程。
 
 任一 handler 拋出或 reject 時，dispatcher 會在 handler 自身**沒有**主動 `notify` 的情況下發出預設錯誤 toast，仍會 resolve 整體 dispatch（不留下 unhandled rejection）。
 
@@ -553,12 +553,14 @@ runPluginPrompt(
   opts?: {
     append?: boolean;             // 預設 false
     appendTag?: string;           // append=true 時必填，須符合 ^[a-zA-Z][a-zA-Z0-9_-]{0,30}$
+    replace?: boolean;            // 預設 false；與 append 互斥
     extraVariables?: Record<string, string | number | boolean>; // 僅允許純量
   }
 ): Promise<{
-  content: string;                // append=true 時為 trim 後的「歸一化回應」；append=false 時為原始 LLM 回應
+  content: string;                // append=true 時為 trim 後的「歸一化回應」；replace=true 時為寫入後的完整內容；其餘為原始 LLM 回應
   usage: TokenUsageRecord | null; // 上游回傳的 token 用量（若有）
   chapterUpdated: boolean;        // append=true 並成功寫入時為 true
+  chapterReplaced: boolean;       // replace=true 並成功覆寫時為 true
   appendedTag: string | null;     // 實際附加的 tag（append=true 時等於 appendTag，否則為 null）
 }>
 ```
@@ -568,7 +570,8 @@ runPluginPrompt(
 - 與一般 `chat:send` 共用 `isLoading` / `streamingContent` / `errorMessage` / `abortCurrentRequest`，因此使用者按下「⏹ 停止」可以中斷正在跑的 plugin action。
 - 當 `isLoading.value === true`（一般 send 或另一個 plugin action 正在進行）時，呼叫會以 reject 回應，避免重疊。
 - 當 WebSocket 已連線時走 WS 路徑並把進度餵入 `streamingContent`；HTTP fallback 一次性回傳最終 JSON，不提供逐字串流。
-- 後端會以同一 Vento engine、同一 dynamic-variable 管線渲染 `promptFile`；`extraVariables` 必須為純量且不得撞到保留變數名（`previousContext`、任何 `lore_*`、`status_data` 等）。`user_input` 在 plugin action 預設為空字串，但範本本身**仍須**至少 emit 一個 `{{ message "user" }}…{{ /message }}` 區塊，否則回 422 `multi-message:no-user-message`。
+- 後端會以同一 Vento engine、同一 dynamic-variable 管線渲染 `promptFile`；`extraVariables` 必須為純量且不得撞到保留變數名（`previousContext`、任何 `lore_*`、`status_data`、`draft` 等）。`user_input` 在 plugin action 預設為空字串，但範本本身**仍須**至少 emit 一個 `{{ message "user" }}…{{ /message }}` 區塊，否則回 422 `multi-message:no-user-message`。
+- `replace` 與 `append` 互斥：同時設定 `replace: true` 與 `append: true` 會被拒絕（HTTP 400）。`replace: true` 加上 `appendTag` 也會被拒絕。
 
 #### WebSocket 信封流程
 
@@ -576,10 +579,10 @@ WebSocket 通道使用以下 envelope（已加進 `WsClientMessage` / `WsServerM
 
 | 方向 | 型別 | 說明 |
 |------|------|------|
-| Client → Server | `plugin-action:run` | 啟動一次 plugin action（含 `pluginName`、`series`、`name`、`promptFile`、`append`、`appendTag`、`extraVariables`） |
+| Client → Server | `plugin-action:run` | 啟動一次 plugin action（含 `pluginName`、`series`、`name`、`promptFile`、`append`、`appendTag`、`replace`、`extraVariables`） |
 | Client → Server | `plugin-action:abort` | 中止目前進行中的 plugin action |
 | Server → Client | `plugin-action:delta` | 串流中的增量 chunk |
-| Server → Client | `plugin-action:done` | 完成；payload 等同 helper 回傳的 `{ content, usage, chapterUpdated, appendedTag }` |
+| Server → Client | `plugin-action:done` | 完成；payload 等同 helper 回傳的 `{ content, usage, chapterUpdated, chapterReplaced, appendedTag }` |
 | Server → Client | `plugin-action:error` | 失敗；payload 為 RFC 9457 Problem Details |
 | Server → Client | `plugin-action:aborted` | 已中止；append 與 `post-response` 都不會發生 |
 
@@ -595,6 +598,34 @@ HTTP fallback（`POST /api/plugins/:pluginName/run-prompt`）僅回傳最終 JSO
 4. `pre-write` 與 `response-stream` 在 `append-to-existing-chapter` 模式**不會**派發；中止（abort）發生時，append 步驟與 `post-response` 都會被略過。
 
 換句話說，正常聊天回合與 plugin action append 對 `post-response` 看到的 `content` 同樣是「append 後的完整章節內容」，下游 replay／diff 邏輯不需要區分來源。
+
+### Replace 行為（`replace-last-chapter` WriteMode）
+
+當 `replace: true` 時，後端以 **atomic overwrite** 模式覆寫故事中編號最大的章節檔：
+
+1. 後端串完 LLM 回應後，以 `replace-last-chapter` WriteMode 將累積內容直接覆寫最高編號的章節檔案（整檔取代，不做 append 或歸一化包裹）。
+2. 寫入前先將原始章節內容備份至記憶體；若中途發生錯誤或使用者中止（abort），原始檔案內容會被**逐位元組還原**（byte-for-byte preserved），確保不會產生半寫入或損毀的檔案。
+3. 覆寫成功後，以 `{ content: <覆寫後完整章節內容>, chapterPath, chapterNumber, storyDir, series, name, rootDir, source: "plugin-action", pluginName }` 派發 `post-response`。
+4. `pre-write` 與 `response-stream` 在 replace 模式**不會**派發。
+
+**互斥規則：**
+
+- `replace: true` 與 `append: true` 互斥，同時設定回 HTTP 400 `plugin-action:conflicting-write-mode`。
+- `replace: true` 搭配 `appendTag` 也會被拒絕（HTTP 400），因為 replace 模式不使用標籤包裹。
+
+**回應欄位：**
+
+- `chapterReplaced: boolean`：replace 模式成功覆寫時為 `true`，其餘情境為 `false`。
+
+### `draft` 保留變數
+
+在 replace 模式下，後端會自動將當前最高編號章節的完整內容（經過所有 plugin 的 `promptStripTags` 清理後）注入為 Vento 模板變數 `draft`。Plugin 的提示詞範本可透過 `{{ draft }}` 引用原始章節內容，供 LLM 在改寫時參考。
+
+規則：
+
+- `"draft"` 為系統保留的變數名稱，呼叫端**不得**透過 `extraVariables` 覆寫此值——若嘗試覆寫，後端回 HTTP 400。
+- 僅在 `replace: true` 時注入；`append` 模式或無寫入模式下不會產生 `draft` 變數。
+- 注入的內容已套用 `promptStripTags`，與 `previous_context` 的清理管線一致。
 
 ### 路徑安全
 
@@ -873,10 +904,14 @@ export function register(hooks) {
 |--------|------|------|
 | context-compaction | full-stack | 長篇脈絡壓縮，自動摘要早期章節 |
 | imgthink | prompt-only | 圖像思考標籤處理 |
+| polish | full-stack | 一鍵文學潤飾改寫；貢獻 `✨ 潤飾` 動作按鈕（`visibleWhen: "last-chapter-backend"`），以 `replace: true` 原子覆寫最新章節。前端模組為薄層 action-button click 接線 |
 | start-hints | prompt-only | 首輪章節開場引導提示，含提示詞與顯示標籤清除 |
 | thinking | full-stack | 回覆前思考指令與折疊 `<thinking>`/`<think>` 標籤為可展開的 details 元素 |
 | user-message | full-stack | 使用者訊息標籤前端清除，pre-write hook 注入使用者訊息區塊 |
 | response-notify | full-stack | 後端 → 前端 Toast 通知系統，透過 `notification` hook 推送使用者提示 |
+
+> [!NOTE]
+> 內建 plugin 的提示詞內容必須維持 SFW（Safe For Work）。禁止包含 NSFW 內容、越獄指令（jailbreak）或年齡相關指示。使用者如有此類需求，應透過外部 plugin（`PLUGIN_DIR`）自行提供。
 
 [prompt-template]: ./prompt-template.md
 [lore-codex]: ./lore-codex.md
