@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertExists } from "@std/assert";
 import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import {
@@ -437,6 +437,42 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
         const pv = await pm.getPromptVariables();
         assertEquals(pv.fragments.length, 0);
         assertEquals(Object.keys(pv.variables).length, 0);
+      },
+    );
+
+    await t.step(
+      "getPromptVariables: populates metadata for named-variable fragments",
+      async () => {
+        const pluginDir = join(tmpDir, "frag-metadata");
+        const pDir = join(pluginDir, "meta-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "meta-plugin",
+            version: "1.0.0",
+            promptFragments: [
+              { file: "named.md", variable: "myVar" },
+              { file: "unnamed.md" },
+            ],
+          }),
+        );
+        await Deno.writeTextFile(join(pDir, "named.md"), "named content");
+        await Deno.writeTextFile(join(pDir, "unnamed.md"), "unnamed content");
+        const pm = new PluginManager(
+          pluginDir,
+          undefined,
+          new HookDispatcher(),
+        );
+        await pm.init();
+        const pv = await pm.getPromptVariables();
+        assertExists(pv.metadata);
+        const myVarMeta = pv.metadata!["myVar"];
+        assertExists(myVarMeta);
+        assertEquals(myVarMeta!.plugin, "meta-plugin");
+        assertEquals(myVarMeta!.file, "named.md");
+        assert(!("unnamed" in pv.metadata!));
+        assertEquals(pv.variables.myVar, "named content");
       },
     );
 

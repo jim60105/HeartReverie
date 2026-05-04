@@ -177,6 +177,32 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
     // Collect plugin prompt variables
     const pluginVars = await pluginManager.getPromptVariables();
 
+    // Render named-variable plugin fragments through Vento (e.g. chapter_number injection).
+    // Plugin fragments are first-party and not run through validateTemplate().
+    const fragmentContext: Record<string, unknown> = {
+      chapter_number: chapterNumber ?? 1,
+      series_name: series || "",
+      story_name: story || "",
+      ...loreVars,
+    };
+
+    const renderedPluginVariables: Record<string, string> = { ...pluginVars.variables };
+    for (const [name, value] of Object.entries(renderedPluginVariables)) {
+      if (typeof value !== "string" || !value.includes("{{")) continue;
+      try {
+        const result = await ventoEnv.runString(value, { ...fragmentContext });
+        renderedPluginVariables[name] = result.content;
+      } catch (renderErr: unknown) {
+        const meta = pluginVars.metadata?.[name];
+        log.warn(`Plugin fragment variable '${name}' Vento render failed, using raw content`, {
+          variable: name,
+          plugin: meta?.plugin ?? "unknown",
+          file: meta?.file ?? "unknown",
+          error: renderErr instanceof Error ? renderErr.message : String(renderErr),
+        });
+      }
+    }
+
     // Collect dynamic variables from plugins (e.g. status_data from state plugin)
     const dynamicVars = await pluginManager.getDynamicVariables({
       series: series || "",
@@ -208,7 +234,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
         series_name: series || "",
         story_name: story || "",
         ...loreVars,
-        ...pluginVars.variables,
+        ...renderedPluginVariables,
         plugin_fragments: pluginVars.fragments || [],
         ...(extraVariables ?? {}),
         __messageState: messageState,
@@ -227,7 +253,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       }
       assertHasUserMessage(messages);
       const latencyMs = Math.round(performance.now() - startTime);
-      const variableCount = Object.keys(loreVars).length + Object.keys(pluginVars.variables).length + Object.keys(dynamicVars).length + 4;
+      const variableCount = Object.keys(loreVars).length + Object.keys(renderedPluginVariables).length + Object.keys(dynamicVars).length + 4;
       const roleCounts: Record<ChatMessage["role"], number> = { system: 0, user: 0, assistant: 0 };
       for (const m of messages) roleCounts[m.role]++;
       log.info("Template rendered successfully", {
@@ -238,7 +264,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       });
       log.debug("Template render details", {
         templatePath: templateOverride ? "(override)" : systemTemplatePath,
-        variableNames: [...Object.keys(loreVars), ...Object.keys(pluginVars.variables), ...Object.keys(dynamicVars)],
+        variableNames: [...Object.keys(loreVars), ...Object.keys(renderedPluginVariables), ...Object.keys(dynamicVars)],
         messageCount: messages.length,
         roleCounts,
       });

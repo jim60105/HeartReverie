@@ -285,6 +285,62 @@ Deno.test("createTemplateEngine", async (t) => {
     assertEquals(captured!.isFirstRound, false);
     assertEquals(captured!.chapterCount, 0);
   });
+
+  await t.step("plugin fragment renders chapter_number from chapterNumber option", async () => {
+    const pluginMgr = {
+      getPromptVariables: async () => ({
+        variables: { test_frag: "第 {{ chapter_number }} 章" },
+        fragments: [],
+        metadata: { test_frag: { plugin: "test-plugin", file: "test.md" } },
+      }),
+      getDynamicVariables: async () => ({}),
+    } as unknown as PluginManager;
+    const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
+    const result = await renderSystemPrompt("test-series", undefined, {
+      templateOverride: `{{ message "user" }}{{ test_frag }}{{ /message }}`,
+      chapterNumber: 42,
+    });
+    assertEquals(result.error, null);
+    assertExists(result.messages[0]);
+    assertMatch(result.messages[0]!.content, /第 42 章/);
+    assertEquals(result.messages[0]!.content.includes("{{ chapter_number }}"), false);
+    assertEquals(result.messages[0]!.content.includes("${chapter_number}"), false);
+  });
+
+  await t.step("plugin fragment render failure falls back to raw content", async () => {
+    const pluginMgr = {
+      getPromptVariables: async () => ({
+        variables: { broken_frag: "{{ if x }}broken no closing" },
+        fragments: [],
+        metadata: { broken_frag: { plugin: "bad-plugin", file: "broken.md" } },
+      }),
+      getDynamicVariables: async () => ({}),
+    } as unknown as PluginManager;
+    const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
+    const result = await renderSystemPrompt("test-series", undefined, {
+      templateOverride: `{{ message "user" }}{{ broken_frag }}{{ /message }}`,
+    });
+    assertEquals(result.error, null);
+    assertExists(result.messages[0]);
+    assertMatch(result.messages[0]!.content, /broken no closing/);
+  });
+
+  await t.step("plugin fragment defaults chapter_number to 1 when not provided", async () => {
+    const pluginMgr = {
+      getPromptVariables: async () => ({
+        variables: { ch_frag: "Ch{{ chapter_number }}" },
+        fragments: [],
+      }),
+      getDynamicVariables: async () => ({}),
+    } as unknown as PluginManager;
+    const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
+    const result = await renderSystemPrompt("test-series", undefined, {
+      templateOverride: `{{ message "user" }}{{ ch_frag }}{{ /message }}`,
+    });
+    assertEquals(result.error, null);
+    assertExists(result.messages[0]);
+    assertEquals(result.messages[0]!.content, "Ch1");
+  });
 });
 
 Deno.test("lore Vento rendering", async (t) => {
