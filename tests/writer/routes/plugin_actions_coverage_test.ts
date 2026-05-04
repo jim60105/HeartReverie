@@ -137,6 +137,7 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<Scenario> {
     pluginManager,
     hookDispatcher,
     buildPromptFromStory: storyEngine.buildPromptFromStory,
+    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     verifyPassphrase,
   } as AppDeps;
 
@@ -538,11 +539,13 @@ Deno.test({
     await t.step(
       "vento template error (non no-user-message) returns generic 422",
       async () => {
-        // Use an undefined variable to trigger a Vento render error that is
-        // not the multi-message:no-user-message slug.
+        // Use a runtime error (calling .length on undefined) to trigger a
+        // Vento render error that is not the multi-message:no-user-message
+        // slug. Empty content alone is now silently filtered, so we need a
+        // template that actually throws during render.
         const { app, cleanup } = await makeScenario({
           promptContent:
-            '{{ message "user" }}{{ undefined_variable_xyz }}{{ /message }}',
+            '{{ message "user" }}{{ undefined_variable_xyz.length }}{{ /message }}',
         });
         try {
           const res = await callRoute(app, "tester", {

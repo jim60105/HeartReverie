@@ -21,6 +21,7 @@ import type {
   LlmConfig,
   SafePathFn,
   BuildPromptFn,
+  BuildContinuePromptFn,
   LLMStreamChunk,
   VentoError,
   TokenUsageRecord,
@@ -30,6 +31,7 @@ import {
   resolveTargetChapterNumber,
   listChapterFiles,
   atomicWriteChapter,
+  ContinuePromptError,
 } from "./story.ts";
 import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
 import { createLogger, createLlmLogger } from "./logger.ts";
@@ -78,6 +80,27 @@ export interface ChatResult {
   readonly usage: TokenUsageRecord | null;
 }
 
+/** Options for `executeContinue` — continues the latest chapter file. */
+export interface ContinueOptions {
+  readonly series: string;
+  readonly name: string;
+  readonly template?: string;
+  readonly config: AppConfig;
+  readonly safePath: SafePathFn;
+  readonly hookDispatcher: HookDispatcher;
+  readonly buildContinuePromptFromStory: BuildContinuePromptFn;
+  readonly onDelta?: (content: string) => void;
+  readonly signal?: AbortSignal;
+}
+
+/** Successful continue result. */
+export interface ContinueResult {
+  readonly chapter: number;
+  /** Full chapter content after the continue stream completes. */
+  readonly content: string;
+  readonly usage: TokenUsageRecord | null;
+}
+
 /** Error thrown when a chat generation is aborted by the client. */
 export class ChatAbortError extends Error {
   override readonly name = "ChatAbortError";
@@ -87,7 +110,7 @@ export class ChatAbortError extends Error {
 export class ChatError extends Error {
   override readonly name = "ChatError";
   constructor(
-    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "llm-stream" | "no-body" | "no-content" | "story-config" | "no-chapter" | "concurrent",
+    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "llm-stream" | "no-body" | "no-content" | "story-config" | "no-chapter" | "concurrent" | "conflict",
     message: string,
     public readonly httpStatus: number = 500,
     public readonly ventoError?: VentoError,
@@ -110,11 +133,22 @@ export class ChatError extends Error {
  *   dispatched.
  * - `discard`: plugin-action discard mode — accumulate the stream in memory
  *   and return it; no chapter mutation, no hook dispatches.
+ * - `continue-last-chapter`: continue mode — append streaming bytes to an
+ *   already-existing chapter file (specified by `targetChapterNumber`).
+ *   Re-uses the per-chunk `response-stream` hook + `<think>` framing from
+ *   `write-new-chapter`, but does NOT dispatch `pre-write` (no new user
+ *   message exists), opens the file with `append: true` (no truncate, no
+ *   create), and on entry verifies the on-disk bytes still match
+ *   `existingContent` (snapshot guard against external editors racing the
+ *   per-story lock — throws `ChatError("conflict", …, 409)` on mismatch).
+ *   Finalisation re-reads the chapter file to compute `chapterContentAfter`
+ *   and dispatches `post-response` with `source: "continue"`.
  */
 export type WriteMode =
   | { readonly kind: "write-new-chapter"; readonly userMessage: string; readonly targetChapterNumber: number }
   | { readonly kind: "append-to-existing-chapter"; readonly appendTag: string; readonly pluginName: string }
-  | { readonly kind: "discard" };
+  | { readonly kind: "discard" }
+  | { readonly kind: "continue-last-chapter"; readonly targetChapterNumber: number; readonly existingContent: string };
 
 /** Arguments for `streamLlmAndPersist`. */
 export interface StreamLlmArgs {
@@ -186,6 +220,10 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     const lastFile = chapterFiles[chapterFiles.length - 1]!;
     targetNum = parseInt(lastFile, 10);
     chapterPath = join(storyDir, lastFile);
+  } else if (writeMode.kind === "continue-last-chapter") {
+    targetNum = writeMode.targetChapterNumber;
+    const padded = String(targetNum).padStart(3, "0");
+    chapterPath = join(storyDir, `${padded}.md`);
   }
 
   // ── Build upstream request body ──
@@ -325,6 +363,41 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     if (preContent) {
       await file.write(encoder.encode(preContent));
     }
+  } else if (writeMode.kind === "continue-last-chapter" && chapterPath !== null && targetNum !== null) {
+    // Snapshot guard (defence-in-depth against external editors racing the
+    // per-story generation lock): re-read the file and compare against the
+    // bytes captured at parse time. Mismatch → 409 Conflict.
+    let onDiskContent: string;
+    try {
+      onDiskContent = await Deno.readTextFile(chapterPath);
+    } catch (err) {
+      if (err instanceof Deno.errors.NotFound) {
+        throw new ChatError("no-chapter", "Cannot continue: chapter file no longer exists", 400);
+      }
+      throw err;
+    }
+    if (onDiskContent !== writeMode.existingContent) {
+      throw new ChatError(
+        "conflict",
+        "Latest chapter changed during continue; please retry",
+        409,
+      );
+    }
+
+    reqFileLog.info("Appending to chapter file (continue)", {
+      op: "append",
+      path: chapterPath,
+      chapter: targetNum,
+    });
+
+    try {
+      file = await Deno.open(chapterPath, { write: true, append: true, mode: 0o664 });
+    } catch (err) {
+      if (err instanceof Deno.errors.NotFound) {
+        throw new ChatError("no-chapter", "Cannot continue: chapter file no longer exists", 400);
+      }
+      throw err;
+    }
   }
 
   /** Extract reasoning text from a stream chunk delta. */
@@ -365,7 +438,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
 
   /** Persist a content delta — mode-specific. */
   const persistChunk = async (delta: string): Promise<void> => {
-    if (writeMode.kind === "write-new-chapter") {
+    if (writeMode.kind === "write-new-chapter" || writeMode.kind === "continue-last-chapter") {
       const ctx = await hookDispatcher.dispatch("response-stream", {
         correlationId,
         chunk: delta,
@@ -428,9 +501,11 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       const choice = parsed.choices?.[0];
       const delta = choice?.delta;
 
-      // Reasoning bytes — only frame as `<think>` for write-new-chapter mode.
+      // Reasoning bytes — only frame as `<think>` for chapter-writing modes.
       const reasoningText = extractReasoningText(delta);
-      if (reasoningText.length > 0 && writeMode.kind === "write-new-chapter") {
+      const isChapterWritingMode = writeMode.kind === "write-new-chapter"
+        || writeMode.kind === "continue-last-chapter";
+      if (reasoningText.length > 0 && isChapterWritingMode) {
         if (!inThinkBlock) {
           await writeFile("<think>\n");
           inThinkBlock = true;
@@ -443,7 +518,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
 
       const contentDelta = delta?.content;
       if (contentDelta) {
-        if (inThinkBlock && writeMode.kind === "write-new-chapter") {
+        if (inThinkBlock && isChapterWritingMode) {
           await writeFile("\n</think>\n\n");
           inThinkBlock = false;
           notifyDelta("\n</think>\n\n");
@@ -637,6 +712,32 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       pluginName,
       appendedTag: appendTag,
     });
+  } else if (writeMode.kind === "continue-last-chapter" && chapterPath !== null && targetNum !== null) {
+    if (usage !== null) {
+      await appendUsage(storyDir, usage);
+    }
+
+    // Re-read the chapter file from disk to obtain the FULL updated content
+    // (original pre-continue bytes + everything appended during this stream).
+    chapterContentAfter = await Deno.readTextFile(chapterPath);
+
+    reqFileLog.info("Chapter file appended (continue)", {
+      op: "append",
+      path: chapterPath,
+      bytes: encoder.encode(aiContent).length,
+    });
+
+    await hookDispatcher.dispatch("post-response", {
+      correlationId,
+      content: chapterContentAfter,
+      storyDir,
+      series,
+      name,
+      rootDir,
+      chapterNumber: targetNum,
+      chapterPath,
+      source: "continue",
+    });
   }
   // discard: no chapter mutation, no hook dispatch
 
@@ -768,6 +869,112 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     return {
       chapter: result.chapterNumber ?? 0,
       content: result.chapterContentAfter ?? result.content,
+      usage: result.usage,
+    };
+  } finally {
+    clearGenerationActive(series, name);
+  }
+}
+
+/**
+ * Execute a continue-last-chapter request: re-read latest chapter, parse
+ * `<user_message>` + assistant prefill, build prompt with the trailing
+ * assistant turn (when prefill non-empty), then stream LLM output and
+ * append to the existing chapter file. Translates `ContinuePromptError`
+ * (from `parseChapterForContinue` failures) into `ChatError`.
+ */
+export async function executeContinue(options: ContinueOptions): Promise<ContinueResult> {
+  const {
+    series,
+    name,
+    template,
+    config,
+    safePath,
+    hookDispatcher,
+    buildContinuePromptFromStory,
+    onDelta,
+    signal,
+  } = options;
+  const reqLog = log;
+
+  reqLog.info("Continue execution started", { series, story: name });
+
+  if (!Deno.env.get("LLM_API_KEY")) {
+    reqLog.error("LLM_API_KEY not configured");
+    throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
+  }
+
+  const storyDir = safePath(series, name);
+  if (!storyDir) {
+    throw new ChatError("bad-path", "Invalid path", 400);
+  }
+
+  let llmConfig: LlmConfig;
+  try {
+    llmConfig = await resolveStoryLlmConfig(storyDir, config.llmDefaults);
+  } catch (err) {
+    if (err instanceof StoryConfigValidationError) {
+      reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
+      throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
+    throw new ChatError("story-config", "Failed to read story configuration", 500);
+  }
+
+  let templateOverride: string | undefined;
+  if (typeof template === "string") {
+    templateOverride = template;
+  } else {
+    try {
+      const tpl = await readTemplate(config);
+      if (tpl.source === "custom") {
+        templateOverride = tpl.content;
+      }
+    } catch {
+      // fall through to default rendering
+    }
+  }
+
+  let promptResult;
+  try {
+    promptResult = await buildContinuePromptFromStory(series, name, storyDir, templateOverride);
+  } catch (err) {
+    if (err instanceof ContinuePromptError) {
+      throw new ChatError(err.code, err.message, err.httpStatus);
+    }
+    throw err;
+  }
+
+  const { messages, ventoError, targetChapterNumber, existingContent } = promptResult;
+
+  if (ventoError) {
+    throw new ChatError("vento", "Template rendering error", 422, ventoError);
+  }
+  if (messages.length === 0) {
+    throw new ChatError("no-prompt", "Failed to generate prompt", 500);
+  }
+
+  if (!tryMarkGenerationActive(series, name)) {
+    throw new ChatError("concurrent", "Another generation is already in progress for this story", 409);
+  }
+  try {
+    const result = await streamLlmAndPersist({
+      messages,
+      llmConfig,
+      series,
+      name,
+      storyDir,
+      rootDir: config.ROOT_DIR,
+      signal,
+      writeMode: { kind: "continue-last-chapter", targetChapterNumber, existingContent },
+      onDelta,
+      hookDispatcher,
+      config,
+    });
+    return {
+      chapter: result.chapterNumber ?? targetChapterNumber,
+      content: result.chapterContentAfter ?? "",
       usage: result.usage,
     };
   } finally {

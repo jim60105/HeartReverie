@@ -248,6 +248,34 @@ export function assertHasUserMessage(messages: ChatMessage[]): void {
 }
 
 /**
+ * Drop messages with empty / whitespace-only content from the rendered
+ * message list, returning the filtered array.
+ *
+ * Author templates often emit a `{{ message "X" }}` block that wraps a
+ * conditional or `{{ for }}` body — when the iteration produces zero output
+ * (e.g. an empty `previous_context`), the message renders to whitespace.
+ * Keeping such messages would waste tokens and confuse upstream chat APIs
+ * (some treat them as malformed), so we silently drop them. Authors who want
+ * a strict check can call `assertNoEmptyMessages` directly.
+ *
+ * @returns {{ kept: ChatMessage[]; droppedCount: number }}
+ */
+export function filterEmptyMessages(
+  messages: ChatMessage[],
+): { kept: ChatMessage[]; droppedCount: number } {
+  const kept: ChatMessage[] = [];
+  let dropped = 0;
+  for (const m of messages) {
+    if (m.content.trim().length === 0) {
+      dropped++;
+      continue;
+    }
+    kept.push(m);
+  }
+  return { kept, droppedCount: dropped };
+}
+
+/**
  * Throw a tagged error if any message has whitespace-only or empty content.
  * Author-emitted `{{ message }}` blocks that render to nothing waste tokens
  * and confuse upstream chat APIs (some treat them as malformed). The thrown

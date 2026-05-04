@@ -24,7 +24,7 @@ import { resolveLoreVariables, generateLoreVariables } from "./lore.ts";
 import { createLogger } from "./logger.ts";
 import {
   assertHasUserMessage,
-  assertNoEmptyMessages,
+  filterEmptyMessages,
   type MessageState,
   messageTagPlugin,
   splitRenderedMessages,
@@ -213,13 +213,19 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
         ...(extraVariables ?? {}),
         __messageState: messageState,
       });
-      const messages: ChatMessage[] = splitRenderedMessages(
+      const rawMessages: ChatMessage[] = splitRenderedMessages(
         result.content,
         messageState.nonce,
         messageState.messages,
       );
+      const { kept: messages, droppedCount } = filterEmptyMessages(rawMessages);
+      if (droppedCount > 0) {
+        log.debug("Dropped empty messages from rendered template", {
+          droppedCount,
+          keptCount: messages.length,
+        });
+      }
       assertHasUserMessage(messages);
-      assertNoEmptyMessages(messages);
       const latencyMs = Math.round(performance.now() - startTime);
       const variableCount = Object.keys(loreVars).length + Object.keys(pluginVars.variables).length + Object.keys(dynamicVars).length + 4;
       const roleCounts: Record<ChatMessage["role"], number> = { system: 0, user: 0, assistant: 0 };

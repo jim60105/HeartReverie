@@ -86,6 +86,7 @@ Deno.test({ name: "plugin routes", sanitizeOps: false, sanitizeResources: false,
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     verifyPassphrase,
   } as AppDeps);
 
@@ -142,6 +143,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
       verifyPassphrase,
     } as AppDeps);
 
@@ -178,6 +180,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
       verifyPassphrase,
     } as AppDeps);
 
@@ -223,6 +226,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
       verifyPassphrase,
     } as AppDeps);
 
@@ -261,6 +265,7 @@ Deno.test({ name: "plugin frontend module routes", sanitizeOps: false, sanitizeR
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
       verifyPassphrase,
     } as AppDeps);
 
@@ -302,6 +307,7 @@ Deno.test({ name: "shared plugin utils routes", sanitizeOps: false, sanitizeReso
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
       verifyPassphrase,
     } as AppDeps);
   }
@@ -376,6 +382,7 @@ Deno.test({ name: "parameters endpoint with lore discovery", sanitizeOps: false,
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     verifyPassphrase,
   } as AppDeps);
 
@@ -443,6 +450,7 @@ Deno.test({ name: "plugin frontendStyles routes", sanitizeOps: false, sanitizeRe
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
       verifyPassphrase,
     } as AppDeps);
   }

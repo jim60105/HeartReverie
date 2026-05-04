@@ -1,5 +1,8 @@
-## ADDED Requirements
+# continue-last-chapter Specification
 
+## Purpose
+TBD - created by archiving change continue-last-chapter. Update Purpose after archive.
+## Requirements
 ### Requirement: Continue endpoint resumes generation in place
 
 The server SHALL expose two equivalent ways to resume LLM generation on the latest existing chapter without creating a new chapter file: an HTTP route `POST /api/stories/:series/:name/chat/continue` (no request body fields are required) and a WebSocket message `{ type: "chat:continue", id: string, series: string, story: string }`. Both SHALL execute through a single library function `executeContinue()` in `writer/lib/chat-shared.ts` that reuses the existing prompt-building, streaming, abort, mid-stream-error, and token-usage code paths.
@@ -12,7 +15,7 @@ The server SHALL expose two equivalent ways to resume LLM generation on the late
 4. Parse the freshly-read chapter via a helper `parseChapterForContinue()` that returns `{ userMessageText, assistantPrefill }`, where `userMessageText` is the *content* of the **first** `<user_message>…</user_message>` block (with the wrapping tags removed; `""` when no such block exists) and `assistantPrefill` is the chapter bytes with that first user_message block removed and then run through `stripPromptTags()`.
 5. Refuse with `ChatError("no-content", "Latest chapter is empty; nothing to continue", 400)` when **both** `userMessageText.trim() === ""` *and* `assistantPrefill.trim() === ""`. Either part being non-empty is sufficient to allow continue.
 6. Acquire the per-story generation lock via `tryMarkGenerationActive(series, name)`; on failure throw `ChatError("concurrent", …, 409)`. Release the lock in `finally`.
-7. Build the prompt by re-using the same `previous_context` machinery as `buildPromptFromStory()` for chapters 1..n−1 (same Vento template, same plugin hooks, same lore resolution, same `stripPromptTags()` policy on prior chapters). The render SHALL be invoked with `userInput: userMessageText` (so the user's possibly-edited prompt drives the trailing user turn) and `isFirstRound: false`.
+7. Build the prompt by re-using the same `previous_context` machinery as `buildPromptFromStory()` for chapters 1..n−1 (same Vento template, same plugin hooks, same lore resolution, same `stripPromptTags()` policy on prior chapters). The render SHALL be invoked with `userInput: userMessageText` (so the user's possibly-edited prompt drives the trailing user turn) and `isFirstRound` derived from the filtered prior-context length (`isFirstRound = filteredContext.length === 0`) so the render path matches `executeChat()` semantics: the first-ever continue (single chapter, empty `previous_context`) takes the first-round branch, while subsequent continues do not.
 8. After the rendered `messages` array is returned, conditionally append exactly one extra entry `{ role: "assistant", content: assistantPrefill }` as the **last** element of the array **only when `assistantPrefill.trim() !== ""`**. When `assistantPrefill` is empty (the `<user_message>` block exists but no prose has been generated yet, or the user manually deleted the prose tail), `executeContinue()` SHALL NOT append an empty assistant message — the request is genuinely equivalent to a `chat:send` carrying `userMessageText`, and the model produces a fresh continuation. This avoids sending an empty message that providers may reject (the project's own `assertNoEmptyMessages()` treats empty messages as malformed) or treat inconsistently.
 9. Before opening the chapter file for append in `streamLlmAndPersist()`, the persistence layer SHALL verify the on-disk bytes still match `existingContent` (the bytes captured during step 3). On mismatch (an external editor modified the file between the parse and the append) the function SHALL throw `ChatError("conflict", "Latest chapter changed during continue; please retry", 409)` before opening the file for writing. This is a defence-in-depth snapshot check; the per-story generation lock and the frontend's editor-disabled-during-loading already prevent the common cases.
 10. Call `streamLlmAndPersist()` with the new `WriteMode` variant `{ kind: "continue-last-chapter"; targetChapterNumber: <n>; existingContent: <unstripped chapter-n bytes read in step 3> }`.
@@ -35,7 +38,7 @@ The HTTP route SHALL be subject to the same per-passphrase rate limiter that alr
 
 - **GIVEN** a story whose latest chapter contains `<user_message>探索藥妝店</user_message>\n\n` followed by no prose (the LLM stopped before producing any content)
 - **WHEN** the client invokes continue
-- **THEN** the server SHALL accept the request, render the upstream prompt with `userInput: "探索藥妝店"`, append a trailing `{ role: "assistant", content: "" }` message, and stream a fresh continuation that is appended to the chapter file's tail
+- **THEN** the server SHALL accept the request, render the upstream prompt with `userInput: "探索藥妝店"`, NOT append any trailing assistant message (because `assistantPrefill.trim() === ""`), and stream a fresh continuation that is appended to the chapter file's tail
 
 #### Scenario: Continue refused while another generation is active
 
@@ -87,7 +90,7 @@ The provider-dependence of trailing-assistant prefill is a known limitation: Ope
 
 - **GIVEN** the project's `system.md` Vento template at the time of this change
 - **WHEN** `executeContinue()` runs
-- **THEN** the function SHALL invoke the same `renderSystemPrompt()` entry point as `executeChat()` with `userInput: userMessageText` and `isFirstRound: false`, AND SHALL NOT pass any `templateOverride` that mentions a continue-specific branch
+- **THEN** the function SHALL invoke the same `renderSystemPrompt()` entry point as `executeChat()` with `userInput: userMessageText` and `isFirstRound = (filteredContext.length === 0)` (so single-chapter continues match the first-round semantics of `executeChat()`), AND SHALL NOT pass any `templateOverride` that mentions a continue-specific branch
 
 #### Scenario: Stripping rules for prior chapters match `executeChat`
 
@@ -161,3 +164,4 @@ The continue path SHALL share the existing streaming and lifecycle infrastructur
 
 - **WHEN** `executeContinue()` runs successfully
 - **THEN** the LLM interaction log entries for that correlation id SHALL include `mode: "continue-last-chapter"` on both the request and response entries
+

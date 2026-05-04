@@ -133,6 +133,10 @@ export interface ChapterContentProps {
 
 export interface ChatInputProps {
   disabled?: boolean;
+  /** Total number of chapters loaded (Continue button gating). */
+  chapterCount?: number;
+  /** True when no chapters exist or the latest chapter is whitespace-only after stripping `<user_message>` blocks. */
+  latestChapterIsEmpty?: boolean;
 }
 
 export interface StorySelectorProps {
@@ -155,6 +159,7 @@ export interface PromptPreviewProps {
 export interface ChatInputEmits {
   (e: "send", message: string): void;
   (e: "resend", message: string): void;
+  (e: "continue"): void;
   (e: "sent"): void;
 }
 
@@ -181,6 +186,8 @@ export interface UseChapterNavReturn {
   currentIndex: Ref<number>;
   chapters: Ref<ChapterData[]>;
   totalChapters: ComputedRef<number>;
+  chapterCount: ComputedRef<number>;
+  latestChapterIsEmpty: ComputedRef<boolean>;
   isFirst: ComputedRef<boolean>;
   isLast: ComputedRef<boolean>;
   isLastChapter: ComputedRef<boolean>;
@@ -281,6 +288,10 @@ export interface UseChatApiReturn {
     series: string,
     story: string,
     message: string,
+  ) => Promise<boolean>;
+  continueLastChapter: (
+    series: string,
+    story: string,
   ) => Promise<boolean>;
   runPluginPrompt: (
     pluginName: string,
@@ -695,11 +706,20 @@ export interface WsPluginActionAbortMessage {
   correlationId: string;
 }
 
+/** Client-to-server: continue the latest chapter (no new user message). */
+export interface WsChatContinueMessage {
+  type: "chat:continue";
+  id: string;
+  series: string;
+  story: string;
+}
+
 /** All client-to-server message types. */
 export type WsClientMessage =
   | WsAuthMessage
   | WsChatSendMessage
   | WsChatResendMessage
+  | WsChatContinueMessage
   | WsChatAbortMessage
   | WsSubscribeMessage
   | WsPluginActionRunMessage

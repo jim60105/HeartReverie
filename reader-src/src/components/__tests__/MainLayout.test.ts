@@ -20,6 +20,8 @@ import ChatInput from "@/components/ChatInput.vue";
 
 const isLastChapterRef = ref(false);
 const chaptersRef = ref([{ number: 1 }]);
+const chapterCountRef = ref(1);
+const latestChapterIsEmptyRef = ref(false);
 const backendContext = {
   series: "series-a",
   story: "story-a",
@@ -29,6 +31,7 @@ const backendContext = {
 const reloadToLastMock = vi.fn().mockResolvedValue(undefined);
 const sendMessageMock = vi.fn().mockResolvedValue(true);
 const resendMessageMock = vi.fn().mockResolvedValue(true);
+const continueLastChapterMock = vi.fn().mockResolvedValue(true);
 const abortCurrentRequestMock = vi.fn();
 const isLoadingRef = ref(false);
 const errorMessageRef = ref("");
@@ -51,6 +54,8 @@ vi.mock("@/composables/useChapterNav", () => ({
   useChapterNav: () => ({
     isLastChapter: isLastChapterRef,
     chapters: chaptersRef,
+    chapterCount: chapterCountRef,
+    latestChapterIsEmpty: latestChapterIsEmptyRef,
     getBackendContext: () => backendContext,
     reloadToLast: reloadToLastMock,
   }),
@@ -64,6 +69,7 @@ vi.mock("@/composables/useChatApi", () => ({
     abortCurrentRequest: abortCurrentRequestMock,
     sendMessage: sendMessageMock,
     resendMessage: resendMessageMock,
+    continueLastChapter: continueLastChapterMock,
   }),
 }));
 
@@ -84,6 +90,8 @@ describe("MainLayout", () => {
   beforeEach(() => {
     isLastChapterRef.value = false;
     chaptersRef.value = [{ number: 1 }];
+    chapterCountRef.value = 1;
+    latestChapterIsEmptyRef.value = false;
     backendContext.series = "series-a";
     backendContext.story = "story-a";
     backendContext.isBackendMode = true;
@@ -93,6 +101,7 @@ describe("MainLayout", () => {
     sessionStorage.clear();
     sendMessageMock.mockClear();
     resendMessageMock.mockClear();
+    continueLastChapterMock.mockClear();
     reloadToLastMock.mockClear();
   });
 

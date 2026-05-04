@@ -336,6 +336,133 @@ async function resendMessage(
   }
 }
 
+async function continueLastChapter(
+  series: string,
+  story: string,
+): Promise<boolean> {
+  if (isLoading.value) {
+    errorMessage.value = "續寫失敗";
+    return false;
+  }
+
+  const { isConnected, isAuthenticated, send, onMessage } = useWebSocket();
+
+  isLoading.value = true;
+  errorMessage.value = "";
+  streamingContent.value = "";
+
+  if (isConnected.value && isAuthenticated.value) {
+    // ── WebSocket path ──
+    const id = crypto.randomUUID();
+    currentRequestId = id;
+    return new Promise<boolean>((resolve) => {
+      const unsubDelta = onMessage('chat:delta', (msg) => {
+        if (msg.id !== id) return;
+        streamingContent.value += msg.content;
+      });
+      const unsubDone = onMessage('chat:done', (msg) => {
+        if (msg.id !== id) return;
+        cleanup();
+        streamingContent.value = '';
+        isLoading.value = false;
+        useUsage().pushRecord(msg.usage);
+        dispatchNotification('chat:done', { id });
+        resolve(true);
+      });
+      const unsubError = onMessage('chat:error', (msg) => {
+        if (msg.id !== id) return;
+        cleanup();
+        streamingContent.value = '';
+        errorMessage.value = '續寫失敗';
+        isLoading.value = false;
+        dispatchNotification('chat:error', { id });
+        resolve(false);
+      });
+      const unsubAborted = onMessage('chat:aborted', (msg) => {
+        if (msg.id !== id) return;
+        cleanup();
+        streamingContent.value = '';
+        isLoading.value = false;
+        resolve(false);
+      });
+      const stopWatchClose = watch(isConnected, (connected) => {
+        if (!connected) {
+          cleanup();
+          streamingContent.value = '';
+          errorMessage.value = '連線中斷';
+          isLoading.value = false;
+          resolve(false);
+        }
+      });
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        streamingContent.value = '';
+        errorMessage.value = '請求逾時';
+        isLoading.value = false;
+        resolve(false);
+      }, 300_000);
+
+      function cleanup(): void {
+        clearTimeout(timeout);
+        stopWatchClose();
+        unsubDelta();
+        unsubDone();
+        unsubError();
+        unsubAborted();
+        currentRequestId = null;
+      }
+
+      send({ type: 'chat:continue', id, series, story });
+    });
+  }
+
+  // ── HTTP fallback ──
+  const { getAuthHeaders } = useAuth();
+  httpAbortController = new AbortController();
+
+  try {
+    const res = await fetch(
+      `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chat/continue`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        signal: httpAbortController.signal,
+      },
+    );
+
+    if (!res.ok) {
+      errorMessage.value = "續寫失敗";
+      dispatchNotification("chat:error", {});
+      return false;
+    }
+
+    try {
+      const body = (await res.json()) as { usage?: TokenUsageRecord | null };
+      if (body && typeof body === "object" && body.usage) {
+        useUsage().pushRecord(body.usage);
+      } else {
+        await useUsage().load(series, story);
+      }
+    } catch {
+      await useUsage().load(series, story);
+    }
+
+    dispatchNotification("chat:done", {});
+    return true;
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return false;
+    }
+    errorMessage.value = "續寫失敗";
+    dispatchNotification("chat:error", {});
+    return false;
+  } finally {
+    httpAbortController = null;
+    isLoading.value = false;
+  }
+}
+
 export function useChatApi(): UseChatApiReturn {
   return {
     isLoading,
@@ -343,6 +470,7 @@ export function useChatApi(): UseChatApiReturn {
     streamingContent,
     sendMessage,
     resendMessage,
+    continueLastChapter,
     runPluginPrompt,
     abortCurrentRequest,
   };

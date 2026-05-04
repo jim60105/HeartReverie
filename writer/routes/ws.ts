@@ -18,7 +18,7 @@ import { timingSafeEqual } from "@std/crypto/timing-safe-equal";
 import { join } from "@std/path";
 import { parse as parseYaml } from "@std/yaml";
 import { isValidParam } from "../lib/middleware.ts";
-import { executeChat, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
+import { executeChat, executeContinue, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
 import { runPluginActionWithDeps } from "./plugin-actions.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
@@ -56,7 +56,7 @@ function verifyWsPassphrase(passphrase: string): boolean {
  * Must be called BEFORE body-limit and auth middleware to bypass them.
  */
 export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
-  const { safePath, hookDispatcher, buildPromptFromStory, config } = deps;
+  const { safePath, hookDispatcher, buildPromptFromStory, buildContinuePromptFromStory, config } = deps;
 
   app.get("/api/ws", upgradeWebSocket((_c) => {
     // ── Per-connection state ──
@@ -102,7 +102,9 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
         clearTimeout(idleTimer);
         idleTimer = null;
       }
-      // Abort all active generations on disconnect to save tokens
+      // Abort all active generations on disconnect to save tokens.
+      // The same abortControllers map holds entries for chat:send, chat:continue,
+      // and plugin-action:run, so this loop cancels every in-flight flow.
       for (const controller of abortControllers.values()) {
         controller.abort();
       }
@@ -260,6 +262,102 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
         const detail = err instanceof ChatError
           ? err.message
           : "Failed to process chat request";
+        if (err instanceof ChatError) {
+          log.error("Chat request failed", {
+            event: "chat:error",
+            id,
+            series,
+            story,
+            code: err.code,
+            httpStatus: err.httpStatus,
+            detail: err.message,
+            ventoError: err.ventoError,
+          });
+        } else {
+          log.error("Chat request failed (unexpected)", {
+            event: "chat:error",
+            id,
+            series,
+            story,
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+          });
+        }
+        wsSend(ws, { type: "chat:error", id, detail });
+      } finally {
+        abortControllers.delete(id);
+        activeGenerations--;
+        resetIdleTimer(ws);
+      }
+    }
+
+    async function handleChatContinue(ws: WSContext, msg: Record<string, unknown>): Promise<void> {
+      const id = msg.id;
+      const series = msg.series;
+      const story = msg.story;
+
+      if (
+        typeof id !== "string" ||
+        typeof series !== "string" ||
+        typeof story !== "string"
+      ) {
+        wsSend(ws, { type: "error", detail: "Invalid chat:continue parameters" });
+        return;
+      }
+
+      if (!isValidParam(series) || !isValidParam(story)) {
+        wsSend(ws, { type: "chat:error", id, detail: "Invalid series or story name" });
+        return;
+      }
+
+      activeGenerations++;
+      const controller = new AbortController();
+      // Reuse the same abortControllers map keyed by `id` so a single chat:abort
+      // (and the connection-close cleanup loop) cancels chat:send and chat:continue alike.
+      abortControllers.set(id, controller);
+      try {
+        const result = await executeContinue({
+          series,
+          name: story,
+          config,
+          safePath,
+          hookDispatcher,
+          buildContinuePromptFromStory,
+          onDelta: (content) => {
+            wsSend(ws, { type: "chat:delta", id, content });
+          },
+          signal: controller.signal,
+        });
+        wsSend(ws, { type: "chat:done", id, usage: result.usage });
+      } catch (err: unknown) {
+        if (err instanceof ChatAbortError) {
+          wsSend(ws, { type: "chat:aborted", id });
+          return;
+        }
+        const detail = err instanceof ChatError
+          ? err.message
+          : "Failed to process chat request";
+        if (err instanceof ChatError) {
+          log.error("Continue request failed", {
+            event: "chat:error",
+            id,
+            series,
+            story,
+            code: err.code,
+            httpStatus: err.httpStatus,
+            detail: err.message,
+            ventoError: err.ventoError,
+          });
+        } else {
+          log.error("Continue request failed (unexpected)", {
+            event: "chat:error",
+            id,
+            series,
+            story,
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+          });
+        }
         wsSend(ws, { type: "chat:error", id, detail });
       } finally {
         abortControllers.delete(id);
@@ -486,6 +584,9 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
             break;
           case "chat:send":
             await handleChatSend(ws, msg);
+            break;
+          case "chat:continue":
+            await handleChatContinue(ws, msg);
             break;
           case "chat:resend":
             await handleChatResend(ws, msg);
