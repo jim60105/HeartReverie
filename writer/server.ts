@@ -23,6 +23,7 @@ import { PluginManager } from "./lib/plugin-manager.ts";
 import { createSafePath, verifyPassphrase } from "./lib/middleware.ts";
 import { createTemplateEngine } from "./lib/template.ts";
 import { createStoryEngine } from "./lib/story.ts";
+import { loadThemes } from "./lib/themes.ts";
 import { createApp } from "./app.ts";
 
 // ── Initialize logger first ────────────────────────────────────
@@ -37,6 +38,9 @@ if (!Deno.env.get("LLM_API_KEY")) {
 const hookDispatcher = new HookDispatcher();
 const pluginManager = new PluginManager(config.PLUGINS_DIR, Deno.env.get("PLUGIN_DIR"), hookDispatcher);
 await pluginManager.init();
+
+// ── Theme system ────────────────────────────────────────────────
+await loadThemes(config.THEME_DIR);
 
 // ── Build dependency graph ──────────────────────────────────────
 const safePath = createSafePath(config.PLAYGROUND_DIR);

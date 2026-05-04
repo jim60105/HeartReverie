@@ -15,13 +15,20 @@
 
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
+import { getTheme, listThemes } from "../lib/themes.ts";
+import { problemJson } from "../lib/errors.ts";
 
-/**
- * Register public configuration routes.
- * These routes do NOT require authentication.
- */
-export function registerConfigRoutes(app: Hono, deps: AppDeps): void {
-  app.get("/api/config", (c) => {
-    return c.json({ backgroundImage: deps.config.BACKGROUND_IMAGE });
+export function registerThemeRoutes(app: Hono, _deps: AppDeps): void {
+  app.get("/api/themes", (c) => {
+    return c.json(listThemes());
+  });
+
+  app.get("/api/themes/:id", (c) => {
+    const id = c.req.param("id");
+    const theme = getTheme(id);
+    if (!theme) {
+      return c.json(problemJson("Not Found", 404, `Theme "${id}" not found`), 404);
+    }
+    return c.json(theme);
   });
 }

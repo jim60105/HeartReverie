@@ -28,7 +28,7 @@ import { registerChatRoutes } from "./routes/chat.ts";
 import { registerPluginRoutes } from "./routes/plugins.ts";
 import { registerPluginActionRoutes } from "./routes/plugin-actions.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
-import { registerConfigRoutes } from "./routes/config.ts";
+import { registerThemeRoutes } from "./routes/themes.ts";
 import { registerStoryConfigRoutes } from "./routes/story-config.ts";
 import { registerLlmDefaultsRoutes } from "./routes/llm-defaults.ts";
 import { registerLoreRoutes } from "./routes/lore.ts";
@@ -133,13 +133,13 @@ export function createApp(deps: AppDeps): Hono {
   // Auth middleware for API routes (skip public endpoints and WebSocket upgrade)
   app.use("/api/*", async (c, next) => {
     const pathname = new URL(c.req.url).pathname;
-    if (pathname === "/api/config" || pathname === "/api/ws") return next();
+    if (pathname === "/api/themes" || pathname.startsWith("/api/themes/") || pathname === "/api/ws") return next();
     return deps.verifyPassphrase(c, next);
   });
 
   // Routes
   registerAuthRoutes(app);
-  registerConfigRoutes(app, deps);
+  registerThemeRoutes(app, deps);
   registerStoriesRoutes(app, deps);
   registerLoreRoutes(app, deps);
   registerChapterRoutes(app, deps);

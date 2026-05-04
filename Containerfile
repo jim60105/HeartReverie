@@ -96,6 +96,7 @@ COPY --link --chown=$UID:0 --chmod=775 writer/ /app/writer/
 COPY --link --chown=$UID:0 --chmod=775 --from=frontend-build /app/reader-dist/ /app/reader-dist/
 COPY --link --chown=$UID:0 --chmod=775 assets/ /app/assets/
 COPY --link --chown=$UID:0 --chmod=775 plugins/ /app/plugins/
+COPY --link --chown=$UID:0 --chmod=775 themes/ /app/themes/
 
 ENV DENO_DIR=/deno-dir
 

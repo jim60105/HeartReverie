@@ -128,8 +128,11 @@ const LLM_REASONING_ENABLED: boolean = boolEnv("LLM_REASONING_ENABLED", true);
 const LLM_REASONING_EFFORT: ReasoningEffort = effortEnv("LLM_REASONING_EFFORT", "xhigh");
 const LLM_REASONING_OMIT: boolean = boolEnv("LLM_REASONING_OMIT", false);
 const LLM_MAX_COMPLETION_TOKENS: number = posIntEnv("LLM_MAX_COMPLETION_TOKENS", 4096);
-const BACKGROUND_IMAGE: string =
-  Deno.env.get("BACKGROUND_IMAGE") || "/assets/heart.webp";
+const THEME_DIR: string = (() => {
+  const raw = Deno.env.get("THEME_DIR");
+  if (!raw) return "./themes/";
+  return raw;
+})();
 const LOG_LEVEL: string = Deno.env.get("LOG_LEVEL") || "info";
 const LOG_FILE: string | undefined = Deno.env.get("LOG_FILE");
 const LLM_LOG_FILE: string | undefined = Deno.env.get("LLM_LOG_FILE");
@@ -181,7 +184,7 @@ export {
   LLM_REASONING_OMIT,
   LLM_MAX_COMPLETION_TOKENS,
   llmDefaults,
-  BACKGROUND_IMAGE,
+  THEME_DIR,
   PROMPT_FILE,
   LOG_LEVEL,
   LOG_FILE,

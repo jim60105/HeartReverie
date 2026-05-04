@@ -56,7 +56,7 @@ function buildConfig(tmpDir: string): AppConfig {
       reasoningEffort: "high",
     maxCompletionTokens: 4096,
     },
-    BACKGROUND_IMAGE: "/bg",
+    THEME_DIR: "./themes/",
     PROMPT_FILE: "x",
   } as unknown as AppConfig;
 }

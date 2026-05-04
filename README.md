@@ -76,10 +76,38 @@ deno task build:reader
 | `PLUGIN_DIR` | — | — | 外部外掛目錄（絕對路徑） |
 | `PLAYGROUND_DIR` | — | `./playground` | 故事資料根目錄 |
 | `READER_DIR` | — | `./reader-dist` | 前端靜態檔案根目錄 |
-| `BACKGROUND_IMAGE` | — | `/assets/heart.webp` | 背景圖片 URL 路徑 |
+| `THEME_DIR` | — | `./themes/` | 主題檔案目錄 |
 | `LOG_LEVEL` | — | `info` | 日誌等級：debug、info、warn、error |
 | `LOG_FILE` | — | — | JSON Lines 日誌檔案路徑（啟用檔案日誌與自動輪替） |
 | `PROMPT_FILE` | — | `playground/_prompts/system.md` | 自訂提示詞模板檔案路徑 |
+
+### 主題系統
+
+HeartReverie 支援透過 TOML 檔案自定義主題。主題檔案放在 `THEME_DIR` 指定的目錄下（預設 `./themes/`）。
+
+內建三套主題：
+- `default.toml` — 心夢預設（深色，含背景圖）
+- `light.toml` — 淡雅晨光（淺色方案）
+- `dark.toml` — 靜夜深邃（中性深色方案）
+
+#### 新增主題
+
+建立一個 `.toml` 檔案，格式如下：
+
+```toml
+id = "my-theme"          # 必須與檔名相同（去除 .toml）
+label = "我的主題"        # 下拉選單顯示名稱
+colorScheme = "dark"     # "light" 或 "dark"
+backgroundImage = ""     # 同源路徑或 data: URL，空字串表示無背景圖
+
+[palette]
+# 每個 CSS 自訂屬性（不含前綴 --）
+panel-bg = "#1a1e24"
+text-main = "rgba(220, 220, 215, 1)"
+# ... 完整 36 個屬性請參考 themes/default.toml
+```
+
+重啟服務後新主題即可在「設定 → 主題」中選用。
 
 ## 🔌 外掛系統
 

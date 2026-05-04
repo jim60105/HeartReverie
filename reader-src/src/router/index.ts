@@ -6,6 +6,7 @@ const SettingsLayout = () => import("@/components/SettingsLayout.vue");
 const PromptEditorPage = () => import("@/components/PromptEditorPage.vue");
 const LoreCodexPage = () => import("@/components/lore/LoreCodexPage.vue");
 const LlmSettingsPage = () => import("@/components/LlmSettingsPage.vue");
+const ThemeSettingsPage = () => import("@/components/ThemeSettingsPage.vue");
 
 export const settingsChildren: RouteRecordRaw[] = [
   {
@@ -25,6 +26,12 @@ export const settingsChildren: RouteRecordRaw[] = [
     name: "settings-llm",
     component: LlmSettingsPage,
     meta: { title: "LLM 設定" },
+  },
+  {
+    path: "theme",
+    name: "settings-theme",
+    component: ThemeSettingsPage,
+    meta: { title: "主題" },
   },
 ];
 

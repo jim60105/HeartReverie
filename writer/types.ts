@@ -86,7 +86,7 @@ export interface AppConfig {
   readonly LLM_REASONING_EFFORT: ReasoningEffort;
   readonly LLM_REASONING_OMIT: boolean;
   readonly LLM_MAX_COMPLETION_TOKENS: number;
-  readonly BACKGROUND_IMAGE: string;
+  readonly THEME_DIR: string;
   readonly PROMPT_FILE: string;
   /** Defaults for per-story LLM overrides, assembled from the flat `LLM_*` env vars. */
   readonly llmDefaults: LlmConfig;

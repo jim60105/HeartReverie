@@ -303,9 +303,21 @@ export interface UseChatApiReturn {
   abortCurrentRequest: () => void;
 }
 
-export interface UseBackgroundReturn {
-  backgroundUrl: Ref<string>;
-  applyBackground: () => Promise<void>;
+export interface ThemePayload {
+  id: string;
+  label: string;
+  colorScheme: string;
+  backgroundImage: string;
+  palette: Record<string, string>;
+}
+
+export interface UseThemeReturn {
+  currentThemeId: Ref<string>;
+  themes: Ref<Array<{ id: string; label: string }>>;
+  listThemes: () => Promise<void>;
+  applyTheme: (theme: ThemePayload) => void;
+  selectTheme: (id: string) => Promise<void>;
+  applyOnMount: () => Promise<void>;
 }
 
 // ── Hook System Types ──
