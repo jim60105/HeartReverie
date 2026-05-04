@@ -99,7 +99,7 @@ async function evalAll(env: Record<string, string>): Promise<{
       LLM_REASONING_EFFORT: c.LLM_REASONING_EFFORT,
       LLM_REASONING_OMIT: c.LLM_REASONING_OMIT,
       LLM_MAX_COMPLETION_TOKENS: c.LLM_MAX_COMPLETION_TOKENS,
-      BACKGROUND_IMAGE: c.BACKGROUND_IMAGE,
+      THEME_DIR: c.THEME_DIR,
       PROMPT_FILE: c.PROMPT_FILE,
       LOG_LEVEL: c.LOG_LEVEL,
       LOG_FILE: c.LOG_FILE ?? null,
@@ -131,7 +131,7 @@ Deno.test("config.ts – defaults when no env vars set", async () => {
   assertEquals(values.LLM_REASONING_EFFORT, "xhigh");
   assertEquals(values.LLM_REASONING_OMIT, false);
   assertEquals(values.LLM_MAX_COMPLETION_TOKENS, 4096);
-  assertEquals(values.BACKGROUND_IMAGE, "/assets/heart.webp");
+  assertEquals(values.THEME_DIR, "./themes/");
   assertEquals(values.LOG_LEVEL, "info");
   assertEquals(values.LOG_FILE, null);
   assert(
@@ -323,9 +323,9 @@ Deno.test("config.ts – PROMPT_FILE: env override (absolute, relative) and defa
   assert((vRel.PROMPT_FILE as string).startsWith("/"));
 });
 
-Deno.test("config.ts – BACKGROUND_IMAGE override", async () => {
-  const { values } = await evalAll({ BACKGROUND_IMAGE: "/custom/bg.png" });
-  assertEquals(values.BACKGROUND_IMAGE, "/custom/bg.png");
+Deno.test("config.ts – THEME_DIR override", async () => {
+  const { values } = await evalAll({ THEME_DIR: "/custom/themes/" });
+  assertEquals(values.THEME_DIR, "/custom/themes/");
 });
 
 Deno.test("config.ts – LOG_LEVEL / LOG_FILE / LLM_LOG_FILE pass through env", async () => {

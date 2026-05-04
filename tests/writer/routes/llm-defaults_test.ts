@@ -45,7 +45,7 @@ function createTestApp(): Hono {
       READER_DIR: "/nonexistent-reader",
       PLAYGROUND_DIR: "/nonexistent-playground",
       ROOT_DIR: "/nonexistent-root",
-      BACKGROUND_IMAGE: "/bg",
+      THEME_DIR: "./themes/",
       LLM_API_URL: "https://example.test/chat/completions",
       LLM_MODEL: llmDefaults.model,
       LLM_TEMPERATURE: llmDefaults.temperature,

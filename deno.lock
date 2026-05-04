@@ -4,6 +4,7 @@
     "jsr:@hono/hono@^4.12.14": "4.12.14",
     "jsr:@std/assert@^1.0.17": "1.0.19",
     "jsr:@std/assert@^1.0.19": "1.0.19",
+    "jsr:@std/collections@^1.1.3": "1.1.6",
     "jsr:@std/crypto@^1.0.5": "1.0.5",
     "jsr:@std/data-structures@^1.0.10": "1.0.10",
     "jsr:@std/dotenv@~0.225.6": "0.225.6",
@@ -11,6 +12,7 @@
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/path@^1.1.4": "1.1.4",
     "jsr:@std/testing@^1.0.17": "1.0.17",
+    "jsr:@std/toml@^1.0.6": "1.0.11",
     "jsr:@std/yaml@^1.0.12": "1.0.12",
     "npm:@tailwindcss/postcss@4": "4.2.2",
     "npm:@vitejs/plugin-vue@6": "6.0.6_vite@8.0.8_vue@3.5.32__typescript@6.0.2",
@@ -39,6 +41,9 @@
       "dependencies": [
         "jsr:@std/internal"
       ]
+    },
+    "@std/collections@1.1.6": {
+      "integrity": "b458160ce65ea5ad35da05d0a5cbee4b583677c8b443a10d7beb0c4ac63f2baa"
     },
     "@std/crypto@1.0.5": {
       "integrity": "0dcfbb319fe0bba1bd3af904ceb4f948cde1b92979ec1614528380ed308a3b40"
@@ -72,6 +77,12 @@
         "jsr:@std/fs",
         "jsr:@std/internal",
         "jsr:@std/path"
+      ]
+    },
+    "@std/toml@1.0.11": {
+      "integrity": "e084988b872ca4bad6aedfb7350f6eeed0e8ba88e9ee5e1590621c5b5bb8f715",
+      "dependencies": [
+        "jsr:@std/collections"
       ]
     },
     "@std/yaml@1.0.12": {
@@ -1925,6 +1936,7 @@
       "jsr:@std/dotenv@~0.225.6",
       "jsr:@std/path@^1.1.4",
       "jsr:@std/testing@^1.0.17",
+      "jsr:@std/toml@^1.0.6",
       "jsr:@std/yaml@^1.0.12",
       "npm:@tailwindcss/postcss@4",
       "npm:@vitejs/plugin-vue@6",

@@ -66,7 +66,7 @@ env:
   # PLAYGROUND_DIR: "./playground"
   # READER_DIR: "./reader-dist"
   # PROMPT_FILE: ""        # auto-injected when prompts.enabled=true; do NOT set both
-  # BACKGROUND_IMAGE: "/assets/heart.webp"
+  # THEME_DIR: "./themes/"
 
   # ── Logging ──────────────────────────────────────────────────────
   # LOG_LEVEL: "info"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePlugins } from "@/composables/usePlugins";
-import { useBackground } from "@/composables/useBackground";
+import { useTheme } from "@/composables/useTheme";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useAuth } from "@/composables/useAuth";
@@ -11,13 +11,13 @@ import "@/styles/base.css";
 
 const route = useRoute();
 const { initPlugins } = usePlugins();
-const { applyBackground } = useBackground();
+const { applyOnMount } = useTheme();
 const { loadFromBackend } = useChapterNav();
 const { connect } = useWebSocket();
 const { passphrase } = useAuth();
 
 async function handleUnlocked() {
-  await Promise.all([initPlugins(), applyBackground()]);
+  await Promise.all([initPlugins(), applyOnMount()]);
 
   // Connect WebSocket after successful auth
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';

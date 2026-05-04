@@ -163,10 +163,14 @@ HeartReverie speaks plain HTTP only. For production, terminate TLS at an upstrea
 | `LLM_LOG_FILE` | No | `playground/_logs/llm.jsonl` | Path to LLM interaction log file (full request/response); empty string disables |
 | `PLAYGROUND_DIR` | No | `./playground` | Story data root |
 | `READER_DIR` | No | `./reader-dist` | Frontend static files root |
-| `BACKGROUND_IMAGE` | No | `/assets/heart.webp` | Background image URL path for the web reader |
+| `THEME_DIR` | No | `./themes/` | Theme directory path (TOML files); default `./themes/` |
 | `PROMPT_FILE` | No | `playground/_prompts/system.md` | Custom prompt template file path |
 
 The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_API_KEY` and `PASSPHRASE`.
+
+### Theme System
+
+Themes are TOML files in `THEME_DIR` (default `./themes/`). Each file declares an `id` (kebab-case, matching filename stem), `label`, optional `colorScheme` (`"light"` or `"dark"`), optional `backgroundImage` (same-origin path or `data:` URL only), and a `[palette]` table mapping CSS custom-property names (without `--` prefix) to string values. The loader prepends `--` when serving to the frontend. Three built-in themes ship: `default`, `light`, `dark`.
 
 ## Container Deployment
 

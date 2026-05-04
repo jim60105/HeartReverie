@@ -27,7 +27,8 @@ export type LogCategory =
   | "auth"
   | "ws"
   | "http"
-  | "system";
+  | "system"
+  | "themes";
 
 /** A single structured log entry. */
 export interface LogEntry {

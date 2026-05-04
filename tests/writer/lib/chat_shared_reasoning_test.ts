@@ -72,7 +72,7 @@ function buildConfig(tmpDir: string, opts: ConfigOpts = {}): AppConfig {
     LLM_REASONING_OMIT: reasoningOmit,
     LLM_MAX_COMPLETION_TOKENS: 4096,
     llmDefaults,
-    BACKGROUND_IMAGE: "/bg",
+    THEME_DIR: "./themes/",
     PROMPT_FILE: "x",
   } as unknown as AppConfig;
 }
