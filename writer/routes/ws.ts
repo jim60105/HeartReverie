@@ -458,6 +458,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
       const story = msg.name;
       const promptFile = msg.promptFile;
       const append = msg.append === true;
+      const replace = msg.replace === true;
       const appendTag = msg.appendTag;
       const extraVariables = msg.extraVariables;
 
@@ -470,14 +471,20 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
       const controller = new AbortController();
       abortControllers.set(correlationId, controller);
       try {
+        const resolvedMode = append
+          ? "append-to-existing-chapter"
+          : replace
+          ? "replace-last-chapter"
+          : "discard";
         const outcome = await runPluginActionWithDeps(
           {
             pluginName,
             series,
             story,
             promptPath: promptFile,
-            mode: append ? "append-to-existing-chapter" : "discard",
+            mode: resolvedMode,
             appendTag,
+            replace: msg.replace,
             extraVariables,
             signal: controller.signal,
             onDelta: (chunk) => {
@@ -493,6 +500,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
             content: outcome.response.content,
             usage: outcome.response.usage,
             chapterUpdated: outcome.response.chapterUpdated,
+            chapterReplaced: outcome.response.chapterReplaced,
             appendedTag: outcome.response.appendedTag,
           });
         } else if (outcome.aborted) {

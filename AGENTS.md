@@ -112,6 +112,7 @@ plugins/                  # Built-in plugins (manifest-driven) + shared utils
   thinking/               # Fold <thinking>/<think> tags into collapsible details
   user-message/           # User message lifecycle: wrap, strip from context/display
   response-notify/        # Toast notification system for backend → frontend messages
+  polish/                 # One-click literary polish rewrite (replace mode, action button)
 tests/                    # Backend tests (Deno)
   writer/
     lib/                  # Backend library tests (*_test.ts)

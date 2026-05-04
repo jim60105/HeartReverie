@@ -516,6 +516,7 @@ async function runPluginPrompt(
           content: msg.content,
           usage: msg.usage,
           chapterUpdated: msg.chapterUpdated,
+          chapterReplaced: msg.chapterReplaced ?? false,
           appendedTag: msg.appendedTag,
         });
       });
@@ -578,6 +579,7 @@ async function runPluginPrompt(
         promptFile,
         ...(opts.append !== undefined ? { append: opts.append } : {}),
         ...(opts.appendTag !== undefined ? { appendTag: opts.appendTag } : {}),
+        ...(opts.replace !== undefined ? { replace: opts.replace } : {}),
         ...(opts.extraVariables !== undefined
           ? { extraVariables: opts.extraVariables }
           : {}),
@@ -597,6 +599,7 @@ async function runPluginPrompt(
     };
     if (opts.append !== undefined) body.append = opts.append;
     if (opts.appendTag !== undefined) body.appendTag = opts.appendTag;
+    if (opts.replace !== undefined) body.replace = opts.replace;
     if (opts.extraVariables !== undefined) {
       body.extraVariables = opts.extraVariables;
     }

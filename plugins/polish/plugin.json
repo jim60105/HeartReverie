@@ -1,0 +1,16 @@
+{
+  "name": "polish",
+  "version": "1.0.0",
+  "description": "One-click literary polish for the last chapter — atomic rewrite via replace mode",
+  "type": "full-stack",
+  "frontendModule": "./frontend.js",
+  "actionButtons": [
+    {
+      "id": "polish",
+      "label": "✨ 潤飾",
+      "visibleWhen": "last-chapter-backend",
+      "priority": 200,
+      "tooltip": "以文學筆觸重寫當前章節"
+    }
+  ]
+}

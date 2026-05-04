@@ -148,7 +148,20 @@ export type WriteMode =
   | { readonly kind: "write-new-chapter"; readonly userMessage: string; readonly targetChapterNumber: number }
   | { readonly kind: "append-to-existing-chapter"; readonly appendTag: string; readonly pluginName: string }
   | { readonly kind: "discard" }
-  | { readonly kind: "continue-last-chapter"; readonly targetChapterNumber: number; readonly existingContent: string };
+  | { readonly kind: "continue-last-chapter"; readonly targetChapterNumber: number; readonly existingContent: string }
+  /**
+   * `replace-last-chapter`: a plugin-action mode that atomically overwrites
+   * the highest-numbered chapter file with the LLM's full response after
+   * the stream completes. Used by the bundled `polish` plugin. Streaming
+   * deltas are accumulated in memory only — no file is opened during the
+   * stream, so an aborted/errored generation leaves the on-disk chapter
+   * untouched (byte-for-byte preservation). Finalisation calls
+   * `atomicWriteChapter` with `aiContent.trimEnd() + "\n"`, re-reads the
+   * file, appends one usage record (if available), and dispatches
+   * `post-response` with `source: "plugin-action"` and `pluginName`.
+   * Neither `pre-write` nor `response-stream` hooks fire in this mode.
+   */
+  | { readonly kind: "replace-last-chapter"; readonly pluginName: string };
 
 /** Arguments for `streamLlmAndPersist`. */
 export interface StreamLlmArgs {
@@ -224,6 +237,14 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     targetNum = writeMode.targetChapterNumber;
     const padded = String(targetNum).padStart(3, "0");
     chapterPath = join(storyDir, `${padded}.md`);
+  } else if (writeMode.kind === "replace-last-chapter") {
+    const chapterFiles = await listChapterFiles(storyDir);
+    if (chapterFiles.length === 0) {
+      throw new ChatError("no-chapter", "Cannot replace: no existing chapter file in story directory", 400);
+    }
+    const lastFile = chapterFiles[chapterFiles.length - 1]!;
+    targetNum = parseInt(lastFile, 10);
+    chapterPath = join(storyDir, lastFile);
   }
 
   // ── Build upstream request body ──
@@ -737,6 +758,41 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       chapterNumber: targetNum,
       chapterPath,
       source: "continue",
+    });
+  } else if (writeMode.kind === "replace-last-chapter" && chapterPath !== null && targetNum !== null) {
+    const { pluginName } = writeMode;
+    const padded = String(targetNum).padStart(3, "0");
+    // Atomic replace: only commit AFTER the stream completes successfully.
+    // Aborts / errors are caught by upstream try/catch blocks and the
+    // pre-existing file remains untouched (no file handle was opened
+    // during the stream phase for this mode).
+    const newContent = aiContent.trimEnd() + "\n";
+    await atomicWriteChapter(storyDir, `${padded}.md`, newContent);
+
+    if (usage !== null) {
+      await appendUsage(storyDir, usage);
+    }
+
+    chapterContentAfter = await Deno.readTextFile(chapterPath);
+
+    reqFileLog.info("Chapter file replaced (plugin-action)", {
+      op: "replace",
+      path: chapterPath,
+      pluginName,
+      bytes: encoder.encode(newContent).length,
+    });
+
+    await hookDispatcher.dispatch("post-response", {
+      correlationId,
+      content: chapterContentAfter,
+      storyDir,
+      series,
+      name,
+      rootDir,
+      chapterNumber: targetNum,
+      chapterPath,
+      source: "plugin-action",
+      pluginName,
     });
   }
   // discard: no chapter mutation, no hook dispatch

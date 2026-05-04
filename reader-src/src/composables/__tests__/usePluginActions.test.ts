@@ -25,6 +25,7 @@ const runPluginPromptMock = vi.fn().mockResolvedValue({
   content: "",
   usage: null,
   chapterUpdated: false,
+  chapterReplaced: false,
   appendedTag: null,
 });
 
@@ -266,5 +267,113 @@ describe("usePluginActions", () => {
     expect(toasts.value.some((t) => (t.body ?? "").includes("kaboom"))).toBe(true);
     expect(api.pendingKey.value).toBeNull();
     errSpy.mockRestore();
+  });
+
+  it("polish button is disabled (no-op + warning toast) when editor has unsaved buffer for last chapter", async () => {
+    pluginsRef.value = [
+      {
+        name: "polish",
+        hasFrontendModule: true,
+        actionButtons: [{ id: "polish", label: "✨ 潤飾" }],
+      },
+    ] as PluginDescriptor[];
+
+    const api = await getApi();
+
+    // Dynamically import to get the same instance usePluginActions uses
+    const { useChapterEditor } = await import("@/composables/useChapterEditor");
+    const editor = useChapterEditor();
+    editor.beginEdit(0, "some content");
+
+    const { frontendHooks } = await import("@/lib/plugin-hooks");
+    const hookSpy = vi.fn();
+    frontendHooks.register("action-button:click", hookSpy, 100, "polish");
+
+    await api.clickButton("polish", "polish");
+
+    // Hook handler should NOT have been called
+    expect(hookSpy).not.toHaveBeenCalled();
+    // runPluginPrompt should NOT have been called
+    expect(runPluginPromptMock).not.toHaveBeenCalled();
+    // Warning toast should have been shown
+    const notifMod = await import("@/composables/useNotification");
+    const { toasts } = notifMod.useNotification();
+    expect(toasts.value.some((t) => t.level === "warning")).toBe(true);
+    expect(
+      toasts.value.some((t) => (t.body ?? "").includes("請先儲存或捨棄章節編輯內容後再潤飾")),
+    ).toBe(true);
+  });
+
+  it("polish button works normally when editor has no unsaved buffer", async () => {
+    pluginsRef.value = [
+      {
+        name: "polish",
+        hasFrontendModule: true,
+        actionButtons: [{ id: "polish", label: "✨ 潤飾" }],
+      },
+    ] as PluginDescriptor[];
+
+    runPluginPromptMock.mockResolvedValue({
+      content: "polished",
+      usage: null,
+      chapterUpdated: true,
+      chapterReplaced: false,
+      appendedTag: null,
+    });
+
+    const { frontendHooks } = await import("@/lib/plugin-hooks");
+    const hookSpy = vi.fn(async (ctx) => {
+      await ctx.runPluginPrompt("polish-instruction.md", { replace: true });
+    });
+    frontendHooks.register("action-button:click", hookSpy, 100, "polish");
+
+    const api = await getApi();
+    await api.clickButton("polish", "polish");
+
+    expect(hookSpy).toHaveBeenCalled();
+    expect(runPluginPromptMock).toHaveBeenCalled();
+  });
+
+  it("force-closes editor on chapterReplaced: true", async () => {
+    pluginsRef.value = [
+      {
+        name: "polish",
+        hasFrontendModule: true,
+        actionButtons: [{ id: "polish", label: "✨ 潤飾" }],
+      },
+    ] as PluginDescriptor[];
+
+    runPluginPromptMock.mockResolvedValue({
+      content: "polished",
+      usage: null,
+      chapterUpdated: true,
+      chapterReplaced: true,
+      appendedTag: null,
+    });
+
+    const api = await getApi();
+
+    const { frontendHooks } = await import("@/lib/plugin-hooks");
+    const { useChapterEditor } = await import("@/composables/useChapterEditor");
+    const editor = useChapterEditor();
+
+    // Register a hook that opens the editor mid-flight, then calls runPluginPrompt
+    frontendHooks.register(
+      "action-button:click",
+      async (ctx) => {
+        // Simulate user opening editor during WS stream
+        editor.beginEdit(0, "typing...");
+        await ctx.runPluginPrompt("polish-instruction.md", { replace: true });
+      },
+      100,
+      "polish",
+    );
+
+    await api.clickButton("polish", "polish");
+
+    // After chapterReplaced: true, editor should be force-closed
+    expect(editor.isEditing.value).toBe(false);
+    expect(editor.editBuffer.value).toBe("");
+    expect(editor.editingChapterIndex.value).toBeNull();
   });
 });
