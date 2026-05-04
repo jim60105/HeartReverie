@@ -31,6 +31,7 @@ interface PluginEntry {
 interface PromptVariables {
   readonly variables: Record<string, string>;
   readonly fragments: string[];
+  readonly metadata?: Record<string, { plugin: string; file: string }>;
 }
 
 interface ParameterInfo {
@@ -520,6 +521,7 @@ export class PluginManager {
   async getPromptVariables(): Promise<PromptVariables> {
     const variables: Record<string, string> = {};
     const fragments: string[] = [];
+    const metadata: Record<string, { plugin: string; file: string }> = {};
 
     const allFragments: Array<{ content: string; priority: number }> = [];
 
@@ -550,6 +552,7 @@ export class PluginManager {
         if (frag.variable) {
           // Named variable — store directly
           variables[frag.variable] = content;
+          metadata[frag.variable] = { plugin: manifest.name, file: frag.file };
         } else {
           // Unnamed — add to generic fragments array
           allFragments.push({ content, priority });
@@ -561,7 +564,7 @@ export class PluginManager {
     allFragments.sort((a, b) => a.priority - b.priority);
     fragments.push(...allFragments.map((f) => f.content));
 
-    return { variables, fragments };
+    return { variables, fragments, metadata };
   }
 
   /** Core template variable names that plugins must not override. */

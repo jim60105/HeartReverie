@@ -259,7 +259,7 @@ Key classes:
 - `PluginRegisterContext` (`writer/types.ts`) — context object passed to plugin `register()`: `{ hooks: PluginHooks, logger: Logger }`; the `hooks` wrapper auto-binds the plugin name, and `context.logger` is always injected during hook dispatch
 
 Plugin interaction layers:
-1. **Prompt injection** — `promptFragments` field maps Markdown files to Vento template variables
+1. **Prompt injection** — `promptFragments` field maps Markdown files to Vento template variables. Named-variable fragments containing `{{` are Vento-rendered with a limited context: `chapter_number`, `series_name`, `story_name`, and lore variables. Plugin-provided dynamic variables (e.g. `status_data`) are **not** available in fragment rendering.
 2. **Prompt tag stripping** — `promptStripTags` field declares plain tag names or regex patterns to remove from previousContext when building prompts
 3. **Display tag stripping** — `displayStripTags` field declares plain tag names or regex patterns to remove from frontend display during browser rendering
 4. **CSS injection** — `frontendStyles` field declares CSS files to inject as `<link>` elements into the frontend `<head>` before JS modules load

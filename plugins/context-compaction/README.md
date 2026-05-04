@@ -56,6 +56,14 @@ enabled: true
 </chapter_summary>
 ```
 
+## 範本變數
+
+`chapter-summary-instruction.md` 是 [Vento](https://vento.js.org/) 範本，引擎會在渲染時注入動態變數：
+
+- `chapter_number`：由目標章節的檔名解析而來（例如 `0042.md` → `42`），確保摘要使用正確的章節編號。
+
+若範本渲染失敗，引擎會記錄警告並回退至原始內容。
+
 ## 檔案結構
 
 ```
