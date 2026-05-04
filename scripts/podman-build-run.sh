@@ -4,8 +4,8 @@ set -euo pipefail
 # HeartReverie container build & run script
 # Builds both base and plugins images, then runs the plugins container.
 
-PROJECT_DIR="$HOME/repos/HeartReverie"
-PLUGINS_DIR="$HOME/repos/HeartReverie_Plugins"
+PROJECT_DIR="$HOME/repos/HeartReverie/HeartReverie"
+PLUGINS_DIR="$HOME/repos/HeartReverie/HeartReverie_Plugins"
 
 BASE_IMAGE="heartreverie:latest"
 PLUGINS_IMAGE="heartreverie-plugins:latest"
