@@ -570,7 +570,57 @@ async function onImport(e: Event) {
 
     <template v-if="cardLoaded">
       <fieldset class="group">
+        <legend>故事位置</legend>
+        <div class="field">
+          <label for="ic-series">系列名稱</label>
+          <input id="ic-series" v-model="seriesName" type="text" required />
+          <p v-if="errors.seriesName" class="field-error">{{ errors.seriesName }}</p>
+        </div>
+        <div class="field">
+          <label for="ic-story">故事名稱</label>
+          <input id="ic-story" v-model="storyName" type="text" required />
+          <p v-if="errors.storyName" class="field-error">{{ errors.storyName }}</p>
+        </div>
+      </fieldset>
+
+      <fieldset class="group">
         <legend>角色資料</legend>
+        <div class="field">
+          <label for="ic-char-fn">角色檔案名稱</label>
+          <input id="ic-char-fn" v-model="characterFilename" type="text" />
+          <p v-if="errors.characterFilename" class="field-error">
+            {{ errors.characterFilename }}
+          </p>
+          <div v-if="acknowledgements.character.filename" class="collision">
+            <p class="warning">已存在同名篇章：{{ acknowledgements.character.filename }}</p>
+            <label>
+              <input v-model="acknowledgements.character.acknowledged" type="checkbox" />
+              覆寫現有篇章
+            </label>
+          </div>
+        </div>
+        <div class="field">
+          <label>tags（以逗號分隔）</label>
+          <input
+            type="text"
+            :value="tagsAsString()"
+            @input="setTagsFromString(($event.target as HTMLInputElement).value)"
+          />
+          <p
+            v-for="t in tagWarnings.tooLong"
+            :key="`tl-${t}`"
+            class="field-error"
+          >
+            已忽略過長標籤：{{ t.slice(0, 30) }}…
+          </p>
+          <p
+            v-for="t in tagWarnings.special"
+            :key="`sp-${t}`"
+            class="field-error"
+          >
+            已忽略含特殊字元的標籤：{{ t }}
+          </p>
+        </div>
         <div class="field">
           <label for="ic-name">name</label>
           <textarea id="ic-name" v-model="form.name" rows="1" />
@@ -611,28 +661,6 @@ async function onImport(e: Event) {
             rows="2"
           />
         </div>
-        <div class="field">
-          <label>tags（以逗號分隔）</label>
-          <input
-            type="text"
-            :value="tagsAsString()"
-            @input="setTagsFromString(($event.target as HTMLInputElement).value)"
-          />
-          <p
-            v-for="t in tagWarnings.tooLong"
-            :key="`tl-${t}`"
-            class="field-error"
-          >
-            已忽略過長標籤：{{ t.slice(0, 30) }}…
-          </p>
-          <p
-            v-for="t in tagWarnings.special"
-            :key="`sp-${t}`"
-            class="field-error"
-          >
-            已忽略含特殊字元的標籤：{{ t }}
-          </p>
-        </div>
 
         <h4>alternate_greetings</h4>
         <div
@@ -653,43 +681,10 @@ async function onImport(e: Event) {
         <button type="button" class="themed-btn" @click="addAlternateGreeting">
           新增 alternate_greeting
         </button>
-
-        <div class="field" style="margin-top: 1rem;">
-          <label for="ic-char-fn">角色檔案名稱</label>
-          <input id="ic-char-fn" v-model="characterFilename" type="text" />
-          <p v-if="errors.characterFilename" class="field-error">
-            {{ errors.characterFilename }}
-          </p>
-          <div v-if="acknowledgements.character.filename" class="collision">
-            <p class="warning">已存在同名篇章：{{ acknowledgements.character.filename }}</p>
-            <label>
-              <input v-model="acknowledgements.character.acknowledged" type="checkbox" />
-              覆寫現有篇章
-            </label>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset class="group">
-        <legend>故事位置</legend>
-        <div class="field">
-          <label for="ic-series">系列名稱</label>
-          <input id="ic-series" v-model="seriesName" type="text" required />
-          <p v-if="errors.seriesName" class="field-error">{{ errors.seriesName }}</p>
-        </div>
-        <div class="field">
-          <label for="ic-story">故事名稱</label>
-          <input id="ic-story" v-model="storyName" type="text" required />
-          <p v-if="errors.storyName" class="field-error">{{ errors.storyName }}</p>
-        </div>
       </fieldset>
 
       <fieldset class="group">
         <legend>世界篇章</legend>
-        <div class="field">
-          <label for="ic-wi-name">世界篇章名稱</label>
-          <input id="ic-wi-name" v-model="worldInfoName" type="text" />
-        </div>
         <div class="field">
           <label for="ic-wi-fn">世界篇章檔案名稱</label>
           <input
@@ -708,6 +703,10 @@ async function onImport(e: Event) {
               覆寫現有篇章
             </label>
           </div>
+        </div>
+        <div class="field">
+          <label for="ic-wi-name">世界篇章名稱</label>
+          <input id="ic-wi-name" v-model="worldInfoName" type="text" />
         </div>
 
         <h4>character_book entries</h4>
