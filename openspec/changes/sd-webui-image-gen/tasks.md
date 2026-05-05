@@ -8,55 +8,55 @@
 
 ## 2. Plugin Settings API
 
-- [ ] 2.1 Implement `GET /api/plugins/:name/settings` returning current config merged with schema defaults
-- [ ] 2.2 Implement `PUT /api/plugins/:name/settings` with schema validation and persistence
-- [ ] 2.3 Implement `GET /api/plugins/:name/settings-schema` returning the plugin's declared JSON Schema
-- [ ] 2.4 Return 404 when plugin has no `settingsSchema` declared
-- [ ] 2.5 Wire settings routes into `app.ts` router
+- [x] 2.1 Implement `GET /api/plugins/:name/settings` returning current config merged with schema defaults
+- [x] 2.2 Implement `PUT /api/plugins/:name/settings` with schema validation and persistence
+- [x] 2.3 Implement `GET /api/plugins/:name/settings-schema` returning the plugin's declared JSON Schema
+- [x] 2.4 Return 404 when plugin has no `settingsSchema` declared
+- [x] 2.5 Wire settings routes into `app.ts` router
 
 ## 3. Plugin API Routes
 
-- [ ] 3.1 Add route mounting logic in `app.ts` to call `registerRoutes(ctx)` per plugin with enriched context (`{ app, basePath, logger, getSettings, config }`)
-- [ ] 3.2 Mount plugin routes at `/api/plugins/:name/` namespace
-- [ ] 3.3 Ensure plugin routes are loaded after core middleware but before catch-all handlers
-- [ ] 3.4 Pass plugin settings helpers to route handlers so plugins can read their own config without reimplementing path logic
+- [x] 3.1 Add route mounting logic in `app.ts` to call `registerRoutes(ctx)` per plugin with enriched context (`{ app, basePath, logger, getSettings, config }`)
+- [x] 3.2 Mount plugin routes at `/api/plugins/${name}` namespace
+- [x] 3.3 Ensure plugin routes are loaded after core middleware but before catch-all handlers
+- [x] 3.4 Pass plugin settings helpers to route handlers so plugins can read their own config without reimplementing path logic
 
 ## 4. Story Image Serving
 
-- [ ] 4.1 Implement `GET /api/stories/:series/:story/images/:filename` endpoint
-- [ ] 4.2 Add path traversal protection with `^[\w\-\.]+$` regex validation on filename
-- [ ] 4.3 Apply passphrase auth middleware to image serving route
-- [ ] 4.4 Infer and set Content-Type from file extension
-- [ ] 4.5 Set `Cache-Control: public, immutable` response header
+- [x] 4.1 Implement `GET /api/stories/:series/:story/images/:filename` endpoint
+- [x] 4.2 Add path traversal protection with `^[\w\-\.]+$` regex validation on filename
+- [x] 4.3 Apply passphrase auth middleware to image serving route
+- [x] 4.4 Infer and set Content-Type from file extension
+- [x] 4.5 Set `Cache-Control: public, immutable` response header
 
 ## 5. Image Metadata API
 
-- [ ] 5.1 Implement `GET /api/stories/:series/:story/image-metadata` endpoint
-- [ ] 5.2 Accept `chapter` query parameter to filter metadata by chapter number
-- [ ] 5.3 Read and parse `_images/_metadata.json` from the story directory
-- [ ] 5.4 Return JSON response with images array (filename, title, status, prompt fields)
-- [ ] 5.5 Apply passphrase auth middleware to metadata route
+- [x] 5.1 Implement `GET /api/stories/:series/:story/image-metadata` endpoint
+- [x] 5.2 Accept `chapter` query parameter to filter metadata by chapter number
+- [x] 5.3 Read and parse `_images/_metadata.json` from the story directory
+- [x] 5.4 Return JSON response with images array (filename, title, status, prompt fields)
+- [x] 5.5 Apply passphrase auth middleware to metadata route
 
 ## 6. Body Limit and App Configuration
 
-- [ ] 6.1 Increase body size limit from 1 MB to 10 MB on `/api/*` routes in `app.ts`
-- [ ] 6.2 Verify existing routes still function correctly with the new limit
+- [x] 6.1 Increase body size limit from 1 MB to 10 MB on `/api/*` routes in `app.ts`
+- [x] 6.2 Verify existing routes still function correctly with the new limit
 
 ## 7. Frontend Plugin Settings Page
 
-- [ ] 7.1 Add `/settings/plugins/:name` route to `reader-src/src/router/`
-- [ ] 7.2 Update `SettingsLayout.vue` sidebar to dynamically list plugins that have `settingsSchema`
-- [ ] 7.3 Fetch schema from `GET /api/plugins/:name/settings-schema` for form generation
-- [ ] 7.4 Implement form auto-generation from JSON Schema (text, number, select, checkbox, password inputs)
-- [ ] 7.5 Support `x-options-url` schema extension for dynamic dropdown population via fetch (graceful fallback to text input on fetch failure)
-- [ ] 7.6 Wire form submission to `PUT /api/plugins/:name/settings`
-- [ ] 7.7 Ensure all fetch calls include passphrase auth headers
+- [x] 7.1 Add `/settings/plugins/:name` route to `reader-src/src/router/`
+- [x] 7.2 Update `SettingsLayout.vue` sidebar to dynamically list plugins that have `settingsSchema`
+- [x] 7.3 Fetch schema from `GET /api/plugins/:name/settings-schema` for form generation
+- [x] 7.4 Implement form auto-generation from JSON Schema (text, number, select, checkbox, password inputs)
+- [x] 7.5 Support `x-options-url` schema extension for dynamic dropdown population via fetch (graceful fallback to text input on fetch failure)
+- [x] 7.6 Wire form submission to `PUT /api/plugins/:name/settings`
+- [x] 7.7 Ensure all fetch calls include passphrase auth headers
 
 ## 8. Frontend Hook Context Extension
 
-- [ ] 8.1 Extend `frontend-render` hook context to include `{ series, story, chapterNumber }` so plugins can make story-aware API calls
-- [ ] 8.2 Extend `chapter:dom:ready` hook context to include `{ series, story, chapterNumber }`
-- [ ] 8.3 Verify existing plugins still function with the extended context
+- [x] 8.1 Extend `frontend-render` hook context to include `{ series, story, chapterNumber }` so plugins can make story-aware API calls
+- [x] 8.2 Extend `chapter:dom:ready` hook context to include `{ series, story, chapterNumber }`
+- [x] 8.3 Verify existing plugins still function with the extended context
 
 ## 9. Legacy Plugin Removal
 

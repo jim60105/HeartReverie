@@ -350,6 +350,9 @@ export interface FrontendRenderContext {
   text: string;
   placeholderMap: Map<string, string>;
   options: RenderOptions;
+  series?: string;
+  story?: string;
+  chapterNumber?: number;
 }
 
 export interface ChatSendBeforeContext {
@@ -370,6 +373,9 @@ export interface ChapterDomReadyContext {
   tokens: RenderToken[];
   rawMarkdown: string;
   chapterIndex: number;
+  series?: string;
+  story?: string;
+  chapterNumber?: number;
 }
 
 export interface ChapterDomDisposeContext {
@@ -441,6 +447,9 @@ export interface UseNotificationReturn {
 export interface RenderOptions {
   isLastChapter?: boolean;
   stateDiff?: StateDiffPayload;
+  series?: string;
+  story?: string;
+  chapterNumber?: number;
 }
 
 // ── Render Token Types ──

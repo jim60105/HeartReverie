@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { settingsChildren } from "@/router";
 import { useLastReadingRoute } from "@/composables/useLastReadingRoute";
+import { useAuth } from "@/composables/useAuth";
 
 const router = useRouter();
 const { lastReadingRoute } = useLastReadingRoute();
+const { getAuthHeaders } = useAuth();
 
 const tabs = computed(() =>
   settingsChildren
@@ -15,6 +17,30 @@ const tabs = computed(() =>
       title: r.meta!.title as string,
     })),
 );
+
+interface PluginTab {
+  pluginName: string;
+  label: string;
+}
+
+const pluginTabs = ref<PluginTab[]>([]);
+
+onMounted(async () => {
+  try {
+    const res = await fetch("/api/plugins", { headers: getAuthHeaders() as Record<string, string> });
+    if (res.ok) {
+      const plugins = await res.json();
+      pluginTabs.value = plugins
+        .filter((p: Record<string, unknown>) => p.hasSettings)
+        .map((p: Record<string, unknown>) => ({
+          pluginName: p.name as string,
+          label: (p.name as string),
+        }));
+    }
+  } catch {
+    // Plugin list unavailable — sidebar won't show plugin links
+  }
+});
 
 function goBack() {
   const target = lastReadingRoute.value;
@@ -40,6 +66,18 @@ function goBack() {
         >
           {{ tab.title }}
         </router-link>
+        <template v-if="pluginTabs.length">
+          <span class="sidebar-divider">插件</span>
+          <router-link
+            v-for="pt in pluginTabs"
+            :key="pt.pluginName"
+            :to="{ name: 'settings-plugin', params: { pluginName: pt.pluginName } }"
+            class="sidebar-link"
+            active-class="sidebar-link--active"
+          >
+            {{ pt.label }}
+          </router-link>
+        </template>
       </nav>
     </aside>
     <main class="settings-content">
@@ -101,6 +139,17 @@ function goBack() {
   border-left-color: var(--settings-sidebar-active-border);
   background: var(--settings-sidebar-active-bg);
   color: var(--text-name);
+}
+
+.sidebar-divider {
+  display: block;
+  padding: 8px 16px 4px;
+  font-size: 0.75rem;
+  color: var(--text-label);
+  opacity: 0.7;
+  font-family: var(--font-antique), var(--font-system-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .settings-content {

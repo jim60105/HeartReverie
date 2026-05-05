@@ -132,6 +132,9 @@ describe("ChapterContent", () => {
     expect(mockState.renderChapterMock).toHaveBeenCalledWith("raw content", {
       isLastChapter: true,
       stateDiff: { hp: "+1" },
+      series: "series-a",
+      story: "story-a",
+      chapterNumber: 2,
     });
   });
 

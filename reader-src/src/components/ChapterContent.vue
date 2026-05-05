@@ -33,9 +33,13 @@ const tokens = computed(() => {
   // when those signals change. See design.md Decision 5.
   void pluginsReady.value;
   void renderEpoch.value;
+  const ctx = getBackendContext();
   return renderChapter(props.rawMarkdown, {
     isLastChapter: props.isLastChapter,
     stateDiff: chapters.value[currentIndex.value]?.stateDiff,
+    series: ctx.series ?? undefined,
+    story: ctx.story ?? undefined,
+    chapterNumber: currentChapterNumber.value,
   });
 });
 
@@ -55,11 +59,15 @@ function dispatchDomReady(): void {
   if (isEditing.value) return;
   const container = containerRef.value;
   if (!container) return;
+  const ctx = getBackendContext();
   frontendHooks.dispatch("chapter:dom:ready", {
     container,
     tokens: tokens.value,
     rawMarkdown: props.rawMarkdown,
     chapterIndex: currentIndex.value,
+    series: ctx.series ?? undefined,
+    story: ctx.story ?? undefined,
+    chapterNumber: currentChapterNumber.value,
   });
 }
 
