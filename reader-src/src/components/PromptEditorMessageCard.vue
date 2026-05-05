@@ -385,7 +385,7 @@ function confirmDelete() {
   cursor: pointer;
   border: 1px solid var(--item-border);
   border-radius: 12px;
-  background: rgba(224, 80, 112, 0.12);
+  background: var(--pill-bg);
   padding: 2px 8px;
   color: var(--text-name);
   font-size: 0.75em;
@@ -393,8 +393,8 @@ function confirmDelete() {
 }
 
 .card-variable-item.pill-plugin {
-  border-color: rgba(180, 30, 60, 0.6);
-  background: rgba(180, 30, 60, 0.12);
+  border-color: var(--item-border);
+  background: var(--btn-active-bg);
   color: var(--text-label);
 }
 

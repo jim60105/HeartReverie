@@ -74,7 +74,7 @@ onMounted(() => {
     <main class="main-content">
       <ContentArea />
       <UsagePanel />
-      <PluginActionBar />
+      <PluginActionBar v-if="showChatInput" />
       <ChatInput
         v-if="showChatInput"
         :key="chatInputKey"

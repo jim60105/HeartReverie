@@ -400,10 +400,9 @@ async function handleDelete() {
   flex-direction: column;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: linear-gradient(145deg, #1a0810, #220c16);
+  background: var(--panel-bg);
   margin-top: 4px;
   max-height: 160px;
-  overflow-y: auto;
 }
 
 .tag-suggestion {
@@ -419,7 +418,7 @@ async function handleDelete() {
 }
 
 .tag-suggestion:hover {
-  background: rgba(180, 30, 60, 0.22);
+  background: var(--btn-hover-bg);
 }
 
 .editor-actions {
@@ -485,9 +484,8 @@ async function handleDelete() {
 .confirm-dialog {
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: linear-gradient(145deg, #1a0810, #220c16);
+  background: var(--panel-bg);
   padding: 20px 24px;
-  max-width: 400px;
 }
 
 .confirm-text {

@@ -339,7 +339,7 @@ function handleCancelled() {
 
 .scope-tab--active {
   border-color: var(--text-title);
-  background: rgba(180, 30, 60, 0.22);
+  background: var(--btn-hover-bg);
   color: var(--text-name);
 }
 
@@ -359,7 +359,7 @@ function handleCancelled() {
   cursor: pointer;
   border: 1px solid var(--item-border);
   border-radius: 12px;
-  background: rgba(224, 80, 112, 0.12);
+  background: var(--pill-bg);
   padding: 2px 10px;
   color: var(--text-label);
   font-size: 0.8em;
@@ -368,12 +368,12 @@ function handleCancelled() {
 }
 
 .tag-chip:hover {
-  background: rgba(224, 80, 112, 0.3);
+  background: var(--pill-hover-bg);
 }
 
 .tag-chip--active {
   border-color: var(--text-title);
-  background: rgba(180, 30, 60, 0.35);
+  background: var(--accent-shadow);
   color: var(--text-name);
 }
 
@@ -411,13 +411,13 @@ function handleCancelled() {
 }
 
 .passage-card:hover {
-  background: rgba(180, 30, 60, 0.12);
+  background: var(--btn-active-bg);
   border-color: var(--btn-hover-border);
 }
 
 .passage-card--active {
   border-color: var(--text-title);
-  background: rgba(180, 30, 60, 0.22);
+  background: var(--btn-hover-bg);
 }
 
 .passage-name {
@@ -433,9 +433,9 @@ function handleCancelled() {
 }
 
 .passage-tag {
-  border: 1px solid rgba(180, 30, 60, 0.4);
+  border: 1px solid var(--accent-border);
   border-radius: 10px;
-  background: rgba(180, 30, 60, 0.15);
+  background: var(--accent-subtle);
   padding: 1px 8px;
   color: var(--text-label);
   font-size: 0.75em;
@@ -549,7 +549,7 @@ function handleCancelled() {
   gap: 2px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: linear-gradient(145deg, #1a0810, #220c16);
+  background: var(--panel-bg);
   padding: 4px;
   margin-top: 4px;
 }

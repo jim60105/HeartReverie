@@ -168,7 +168,7 @@ async function handleExport(format: ExportFormat) {
   left: 0;
   margin-top: 4px;
   z-index: 20;
-  background: #1a0810;
+  background: var(--panel-bg);
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 10px;

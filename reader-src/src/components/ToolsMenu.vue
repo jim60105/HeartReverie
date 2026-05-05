@@ -187,6 +187,6 @@ watch(
 }
 
 .tools-menu__item:hover {
-  background: rgba(180, 30, 60, 0.12);
+  background: var(--btn-active-bg);
 }
 </style>

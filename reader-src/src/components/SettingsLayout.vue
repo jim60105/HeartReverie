@@ -94,7 +94,7 @@ function goBack() {
 }
 
 .sidebar-link:hover {
-  background: rgba(180, 30, 60, 0.12);
+  background: var(--btn-active-bg);
 }
 
 .sidebar-link--active {
