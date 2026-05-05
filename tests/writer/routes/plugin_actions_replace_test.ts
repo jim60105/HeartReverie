@@ -122,6 +122,7 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<{
     pluginsRoot,
     undefined,
     hookDispatcher,
+    Deno.makeTempDirSync(),
   );
   await pluginManager.init();
 

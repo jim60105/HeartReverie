@@ -26,6 +26,7 @@ interface PluginEntry {
   readonly source: string;
   readonly validatedStyles: string[];
   readonly validatedActionButtons: ActionButtonDescriptor[];
+  registerRoutes?: (context: import("../types.ts").PluginRouteContext) => void | Promise<void>;
 }
 
 interface PromptVariables {
@@ -63,6 +64,7 @@ export class PluginManager {
   #builtinDir: string;
   #externalDir: string | null;
   #hookDispatcher: HookDispatcher;
+  #playgroundDir: string;
   #plugins: Map<string, PluginEntry> = new Map();
   #dynamicVarProviders: Map<string, (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>> = new Map();
 
@@ -70,17 +72,22 @@ export class PluginManager {
    * @param {string} builtinDir - Absolute path to built-in plugins (e.g. ROOT_DIR/plugins)
    * @param {string|undefined} externalDir - Optional absolute path to external plugins (PLUGIN_DIR env)
    * @param {import('./hooks.ts').HookDispatcher} hookDispatcher
+   * @param {string} playgroundDir - Absolute path to the playground directory
    */
-  constructor(builtinDir: string, externalDir: string | undefined, hookDispatcher: HookDispatcher) {
+  constructor(builtinDir: string, externalDir: string | undefined, hookDispatcher: HookDispatcher, playgroundDir: string) {
     this.#builtinDir = builtinDir;
     this.#externalDir = externalDir || null;
     this.#hookDispatcher = hookDispatcher;
+    this.#playgroundDir = playgroundDir;
   }
 
   /**
    * Scan plugin directories, parse manifests, load backend modules, register hooks.
    */
   async init(): Promise<void> {
+    // Ensure _plugins config directory exists
+    await Deno.mkdir(join(this.#playgroundDir, "_plugins"), { recursive: true });
+
     // Scan built-in plugins
     await this.#scanDir(this.#builtinDir, "built-in");
 
@@ -177,6 +184,22 @@ export class PluginManager {
 
       // Validate and normalize actionButtons
       const validatedActionButtons = this.#validateActionButtons(manifest);
+
+      // Validate settingsSchema if present (task 1.1)
+      if (manifest.settingsSchema !== undefined) {
+        const schema = manifest.settingsSchema;
+        if (
+          typeof schema !== "object" ||
+          schema === null ||
+          Array.isArray(schema)
+        ) {
+          log.warn("Plugin settingsSchema must be an object — ignoring", { plugin: manifest.name });
+          (manifest as { settingsSchema?: unknown }).settingsSchema = undefined;
+        } else if (schema.type !== "object" || typeof schema.properties !== "object" || schema.properties === null || Array.isArray(schema.properties)) {
+          log.warn("Plugin settingsSchema must have type:'object' and a properties record — ignoring", { plugin: manifest.name });
+          (manifest as { settingsSchema?: unknown }).settingsSchema = undefined;
+        }
+      }
 
       this.#plugins.set(manifest.name, { manifest, dir: pluginDir, source, validatedStyles, validatedActionButtons });
     }
@@ -413,6 +436,12 @@ export class PluginManager {
           name,
           mod.getDynamicVariables as (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>,
         );
+      }
+
+      // Store registerRoutes function reference if exported (task 1.2)
+      if (typeof mod.registerRoutes === "function") {
+        entry.registerRoutes = mod.registerRoutes as PluginEntry["registerRoutes"];
+        log.debug("Plugin exports registerRoutes", { plugin: name });
       }
     } catch (err: unknown) {
       log.error("Failed to load backend module", { plugin: name, error: err instanceof Error ? err.message : String(err) });
@@ -691,5 +720,167 @@ export class PluginManager {
     }
 
     return params;
+  }
+
+  /**
+   * Returns route registrar info for all plugins that export `registerRoutes`.
+   * Called by app.ts route wiring to mount plugin-specific HTTP routes.
+   */
+  getPluginRouteRegistrars(): Array<{ name: string; registerRoutes: NonNullable<PluginEntry["registerRoutes"]>; dir: string }> {
+    const registrars: Array<{ name: string; registerRoutes: NonNullable<PluginEntry["registerRoutes"]>; dir: string }> = [];
+    for (const [name, entry] of this.#plugins) {
+      if (entry.registerRoutes) {
+        registrars.push({ name, registerRoutes: entry.registerRoutes, dir: entry.dir });
+      }
+    }
+    return registrars;
+  }
+
+  /**
+   * Returns true if the plugin has a valid settingsSchema declared in its manifest.
+   */
+  hasSettingsSchema(name: string): boolean {
+    const entry = this.#plugins.get(name);
+    return !!entry?.manifest.settingsSchema;
+  }
+
+  /**
+   * Returns the plugin's settingsSchema or null if none declared.
+   */
+  getPluginSettingsSchema(name: string): Record<string, unknown> | null {
+    const entry = this.#plugins.get(name);
+    return entry?.manifest.settingsSchema ?? null;
+  }
+
+  /**
+   * Read plugin settings from `playground/_plugins/<name>/config.json`.
+   * Returns merged result of schema defaults + saved values.
+   */
+  async getPluginSettings(name: string): Promise<Record<string, unknown>> {
+    const entry = this.#plugins.get(name);
+    if (!entry) throw new Error(`Unknown plugin: ${name}`);
+
+    // Extract defaults from settingsSchema
+    const defaults = this.#extractSchemaDefaults(entry.manifest.settingsSchema);
+
+    const configPath = join(this.#playgroundDir, "_plugins", name, "config.json");
+    let saved: Record<string, unknown> = {};
+    try {
+      const raw = await Deno.readTextFile(configPath);
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        saved = parsed as Record<string, unknown>;
+      }
+    } catch (err: unknown) {
+      if (!(err instanceof Deno.errors.NotFound)) {
+        log.warn("Failed to read plugin config", { plugin: name, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    return { ...defaults, ...saved };
+  }
+
+  /**
+   * Save plugin settings to `playground/_plugins/<name>/config.json`.
+   * Validates against settingsSchema before writing; throws on validation failure.
+   */
+  async savePluginSettings(name: string, settings: Record<string, unknown>): Promise<void> {
+    const entry = this.#plugins.get(name);
+    if (!entry) throw new Error(`Unknown plugin: ${name}`);
+
+    // Validate against schema if declared
+    if (entry.manifest.settingsSchema) {
+      const errors = this.#validateAgainstSchema(settings, entry.manifest.settingsSchema);
+      if (errors.length > 0) {
+        throw new Error(`Settings validation failed: ${errors.join("; ")}`);
+      }
+    }
+
+    const configDir = join(this.#playgroundDir, "_plugins", name);
+    await Deno.mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, "config.json");
+    await Deno.writeTextFile(configPath, JSON.stringify(settings, null, 2) + "\n");
+    log.debug("Plugin settings saved", { plugin: name });
+  }
+
+  /**
+   * Extract default values from a JSON Schema's properties.
+   */
+  #extractSchemaDefaults(schema: Record<string, unknown> | undefined): Record<string, unknown> {
+    if (!schema || typeof schema !== "object") return {};
+    const properties = schema.properties;
+    if (!properties || typeof properties !== "object" || Array.isArray(properties)) return {};
+
+    const defaults: Record<string, unknown> = {};
+    for (const [key, prop] of Object.entries(properties as Record<string, unknown>)) {
+      if (prop && typeof prop === "object" && !Array.isArray(prop)) {
+        const propObj = prop as Record<string, unknown>;
+        if ("default" in propObj) {
+          defaults[key] = propObj.default;
+        }
+      }
+    }
+    return defaults;
+  }
+
+  /**
+   * Validate a settings payload against a JSON Schema (lightweight validation).
+   * Checks required fields and basic type constraints.
+   * Returns an array of error messages (empty = valid).
+   */
+  #validateAgainstSchema(settings: Record<string, unknown>, schema: Record<string, unknown>): string[] {
+    const errors: string[] = [];
+    const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+
+    // Check required fields
+    if (Array.isArray(schema.required)) {
+      for (const field of schema.required) {
+        if (typeof field === "string" && !(field in settings)) {
+          errors.push(`Missing required field: ${field}`);
+        }
+      }
+    }
+
+    // Type-check each property that is present
+    if (properties) {
+      for (const [key, value] of Object.entries(settings)) {
+        const propSchema = properties[key];
+        if (!propSchema) continue; // additionalProperties not enforced
+
+        const expectedType = propSchema.type;
+        if (typeof expectedType !== "string") continue;
+
+        const typeError = this.#checkType(key, value, expectedType);
+        if (typeError) errors.push(typeError);
+      }
+    }
+
+    return errors;
+  }
+
+  /**
+   * Check a single value against an expected JSON Schema type.
+   */
+  #checkType(key: string, value: unknown, expectedType: string): string | null {
+    switch (expectedType) {
+      case "string":
+        if (typeof value !== "string") return `Field '${key}' must be a string`;
+        break;
+      case "number":
+      case "integer":
+        if (typeof value !== "number") return `Field '${key}' must be a number`;
+        if (expectedType === "integer" && !Number.isInteger(value)) return `Field '${key}' must be an integer`;
+        break;
+      case "boolean":
+        if (typeof value !== "boolean") return `Field '${key}' must be a boolean`;
+        break;
+      case "array":
+        if (!Array.isArray(value)) return `Field '${key}' must be an array`;
+        break;
+      case "object":
+        if (typeof value !== "object" || value === null || Array.isArray(value)) return `Field '${key}' must be an object`;
+        break;
+    }
+    return null;
   }
 }

@@ -52,7 +52,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
         join(dotDir, "plugin.json"),
         JSON.stringify({ name: ".hidden", version: "1.0.0" }),
       );
-      const pm = new PluginManager(pluginDir, undefined, new HookDispatcher());
+      const pm = new PluginManager(pluginDir, undefined, new HookDispatcher(), Deno.makeTempDirSync());
       await pm.init();
       assertEquals(pm.getPlugins().length, 0);
     });
@@ -67,6 +67,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         assertEquals(pm.getPlugins().length, 0);
@@ -83,6 +84,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         assertEquals(pm.getPlugins().length, 0);
@@ -94,7 +96,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
       const pDir = join(pluginDir, "p");
       await Deno.mkdir(pDir, { recursive: true });
       await Deno.writeTextFile(join(pDir, "plugin.json"), "null");
-      const pm = new PluginManager(pluginDir, undefined, new HookDispatcher());
+      const pm = new PluginManager(pluginDir, undefined, new HookDispatcher(), Deno.makeTempDirSync());
       await pm.init();
       assertEquals(pm.getPlugins().length, 0);
       assert(
@@ -116,6 +118,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         assertEquals(pm.getPlugins().length, 0);
@@ -130,7 +133,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
         const filePath = join(tmpDir, "not-a-dir-sentinel");
         await Deno.writeTextFile(filePath, "hi");
         warnStub.calls.length = 0;
-        const pm = new PluginManager(filePath, undefined, new HookDispatcher());
+        const pm = new PluginManager(filePath, undefined, new HookDispatcher(), Deno.makeTempDirSync());
         await pm.init();
         assertEquals(pm.getPlugins().length, 0);
         assert(
@@ -159,6 +162,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         assertEquals(pm.getPluginActionButtons("abna"), []);
@@ -203,6 +207,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         const buttons = pm.getPluginActionButtons("p");
@@ -246,6 +251,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         assertEquals(pm.getPluginStyles("p"), ["ok.css"]);
@@ -271,6 +277,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         assertEquals(pm.getPluginStyles("p"), []);
@@ -314,6 +321,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
             pluginDir,
             undefined,
             new HookDispatcher(),
+          Deno.makeTempDirSync(),
           );
           await pm.init();
           assertEquals(pm.getPluginStyles("p"), []);
@@ -346,6 +354,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         const re = pm.getStripTagPatterns();
@@ -374,6 +383,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         assertEquals(pm.getStripTagPatterns(), null);
@@ -404,6 +414,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         const re = pm.getCombinedStripTagPatterns();
@@ -432,6 +443,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         const pv = await pm.getPromptVariables();
@@ -463,6 +475,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           pluginDir,
           undefined,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
         const pv = await pm.getPromptVariables();
@@ -556,6 +569,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           builtinDir,
           externalDir,
           new HookDispatcher(),
+        Deno.makeTempDirSync(),
         );
         await pm.init();
 
@@ -596,7 +610,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
     await t.step("getBuiltinDir returns constructor argument", async () => {
       const pluginDir = join(tmpDir, "builtin-dir-prop");
       await Deno.mkdir(pluginDir, { recursive: true });
-      const pm = new PluginManager(pluginDir, undefined, new HookDispatcher());
+      const pm = new PluginManager(pluginDir, undefined, new HookDispatcher(), Deno.makeTempDirSync());
       await pm.init();
       assertEquals(pm.getBuiltinDir(), pluginDir);
     });

@@ -24,7 +24,7 @@ import { createSafePath, verifyPassphrase } from "./lib/middleware.ts";
 import { createTemplateEngine } from "./lib/template.ts";
 import { createStoryEngine } from "./lib/story.ts";
 import { loadThemes } from "./lib/themes.ts";
-import { createApp } from "./app.ts";
+import { createApp, initPluginRoutes } from "./app.ts";
 
 // ── Initialize logger first ────────────────────────────────────
 await initLogger();
@@ -36,7 +36,7 @@ if (!Deno.env.get("LLM_API_KEY")) {
 
 // ── Plugin system ───────────────────────────────────────────────
 const hookDispatcher = new HookDispatcher();
-const pluginManager = new PluginManager(config.PLUGINS_DIR, Deno.env.get("PLUGIN_DIR"), hookDispatcher);
+const pluginManager = new PluginManager(config.PLUGINS_DIR, Deno.env.get("PLUGIN_DIR"), hookDispatcher, config.PLAYGROUND_DIR);
 await pluginManager.init();
 
 // ── Theme system ────────────────────────────────────────────────
@@ -56,6 +56,7 @@ const app = createApp({
   buildContinuePromptFromStory,
   verifyPassphrase,
 });
+await initPluginRoutes(app);
 
 // ── Start server (plain HTTP only — TLS is the operator's job) ──
 const serveOptions: Deno.ServeTcpOptions = {
