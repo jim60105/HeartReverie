@@ -30,7 +30,7 @@
 
 ## 主題覆寫
 
-預設色為 `#ff8aaa`，可透過 CSS 變數 `--dialogue-color` 在任意祖先元素覆寫：
+預設色跟隨目前主題的 `--text-name` 變數（若無主題則回退為 `#ff8aaa`）。亦可透過 CSS 變數 `--dialogue-color` 在任意祖先元素覆寫：
 
 ```css
 .chapter-content {

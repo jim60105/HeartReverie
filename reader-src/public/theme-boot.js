@@ -16,12 +16,23 @@
     if (t.colorScheme) root.style.setProperty("color-scheme", t.colorScheme);
     function applyBg() {
       if (!document.body) return;
-      if (t.backgroundImage) {
-        document.body.style.backgroundImage =
-          "url('" + String(t.backgroundImage).replace(/'/g, "\\'") + "')";
-      }
+      document.body.style.backgroundImage = t.backgroundImage || "none";
     }
     if (document.body) applyBg();
     else document.addEventListener("DOMContentLoaded", applyBg, { once: true });
+    // ::highlight() cannot resolve var() — inject literal color for dialogue plugin
+    var textName = t.palette["--text-name"];
+    if (textName) {
+      var s = document.createElement("style");
+      s.id = "theme-highlight-override";
+      s.textContent =
+        "::highlight(dialogue-quote-straight)," +
+        "::highlight(dialogue-quote-curly)," +
+        "::highlight(dialogue-quote-guillemet)," +
+        "::highlight(dialogue-quote-corner)," +
+        "::highlight(dialogue-quote-corner-half)," +
+        "::highlight(dialogue-quote-book){color:" + textName + "!important}";
+      document.head.appendChild(s);
+    }
   } catch (_) {}
 })();

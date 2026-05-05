@@ -28,7 +28,7 @@ body {
   background-size: cover;
   background-repeat: no-repeat;
   background-attachment: fixed;
-  background-color: #0f0a0c;
+  background-color: var(--page-bg);
   color: var(--text-main);
   font-size: var(--font-base);
   font-family: var(--font-system-ui);
@@ -39,7 +39,7 @@ body::before {
   top: 0;
   left: 0;
   z-index: -1;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--page-overlay);
   width: 100%;
   height: 100%;
   pointer-events: none;
@@ -184,10 +184,10 @@ details[open] summary::before {
   animation: slideUpFade 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   box-sizing: border-box;
   margin: 1rem 0;
-  outline: 1px solid rgba(255, 80, 120, 0.08);
+  outline: 1px solid var(--border-inner);
   box-shadow:
-    0 10px 25px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 100, 120, 0.1);
+    0 10px 25px var(--shadow-color),
+    inset 0 1px 0 var(--border-inner);
   border: 1px solid var(--border-color);
   border-radius: 16px;
   background: var(--panel-bg);
@@ -205,7 +205,7 @@ details[open] summary::before {
 }
 
 select option {
-  background: #1a0810;
+  background: var(--section-head-bg);
   color: var(--text-main);
 }
 
@@ -217,7 +217,7 @@ select option {
 .variable-content {
   margin: 0;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--item-bg);
   padding: 8px;
   color: var(--text-main);
   font-size: 0.82em;
@@ -233,7 +233,7 @@ select option {
 .thinking-content {
   margin: 0;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--item-bg);
   padding: 8px;
   color: var(--text-main);
   font-size: 0.82em;
@@ -345,7 +345,7 @@ select option {
   flex-direction: column;
   z-index: 1000;
   border-right: 1px solid var(--border-color);
-  background: linear-gradient(145deg, #1a0810, #220c16);
+  background: var(--panel-bg);
   width: 33vw;
   height: 100vh;
   overflow: hidden;
@@ -396,7 +396,7 @@ select option {
   flex-direction: column;
   z-index: 1000;
   border-left: 1px solid var(--border-color);
-  background: linear-gradient(145deg, #1a0810, #220c16);
+  background: var(--panel-bg);
   padding: 16px;
   width: 33vw;
   height: 100vh;
@@ -482,7 +482,7 @@ select option {
 
 .variable-pill.pill-core {
   border-color: var(--border-color);
-  color: #ff8aaa;
+  color: var(--text-name);
 }
 
 .variable-pill.pill-plugin {

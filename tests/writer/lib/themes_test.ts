@@ -20,7 +20,7 @@ const VALID_TOML = `
 id = "test-theme"
 label = "Test Theme"
 colorScheme = "dark"
-backgroundImage = "/assets/heart.webp"
+backgroundImage = "url('/assets/heart.webp')"
 
 [palette]
 panel-bg = "#123456"
@@ -49,7 +49,7 @@ Deno.test("themes: parses a valid TOML file", async () => {
     assertEquals(theme.id, "test-theme");
     assertEquals(theme.label, "Test Theme");
     assertEquals(theme.colorScheme, "dark");
-    assertEquals(theme.backgroundImage, "/assets/heart.webp");
+    assertEquals(theme.backgroundImage, "url('/assets/heart.webp')");
     assertEquals(theme.palette["--panel-bg"], "#123456");
     assertEquals(theme.palette["--text-main"], "rgba(0, 0, 0, 1)");
   });
@@ -148,12 +148,12 @@ text-main = "#000"
   });
 });
 
-Deno.test("themes: accepts same-origin path starting with /", async () => {
+Deno.test("themes: accepts url() with same-origin path", async () => {
   await withTmpDir(async (dir) => {
     const toml = `
 id = "valid-path"
 label = "Valid Path"
-backgroundImage = "/assets/heart.webp"
+backgroundImage = "url('/assets/heart.webp')"
 [palette]
 text-main = "#000"
 `;
@@ -163,16 +163,16 @@ text-main = "#000"
     assertEquals(result.skipped, 0);
     const theme = getTheme("valid-path");
     assertExists(theme);
-    assertEquals(theme.backgroundImage, "/assets/heart.webp");
+    assertEquals(theme.backgroundImage, "url('/assets/heart.webp')");
   });
 });
 
-Deno.test("themes: accepts data: URL backgroundImage", async () => {
+Deno.test("themes: accepts url() with data: URI", async () => {
   await withTmpDir(async (dir) => {
     const toml = `
 id = "data-url"
 label = "Data URL"
-backgroundImage = "data:image/png;base64,iVBORw0KGgo"
+backgroundImage = "url('data:image/png;base64,iVBORw0KGgo')"
 [palette]
 text-main = "#000"
 `;
@@ -182,7 +182,29 @@ text-main = "#000"
     assertEquals(result.skipped, 0);
     const theme = getTheme("data-url");
     assertExists(theme);
-    assertEquals(theme.backgroundImage, "data:image/png;base64,iVBORw0KGgo");
+    assertEquals(theme.backgroundImage, "url('data:image/png;base64,iVBORw0KGgo')");
+  });
+});
+
+Deno.test("themes: accepts CSS gradient backgroundImage", async () => {
+  await withTmpDir(async (dir) => {
+    const toml = `
+id = "gradient"
+label = "Gradient BG"
+backgroundImage = "linear-gradient(160deg, #F5F0E6 0%, #EDE7DB 40%, #E8E0D2 100%)"
+[palette]
+text-main = "#000"
+`;
+    await Deno.writeTextFile(`${dir}/gradient.toml`, toml);
+    const result = await loadThemes(dir);
+    assertEquals(result.loaded, 1);
+    assertEquals(result.skipped, 0);
+    const theme = getTheme("gradient");
+    assertExists(theme);
+    assertEquals(
+      theme.backgroundImage,
+      "linear-gradient(160deg, #F5F0E6 0%, #EDE7DB 40%, #E8E0D2 100%)",
+    );
   });
 });
 

@@ -19,7 +19,9 @@ import { createLogger } from "./logger.ts";
 const log = createLogger("themes");
 
 const KEBAB_CASE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
-const SAFE_BG = /^(?:\/(?!\/)[^\s]*|data:[^\s]+)$/;
+// Allow: url('/path'), url('data:...'), CSS gradient functions, or empty
+const SAFE_BG =
+  /^(?:url\(\s*'\/[^']*'\s*\)|url\(\s*'data:[^']*'\s*\)|(?:linear|radial|conic|repeating-linear|repeating-radial|repeating-conic)-gradient\([\s\S]+\))$/;
 
 export interface Theme {
   readonly id: string;
@@ -41,7 +43,7 @@ function validateBackgroundImage(v: unknown): string {
   if (v === undefined || v === null || v === "") return "";
   if (typeof v !== "string" || !SAFE_BG.test(v)) {
     throw new Error(
-      `backgroundImage must be a same-origin path ("/...") or a "data:" URL; got ${JSON.stringify(v)}`,
+      `backgroundImage must be url('/same-origin'), url('data:...'), or a CSS gradient function; got ${JSON.stringify(v)}`,
     );
   }
   return v;

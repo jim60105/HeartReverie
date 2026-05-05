@@ -28,7 +28,7 @@ async function createTestApp(): Promise<Hono> {
 id = "default"
 label = "Default Theme"
 colorScheme = "dark"
-backgroundImage = "/assets/heart.webp"
+backgroundImage = "url('/assets/heart.webp')"
 
 [palette]
 panel-bg = "#123"
@@ -98,7 +98,7 @@ Deno.test({
     assertEquals(body.id, "default");
     assertEquals(body.label, "Default Theme");
     assertEquals(body.colorScheme, "dark");
-    assertEquals(body.backgroundImage, "/assets/heart.webp");
+    assertEquals(body.backgroundImage, "url('/assets/heart.webp')");
     assertEquals(body.palette["--panel-bg"], "#123");
     assertEquals(body.palette["--text-main"], "rgba(0,0,0,1)");
   },

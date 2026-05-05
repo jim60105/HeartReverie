@@ -6,6 +6,10 @@
   /* Layout */
   --header-height: 34px;
 
+  /* Page background */
+  --page-bg: #0f0a0c;
+  --page-overlay: rgba(0, 0, 0, 0.5);
+
   /* Panel & borders */
   --panel-bg: linear-gradient(145deg, #1a0810, #220c16);
   --border-color: #6d1a2a;

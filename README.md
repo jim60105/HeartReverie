@@ -86,9 +86,10 @@ deno task build:reader
 HeartReverie 支援透過 TOML 檔案自定義主題。主題檔案放在 `THEME_DIR` 指定的目錄下（預設 `./themes/`）。
 
 內建三套主題：
-- `default.toml` — 心夢預設（深色，含背景圖）
-- `light.toml` — 淡雅晨光（淺色方案）
-- `dark.toml` — 靜夜深邃（中性深色方案）
+
+| 心夢預設 (default) | 淡雅晨光 (light) | 靜夜深邃 (dark) |
+|:---:|:---:|:---:|
+| ![心夢預設](assets/theme-default.png) | ![淡雅晨光](assets/theme-light.png) | ![靜夜深邃](assets/theme-dark.png) |
 
 #### 新增主題
 
