@@ -1,5 +1,19 @@
 # Tasks
 
+- [x] 1. Fix entry name resolution in parser
+- [x] 2. Extract character_book.name and update types
+- [x] 3. Skip Keys line for empty keys in world_info markdown
+- [x] 4. Change lore scope from story to series
+- [x] 5. Change world_info defaults and auto-derivation
+- [x] 6. Restructure UI with fieldset.group sections
+- [x] 7. Add .themed-btn base styles
+- [x] 8. Style the file input as a button trigger
+- [x] 9. Rename 典籍→篇章 terminology
+- [x] 10. Verify with existing tests
+- [x] 11. Build and smoke-test
+
+---
+
 ## Task 1: Fix entry name resolution in parser
 
 **File:** `reader-src/src/lib/character-card-parser.ts`

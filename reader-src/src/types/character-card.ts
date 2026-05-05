@@ -4,6 +4,7 @@
 // `ParsedCharacterCard` shape produced by `character-card-parser.ts`.
 
 export interface CharacterBookEntry {
+  comment?: string;
   name?: string;
   keys?: string[];
   content?: string;
@@ -12,6 +13,7 @@ export interface CharacterBookEntry {
 }
 
 export interface CharacterBook {
+  name?: string;
   entries?: CharacterBookEntry[];
   // V3 adds extra metadata; we don't render it.
 }
@@ -66,5 +68,6 @@ export interface ParsedCharacterCard {
   tags: string[];
   creator: string;
   characterVersion: string;
+  bookName: string;
   bookEntries: ParsedBookEntry[];
 }

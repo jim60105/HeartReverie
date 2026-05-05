@@ -178,12 +178,12 @@ async function preflightExists(filename: string): Promise<boolean> {
     res = await fetch(url, { headers: { ...getAuthHeaders() } });
   } catch (err) {
     throw new Error(
-      `預檢典籍失敗：${err instanceof Error ? err.message : String(err)}`,
+      `預檢篇章失敗：${err instanceof Error ? err.message : String(err)}`,
     );
   }
   if (res.status === 200) return true;
   if (res.status === 404) return false;
-  throw new Error(`預檢典籍失敗：${res.status} ${res.statusText}`.trim());
+  throw new Error(`預檢篇章失敗：${res.status} ${res.statusText}`.trim());
 }
 
 async function postInit(): Promise<{ created: boolean }> {
@@ -205,7 +205,7 @@ async function putLore(
   filename: string,
   displayName: string,
   body: string,
-  groupLabel: "角色典籍" | "世界典籍",
+  groupLabel: "角色篇章" | "世界篇章",
 ): Promise<void> {
   const url = `/api/lore/story/${encodeURIComponent(seriesName.value)}/${encodeURIComponent(storyName.value)}/${encodeURIComponent(filename)}`;
   const content = `# ${displayName}\n\n${body}`;
@@ -285,13 +285,13 @@ async function onSubmit(e: Event) {
     noticeReused.value = !initResult.created;
 
     if (characterActive.value && lastSuccess.character !== charFn) {
-      stepStatus.value = "建立中… 角色典籍";
-      await putLore(charFn, characterName.value, characterContent.value, "角色典籍");
+      stepStatus.value = "建立中… 角色篇章";
+      await putLore(charFn, characterName.value, characterContent.value, "角色篇章");
       lastSuccess.character = charFn;
     }
     if (worldInfoActive.value && lastSuccess.worldInfo !== wiFn) {
-      stepStatus.value = "建立中… 世界典籍";
-      await putLore(wiFn, worldInfoName.value, worldInfoContent.value, "世界典籍");
+      stepStatus.value = "建立中… 世界篇章";
+      await putLore(wiFn, worldInfoName.value, worldInfoContent.value, "世界篇章");
       lastSuccess.worldInfo = wiFn;
     }
 
@@ -348,37 +348,37 @@ async function onSubmit(e: Event) {
         </div>
         <p v-if="errors.character" class="field-error">{{ errors.character }}</p>
         <div v-if="acknowledgements.character.filename" class="collision">
-          <p class="warning">已存在同名典籍：{{ acknowledgements.character.filename }}</p>
+          <p class="warning">已存在同名篇章：{{ acknowledgements.character.filename }}</p>
           <label>
             <input v-model="acknowledgements.character.acknowledged" type="checkbox" />
-            覆寫現有典籍
+            覆寫現有篇章
           </label>
         </div>
       </fieldset>
 
       <fieldset class="group">
-        <legend>世界典籍（選填）</legend>
+        <legend>世界篇章（選填）</legend>
         <div class="field">
-          <label for="qa-wi-name">世界典籍名稱</label>
+          <label for="qa-wi-name">世界篇章名稱</label>
           <input id="qa-wi-name" v-model="worldInfoName" type="text" />
         </div>
         <div class="field">
-          <label for="qa-wi-fn">世界典籍檔案名稱</label>
+          <label for="qa-wi-fn">世界篇章檔案名稱</label>
           <input id="qa-wi-fn" v-model="worldInfoFilename" type="text" />
           <p v-if="errors.worldInfoFilename" class="field-error">
             {{ errors.worldInfoFilename }}
           </p>
         </div>
         <div class="field">
-          <label for="qa-wi-body">世界典籍內容</label>
+          <label for="qa-wi-body">世界篇章內容</label>
           <textarea id="qa-wi-body" v-model="worldInfoContent" rows="6" />
         </div>
         <p v-if="errors.worldInfo" class="field-error">{{ errors.worldInfo }}</p>
         <div v-if="acknowledgements.worldInfo.filename" class="collision">
-          <p class="warning">已存在同名典籍：{{ acknowledgements.worldInfo.filename }}</p>
+          <p class="warning">已存在同名篇章：{{ acknowledgements.worldInfo.filename }}</p>
           <label>
             <input v-model="acknowledgements.worldInfo.acknowledged" type="checkbox" />
-            覆寫現有典籍
+            覆寫現有篇章
           </label>
         </div>
       </fieldset>

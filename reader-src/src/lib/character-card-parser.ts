@@ -125,19 +125,30 @@ function asString(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
+function nonEmptyTrimmed(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
 function asStringArray(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is string => typeof x === "string");
 }
 
 function normalise(data: TavernCardV2Data): ParsedCharacterCard {
-  const entries = data.character_book?.entries ?? [];
+  const rawEntries = data.character_book?.entries;
+  const entries = Array.isArray(rawEntries) ? rawEntries : [];
   if (entries.length > MAX_BOOK_ENTRIES) {
     throw new Error("character_book.entries 超過 1000 筆，無法匯入");
   }
   const bookEntries: ParsedBookEntry[] = entries.map((entry) => {
     const keys = asStringArray(entry?.keys);
-    const name = asString(entry?.name) || keys[0] || "";
+    const firstNonEmptyKey =
+      keys.map((k) => k.trim()).find(Boolean) ?? "";
+    const name =
+      nonEmptyTrimmed(entry?.comment) ||
+      nonEmptyTrimmed(entry?.name) ||
+      firstNonEmptyKey ||
+      "";
     return {
       name,
       keys,
@@ -158,6 +169,7 @@ function normalise(data: TavernCardV2Data): ParsedCharacterCard {
     tags: asStringArray(data.tags),
     creator: asString(data.creator),
     characterVersion: asString(data.character_version),
+    bookName: nonEmptyTrimmed(data.character_book?.name),
     bookEntries,
   };
 }

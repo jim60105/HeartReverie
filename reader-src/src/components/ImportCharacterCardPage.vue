@@ -88,9 +88,10 @@ const parseError = ref("");
 
 const seriesName = ref("");
 const storyName = ref("");
-const worldInfoName = ref("世界典籍");
+const worldInfoName = ref("");
 const characterFilename = ref("");
 const worldInfoFilename = ref("world_info.md");
+const worldInfoFilenameManuallyEdited = ref(false);
 
 const submitting = ref(false);
 const stepStatus = ref("");
@@ -117,14 +118,24 @@ const lastSuccess = reactive<{ character: string; worldInfo: string }>({
   worldInfo: "",
 });
 
+function targetKey(lorePath: string): string {
+  return `${seriesName.value}/${lorePath}`;
+}
+
 const cardLoaded = computed(() => parsed.value !== null);
 
 function resolveCharacterFilename(): string {
   return ensureMdExtension(characterFilename.value) ||
     deriveLoreFilename(form.name, "character.md");
 }
+function resolveCharacterLorePath(): string {
+  return `character/${encodeURIComponent(resolveCharacterFilename())}`;
+}
 function resolveWorldInfoFilename(): string {
   return ensureMdExtension(worldInfoFilename.value) || "world_info.md";
+}
+function resolveWorldInfoLorePath(): string {
+  return encodeURIComponent(resolveWorldInfoFilename());
 }
 
 const collisionsAcknowledged = computed(() => {
@@ -156,30 +167,40 @@ const submitDisabled = computed(
 );
 
 // Invalidate stale acknowledgements / cached successes when the resolved
-// filename changes — covers user edits to the filename input AND to the
-// underlying name field used for derivation.
+// filename or series changes — covers user edits to the filename input, the
+// underlying name field used for derivation, AND series changes.
 watch(
-  () => (cardLoaded.value ? resolveCharacterFilename() : ""),
-  (fn, prev) => {
-    if (fn !== prev) {
+  () => (cardLoaded.value ? targetKey(resolveCharacterLorePath()) : ""),
+  (key, prev) => {
+    if (key !== prev) {
+      const fn = resolveCharacterFilename();
       if (acknowledgements.character.filename !== fn) {
         acknowledgements.character = { filename: "", acknowledged: false };
       }
-      if (lastSuccess.character !== fn) lastSuccess.character = "";
+      if (lastSuccess.character !== key) lastSuccess.character = "";
     }
   },
 );
 watch(
-  () => (form.bookEntries.length > 0 ? resolveWorldInfoFilename() : ""),
-  (fn, prev) => {
-    if (fn !== prev) {
+  () => (form.bookEntries.length > 0 ? targetKey(resolveWorldInfoLorePath()) : ""),
+  (key, prev) => {
+    if (key !== prev) {
+      const fn = resolveWorldInfoFilename();
       if (acknowledgements.worldInfo.filename !== fn) {
         acknowledgements.worldInfo = { filename: "", acknowledged: false };
       }
-      if (lastSuccess.worldInfo !== fn) lastSuccess.worldInfo = "";
+      if (lastSuccess.worldInfo !== key) lastSuccess.worldInfo = "";
     }
   },
 );
+// Auto-derive worldInfoFilename from worldInfoName unless manually edited
+watch(worldInfoName, (name) => {
+  if (!worldInfoFilenameManuallyEdited.value) {
+    worldInfoFilename.value = name.trim()
+      ? deriveLoreFilename(name, "world_info.md")
+      : "world_info.md";
+  }
+});
 
 function captureScalarSnapshot(): ScalarSnapshot {
   return {
@@ -204,8 +225,11 @@ function hydrateFrom(card: ParsedCharacterCard) {
   hydrationSnapshot = deepClone(next);
   parsed.value = card;
   characterFilename.value = deriveLoreFilename(card.name, "character.md");
-  worldInfoFilename.value = "world_info.md";
-  worldInfoName.value = "世界典籍";
+  worldInfoName.value = card.bookName;
+  worldInfoFilename.value = card.bookName
+    ? deriveLoreFilename(card.bookName, "world_info.md")
+    : "world_info.md";
+  worldInfoFilenameManuallyEdited.value = false;
   scalarSnapshot = captureScalarSnapshot();
   acknowledgements.character = { filename: "", acknowledged: false };
   acknowledgements.worldInfo = { filename: "", acknowledged: false };
@@ -285,7 +309,13 @@ function clearErrors() {
   for (const k of Object.keys(errors)) delete errors[k];
 }
 
-function validate(): { ok: boolean; charFilename: string; worldFilename: string } {
+function validate(): {
+  ok: boolean;
+  charFilename: string;
+  charLorePath: string;
+  worldFilename: string;
+  worldLorePath: string;
+} {
   clearErrors();
   let ok = true;
   if (seriesName.value.trim() === "") {
@@ -316,22 +346,28 @@ function validate(): { ok: boolean; charFilename: string; worldFilename: string 
       ok = false;
     }
   }
-  return { ok, charFilename: charFn, worldFilename: worldFn };
+  return {
+    ok,
+    charFilename: charFn,
+    charLorePath: resolveCharacterLorePath(),
+    worldFilename: worldFn,
+    worldLorePath: resolveWorldInfoLorePath(),
+  };
 }
 
-async function preflightExists(filename: string): Promise<boolean> {
-  const url = `/api/lore/story/${encodeURIComponent(seriesName.value)}/${encodeURIComponent(storyName.value)}/${encodeURIComponent(filename)}`;
+async function preflightExists(lorePath: string): Promise<boolean> {
+  const url = `/api/lore/series/${encodeURIComponent(seriesName.value)}/${lorePath}`;
   let res: Response;
   try {
     res = await fetch(url, { headers: { ...getAuthHeaders() } });
   } catch (err) {
     throw new Error(
-      `預檢典籍失敗：${err instanceof Error ? err.message : String(err)}`,
+      `預檢篇章失敗：${err instanceof Error ? err.message : String(err)}`,
     );
   }
   if (res.status === 200) return true;
   if (res.status === 404) return false;
-  throw new Error(`預檢典籍失敗：${res.status} ${res.statusText}`.trim());
+  throw new Error(`預檢篇章失敗：${res.status} ${res.statusText}`.trim());
 }
 
 function buildCharacterMarkdown(): string {
@@ -364,8 +400,10 @@ function buildWorldInfoMarkdown(): string {
   if (trimmedName) sections.push(`# ${trimmedName}`);
   for (const entry of form.bookEntries) {
     const name = entry.name.trim() || "(unnamed)";
-    const keys = entry.keys.join(", ");
-    sections.push(`## ${name}\n**Keys:** ${keys}\n\n${entry.content}`);
+    const nonEmptyKeys = entry.keys.map((k) => k.trim()).filter(Boolean);
+    const keysLine =
+      nonEmptyKeys.length > 0 ? `**Keys:** ${nonEmptyKeys.join(", ")}\n\n` : "";
+    sections.push(`## ${name}\n${keysLine}${entry.content}`);
   }
   return sections.join("\n\n");
 }
@@ -386,12 +424,12 @@ async function postInit(): Promise<{ created: boolean }> {
 }
 
 async function putLore(
-  filename: string,
+  lorePath: string,
   frontmatter: Record<string, unknown>,
   content: string,
-  groupLabel: "角色典籍" | "世界典籍",
+  groupLabel: "角色篇章" | "世界篇章",
 ): Promise<void> {
-  const url = `/api/lore/story/${encodeURIComponent(seriesName.value)}/${encodeURIComponent(storyName.value)}/${encodeURIComponent(filename)}`;
+  const url = `/api/lore/series/${encodeURIComponent(seriesName.value)}/${lorePath}`;
   const res = await fetch(url, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
@@ -422,11 +460,11 @@ async function onImport(e: Event) {
     stepStatus.value = "預檢";
     let needAck = false;
 
-    if (lastSuccess.character !== v.charFilename) {
+    if (lastSuccess.character !== targetKey(v.charLorePath)) {
       if (acknowledgements.character.filename !== v.charFilename) {
         acknowledgements.character = { filename: "", acknowledged: false };
       }
-      const exists = await preflightExists(v.charFilename);
+      const exists = await preflightExists(v.charLorePath);
       if (exists) {
         const a = acknowledgements.character;
         if (a.filename === v.charFilename && a.acknowledged) {
@@ -442,11 +480,11 @@ async function onImport(e: Event) {
         acknowledgements.character = { filename: "", acknowledged: false };
       }
     }
-    if (form.bookEntries.length > 0 && lastSuccess.worldInfo !== v.worldFilename) {
+    if (form.bookEntries.length > 0 && lastSuccess.worldInfo !== targetKey(v.worldLorePath)) {
       if (acknowledgements.worldInfo.filename !== v.worldFilename) {
         acknowledgements.worldInfo = { filename: "", acknowledged: false };
       }
-      const exists = await preflightExists(v.worldFilename);
+      const exists = await preflightExists(v.worldLorePath);
       if (exists) {
         const a = acknowledgements.worldInfo;
         if (a.filename === v.worldFilename && a.acknowledged) {
@@ -472,28 +510,28 @@ async function onImport(e: Event) {
     const initResult = await postInit();
     noticeReused.value = !initResult.created;
 
-    if (lastSuccess.character !== v.charFilename) {
-      stepStatus.value = "寫入角色典籍";
+    if (lastSuccess.character !== targetKey(v.charLorePath)) {
+      stepStatus.value = "寫入角色篇章";
       const charFm: Record<string, unknown> = { enabled: true, priority: 0 };
       if (sanitisedTags.length > 0) charFm.tags = sanitisedTags;
       await putLore(
-        v.charFilename,
+        v.charLorePath,
         charFm,
         buildCharacterMarkdown(),
-        "角色典籍",
+        "角色篇章",
       );
-      lastSuccess.character = v.charFilename;
+      lastSuccess.character = targetKey(v.charLorePath);
     }
 
-    if (form.bookEntries.length > 0 && lastSuccess.worldInfo !== v.worldFilename) {
-      stepStatus.value = "寫入世界典籍";
+    if (form.bookEntries.length > 0 && lastSuccess.worldInfo !== targetKey(v.worldLorePath)) {
+      stepStatus.value = "寫入世界篇章";
       await putLore(
-        v.worldFilename,
+        v.worldLorePath,
         { enabled: true, priority: 0 },
         buildWorldInfoMarkdown(),
-        "世界典籍",
+        "世界篇章",
       );
-      lastSuccess.worldInfo = v.worldFilename;
+      lastSuccess.worldInfo = targetKey(v.worldLorePath);
     }
 
     stepStatus.value = "完成";
@@ -514,183 +552,204 @@ async function onImport(e: Event) {
   <div class="import-card">
     <h2>SillyTavern 角色卡轉換工具</h2>
 
-    <section class="file-region">
+    <fieldset class="group">
+      <legend>檔案選擇</legend>
       <p v-if="parseError" class="field-error">{{ parseError }}</p>
       <div class="dropzone" @dragover.prevent @drop="onDrop">
-        <p>拖曳 PNG 角色卡至此，或</p>
-        <input type="file" accept="image/png" @change="onFileInput" />
-      </div>
-    </section>
-
-    <section v-if="cardLoaded" class="form-region">
-      <h3>故事位置</h3>
-      <div class="field">
-        <label for="ic-series">系列名稱</label>
-        <input id="ic-series" v-model="seriesName" type="text" required />
-        <p v-if="errors.seriesName" class="field-error">{{ errors.seriesName }}</p>
-      </div>
-      <div class="field">
-        <label for="ic-story">故事名稱</label>
-        <input id="ic-story" v-model="storyName" type="text" required />
-        <p v-if="errors.storyName" class="field-error">{{ errors.storyName }}</p>
-      </div>
-      <div class="field">
-        <label for="ic-char-fn">角色檔案名稱</label>
-        <input id="ic-char-fn" v-model="characterFilename" type="text" />
-        <p v-if="errors.characterFilename" class="field-error">
-          {{ errors.characterFilename }}
-        </p>
-        <div v-if="acknowledgements.character.filename" class="collision">
-          <p class="warning">已存在同名典籍：{{ acknowledgements.character.filename }}</p>
-          <label>
-            <input v-model="acknowledgements.character.acknowledged" type="checkbox" />
-            覆寫現有典籍
-          </label>
-        </div>
-      </div>
-      <div class="field">
-        <label for="ic-wi-name">世界典籍名稱</label>
-        <input id="ic-wi-name" v-model="worldInfoName" type="text" />
-      </div>
-      <div class="field">
-        <label for="ic-wi-fn">世界典籍檔案名稱</label>
-        <input id="ic-wi-fn" v-model="worldInfoFilename" type="text" />
-        <p v-if="errors.worldInfoFilename" class="field-error">
-          {{ errors.worldInfoFilename }}
-        </p>
-        <div v-if="acknowledgements.worldInfo.filename" class="collision">
-          <p class="warning">已存在同名典籍：{{ acknowledgements.worldInfo.filename }}</p>
-          <label>
-            <input v-model="acknowledgements.worldInfo.acknowledged" type="checkbox" />
-            覆寫現有典籍
-          </label>
-        </div>
-      </div>
-
-      <h3>角色資料</h3>
-      <div class="field">
-        <label for="ic-name">name</label>
-        <textarea id="ic-name" v-model="form.name" rows="1" />
-      </div>
-      <div class="field">
-        <label for="ic-description">description</label>
-        <textarea id="ic-description" v-model="form.description" rows="6" />
-      </div>
-      <div class="field">
-        <label for="ic-personality">personality</label>
-        <textarea id="ic-personality" v-model="form.personality" rows="3" />
-      </div>
-      <div class="field">
-        <label for="ic-scenario">scenario</label>
-        <textarea id="ic-scenario" v-model="form.scenario" rows="3" />
-      </div>
-      <div class="field">
-        <label for="ic-firstmes">first_mes</label>
-        <textarea id="ic-firstmes" v-model="form.firstMes" rows="3" />
-      </div>
-      <div class="field">
-        <label for="ic-mesexample">mes_example</label>
-        <textarea id="ic-mesexample" v-model="form.mesExample" rows="3" />
-      </div>
-      <div class="field">
-        <label for="ic-creatornotes">creator_notes</label>
-        <textarea id="ic-creatornotes" v-model="form.creatorNotes" rows="2" />
-      </div>
-      <div class="field">
-        <label for="ic-system">system_prompt</label>
-        <textarea id="ic-system" v-model="form.systemPrompt" rows="3" />
-      </div>
-      <div class="field">
-        <label for="ic-phi">post_history_instructions</label>
-        <textarea
-          id="ic-phi"
-          v-model="form.postHistoryInstructions"
-          rows="2"
-        />
-      </div>
-
-      <div class="field">
-        <label>tags（以逗號分隔）</label>
+        <p>拖放 PNG 角色卡到此處，或</p>
+        <label class="file-trigger" for="ic-file-input">選擇檔案</label>
         <input
-          type="text"
-          :value="tagsAsString()"
-          @input="setTagsFromString(($event.target as HTMLInputElement).value)"
+          id="ic-file-input"
+          type="file"
+          accept="image/png"
+          class="file-input-hidden"
+          @change="onFileInput"
         />
-        <p
-          v-for="t in tagWarnings.tooLong"
-          :key="`tl-${t}`"
-          class="field-error"
-        >
-          已忽略過長標籤：{{ t.slice(0, 30) }}…
-        </p>
-        <p
-          v-for="t in tagWarnings.special"
-          :key="`sp-${t}`"
-          class="field-error"
-        >
-          已忽略含特殊字元的標籤：{{ t }}
-        </p>
       </div>
+    </fieldset>
 
-      <h3>alternate_greetings</h3>
-      <div
-        v-for="(_, i) in form.alternateGreetings"
-        :key="`alt-${i}`"
-        class="field"
-      >
-        <label :for="`ic-alt-${i}`">{{ i + 1 }}</label>
-        <textarea
-          :id="`ic-alt-${i}`"
-          v-model="form.alternateGreetings[i]"
-          rows="2"
-        />
-        <button type="button" class="themed-btn" @click="removeAlternateGreeting(i)">
-          刪除
-        </button>
-      </div>
-      <button type="button" class="themed-btn" @click="addAlternateGreeting">
-        新增 alternate_greeting
-      </button>
-
-      <h3>character_book entries</h3>
-      <details
-        v-for="(entry, i) in form.bookEntries"
-        :key="`be-${i}`"
-        class="book-entry"
-      >
-        <summary>{{ entry.name || `(entry ${i + 1})` }}</summary>
+    <template v-if="cardLoaded">
+      <fieldset class="group">
+        <legend>角色資料</legend>
         <div class="field">
-          <label :for="`ic-be-name-${i}`">name</label>
-          <input
-            :id="`ic-be-name-${i}`"
-            v-model="entry.name"
-            type="text"
-          />
+          <label for="ic-name">name</label>
+          <textarea id="ic-name" v-model="form.name" rows="1" />
         </div>
         <div class="field">
-          <label :for="`ic-be-keys-${i}`">keys（以逗號分隔）</label>
-          <input
-            :id="`ic-be-keys-${i}`"
-            type="text"
-            :value="keysAsString(entry)"
-            @input="setKeysFromString(entry, ($event.target as HTMLInputElement).value)"
-          />
+          <label for="ic-description">description</label>
+          <textarea id="ic-description" v-model="form.description" rows="6" />
         </div>
         <div class="field">
-          <label :for="`ic-be-body-${i}`">content</label>
+          <label for="ic-personality">personality</label>
+          <textarea id="ic-personality" v-model="form.personality" rows="3" />
+        </div>
+        <div class="field">
+          <label for="ic-scenario">scenario</label>
+          <textarea id="ic-scenario" v-model="form.scenario" rows="3" />
+        </div>
+        <div class="field">
+          <label for="ic-firstmes">first_mes</label>
+          <textarea id="ic-firstmes" v-model="form.firstMes" rows="3" />
+        </div>
+        <div class="field">
+          <label for="ic-mesexample">mes_example</label>
+          <textarea id="ic-mesexample" v-model="form.mesExample" rows="3" />
+        </div>
+        <div class="field">
+          <label for="ic-creatornotes">creator_notes</label>
+          <textarea id="ic-creatornotes" v-model="form.creatorNotes" rows="2" />
+        </div>
+        <div class="field">
+          <label for="ic-system">system_prompt</label>
+          <textarea id="ic-system" v-model="form.systemPrompt" rows="3" />
+        </div>
+        <div class="field">
+          <label for="ic-phi">post_history_instructions</label>
           <textarea
-            :id="`ic-be-body-${i}`"
-            v-model="entry.content"
-            rows="4"
+            id="ic-phi"
+            v-model="form.postHistoryInstructions"
+            rows="2"
           />
         </div>
-        <button type="button" class="themed-btn" @click="removeBookEntry(i)">
-          刪除此 entry
+        <div class="field">
+          <label>tags（以逗號分隔）</label>
+          <input
+            type="text"
+            :value="tagsAsString()"
+            @input="setTagsFromString(($event.target as HTMLInputElement).value)"
+          />
+          <p
+            v-for="t in tagWarnings.tooLong"
+            :key="`tl-${t}`"
+            class="field-error"
+          >
+            已忽略過長標籤：{{ t.slice(0, 30) }}…
+          </p>
+          <p
+            v-for="t in tagWarnings.special"
+            :key="`sp-${t}`"
+            class="field-error"
+          >
+            已忽略含特殊字元的標籤：{{ t }}
+          </p>
+        </div>
+
+        <h4>alternate_greetings</h4>
+        <div
+          v-for="(_, i) in form.alternateGreetings"
+          :key="`alt-${i}`"
+          class="field"
+        >
+          <label :for="`ic-alt-${i}`">{{ i + 1 }}</label>
+          <textarea
+            :id="`ic-alt-${i}`"
+            v-model="form.alternateGreetings[i]"
+            rows="2"
+          />
+          <button type="button" class="themed-btn" @click="removeAlternateGreeting(i)">
+            刪除
+          </button>
+        </div>
+        <button type="button" class="themed-btn" @click="addAlternateGreeting">
+          新增 alternate_greeting
         </button>
-      </details>
-      <button type="button" class="themed-btn" @click="addBookEntry">
-        新增 book entry
-      </button>
+
+        <div class="field" style="margin-top: 1rem;">
+          <label for="ic-char-fn">角色檔案名稱</label>
+          <input id="ic-char-fn" v-model="characterFilename" type="text" />
+          <p v-if="errors.characterFilename" class="field-error">
+            {{ errors.characterFilename }}
+          </p>
+          <div v-if="acknowledgements.character.filename" class="collision">
+            <p class="warning">已存在同名篇章：{{ acknowledgements.character.filename }}</p>
+            <label>
+              <input v-model="acknowledgements.character.acknowledged" type="checkbox" />
+              覆寫現有篇章
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>故事位置</legend>
+        <div class="field">
+          <label for="ic-series">系列名稱</label>
+          <input id="ic-series" v-model="seriesName" type="text" required />
+          <p v-if="errors.seriesName" class="field-error">{{ errors.seriesName }}</p>
+        </div>
+        <div class="field">
+          <label for="ic-story">故事名稱</label>
+          <input id="ic-story" v-model="storyName" type="text" required />
+          <p v-if="errors.storyName" class="field-error">{{ errors.storyName }}</p>
+        </div>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>世界篇章</legend>
+        <div class="field">
+          <label for="ic-wi-name">世界篇章名稱</label>
+          <input id="ic-wi-name" v-model="worldInfoName" type="text" />
+        </div>
+        <div class="field">
+          <label for="ic-wi-fn">世界篇章檔案名稱</label>
+          <input
+            id="ic-wi-fn"
+            v-model="worldInfoFilename"
+            type="text"
+            @input="worldInfoFilenameManuallyEdited = true"
+          />
+          <p v-if="errors.worldInfoFilename" class="field-error">
+            {{ errors.worldInfoFilename }}
+          </p>
+          <div v-if="acknowledgements.worldInfo.filename" class="collision">
+            <p class="warning">已存在同名篇章：{{ acknowledgements.worldInfo.filename }}</p>
+            <label>
+              <input v-model="acknowledgements.worldInfo.acknowledged" type="checkbox" />
+              覆寫現有篇章
+            </label>
+          </div>
+        </div>
+
+        <h4>character_book entries</h4>
+        <details
+          v-for="(entry, i) in form.bookEntries"
+          :key="`be-${i}`"
+          class="book-entry"
+        >
+          <summary>{{ entry.name || `(entry ${i + 1})` }}</summary>
+          <div class="field">
+            <label :for="`ic-be-name-${i}`">name</label>
+            <input
+              :id="`ic-be-name-${i}`"
+              v-model="entry.name"
+              type="text"
+            />
+          </div>
+          <div class="field">
+            <label :for="`ic-be-keys-${i}`">keys（以逗號分隔）</label>
+            <input
+              :id="`ic-be-keys-${i}`"
+              type="text"
+              :value="keysAsString(entry)"
+              @input="setKeysFromString(entry, ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+          <div class="field">
+            <label :for="`ic-be-body-${i}`">content</label>
+            <textarea
+              :id="`ic-be-body-${i}`"
+              v-model="entry.content"
+              rows="4"
+            />
+          </div>
+          <button type="button" class="themed-btn" @click="removeBookEntry(i)">
+            刪除此 entry
+          </button>
+        </details>
+        <button type="button" class="themed-btn" @click="addBookEntry">
+          新增 book entry
+        </button>
+      </fieldset>
 
       <div class="actions">
         <button
@@ -708,7 +767,7 @@ async function onImport(e: Event) {
         <p v-if="noticeReused" class="notice">已沿用現有故事資料夾</p>
         <p v-if="errors.submit" class="field-error">{{ errors.submit }}</p>
       </div>
-    </section>
+    </template>
   </div>
 </template>
 
@@ -723,17 +782,48 @@ async function onImport(e: Event) {
   color: var(--text-title);
   margin-bottom: 1rem;
 }
-.import-card h3 {
+.import-card h4 {
   color: var(--text-title);
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
   font-size: 1rem;
 }
-.dropzone {
+.group {
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
   padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+.group legend {
+  font-weight: 600;
+  padding: 0 0.5rem;
+}
+.dropzone {
+  padding: 1.5rem;
   border: 2px dashed var(--btn-border);
   border-radius: 6px;
   text-align: center;
+}
+.file-input-hidden {
+  opacity: 0;
+  position: absolute;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+.file-trigger {
+  display: inline-block;
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  background: var(--btn-bg);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: inherit;
+  color: inherit;
+}
+.file-trigger:hover {
+  border-color: var(--btn-hover-border);
+  background: var(--btn-hover-bg);
 }
 .field {
   display: flex;

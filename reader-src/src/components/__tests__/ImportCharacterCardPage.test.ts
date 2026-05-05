@@ -32,6 +32,7 @@ function makeParsed(over: Partial<ParsedCharacterCard> = {}): ParsedCharacterCar
     tags: ["fantasy"],
     creator: "c",
     characterVersion: "1",
+    bookName: "",
     bookEntries: [],
     ...over,
   };
@@ -147,7 +148,7 @@ describe("ImportCharacterCardPage", () => {
     parserResult = makeParsed({ name: "林小美" });
     const { wrapper } = await mountPage();
     await loadCard(wrapper);
-    expect(wrapper.find(".form-region").exists()).toBe(true);
+    expect(wrapper.find("fieldset.group legend").exists()).toBe(true);
     expect(
       (wrapper.find("#ic-char-fn").element as HTMLInputElement).value,
     ).toBe("林小美.md");
@@ -157,7 +158,7 @@ describe("ImportCharacterCardPage", () => {
     parserResult = new Error("Not a PNG file");
     const { wrapper } = await mountPage();
     await loadCard(wrapper);
-    expect(wrapper.find(".form-region").exists()).toBe(false);
+    expect(wrapper.find("#ic-char-fn").exists()).toBe(false);
     expect(wrapper.text()).toContain("Not a PNG file");
   });
 
@@ -184,7 +185,7 @@ describe("ImportCharacterCardPage", () => {
     const puts = calls.filter((c) => c.method === "PUT");
     expect(puts).toHaveLength(1);
     expect(puts[0]!.url).not.toContain("/_lore/");
-    expect(puts[0]!.url).toBe("/api/lore/story/S1/Story1/Hero.md");
+    expect(puts[0]!.url).toBe("/api/lore/series/S1/character/Hero.md");
     expect(router.currentRoute.value.name).toBe("story");
   });
 
@@ -273,7 +274,7 @@ describe("ImportCharacterCardPage", () => {
     const importBtn = wrapper.findAll("button").find((b) => b.text() === "匯入")!;
     await importBtn.trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("已存在同名典籍");
+    expect(wrapper.text()).toContain("已存在同名篇章");
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
     await wrapper.find(".collision input[type='checkbox']").setValue(true);
     await importBtn.trigger("click");
@@ -367,7 +368,7 @@ describe("ImportCharacterCardPage", () => {
     await flushPromises();
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
-    expect(wrapper.text()).toContain("預檢典籍失敗");
+    expect(wrapper.text()).toContain("預檢篇章失敗");
   });
 
   it("preflight 500 surfaces inline error and aborts", async () => {
@@ -381,7 +382,7 @@ describe("ImportCharacterCardPage", () => {
     await importBtn.trigger("click");
     await flushPromises();
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
-    expect(wrapper.text()).toContain("預檢典籍失敗");
+    expect(wrapper.text()).toContain("預檢篇章失敗");
   });
 
   it("preflight network throw surfaces inline error and aborts", async () => {
@@ -399,7 +400,7 @@ describe("ImportCharacterCardPage", () => {
     const importBtn = wrapper.findAll("button").find((b) => b.text() === "匯入")!;
     await importBtn.trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("預檢典籍失敗");
+    expect(wrapper.text()).toContain("預檢篇章失敗");
   });
 
   it("changing filename after acknowledging clears the ack and re-blocks if new filename also collides", async () => {
@@ -412,15 +413,15 @@ describe("ImportCharacterCardPage", () => {
     const importBtn = wrapper.findAll("button").find((b) => b.text() === "匯入")!;
     await importBtn.trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("已存在同名典籍：Hero.md");
+    expect(wrapper.text()).toContain("已存在同名篇章：Hero.md");
     await wrapper.find(".collision input[type='checkbox']").setValue(true);
     // Change filename; ack must clear.
     await wrapper.find("#ic-char-fn").setValue("Other.md");
-    expect(wrapper.text()).not.toContain("已存在同名典籍：Hero.md");
+    expect(wrapper.text()).not.toContain("已存在同名篇章：Hero.md");
     await importBtn.trigger("click");
     await flushPromises();
     // New filename collides too (mock GET 200 for any path).
-    expect(wrapper.text()).toContain("已存在同名典籍：Other.md");
+    expect(wrapper.text()).toContain("已存在同名篇章：Other.md");
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
   });
 
@@ -532,7 +533,7 @@ describe("ImportCharacterCardPage", () => {
     await flushPromises();
     expect(charPutCount).toBe(1);
     expect(wiPutCount).toBe(1);
-    expect(wrapper.text()).toContain("建立世界典籍失敗");
+    expect(wrapper.text()).toContain("建立世界篇章失敗");
     wiPutFails = false;
     const charGetBefore = charGetCount;
     await importBtn.trigger("click");
@@ -540,5 +541,48 @@ describe("ImportCharacterCardPage", () => {
     expect(charGetCount).toBe(charGetBefore);
     expect(charPutCount).toBe(1);
     expect(wiPutCount).toBe(2);
+  });
+
+  it("changing series after successful import triggers new preflight and PUT", async () => {
+    parserResult = makeParsed({ bookEntries: [] });
+    const calls = setupFetch({ charPreflight: 404 });
+    const { wrapper } = await mountPage();
+    await loadCard(wrapper);
+    await wrapper.find("#ic-series").setValue("S1");
+    await wrapper.find("#ic-story").setValue("Story1");
+    const importBtn = wrapper.findAll("button").find((b) => b.text() === "匯入")!;
+    await importBtn.trigger("click");
+    await flushPromises();
+    const firstPuts = calls.filter((c) => c.method === "PUT");
+    expect(firstPuts).toHaveLength(1);
+    expect(firstPuts[0]!.url).toBe("/api/lore/series/S1/character/Hero.md");
+    // Change series — should issue another PUT for the new series
+    await wrapper.find("#ic-series").setValue("S2");
+    await importBtn.trigger("click");
+    await flushPromises();
+    const allPuts = calls.filter((c) => c.method === "PUT");
+    expect(allPuts).toHaveLength(2);
+    expect(allPuts[1]!.url).toBe("/api/lore/series/S2/character/Hero.md");
+  });
+
+  it("buildWorldInfoMarkdown trims and filters empty keys", async () => {
+    parserResult = makeParsed({
+      bookEntries: [
+        { name: "Entry", keys: ["", " alice ", "   ", "bob"], content: "body" },
+      ],
+    });
+    const calls = setupFetch({ charPreflight: 404, worldPreflight: 404 });
+    const { wrapper } = await mountPage();
+    await loadCard(wrapper);
+    await wrapper.find("#ic-series").setValue("S1");
+    await wrapper.find("#ic-story").setValue("Story1");
+    const importBtn = wrapper.findAll("button").find((b) => b.text() === "匯入")!;
+    await importBtn.trigger("click");
+    await flushPromises();
+    const wiPut = calls.filter((c) => c.method === "PUT").find((c) => c.url.includes("world_info"));
+    expect(wiPut).toBeDefined();
+    const body = wiPut!.body as { content: string };
+    expect(body.content).toContain("**Keys:** alice, bob");
+    expect(body.content).not.toMatch(/\*\*Keys:\*\*.*,\s*,/);
   });
 });
