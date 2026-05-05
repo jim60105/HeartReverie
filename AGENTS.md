@@ -51,9 +51,10 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
     main.ts               # Vue app entry point
     App.vue               # Root component
     router/
-      index.ts            # Vue Router with HTML5 history mode
+      index.ts            # Vue Router with HTML5 history mode (exports settingsChildren, toolsChildren)
+      isReadingRoute.ts   # Predicate excluding /settings and /tools from "last reading route" tracking
     components/
-      AppHeader.vue       # Navigation header
+      AppHeader.vue       # Navigation header (mounts ToolsMenu beside ⚙️)
       MainLayout.vue      # Main reading layout
       ContentArea.vue     # Chapter content display area
       ChapterContent.vue  # Chapter content rendering
@@ -68,6 +69,10 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       UsagePanel.vue      # Collapsible token-usage summary + recent records table
       PassphraseGate.vue  # Authentication gate
       SettingsLayout.vue  # Settings page with sidebar navigation
+      ToolsLayout.vue     # /tools page sidebar layout (mirrors SettingsLayout)
+      ToolsMenu.vue       # 🧰 header dropdown listing toolsChildren
+      QuickAddPage.vue    # /tools/new-series — series+story+optional lore quick-create form
+      ImportCharacterCardPage.vue # /tools/import-character-card — SillyTavern PNG card importer
       VentoErrorCard.vue  # Vento template error display component
     components/lore/
       LoreCodexPage.vue   # Lore codex page wrapper
@@ -79,6 +84,7 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       useChapterActions.ts # Edit / rewind / branch chapter REST API client
       useChapterNav.ts    # Chapter navigation and polling
       useChatApi.ts       # Chat API (WebSocket with HTTP fallback)
+      useLastReadingRoute.ts # Tracks the last reading route (skips /settings + /tools via isReadingRoute)
       useLoreApi.ts       # Lore codex API client
       useMarkdownRenderer.ts  # Markdown rendering pipeline
       usePlugins.ts       # Plugin loading and hook management
@@ -86,13 +92,18 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       usePromptEditor.ts  # Prompt editor state (MessageCard[] + parse/serialize, raw fallback toggle, originalRawSource snapshot, lossy-strip flag, pre-save validity guard)
       useStorySelector.ts # Story selector state
       useStoryExport.ts   # Story export download (Markdown/JSON/TXT)
+      useTools.ts         # Tools dropdown state (open/close, click-outside, Escape)
       useUsage.ts         # Token-usage state: load records, push on chat:done, reset on story change
       useWebSocket.ts     # WebSocket connection management
     lib/
+      character-card-parser.ts # SillyTavern V2/V3 PNG tEXt chunk parser → ParsedCharacterCard
       file-utils.ts       # File utility functions
+      lore-filename.ts    # Slug derivation, validation, and tag sanitiser shared by tools
       markdown-pipeline.ts # Markdown processing pipeline
       plugin-hooks.ts     # Frontend hook dispatcher
       string-utils.ts     # String utilities (Levenshtein, escaping)
+    types/
+      character-card.ts   # TavernCardV2/V3 + ParsedCharacterCard types
       template-parser.ts  # Hand-rolled scanner for system.md: parseSystemTemplate() ↔ serializeMessageCards() (cards mode load/save)
       parsers/
         vento-error-parser.ts  # Vento error parsing

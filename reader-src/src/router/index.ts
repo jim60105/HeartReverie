@@ -3,10 +3,14 @@ import type { RouteRecordRaw } from "vue-router";
 
 const MainLayout = () => import("@/components/MainLayout.vue");
 const SettingsLayout = () => import("@/components/SettingsLayout.vue");
+const ToolsLayout = () => import("@/components/ToolsLayout.vue");
 const PromptEditorPage = () => import("@/components/PromptEditorPage.vue");
 const LoreCodexPage = () => import("@/components/lore/LoreCodexPage.vue");
 const LlmSettingsPage = () => import("@/components/LlmSettingsPage.vue");
 const ThemeSettingsPage = () => import("@/components/ThemeSettingsPage.vue");
+const QuickAddPage = () => import("@/components/QuickAddPage.vue");
+const ImportCharacterCardPage = () =>
+  import("@/components/ImportCharacterCardPage.vue");
 
 export const settingsChildren: RouteRecordRaw[] = [
   {
@@ -35,6 +39,21 @@ export const settingsChildren: RouteRecordRaw[] = [
   },
 ];
 
+export const toolsChildren: RouteRecordRaw[] = [
+  {
+    path: "new-series",
+    name: "tools-new-series",
+    component: QuickAddPage,
+    meta: { title: "快速新增" },
+  },
+  {
+    path: "import-character-card",
+    name: "tools-import-character-card",
+    component: ImportCharacterCardPage,
+    meta: { title: "ST 角色卡轉換工具" },
+  },
+];
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -58,6 +77,12 @@ const router = createRouter({
       component: SettingsLayout,
       redirect: { name: "settings-prompt-editor" },
       children: settingsChildren,
+    },
+    {
+      path: "/tools",
+      component: ToolsLayout,
+      redirect: { name: "tools-new-series" },
+      children: toolsChildren,
     },
     {
       path: "/:pathMatch(.*)*",

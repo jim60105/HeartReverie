@@ -18,6 +18,7 @@ import type {
   RouteLocationNormalizedLoaded,
   RouteLocationRaw,
 } from "vue-router";
+import { isReadingRoute } from "@/router/isReadingRoute";
 
 /**
  * Module-level singleton ref tracking the user's most recent reading route
@@ -34,19 +35,6 @@ import type {
  */
 const lastReadingRoute = ref<RouteLocationRaw | null>(null);
 
-/**
- * Predicate identifying routes that belong to the settings tree.
- *
- * Uses an exact match for `/settings` plus a trailing-slash prefix check so
- * that valid top-level slugs whose first segment merely starts with the
- * literal substring `settings` (e.g., a series slug `settings-archive`
- * rendered at `/settings-archive/my-story`) are NOT misclassified. A loose
- * `startsWith("/settings")` MUST NOT be used.
- */
-function isSettingsPath(path: string): boolean {
-  return path === "/settings" || path.startsWith("/settings/");
-}
-
 export interface UseLastReadingRouteReturn {
   lastReadingRoute: Ref<RouteLocationRaw | null>;
   recordReadingRoute(to: RouteLocationNormalizedLoaded): void;
@@ -62,11 +50,11 @@ export function useLastReadingRoute(): UseLastReadingRouteReturn {
     lastReadingRoute,
     /**
      * Record `to` as the most recent reading route, unless `to` is a settings
-     * route (in which case this is a no-op so the existing capture is
-     * preserved across intra-settings tab navigation).
+     * or tools route (in which case this is a no-op so the existing capture
+     * is preserved across intra-settings / intra-tools tab navigation).
      */
     recordReadingRoute(to: RouteLocationNormalizedLoaded): void {
-      if (isSettingsPath(to.path)) return;
+      if (!isReadingRoute(to.path)) return;
       if (typeof to.name === "string" && to.name.length > 0) {
         lastReadingRoute.value = {
           name: to.name,
