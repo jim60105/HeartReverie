@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import type { Context, Next } from "@hono/hono";
+import type { Context, Next, Hono } from "@hono/hono";
 import type { PluginManager } from "./lib/plugin-manager.ts";
 import type { HookDispatcher } from "./lib/hooks.ts";
 import type { Logger } from "./lib/logger.ts";
@@ -155,6 +155,12 @@ export interface PluginManifest {
    * logged warning. Defaults to `[]` when absent.
    */
   readonly actionButtons?: readonly ActionButtonDescriptor[];
+  /**
+   * Optional JSON Schema (draft-07 compatible) describing plugin settings.
+   * Must be an object schema (`type: "object"`) with a `properties` record.
+   * Used by the settings I/O helpers to validate payloads and extract defaults.
+   */
+  readonly settingsSchema?: Record<string, unknown>;
 }
 
 /**
@@ -278,6 +284,17 @@ export interface PluginModule {
   register?: (context: PluginRegisterContext) => void | Promise<void>;
   default?: (context: PluginRegisterContext) => void | Promise<void>;
   getDynamicVariables?: (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>;
+  registerRoutes?: (context: PluginRouteContext) => void | Promise<void>;
+}
+
+/** Context passed to plugin registerRoutes() function for mounting HTTP routes. */
+export interface PluginRouteContext {
+  readonly app: Hono;
+  readonly basePath: string;
+  readonly logger: Logger;
+  readonly getSettings: () => Promise<Record<string, unknown>>;
+  readonly saveSettings: (settings: Record<string, unknown>) => Promise<void>;
+  readonly config: AppConfig;
 }
 
 /** Valid hook lifecycle stages. */

@@ -26,7 +26,9 @@ import { registerChapterRoutes } from "./routes/chapters.ts";
 import { registerBranchRoutes } from "./routes/branch.ts";
 import { registerChatRoutes } from "./routes/chat.ts";
 import { registerPluginRoutes } from "./routes/plugins.ts";
+import { registerPluginSettingsRoutes } from "./routes/plugin-settings.ts";
 import { registerPluginActionRoutes } from "./routes/plugin-actions.ts";
+import { registerImageRoutes } from "./routes/images.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
 import { registerThemeRoutes } from "./routes/themes.ts";
 import { registerStoryConfigRoutes } from "./routes/story-config.ts";
@@ -120,7 +122,7 @@ export function createApp(deps: AppDeps): Hono {
   registerWebSocketRoutes(app, deps);
 
   // Body size limit (replaces Express express.json({ limit: "1mb" }))
-  app.use("/api/*", bodyLimit({ maxSize: 1024 * 1024 }));
+  app.use("/api/*", bodyLimit({ maxSize: 10 * 1024 * 1024 }));
 
   // Rate limiting — generous for single-user personal app; protects against loops
   app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 300 }));
@@ -149,9 +151,32 @@ export function createApp(deps: AppDeps): Hono {
   registerStoryConfigRoutes(app, deps);
   registerLlmDefaultsRoutes(app, deps);
   registerPluginRoutes(app, deps);
+  registerPluginSettingsRoutes(app, deps);
   registerPluginActionRoutes(app, deps);
   registerPromptRoutes(app, deps);
   registerUsageRoutes(app, deps);
+  registerImageRoutes(app, deps);
+
+  // Mount plugin-registered API routes (sync phase: registers route handlers)
+  // Note: if registerRoutes is async (e.g. dynamic imports), call initPluginRoutes() after createApp.
+  const registrars = deps.pluginManager.getPluginRouteRegistrars?.() ?? [];
+  for (const { name, registerRoutes } of registrars) {
+    const basePath = `/api/plugins/${name}`;
+    const pluginLog = createLogger("plugin", { baseData: { plugin: name } });
+    const result = registerRoutes({
+      app,
+      basePath,
+      logger: pluginLog,
+      getSettings: () => deps.pluginManager.getPluginSettings(name),
+      saveSettings: (s: Record<string, unknown>) => deps.pluginManager.savePluginSettings(name, s),
+      config: deps.config,
+    });
+    // Track async registrars for initPluginRoutes
+    if (result instanceof Promise) {
+      (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits ??= [];
+      (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits!.push(result);
+    }
+  }
 
   // Block dotfile access (e.g., /.env, /.gitignore)
   app.use("/*", async (c, next) => {
@@ -204,4 +229,17 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   return app;
+}
+
+/**
+ * Await any async plugin route registrations that were started in createApp.
+ * Call this after createApp in production to ensure all async plugin routes
+ * (e.g. those using dynamic imports) are fully registered before serving.
+ */
+export async function initPluginRoutes(app: Hono): Promise<void> {
+  const pending = (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits;
+  if (pending?.length) {
+    await Promise.all(pending);
+    delete (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits;
+  }
 }

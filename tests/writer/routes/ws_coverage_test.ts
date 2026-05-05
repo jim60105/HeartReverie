@@ -202,10 +202,11 @@ Deno.test({
 
     const hookDispatcher = new HookDispatcher();
     const pluginManager = new PluginManager(
-      pluginsRoot,
-      undefined,
-      hookDispatcher,
-    );
+    pluginsRoot,
+    undefined,
+    hookDispatcher,
+    Deno.makeTempDirSync(),
+  );
     await pluginManager.init();
 
     const templateEngine = createTemplateEngine(pluginManager);

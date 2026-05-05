@@ -38,7 +38,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getStripTagPatterns(), null);
@@ -58,7 +58,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const regex = pm.getStripTagPatterns();
@@ -81,7 +81,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const regex = pm.getStripTagPatterns();
@@ -103,7 +103,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getStripTagPatterns(), null);
@@ -123,7 +123,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getStripTagPatterns(), null);
@@ -141,7 +141,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getCombinedStripTagPatterns(), null);
@@ -161,7 +161,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const re = pm.getCombinedStripTagPatterns();
@@ -183,7 +183,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const re = pm.getCombinedStripTagPatterns();
@@ -206,7 +206,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const re = pm.getCombinedStripTagPatterns();
@@ -231,7 +231,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const re = pm.getCombinedStripTagPatterns();
@@ -255,7 +255,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPlugins().length, 0);
@@ -277,7 +277,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const plugins = pm.getPlugins();
@@ -295,7 +295,7 @@ Deno.test("PluginManager", async (t) => {
         await Deno.mkdir(pluginDir, { recursive: true });
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, "relative/path", hd);
+        const pm = new PluginManager(pluginDir, "relative/path", hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertTrue(
@@ -317,7 +317,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(builtinDir, externalDir, hd);
+        const pm = new PluginManager(builtinDir, externalDir, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const plugins = pm.getPlugins();
@@ -342,7 +342,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(builtinDir, externalDir, hd);
+        const pm = new PluginManager(builtinDir, externalDir, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const plugins = pm.getPlugins();
@@ -360,7 +360,7 @@ Deno.test("PluginManager", async (t) => {
         await Deno.writeTextFile(join(pDir, "plugin.json"), "NOT VALID JSON{{{");
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPlugins().length, 0);
@@ -376,7 +376,7 @@ Deno.test("PluginManager", async (t) => {
         await Deno.writeTextFile(join(pDir, "plugin.json"), JSON.stringify({}));
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPlugins().length, 0);
@@ -405,7 +405,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPlugins().length, 1);
@@ -429,7 +429,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertTrue(
@@ -457,7 +457,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertTrue(
@@ -481,7 +481,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertTrue(
@@ -512,7 +512,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const pv = await pm.getPromptVariables();
@@ -535,7 +535,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const pv = await pm.getPromptVariables();
@@ -561,7 +561,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const pv = await pm.getPromptVariables();
@@ -594,7 +594,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const pv = await pm.getPromptVariables();
@@ -625,7 +625,7 @@ Deno.test("PluginManager", async (t) => {
       await Deno.writeTextFile(join(pDir, "frag.md"), "frag content");
 
       const hd = new HookDispatcher();
-      const pm = new PluginManager(pluginDir, undefined, hd);
+      const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
       await pm.init();
 
       const params = pm.getParameters();
@@ -652,7 +652,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginDir("dir-plugin"), pDir);
@@ -663,7 +663,7 @@ Deno.test("PluginManager", async (t) => {
         await Deno.mkdir(pluginDir, { recursive: true });
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginDir("nonexistent"), null);
@@ -674,7 +674,7 @@ Deno.test("PluginManager", async (t) => {
       const pluginDir = join(tmpDir, "does-not-exist-at-all");
 
       const hd = new HookDispatcher();
-      const pm = new PluginManager(pluginDir, undefined, hd);
+      const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
       await pm.init();
 
       assertEquals(pm.getPlugins().length, 0);
@@ -703,7 +703,7 @@ Deno.test("PluginManager", async (t) => {
       warnStub.calls.length = 0;
 
       const hd = new HookDispatcher();
-      const pm = new PluginManager(builtinDir, externalDir, hd);
+      const pm = new PluginManager(builtinDir, externalDir, hd, Deno.makeTempDirSync());
       await pm.init();
 
       // Only one plugin loaded
@@ -728,7 +728,7 @@ Deno.test("PluginManager", async (t) => {
       );
 
       const hd = new HookDispatcher();
-      const pm = new PluginManager(pluginDir, undefined, hd);
+      const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
       await pm.init();
 
       const plugins = pm.getPlugins();
@@ -754,7 +754,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginStyles("style-plugin"), ["a.css", "b.css"]);
@@ -775,7 +775,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginStyles("miss-plugin"), ["exists.css"]);
@@ -800,7 +800,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginStyles("trav-plugin"), []);
@@ -819,7 +819,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginStyles("na-plugin"), []);
@@ -839,7 +839,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginStyles("ext-plugin"), []);
@@ -859,7 +859,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginStyles("pref-plugin"), ["main.css"]);
@@ -879,7 +879,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginStyles("dup-plugin"), ["s.css"]);
@@ -898,7 +898,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginStyles("abs-plugin"), []);
@@ -931,7 +931,7 @@ Deno.test("PluginManager", async (t) => {
         );
 
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const ctx = {
@@ -982,7 +982,7 @@ Deno.test("PluginManager", async (t) => {
           }),
         );
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const buttons = pm.getPluginActionButtons("ab-plugin");
@@ -1009,7 +1009,7 @@ Deno.test("PluginManager", async (t) => {
           }),
         );
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const buttons = pm.getPluginActionButtons("ab-plugin");
@@ -1033,7 +1033,7 @@ Deno.test("PluginManager", async (t) => {
           }),
         );
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const buttons = pm.getPluginActionButtons("ab-plugin");
@@ -1057,7 +1057,7 @@ Deno.test("PluginManager", async (t) => {
           }),
         );
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const buttons = pm.getPluginActionButtons("ab-plugin");
@@ -1080,7 +1080,7 @@ Deno.test("PluginManager", async (t) => {
           }),
         );
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         const buttons = pm.getPluginActionButtons("ab-plugin");
@@ -1097,7 +1097,7 @@ Deno.test("PluginManager", async (t) => {
           JSON.stringify({ name: "ab-plugin", version: "1.0.0" }),
         );
         const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd);
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
         assertEquals(pm.getPluginActionButtons("ab-plugin"), []);

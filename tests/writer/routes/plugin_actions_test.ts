@@ -105,7 +105,7 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<{
   await Deno.writeTextFile(join(tmpDir, "system.md"), "{{ message \"user\" }}\nSystem.\n{{ /message }}");
 
   const hookDispatcher = new HookDispatcher();
-  const pluginManager = new PluginManager(pluginsRoot, undefined, hookDispatcher);
+  const pluginManager = new PluginManager(pluginsRoot, undefined, hookDispatcher, Deno.makeTempDirSync());
   await pluginManager.init();
 
   const templateEngine = createTemplateEngine(pluginManager);

@@ -27,8 +27,9 @@ The server SHALL expose the following endpoints:
 
 - `GET /api/plugins/:name/settings` — returns current settings (merged defaults from schema + saved values from `config.json`)
 - `PUT /api/plugins/:name/settings` — validates the request body against the plugin's `settingsSchema`, then saves to `config.json`
+- `GET /api/plugins/:name/settings-schema` — returns the plugin's declared JSON Schema for frontend form generation
 
-Both endpoints SHALL be protected by the passphrase authentication middleware. The server SHALL return 404 if the plugin does not declare a `settingsSchema`. The server SHALL return 400 with validation error details if the `PUT` body fails schema validation.
+All endpoints SHALL be protected by the passphrase authentication middleware. The server SHALL return 404 if the plugin does not declare a `settingsSchema`. The server SHALL return 400 with validation error details if the `PUT` body fails schema validation.
 
 #### Scenario: Settings PUT saves valid config
 

@@ -1,10 +1,10 @@
 ## 1. Plugin Manager Infrastructure
 
-- [ ] 1.1 Add `settingsSchema` field support to plugin manifest validation in `plugin-manager.ts`
-- [ ] 1.2 Implement `registerRoutes` discovery and invocation for plugin backend modules
-- [ ] 1.3 Create settings file I/O helpers: read/write `playground/_plugins/<name>/config.json`
-- [ ] 1.4 Add JSON Schema validation for plugin settings payloads against declared `settingsSchema`
-- [ ] 1.5 Ensure `playground/_plugins/` directory is created on startup if missing
+- [x] 1.1 Add `settingsSchema` field support to plugin manifest validation in `plugin-manager.ts`
+- [x] 1.2 Implement `registerRoutes` discovery and invocation for plugin backend modules
+- [x] 1.3 Create settings file I/O helpers: read/write `playground/_plugins/<name>/config.json`
+- [x] 1.4 Add JSON Schema validation for plugin settings payloads against declared `settingsSchema`
+- [x] 1.5 Ensure `playground/_plugins/` directory is created on startup if missing
 
 ## 2. Plugin Settings API
 
@@ -60,14 +60,14 @@
 
 ## 9. Legacy Plugin Removal
 
-- [ ] 9.1 Delete `plugins/imgthink/` directory entirely (only after verifying sd-webui-image-gen plugin loads and declares equivalent stripTags)
-- [ ] 9.2 Remove any references to `imgthink` in plugin loading or configuration files
-- [ ] 9.3 Verify no remaining imports or dependencies on removed plugin code
+- [x] 9.1 Delete `plugins/imgthink/` directory entirely (only after verifying sd-webui-image-gen plugin loads and declares equivalent stripTags)
+- [x] 9.2 Remove any references to `imgthink` in plugin loading or configuration files
+- [x] 9.3 Verify no remaining imports or dependencies on removed plugin code
 
 ## 10. Validation
 
-- [ ] 10.1 Run TypeScript type checking across backend (`tsc --noEmit`)
-- [ ] 10.2 Run frontend build to verify no compilation errors
+- [x] 10.1 Run TypeScript type checking across backend (`tsc --noEmit`)
+- [x] 10.2 Run frontend build to verify no compilation errors
 - [ ] 10.3 Manually verify plugin settings round-trip: PUT then GET returns saved values
 - [ ] 10.4 Manually verify image serving returns correct file with proper headers
 - [ ] 10.5 Manually verify path traversal attempts (e.g. `../`) are rejected with 400
