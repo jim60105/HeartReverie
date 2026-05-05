@@ -82,9 +82,9 @@ Keep `storyName` for the `POST /init` call (story still needs to exist for final
 
 **File:** `reader-src/src/components/ImportCharacterCardPage.vue`
 
-- Pre-fill 世界典籍名稱 (`worldInfoName`) from `parsed.bookName` (empty if absent)
-- Derive 世界典籍檔案名稱 (`worldInfoFilename`) from worldInfoName using the same slug logic as character filename, with fallback to `world_info.md` if derivation is empty
-- Remove the hardcoded `"世界典籍"` default
+- Pre-fill 世界篇章名稱 (`worldInfoName`) from `parsed.bookName` (empty if absent)
+- Derive 世界篇章檔案名稱 (`worldInfoFilename`) from worldInfoName using the same slug logic as character filename, with fallback to `world_info.md` if derivation is empty
+- Remove the hardcoded `"世界篇章"` default
 - Add auto-derivation: if user has NOT manually edited `worldInfoFilename`, it re-derives from `worldInfoName` on change. Track manual edit with a boolean flag (`worldInfoFilenameManuallyEdited`), reset on new card parse.
 
 ## Task 6: Restructure UI with fieldset.group sections
@@ -96,7 +96,7 @@ Wrap UI elements in `<fieldset class="group">` with `<legend>`:
 1. 檔案選擇 — existing dropzone + file input
 2. 角色資料 — all character fields + 角色檔案名稱 (moved here from story section)
 3. 故事位置 — series name, story name (only these two)
-4. 世界典籍 — world_info name, world_info filename, book entries collapsibles
+4. 世界篇章 — world_info name, world_info filename, book entries collapsibles
 
 Show only 檔案選擇 when no card is loaded; show all sections after parse.
 
@@ -126,11 +126,24 @@ Add before the existing `.themed-btn:hover` rule (~line 202):
 - Add a `<label class="file-trigger">` styled as a button (border, padding, hover state)
 - Add instructional text in the dropzone area ("拖放 PNG 角色卡到此處，或")
 
-## Task 9: Verify with existing tests
+## Task 9: Rename 典籍→篇章 terminology
+
+**Files:**
+- `reader-src/src/components/ImportCharacterCardPage.vue`
+- `reader-src/src/components/QuickAddPage.vue`
+- `reader-src/src/components/__tests__/QuickAddPage.test.ts`
+- `reader-src/src/components/__tests__/ImportCharacterCardPage.test.ts`
+
+Rename all occurrences:
+- "角色典籍" → "角色篇章"
+- "世界典籍" → "世界篇章"
+- Including labels, error messages, status messages, type annotations, and test expectations.
+
+## Task 10: Verify with existing tests
 
 Run `deno task test` to ensure no existing tests break. If `character-card-parser` has unit tests, verify the name fallback chain works with the test fixtures.
 
-## Task 10: Build and smoke-test
+## Task 11: Build and smoke-test
 
 Run `scripts/podman-build-run.sh`, navigate to the import tool at `http://localhost:8080/tools/import-character-card`, and test with `tmp/高橋 玲奈.png`:
 

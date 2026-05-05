@@ -19,8 +19,8 @@ The existing lore API already supports series-scope writes (`PUT /api/lore/serie
 - Nest the character file under a `character/` subdirectory for organizational clarity
 - Fix `.themed-btn` to have visible base button styling
 - Style the file input to look like a proper file-picker widget
-- Pre-fill 世界典籍名稱 with the parsed `character_book.name` value (empty if absent), not a hardcoded default
-- Add a dedicated 世界典籍 section in the UI that displays the parsed character_book entries
+- Pre-fill 世界篇章名稱 with the parsed `character_book.name` value (empty if absent), not a hardcoded default
+- Add a dedicated 世界篇章 section in the UI that displays the parsed character_book entries
 
 **Non-Goals:**
 - Adding support for V3-specific `character_book` extensions beyond the standard fields
@@ -48,9 +48,9 @@ Characters and world books are conceptually shared across a series (all stories 
 
 This provides organization within the `_lore/` directory at series scope. The physical path becomes `playground/<series>/_lore/character/<name>.md`. The URL for the PUT (scope-relative, no `_lore/` segment) is `character/<name>.md`. Since the lore API already supports up to 2 path segments, this works without backend changes.
 
-### D4: 世界典籍名稱 default value
+### D4: 世界篇章名稱 default value
 
-The field SHALL be hydrated from `character_book.name` if present in the parsed card, otherwise it starts empty. This is more useful than a hardcoded "世界典籍" because the card already carries a meaningful name (e.g., "悠奈" in our test card). If the user leaves it empty, the world_info markdown simply omits the H1 heading.
+The field SHALL be hydrated from `character_book.name` if present in the parsed card, otherwise it starts empty. This is more useful than a hardcoded "世界篇章" because the card already carries a meaningful name (e.g., "悠奈" in our test card). If the user leaves it empty, the world_info markdown simply omits the H1 heading.
 
 ### D5: Skip Keys line when empty
 
@@ -58,7 +58,11 @@ When `entry.keys` is empty (length 0), the markdown builder SHALL omit the `**Ke
 
 ### D6: fieldset.group wrapping
 
-Reuse the exact same CSS class from QuickAddPage (`.group` on `<fieldset>` elements) for consistent visual grouping. The sections are: 檔案選擇, 角色資料, 故事位置, 世界典籍. "角色檔案名稱" moves from 故事位置 into 角色資料 because it's semantically about the character, not the story location.
+Reuse the exact same CSS class from QuickAddPage (`.group` on `<fieldset>` elements) for consistent visual grouping. The sections are: 檔案選擇, 角色資料, 故事位置, 世界篇章. "角色檔案名稱" moves from 故事位置 into 角色資料 because it's semantically about the character, not the story location.
+
+### D9: Terminology rename 典籍→篇章
+
+"典籍" implies a heavy, canonical document. "篇章" (chapter/entry) better represents individual lore entries in a world book. This rename applies across both ImportCharacterCardPage and QuickAddPage, covering UI labels, error messages, status strings, and type annotations.
 
 ### D7: .themed-btn base styling
 

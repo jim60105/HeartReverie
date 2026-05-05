@@ -8,8 +8,9 @@ The ST 角色卡轉換工具 (`/tools/import-character-card`) shipped with sever
 - **FIX** Markdown builder: Skip the `**Keys:**` line entirely when a `character_book` entry has no keys (instead of rendering `**Keys:** ` with nothing after it).
 - **MODIFIED** UI layout: Move "角色檔案名稱" input under the "角色資料" section (currently under "故事位置").
 - **MODIFIED** UI layout: Wrap page sections with `<fieldset class="group">` + `<legend>` (matching the visual style of `/tools/new-series`) instead of bare `<h3>` headings.
-- **MODIFIED** Default value: "世界典籍名稱" input starts empty (was pre-filled "世界典籍").
-- **NEW** UI section: Add a dedicated "世界典籍" section that displays parsed `character_book` entries in a structured grouping.
+- **MODIFIED** Default value: "世界篇章名稱" input starts empty (was pre-filled "世界典籍").
+- **NEW** UI section: Add a dedicated "世界篇章" section that displays parsed `character_book` entries in a structured grouping.
+- **MODIFIED** Terminology: Rename "典籍" → "篇章" throughout the UI and error messages (both "角色典籍" → "角色篇章" and "世界典籍" → "世界篇章"). This applies to ImportCharacterCardPage, QuickAddPage, and their specs.
 - **MODIFIED** Lore scope: Create lore files at **series** scope (`PUT /api/lore/series/:series/:path`) instead of story scope. This makes the character and world_info available across all stories in the series.
 - **MODIFIED** File path: Create the character file under a `character/` subdirectory, e.g. `_lore/character/<name>.md`.
 - **FIX** CSS: Give `.themed-btn` a proper base button style (border, background, padding, border-radius) so it is visually recognizable as a button — currently only the `:hover` rule exists.
@@ -23,7 +24,8 @@ _(none)_
 
 ### Modified Capabilities
 
-- `import-character-card-tool`: Fix parser to read `comment` field for entry names; skip empty Keys line; change lore scope from story to series; write character file under `character/` subdirectory; restructure UI with fieldset groups; fix themed-btn and file-input styling; empty default for 世界典籍名稱; add 世界典籍 section.
+- `import-character-card-tool`: Fix parser to read `comment` field for entry names; skip empty Keys line; change lore scope from story to series; write character file under `character/` subdirectory; restructure UI with fieldset groups; fix themed-btn and file-input styling; empty default for 世界篇章名稱; add 世界篇章 section; rename 典籍→篇章 terminology.
+- `quick-add-tool`: Rename "角色典籍"/"世界典籍" → "角色篇章"/"世界篇章" in UI labels, error messages, and spec.
 
 ## Impact
 

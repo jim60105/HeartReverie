@@ -109,17 +109,17 @@ The page form SHALL be organised into visual sections using `<fieldset class="gr
 1. **檔案選擇** — dropzone and file input
 2. **角色資料** — name, description, personality, scenario, first message, example messages, system prompt, post-history instructions, alternate greetings, creator notes, creator, character version, tags, AND the character filename input (角色檔案名稱)
 3. **故事位置** — series name input, story name input
-4. **世界典籍** — world_info name input (世界典籍名稱), world_info filename input (世界典籍檔案名稱), and the collapsible book entries
+4. **世界篇章** — world_info name input (世界篇章名稱), world_info filename input (世界篇章檔案名稱), and the collapsible book entries
 
 The "角色檔案名稱" input SHALL be placed at the end of the 角色資料 section (after tags), NOT in the 故事位置 section.
 
 ### MODIFIED Scenario: Editable form is hidden before a card is loaded
 - **WHEN** the page loads with no file selected
-- **THEN** only the 檔案選擇 fieldset SHALL be visible and active; the 角色資料, 故事位置, and 世界典籍 fieldsets SHALL be hidden
+- **THEN** only the 檔案選擇 fieldset SHALL be visible and active; the 角色資料, 故事位置, and 世界篇章 fieldsets SHALL be hidden
 
 ## MODIFIED Requirement: Import page route and structure
 
-The world_info name input (世界典籍名稱) SHALL be pre-filled from `parsed.bookName` (empty if absent). The world_info filename input (世界典籍檔案名稱) SHALL be derived from `worldInfoName` using the same CJK-preserving slug logic as the character filename, with fallback to `world_info.md` when derivation yields empty.
+The world_info name input (世界篇章名稱) SHALL be pre-filled from `parsed.bookName` (empty if absent). The world_info filename input (世界篇章檔案名稱) SHALL be derived from `worldInfoName` using the same CJK-preserving slug logic as the character filename, with fallback to `world_info.md` when derivation yields empty.
 
 **Auto-derivation rule:** If the user has NOT manually edited the world_info filename input, it SHALL automatically re-derive whenever `worldInfoName` changes (via a watcher or computed property). Once the user manually edits the filename, auto-derivation SHALL stop until the next card parse resets the form.
 
@@ -132,7 +132,7 @@ The world_info name input (世界典籍名稱) SHALL be pre-filled from `parsed.
 - **THEN** the world_info name input SHALL be empty and the world_info filename SHALL default to "world_info.md"
 
 ### NEW Scenario: Manual filename edit stops auto-derivation
-- **WHEN** the user manually edits the world_info filename input from "悠奈.md" to "custom.md", then changes 世界典籍名稱
+- **WHEN** the user manually edits the world_info filename input from "悠奈.md" to "custom.md", then changes 世界篇章名稱
 - **THEN** the filename SHALL remain "custom.md" and SHALL NOT re-derive from the name
 
 ## NEW Requirement: Base themed-btn styling
