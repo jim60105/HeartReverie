@@ -18,7 +18,7 @@
 
 ## 3. Built-in Theme Files
 
-- [x] 3.1 Create `themes/default.toml`: copy every CSS custom-property from `reader-src/src/styles/theme.css` into a `[palette]` block (keys without leading `--`), preserving values byte-for-byte. Set `id="default"`, `label="心夢預設"`, `colorScheme="dark"`, `backgroundImage="/assets/heart.webp"`.
+- [x] 3.1 Create `themes/default.toml`: copy every CSS custom-property from `reader-src/src/styles/theme.css` into a `[palette]` block (keys without leading `--`), preserving values byte-for-byte. Set `id="default"`, `label="浮心夜夢"`, `colorScheme="dark"`, `backgroundImage="/assets/heart.webp"`.
 - [x] 3.2 Create `themes/light.toml`: light scheme (cream/parchment panels, ink-grey text, muted rose accent for branding), `colorScheme="light"`, `backgroundImage=""`.
 - [x] 3.3 Create `themes/dark.toml`: neutral dark scheme (slate panels, off-white text, teal accent), `colorScheme="dark"`, `backgroundImage=""`.
 - [x] 3.4 Verify by parsing each TOML: every key in `default.toml`'s `[palette]` exists in `theme.css` and vice versa; values match string-equal after trim.

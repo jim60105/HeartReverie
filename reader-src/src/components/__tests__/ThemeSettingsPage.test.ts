@@ -11,7 +11,7 @@ import { stubLocalStorage } from "@/__tests__/setup";
 import ThemeSettingsPage from "@/components/ThemeSettingsPage.vue";
 
 const THEME_LIST = [
-  { id: "default", label: "心夢預設" },
+  { id: "default", label: "浮心夜夢" },
   { id: "light", label: "晴書紙本" },
   { id: "dark", label: "月硯墨靜" },
 ];
@@ -74,7 +74,7 @@ describe("ThemeSettingsPage", () => {
     const options = wrapper.findAll("option");
     expect(options.length).toBe(3);
     expect(options.map((o) => o.attributes("value"))).toEqual(["default", "light", "dark"]);
-    expect(options.map((o) => o.text())).toEqual(["心夢預設", "晴書紙本", "月硯墨靜"]);
+    expect(options.map((o) => o.text())).toEqual(["浮心夜夢", "晴書紙本", "月硯墨靜"]);
   });
 
   it("selecting an option triggers selectTheme and updates localStorage", async () => {

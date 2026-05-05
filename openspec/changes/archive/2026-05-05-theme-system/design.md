@@ -40,7 +40,7 @@ Each `*.toml` file under `THEME_DIR` declares:
 
 ```toml
 id = "default"          # unique kebab-case id, must match filename stem
-label = "心夢預設"       # human-readable label shown in dropdown
+label = "浮心夜夢"       # human-readable label shown in dropdown
 backgroundImage = "/assets/heart.webp"  # OPTIONAL. Same-origin path (must start with "/") or data: URL only. "" or omitted ⇒ no image. See D2a for the rationale.
 
 [palette]
