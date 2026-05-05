@@ -11,7 +11,7 @@ The settings area SHALL include a new tab registered as a child route of `/setti
 - **THEN** the existing settings sidebar SHALL render a tab labelled `主題` linking to `/settings/theme` without any sidebar-component code change (per the existing "Extensible tab registration" requirement)
 
 #### Scenario: Theme dropdown lists all themes from the backend
-- **GIVEN** `GET /api/themes` returns `[{"id":"default","label":"心夢預設"},{"id":"light","label":"日光"},{"id":"dark","label":"暗夜"}]`
+- **GIVEN** `GET /api/themes` returns `[{"id":"default","label":"浮心夜夢"},{"id":"light","label":"日光"},{"id":"dark","label":"暗夜"}]`
 - **WHEN** the user navigates to `/settings/theme`
 - **THEN** the page SHALL render a `<select>` containing exactly those three options with the labels shown to the user
 

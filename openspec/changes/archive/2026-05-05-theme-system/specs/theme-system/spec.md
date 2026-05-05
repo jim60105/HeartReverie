@@ -36,7 +36,7 @@ Each theme file SHALL be a valid TOML document with the following top-level stru
 The server SHALL accept any string value in `[palette]`, including CSS expressions such as `linear-gradient(...)`, `rgba(...)`, `clamp(...)`, and quoted font-family lists; it SHALL NOT validate or transform palette values beyond requiring them to be strings.
 
 #### Scenario: Valid TOML theme file is loaded
-- **GIVEN** a file `themes/default.toml` whose contents declare `id = "default"`, `label = "心夢預設"`, and a `[palette]` table with at least `panel-bg = "linear-gradient(145deg, #1a0810, #220c16)"`
+- **GIVEN** a file `themes/default.toml` whose contents declare `id = "default"`, `label = "浮心夜夢"`, and a `[palette]` table with at least `panel-bg = "linear-gradient(145deg, #1a0810, #220c16)"`
 - **WHEN** the server starts
 - **THEN** the theme SHALL appear in the in-memory theme index under id `default`
 
