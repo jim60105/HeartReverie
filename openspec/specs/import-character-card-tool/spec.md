@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`/tools/import-character-card` page that imports SillyTavern PNG character cards (ccv3 → chara fallback) into a story-scoped lore file, with an editable preview form and optional bundled world_info import.
+`/tools/import-character-card` page that imports SillyTavern PNG character cards (ccv3 → chara fallback) into a series-scoped lore file, with an editable preview form and optional bundled world_info import.
 
 ## Requirements
 
@@ -11,10 +11,21 @@
 The application SHALL provide an `ImportCharacterCardPage.vue` component mounted at `/tools/import-character-card` (route name `tools-import-character-card`, registered through `toolsChildren`). The page SHALL contain three regions in vertical order:
 
 1. **File selector**: a drop-zone + `<input type="file" accept="image/png">` pair.
-2. **Editable form**: textareas for every parsed character field, plus a series/story picker (series name input, story name input — same UX semantics as `StorySelector.vue` allowing either selecting an existing pair or typing a new pair) and a character lore filename input pre-filled with a CJK-preserving slug derived from the parsed character `name` plus `.md` (see *Filename derivation* below), and an optional world_info filename input pre-filled with `world_info.md`.
+2. **Editable form**: textareas for every parsed character field, plus a series/story picker (series name input, story name input — same UX semantics as `StorySelector.vue` allowing either selecting an existing pair or typing a new pair) and a character lore filename input pre-filled with a CJK-preserving slug derived from the parsed character `name` plus `.md` (see *Filename derivation* below), and a world_info name input (世界篇章名稱) pre-filled from `parsed.bookName`, and a world_info filename input (世界篇章檔案名稱) derived from `worldInfoName` using the same CJK-preserving slug logic with fallback to `world_info.md`.
 3. **Action region**: an 匯入 (Import) button and a status region for progress and errors.
 
-The editable form region SHALL be hidden until a card has been successfully parsed.
+The page form SHALL be organised into visual sections using `<fieldset class="group">` with `<legend>` headers, matching the styling from QuickAddPage:
+
+1. **檔案選擇** — dropzone and file input
+2. **故事位置** — series name input, story name input
+3. **角色資料** — character filename input (角色檔案名稱), tags, name, description, personality, scenario, first message, example messages, creator notes, system prompt, post-history instructions, alternate greetings
+4. **世界篇章** — world_info filename input (世界篇章檔案名稱), world_info name input (世界篇章名稱), and the collapsible book entries
+
+The "角色檔案名稱" input SHALL be placed at the top of the 角色資料 section (before tags and name fields).
+
+The editable form region SHALL be hidden until a card has been successfully parsed. Only the 檔案選擇 fieldset SHALL be visible before a card is loaded; the 故事位置, 角色資料, and 世界篇章 fieldsets SHALL be hidden.
+
+**World_info filename auto-derivation:** The world_info name input (世界篇章名稱) SHALL be pre-filled from `parsed.bookName` (empty if absent). The world_info filename input (世界篇章檔案名稱) SHALL be derived from `worldInfoName` using the same CJK-preserving slug logic as the character filename, with fallback to `world_info.md` when derivation yields empty. If the user has NOT manually edited the world_info filename input, it SHALL automatically re-derive whenever `worldInfoName` changes (via a watcher or computed property). Once the user manually edits the filename, auto-derivation SHALL stop until the next card parse resets the form.
 
 #### Scenario: Page is reachable through the tools registry
 - **WHEN** the user clicks "ST 角色卡轉換工具" in the header tools dropdown or the tools sidebar
@@ -22,7 +33,7 @@ The editable form region SHALL be hidden until a card has been successfully pars
 
 #### Scenario: Editable form is hidden before a card is loaded
 - **WHEN** the page loads with no file selected
-- **THEN** the textareas, the series/story picker, the filename inputs, and the 匯入 button SHALL be hidden or disabled, and only the file selector SHALL be active
+- **THEN** only the 檔案選擇 fieldset SHALL be visible and active; the 角色資料, 故事位置, and 世界篇章 fieldsets SHALL be hidden
 
 ### Requirement: PNG character card parsing
 
@@ -36,7 +47,30 @@ The page SHALL parse the selected PNG client-side via a `parseCharacterCard(file
    - If a pair with keyword `ccv3` is present and its base64-decoded JSON parses successfully, that JSON SHALL be the source of truth.
    - Otherwise, if a pair with keyword `chara` is present and its base64-decoded JSON parses successfully, that JSON SHALL be the source of truth.
    - If neither pair yields a parsable JSON, the function SHALL throw `Error("No SillyTavern character data found")`.
-6. Normalises the chosen JSON (whose `data` object follows the TavernCardV2 / V3 schema) into a `ParsedCharacterCard` shape with the keys `name`, `description`, `personality`, `scenario`, `firstMes`, `mesExample`, `creatorNotes`, `systemPrompt`, `postHistoryInstructions`, `alternateGreetings` (string array), `tags` (string array), `creator`, `characterVersion`, `bookEntries` (array of `{ name: string, keys: string[], content: string }` derived from `data.character_book.entries[]` if present, else empty array). Missing fields SHALL be normalised to empty strings or empty arrays.
+6. Normalises the chosen JSON (whose `data` object follows the TavernCardV2 / V3 schema) into a `ParsedCharacterCard` shape with the keys `name`, `description`, `personality`, `scenario`, `firstMes`, `mesExample`, `creatorNotes`, `systemPrompt`, `postHistoryInstructions`, `alternateGreetings` (string array), `tags` (string array), `creator`, `characterVersion`, `bookName` (string, derived from `data.character_book.name` if present and non-empty after trim, otherwise `""`), `bookEntries` (array of `{ name: string, keys: string[], content: string }` derived from `data.character_book.entries[]` if present, else empty array). Missing fields SHALL be normalised to empty strings or empty arrays.
+
+   The TypeScript interfaces SHALL include:
+
+   ```ts
+   interface CharacterBookEntry {
+     comment?: string;   // display name in SillyTavern cards
+     name?: string;
+     keys?: string[];
+     content?: string;
+   }
+
+   interface ParsedCharacterCard {
+     // ... existing fields ...
+     bookName: string;   // from character_book.name
+     bookEntries: ParsedBookEntry[];
+   }
+   ```
+
+   Each `bookEntries[].name` SHALL be derived using the following trim-aware fallback chain:
+   - `entry.comment` trimmed (if non-empty after trim)
+   - `entry.name` trimmed (if non-empty after trim)
+   - First non-empty-after-trim element of `entry.keys`
+   - Empty string `""`
 7. Enforces a safety ceiling on `bookEntries`: if `data.character_book.entries.length > 1000`, the function SHALL throw `Error("character_book.entries 超過 1000 筆，無法匯入")`. Inside the cap, all entries are preserved (no display-only truncation).
 
 The page SHALL invoke `parseCharacterCard(file)` whenever the user picks a new file (drag-drop or file input). On success the editable form SHALL hydrate from the parsed shape. On failure the page SHALL display the thrown error message inline above the file selector and SHALL NOT clear any previously-shown form state.
@@ -82,8 +116,24 @@ The page SHALL invoke `parseCharacterCard(file)` whenever the user picks a new f
 - **THEN** the form SHALL hydrate from the `chara` JSON
 
 #### Scenario: character_book entries become bookEntries
-- **WHEN** the source JSON's `data.character_book.entries` array contains three entries
-- **THEN** the parsed `bookEntries` array SHALL contain three corresponding objects, each with `name` (from entry's `name` or first key), `keys` (from entry's `keys`), and `content` (from entry's `content`)
+- **WHEN** the source JSON's `data.character_book.entries` array contains three entries whose `comment` fields are "Alice", "   ", and "Charlie" and whose `name` fields are "", "Bob-via-name", and ""
+- **THEN** the parsed `bookEntries` array SHALL contain three objects with `name` values of "Alice" (from comment), "Bob-via-name" (from name, because comment is whitespace-only), and "Charlie" (from comment)
+
+#### Scenario: bookName is extracted from character_book.name
+- **WHEN** `data.character_book.name` is `"悠奈"`
+- **THEN** `ParsedCharacterCard.bookName` SHALL be `"悠奈"`
+
+#### Scenario: Entry with empty comment falls back to name field
+- **WHEN** an entry has `comment: ""` and `name: "Fallback Name"` and `keys: ["k1"]`
+- **THEN** its parsed `bookEntries[].name` SHALL be "Fallback Name"
+
+#### Scenario: Entry with whitespace-only comment and name falls back to first non-empty key
+- **WHEN** an entry has `comment: "  "`, `name: ""`, and `keys: ["", "second"]`
+- **THEN** its parsed `bookEntries[].name` SHALL be "second" (first non-empty key after trim)
+
+#### Scenario: Entry with all empty fields yields empty name
+- **WHEN** an entry has `comment: ""`, `name: ""`, and `keys: []`
+- **THEN** its parsed `bookEntries[].name` SHALL be `""`
 
 ### Requirement: Editable form bound to parsed shape
 
@@ -103,13 +153,13 @@ The page SHALL render one textarea per scalar character field (`name`, `descript
 
 ### Requirement: Import writes the edited form state
 
-The 匯入 button SHALL read the **current form state** (the values currently bound to the textareas at click time, NOT the original `ParsedCharacterCard` returned by the parser) and SHALL execute the following sequence with `useAuth().getAuthHeaders()` for every request, stopping at the first failure. All lore PUT URLs SHALL be **scope-relative** (no `_lore/` segment) — the backend prepends `_lore/` internally; including it client-side would write to a duplicated `_lore/_lore/` directory.
+The 匯入 button SHALL read the **current form state** (the values currently bound to the textareas at click time, NOT the original `ParsedCharacterCard` returned by the parser) and SHALL execute the following sequence with `useAuth().getAuthHeaders()` for every request, stopping at the first failure. All lore PUT URLs SHALL be **series-scope** — the backend prepends `_lore/` internally; including it client-side would write to a duplicated `_lore/_lore/` directory.
 
 1. Validate the series name, story name, and resolved filenames per the same rules as the Quick-Add tool, including the *Filename derivation and validation* requirement below. If validation fails, display the error inline and issue no network calls.
 2. Sanitise `form.tags` per the *Tag sanitisation* requirement. Display any drop-warnings inline above the 匯入 button.
 3. Run the *Collision preflight* requirement against both the character filename and (if applicable) the world_info filename. If either collides and the user has not yet acknowledged, abort the import and surface the warning + overwrite checkbox.
 4. `POST /api/stories/:seriesName/:storyName/init` (idempotent — 200 or 201 both treated as success; 200 surfaces a non-blocking notice "已沿用現有故事資料夾").
-5. `PUT /api/lore/story/:seriesName/:storyName/<characterFilename>` with body:
+5. `PUT /api/lore/series/:seriesName/character/<characterFilename>` with body:
    - `frontmatter`: `{ enabled: true, priority: 0 }` plus `tags: <sanitisedTags>` only if `sanitisedTags.length > 0`. Frontmatter SHALL NOT contain a `name` key (the backend frontmatter validator at `writer/routes/lore.ts` accepts only `tags`/`priority`/`enabled` and silently drops every other key — the human display name is preserved as the body H1 instead).
    - `content`: a markdown document beginning with `# <form.name>` (omitted only if `form.name` is empty after trim) followed by a blank line, then the major sections joined by `\n\n` and skipping any section whose source field is empty after trimming, in this order:
      - `## Description\n<form.description>`
@@ -121,9 +171,21 @@ The 匯入 button SHALL read the **current form state** (the values currently bo
      - `## Post-History Instructions\n<form.postHistoryInstructions>`
      - `## Alternate Greetings` followed by one bullet `- <greeting>` per non-empty entry of `form.alternateGreetings`
      - `## Creator Notes\n<form.creatorNotes>`
-6. If `form.bookEntries.length > 0`, `PUT /api/lore/story/:seriesName/:storyName/<worldInfoFilename>` with body:
+
+   **Path construction:** The `characterFilename` is the user-editable basename (e.g. `hero.md`). The full lore path is `character/<characterFilename>`. URL construction SHALL encode each path segment individually — the slash between `character` and the filename is a literal path separator, NOT part of a single encoded value:
+
+   ```
+   /api/lore/series/${encodeURIComponent(series)}/character/${encodeURIComponent(characterFilename)}
+   ```
+
+   The filename validation (`validateLoreFilename`) SHALL only validate the basename portion (e.g. `hero.md`), NOT the `character/` prefix.
+
+6. If `form.bookEntries.length > 0`, `PUT /api/lore/series/:seriesName/<worldInfoFilename>` with body:
    - `frontmatter`: `{ enabled: true, priority: 0 }`. SHALL NOT contain a `name` key.
-   - `content`: a markdown document beginning with `# <form.worldInfoName>` (the world_info display name input; omitted if empty), followed by one section per `bookEntries` item: `## <entry.name>\n**Keys:** <entry.keys joined by ", ">\n\n<entry.content>`, sections separated by `\n\n`.
+   - `content`: a markdown document beginning with `# <form.worldInfoName>` (the world_info display name input; omitted if empty), followed by one section per `bookEntries` item. Each section format depends on whether `entry.keys` is non-empty after filtering empty strings:
+     - If keys is non-empty: `## <entry.name>\n**Keys:** <entry.keys joined by ", ">\n\n<entry.content>`
+     - If keys is empty (length 0 after filtering): `## <entry.name>\n<entry.content>`
+     Sections are separated by `\n\n`.
 
 The character lore PUT body SHALL NOT include any field whose form state value is empty after trimming (other than the explicit defaults named above for frontmatter). On full success the page SHALL navigate to `router.push({ name: "story", params: { series, story } })`.
 
@@ -136,8 +198,12 @@ The character lore PUT body SHALL NOT include any field whose form state value i
 - **THEN** the page SHALL issue exactly one story-init POST and one character lore PUT, and SHALL NOT issue a world_info PUT
 
 #### Scenario: With book entries, world_info PUT contains all entries
-- **WHEN** the user imports a card whose `bookEntries` has two entries `(name="Alice", keys=["alice","a"], content="Alice description")` and `(name="Bob", keys=["bob"], content="Bob description")`
-- **THEN** the world_info PUT body's `content` SHALL contain both `## Alice` and `## Bob` sections, with each section followed by the entry's keys joined by `, ` under `**Keys:**` and the entry's content body
+- **WHEN** the user imports a card whose `bookEntries` has two entries: `(name="Alice", keys=["alice","a"], content="Alice description")` and `(name="Bob", keys=[], content="Bob description")`
+- **THEN** the world_info PUT URL SHALL be `/api/lore/series/:seriesName/<worldInfoFilename>`, and the body's `content` SHALL contain `## Alice\n**Keys:** alice, a\n\nAlice description` for the first entry and `## Bob\nBob description` for the second entry (no Keys line because keys is empty)
+
+#### Scenario: Character file PUT uses series scope with character subdirectory
+- **WHEN** the user clicks 匯入 with seriesName "MyCharacters" and characterFilename "hero.md"
+- **THEN** the character PUT SHALL go to `PUT /api/lore/series/MyCharacters/character/hero.md`
 
 #### Scenario: Empty scalar fields are omitted from the markdown
 - **WHEN** the user clears the `systemPrompt` textarea before importing
@@ -181,17 +247,17 @@ The sanitised array SHALL be used in the lore PUT body. The original `form.tags`
 
 Because the lore PUT endpoint silently overwrites any existing file at the same scope-relative path, the importer SHALL run a preflight before each lore PUT:
 
-- For the character file: `GET /api/lore/story/:series/:story/<characterFilename>`. A 200 response means the file exists; 404 means it does not.
-- For the world_info file (only when `bookEntries.length > 0`): the analogous GET against `<worldInfoFilename>`.
+- For the character file: `GET /api/lore/series/:series/character/<characterFilename>`. A 200 response means the file exists; 404 means it does not.
+- For the world_info file (only when `bookEntries.length > 0`): `GET /api/lore/series/:series/<worldInfoFilename>`.
 
-**Any preflight response other than 200 or 404 (e.g., 401, 403, 500), and any thrown network error, SHALL be treated as a preflight failure**: the page SHALL surface an inline error "預檢典籍失敗：<reason>", SHALL abort the submission, and SHALL NOT issue any `POST /init` or lore PUT.
+**Any preflight response other than 200 or 404 (e.g., 401, 403, 500), and any thrown network error, SHALL be treated as a preflight failure**: the page SHALL surface an inline error "預檢篇章失敗：<reason>", SHALL abort the submission, and SHALL NOT issue any `POST /init` or lore PUT.
 
-Acknowledgement is **per-resolved-filename**: the page SHALL track, for each lore group, the exact filename that the user explicitly acknowledged via the 覆寫現有典籍 checkbox. Whenever the resolved filename for a group changes (because the user edited the filename input, the source name used for derivation, or—for world_info—the world_info name), any prior acknowledgement for that group SHALL be cleared and the page SHALL re-run preflight on the next submit.
+Acknowledgement is **per-resolved-filename**: the page SHALL track, for each lore group, the exact filename that the user explicitly acknowledged via the 覆寫現有篇章 checkbox. Whenever the resolved filename for a group changes (because the user edited the filename input, the source name used for derivation, or—for world_info—the world_info name), any prior acknowledgement for that group SHALL be cleared and the page SHALL re-run preflight on the next submit.
 
 When any preflight returns 200 the importer SHALL:
 
-- Display the inline warning "已存在同名典籍：<filename>" beside the corresponding filename input.
-- Render an unchecked "覆寫現有典籍" checkbox beside the warning.
+- Display the inline warning "已存在同名篇章：<filename>" beside the corresponding filename input.
+- Render an unchecked "覆寫現有篇章" checkbox beside the warning.
 - Disable the 匯入 button until either (a) every colliding file's checkbox is toggled on for its *current* resolved filename, or (b) the user changes the offending filename to one whose preflight returns 404.
 
 Once acknowledged, the import proceeds to the PUT(s) as normal.
@@ -210,15 +276,15 @@ Once acknowledged, the import proceeds to the PUT(s) as normal.
 
 #### Scenario: Preflight non-200/non-404 status fails closed
 - **WHEN** the preflight GET returns 401, 403, 500, or any status other than 200/404
-- **THEN** the page SHALL surface "預檢典籍失敗：<status>" inline, and SHALL NOT issue any `POST /init` or lore PUT
+- **THEN** the page SHALL surface "預檢篇章失敗：<status>" inline, and SHALL NOT issue any `POST /init` or lore PUT
 
 #### Scenario: Preflight network error fails closed
 - **WHEN** the preflight `fetch()` throws (e.g., offline)
-- **THEN** the page SHALL surface "預檢典籍失敗：<error message>" inline, and SHALL NOT issue any subsequent request
+- **THEN** the page SHALL surface "預檢篇章失敗：<error message>" inline, and SHALL NOT issue any subsequent request
 
 #### Scenario: Filename change after acknowledgement re-runs preflight
 - **WHEN** the user acknowledged a collision for `Hero.md`, then edits 角色檔案名稱 to `Other.md`, then clicks 匯入
-- **THEN** the prior acknowledgement SHALL be cleared, the page SHALL re-run the preflight against `Other.md`, and SHALL re-block submission with a fresh unchecked 覆寫現有典籍 checkbox if `Other.md` also collides
+- **THEN** the prior acknowledgement SHALL be cleared, the page SHALL re-run the preflight against `Other.md`, and SHALL re-block submission with a fresh unchecked 覆寫現有篇章 checkbox if `Other.md` also collides
 
 #### Scenario: Retry after world_info PUT failure does not re-write the character file
 - **WHEN** the character PUT succeeded but the world_info PUT failed in the same submission, and the user clicks 匯入 again without changing the character filename
@@ -275,7 +341,7 @@ The character filename input SHALL be pre-filled, on each successful parse, with
 - CJK Unified Ideographs (`\u3400-\u9FFF`, `\u4E00-\u9FFF`), Hiragana, Katakana, Hangul, and other non-ASCII letters SHALL be preserved verbatim — no transliteration, no romanisation.
 - If the result before appending `.md` is empty, the pre-fill SHALL fall back to `character.md`.
 
-The user MAY override the pre-filled value at any time. The world_info filename input SHALL be pre-filled with `world_info.md`.
+The user MAY override the pre-filled value at any time. The world_info filename input SHALL be derived from `worldInfoName` (pre-filled from `parsed.bookName`) using the same CJK-preserving slug logic, with fallback to `world_info.md` when derivation yields empty.
 
 The resolved filenames (after any user edits, with `.md` appended if missing) SHALL be validated as follows before any network call:
 
@@ -298,6 +364,18 @@ If validation fails the form SHALL block 匯入 and display "檔案名稱無效"
 - **WHEN** the user replaces the pre-filled character filename with `../foo.md` and clicks 匯入
 - **THEN** the form SHALL block submission with the validation error and SHALL NOT issue the lore PUT
 
+#### Scenario: World_info filename is derived from character_book.name
+- **WHEN** the parsed card has `character_book.name` = "悠奈"
+- **THEN** the world_info name input SHALL show "悠奈" and the world_info filename input SHALL show "悠奈.md"
+
+#### Scenario: Empty character_book.name falls back to world_info.md
+- **WHEN** the parsed card has no `character_book.name` or it is empty after trim
+- **THEN** the world_info name input SHALL be empty and the world_info filename SHALL default to "world_info.md"
+
+#### Scenario: Manual filename edit stops auto-derivation
+- **WHEN** the user manually edits the world_info filename input from "悠奈.md" to "custom.md", then changes 世界篇章名稱
+- **THEN** the filename SHALL remain "custom.md" and SHALL NOT re-derive from the name
+
 ### Requirement: Source file bytes are never sent to the backend
 
 The PNG bytes of the selected file SHALL never be uploaded to the backend through any endpoint. Only the JSON-shaped lore PUT bodies derived from the form state SHALL be transmitted.
@@ -305,3 +383,57 @@ The PNG bytes of the selected file SHALL never be uploaded to the backend throug
 #### Scenario: No multipart upload to the backend
 - **WHEN** the user picks a PNG and clicks 匯入
 - **THEN** no request body of `multipart/form-data` content type containing the PNG SHALL be issued to the server, and the only outgoing requests SHALL be the documented JSON POST/PUT calls
+
+### Requirement: Base themed-btn styling
+
+The application's shared stylesheet (`base.css`) SHALL include base styles for `.themed-btn` (not just `:hover`):
+
+```css
+.themed-btn {
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  background: var(--btn-bg);
+  padding: 8px 16px;
+  color: inherit;
+  cursor: pointer;
+  font-size: inherit;
+}
+```
+
+This ensures buttons using `.themed-btn` are visible and styled before hover. The existing `:hover` rule remains unchanged.
+
+#### Scenario: themed-btn is visible without hover
+- **WHEN** a `.themed-btn` element renders on any page
+- **THEN** it SHALL have a visible border, background color, and padding — it SHALL NOT appear as unstyled/invisible text
+
+### Requirement: File input styling
+
+The file input inside the dropzone SHALL be visually styled as a button-like trigger:
+
+- The native `<input type="file">` SHALL be visually hidden (opacity 0, position absolute)
+- A styled `<label>` element with class `file-trigger` SHALL serve as the click target with button-like appearance (border, padding, hover state)
+- The dropzone area SHALL display instructional text and the file-trigger label
+
+#### Scenario: File input appears as a styled button
+- **WHEN** the page loads
+- **THEN** the file selector area SHALL display a styled button-like element for triggering file selection, not the browser's default file input widget
+
+### Requirement: Required field indicators and validation feedback
+
+Required fields (系列名稱, 故事名稱, 角色檔案名稱, 世界篇章檔案名稱) SHALL display a "必填" indicator next to the field label. When the user clicks 匯入 and validation fails:
+
+1. Each invalid field SHALL receive a red border (`border-color: #b41e3c`) via a `.has-error` class on the `.field` container
+2. A descriptive error message SHALL appear below the invalid input
+3. The "必填" indicator on invalid fields SHALL turn red to visually reinforce the error
+
+#### Scenario: Required fields show 必填 indicator
+- **WHEN** the form is visible after card parse
+- **THEN** the 系列名稱, 故事名稱, 角色檔案名稱, and 世界篇章檔案名稱 fields SHALL each display a "必填" label indicator
+
+#### Scenario: Empty required fields show red border on submit
+- **WHEN** the user clicks 匯入 with 系列名稱 and 故事名稱 both empty
+- **THEN** both fields SHALL show a red border and their respective error messages ("系列名稱為必填", "故事名稱為必填")
+
+#### Scenario: Validation errors clear on successful input
+- **WHEN** a field previously showed an error and the user fills it correctly
+- **THEN** the red border and error message SHALL be cleared on the next validation attempt (clicking 匯入 again)
