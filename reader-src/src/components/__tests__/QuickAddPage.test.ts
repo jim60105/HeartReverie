@@ -83,8 +83,8 @@ describe("QuickAddPage", () => {
     const labels = wrapper.findAll("label").map((l) => l.text());
     expect(labels).toEqual(
       expect.arrayContaining([
-        "系列名稱",
-        "故事名稱",
+        "系列名稱 必填",
+        "故事名稱 必填",
         "角色名稱",
         "角色檔案名稱",
         "角色設定內容",

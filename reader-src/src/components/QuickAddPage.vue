@@ -313,13 +313,13 @@ async function onSubmit(e: Event) {
   <div class="quick-add">
     <h2>快速新增系列</h2>
     <form @submit="onSubmit">
-      <div class="field">
-        <label for="qa-series">系列名稱</label>
+      <div class="field" :class="{ 'has-error': errors.seriesName }">
+        <label for="qa-series">系列名稱 <span class="required-mark">必填</span></label>
         <input id="qa-series" v-model="seriesName" type="text" required />
         <p v-if="errors.seriesName" class="field-error">{{ errors.seriesName }}</p>
       </div>
-      <div class="field">
-        <label for="qa-story">故事名稱</label>
+      <div class="field" :class="{ 'has-error': errors.storyName }">
+        <label for="qa-story">故事名稱 <span class="required-mark">必填</span></label>
         <input id="qa-story" v-model="storyName" type="text" required />
         <p v-if="errors.storyName" class="field-error">{{ errors.storyName }}</p>
       </div>
@@ -443,6 +443,20 @@ async function onSubmit(e: Event) {
   color: #b41e3c;
   font-size: 0.85rem;
   margin: 0.25rem 0 0;
+}
+.required-mark {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-title);
+  opacity: 0.6;
+}
+.has-error input,
+.has-error textarea {
+  border-color: #b41e3c;
+}
+.has-error .required-mark {
+  color: #b41e3c;
+  opacity: 1;
 }
 .group {
   border: 1px solid var(--btn-border);
