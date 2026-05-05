@@ -440,7 +440,7 @@ async function onSubmit(e: Event) {
   resize: vertical;
 }
 .field-error {
-  color: #b41e3c;
+  color: var(--accent-solid);
   font-size: 0.85rem;
   margin: 0.25rem 0 0;
 }
@@ -452,10 +452,10 @@ async function onSubmit(e: Event) {
 }
 .has-error input,
 .has-error textarea {
-  border-color: #b41e3c;
+  border-color: var(--accent-solid);
 }
 .has-error .required-mark {
-  color: #b41e3c;
+  color: var(--accent-solid);
   opacity: 1;
 }
 .group {
@@ -471,12 +471,12 @@ async function onSubmit(e: Event) {
 .collision {
   margin-top: 0.5rem;
   padding: 0.5rem;
-  background: rgba(180, 30, 60, 0.08);
+  background: var(--accent-subtle);
   border-radius: 4px;
 }
 .collision .warning {
   margin: 0 0 0.5rem;
-  color: #b41e3c;
+  color: var(--accent-solid);
 }
 .actions {
   display: flex;

@@ -110,6 +110,11 @@ describe("MainLayout", () => {
     expect(wrapper.findComponent(ChatInput).exists()).toBe(false);
   });
 
+  it("WHEN backend mode is active but chapter is not last THEN PluginActionBar is hidden", () => {
+    const wrapper = mountMainLayout();
+    expect(wrapper.find(".plugin-action-bar-stub").exists()).toBe(false);
+  });
+
   it("WHEN backend mode is active and current chapter is last THEN ChatInput is shown", async () => {
     isLastChapterRef.value = true;
     const wrapper = mountMainLayout();
@@ -117,11 +122,25 @@ describe("MainLayout", () => {
     expect(wrapper.findComponent(ChatInput).exists()).toBe(true);
   });
 
+  it("WHEN backend mode is active and current chapter is last THEN PluginActionBar is shown", async () => {
+    isLastChapterRef.value = true;
+    const wrapper = mountMainLayout();
+    await nextTick();
+    expect(wrapper.find(".plugin-action-bar-stub").exists()).toBe(true);
+  });
+
   it("WHEN backend mode has no chapters THEN ChatInput is shown as fallback", async () => {
     chaptersRef.value = [];
     const wrapper = mountMainLayout();
     await nextTick();
     expect(wrapper.findComponent(ChatInput).exists()).toBe(true);
+  });
+
+  it("WHEN backend mode has no chapters THEN PluginActionBar is shown as fallback", async () => {
+    chaptersRef.value = [];
+    const wrapper = mountMainLayout();
+    await nextTick();
+    expect(wrapper.find(".plugin-action-bar-stub").exists()).toBe(true);
   });
 
   it("WHEN ChatInput emits send and request succeeds THEN it reloads to last chapter", async () => {

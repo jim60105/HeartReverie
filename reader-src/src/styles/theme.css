@@ -52,6 +52,19 @@
   --shadow-color: rgba(0, 0, 0, 0.9);
   --shadow-width: 2px;
 
+  /* Accent colours */
+  --selection-bg: rgba(180, 30, 60, 0.6);
+  --accent-glow: rgba(255, 100, 140, 0.5);
+  --accent-line: #c23456;
+  --text-hover: #ffd0dc;
+  --pill-bg: rgba(224, 80, 112, 0.12);
+  --pill-hover-bg: rgba(224, 80, 112, 0.3);
+  --accent-shadow: rgba(180, 30, 60, 0.3);
+  --accent-border: rgba(180, 30, 60, 0.5);
+  --accent-inset: rgba(255, 100, 120, 0.1);
+  --accent-subtle: rgba(180, 30, 60, 0.08);
+  --accent-solid: #b41e3c;
+
   /* Reading overlay */
   --reading-tint: rgba(29, 33, 40, 0.9);
 
