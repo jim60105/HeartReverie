@@ -571,13 +571,13 @@ async function onImport(e: Event) {
     <template v-if="cardLoaded">
       <fieldset class="group">
         <legend>故事位置</legend>
-        <div class="field">
-          <label for="ic-series">系列名稱</label>
+        <div class="field" :class="{ 'has-error': errors.seriesName }">
+          <label for="ic-series">系列名稱 <span class="required-mark">必填</span></label>
           <input id="ic-series" v-model="seriesName" type="text" required />
           <p v-if="errors.seriesName" class="field-error">{{ errors.seriesName }}</p>
         </div>
-        <div class="field">
-          <label for="ic-story">故事名稱</label>
+        <div class="field" :class="{ 'has-error': errors.storyName }">
+          <label for="ic-story">故事名稱 <span class="required-mark">必填</span></label>
           <input id="ic-story" v-model="storyName" type="text" required />
           <p v-if="errors.storyName" class="field-error">{{ errors.storyName }}</p>
         </div>
@@ -585,8 +585,8 @@ async function onImport(e: Event) {
 
       <fieldset class="group">
         <legend>角色資料</legend>
-        <div class="field">
-          <label for="ic-char-fn">角色檔案名稱</label>
+        <div class="field" :class="{ 'has-error': errors.characterFilename }">
+          <label for="ic-char-fn">角色檔案名稱 <span class="required-mark">必填</span></label>
           <input id="ic-char-fn" v-model="characterFilename" type="text" />
           <p v-if="errors.characterFilename" class="field-error">
             {{ errors.characterFilename }}
@@ -685,8 +685,8 @@ async function onImport(e: Event) {
 
       <fieldset class="group">
         <legend>世界篇章</legend>
-        <div class="field">
-          <label for="ic-wi-fn">世界篇章檔案名稱</label>
+        <div class="field" :class="{ 'has-error': errors.worldInfoFilename }">
+          <label for="ic-wi-fn">世界篇章檔案名稱 <span class="required-mark">必填</span></label>
           <input
             id="ic-wi-fn"
             v-model="worldInfoFilename"
@@ -853,6 +853,20 @@ async function onImport(e: Event) {
   color: #b41e3c;
   font-size: 0.85rem;
   margin: 0.25rem 0 0;
+}
+.required-mark {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-title);
+  opacity: 0.6;
+}
+.has-error input,
+.has-error textarea {
+  border-color: #b41e3c;
+}
+.has-error .required-mark {
+  color: #b41e3c;
+  opacity: 1;
 }
 .book-entry {
   border: 1px solid var(--btn-border);

@@ -107,11 +107,11 @@ All references to story-scope preflight URLs SHALL be replaced with the correspo
 The page form SHALL be organised into visual sections using `<fieldset class="group">` with `<legend>` headers, matching the styling from QuickAddPage:
 
 1. **檔案選擇** — dropzone and file input
-2. **角色資料** — name, description, personality, scenario, first message, example messages, system prompt, post-history instructions, alternate greetings, creator notes, creator, character version, tags, AND the character filename input (角色檔案名稱)
-3. **故事位置** — series name input, story name input
-4. **世界篇章** — world_info name input (世界篇章名稱), world_info filename input (世界篇章檔案名稱), and the collapsible book entries
+2. **故事位置** — series name input, story name input
+3. **角色資料** — character filename input (角色檔案名稱), tags, name, description, personality, scenario, first message, example messages, creator notes, system prompt, post-history instructions, alternate greetings
+4. **世界篇章** — world_info filename input (世界篇章檔案名稱), world_info name input (世界篇章名稱), and the collapsible book entries
 
-The "角色檔案名稱" input SHALL be placed at the end of the 角色資料 section (after tags), NOT in the 故事位置 section.
+The "角色檔案名稱" input SHALL be placed at the top of the 角色資料 section (before tags and name fields).
 
 ### MODIFIED Scenario: Editable form is hidden before a card is loaded
 - **WHEN** the page loads with no file selected
@@ -168,3 +168,23 @@ The file input inside the dropzone SHALL be visually styled as a button-like tri
 ### Scenario: File input appears as a styled button
 - **WHEN** the page loads
 - **THEN** the file selector area SHALL display a styled button-like element for triggering file selection, not the browser's default file input widget
+
+## NEW Requirement: Required field indicators and validation feedback
+
+Required fields (系列名稱, 故事名稱, 角色檔案名稱, 世界篇章檔案名稱) SHALL display a "必填" indicator next to the field label. When the user clicks 匯入 and validation fails:
+
+1. Each invalid field SHALL receive a red border (`border-color: #b41e3c`) via a `.has-error` class on the `.field` container
+2. A descriptive error message SHALL appear below the invalid input
+3. The "必填" indicator on invalid fields SHALL turn red to visually reinforce the error
+
+### Scenario: Required fields show 必填 indicator
+- **WHEN** the form is visible after card parse
+- **THEN** the 系列名稱, 故事名稱, 角色檔案名稱, and 世界篇章檔案名稱 fields SHALL each display a "必填" label indicator
+
+### Scenario: Empty required fields show red border on submit
+- **WHEN** the user clicks 匯入 with 系列名稱 and 故事名稱 both empty
+- **THEN** both fields SHALL show a red border and their respective error messages ("系列名稱為必填", "故事名稱為必填")
+
+### Scenario: Validation errors clear on successful input
+- **WHEN** a field previously showed an error and the user fills it correctly
+- **THEN** the red border and error message SHALL be cleared on the next validation attempt (clicking 匯入 again)
