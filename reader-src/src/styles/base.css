@@ -214,6 +214,16 @@ details[open] summary::before {
   background: var(--btn-hover-bg) !important;
 }
 
+.themed-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.themed-btn:disabled:hover {
+  border-color: var(--btn-border) !important;
+  background: var(--btn-bg) !important;
+}
+
 select option {
   background: var(--section-head-bg);
   color: var(--text-main);
