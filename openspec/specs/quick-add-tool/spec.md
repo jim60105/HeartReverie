@@ -15,9 +15,9 @@ The application SHALL provide a `QuickAddPage.vue` component mounted at `/tools/
 3. **角色名稱** — text input, optional, bound to `characterName` (rendered as the H1 of the character lore body and used to derive the default filename).
 4. **角色檔案名稱** — text input, optional, bound to `characterFilename` (the `.md` filename written under the story's lore scope; auto-derived from `characterName` when blank).
 5. **角色設定內容** — textarea, optional, bound to `characterContent` (the markdown body of the character lore file).
-6. **世界典籍名稱** — text input, optional, bound to `worldInfoName`.
-7. **世界典籍檔案名稱** — text input, optional, bound to `worldInfoFilename` and pre-filled with the literal string `world_info.md` (treated as a placeholder/default — see *All-or-skipped rule* below; the user is NOT required to clear it to opt out of the world_info group).
-8. **世界典籍內容** — textarea, optional, bound to `worldInfoContent`.
+6. **世界篇章名稱** — text input, optional, bound to `worldInfoName`.
+7. **世界篇章檔案名稱** — text input, optional, bound to `worldInfoFilename` and pre-filled with the literal string `world_info.md` (treated as a placeholder/default — see *All-or-skipped rule* below; the user is NOT required to clear it to opt out of the world_info group).
+8. **世界篇章內容** — textarea, optional, bound to `worldInfoContent`.
 
 Below the inputs the page SHALL render exactly one submit button labelled **建立** (Create) and a status region for progress and errors.
 
@@ -56,7 +56,7 @@ For each optional lore group, *activity* is determined by the display name and b
 When a group is active, its filename is required and SHALL be auto-filled if blank: the character filename derives from `characterName` (see *Filename derivation* below); the world_info filename uses the existing pre-fill `world_info.md`. The user MAY override either filename, in which case the user's value is used after `.md` auto-extension.
 
 #### Scenario: Both groups inactive submits with story-only
-- **WHEN** all four name+body fields (角色名稱, 角色設定內容, 世界典籍名稱, 世界典籍內容) are empty after trimming and the user clicks 建立 — even if the world_info filename still shows its default `world_info.md`
+- **WHEN** all four name+body fields (角色名稱, 角色設定內容, 世界篇章名稱, 世界篇章內容) are empty after trimming and the user clicks 建立 — even if the world_info filename still shows its default `world_info.md`
 - **THEN** the form SHALL submit, the backend SHALL receive only the story-init call, and no lore PUT calls SHALL be issued
 
 #### Scenario: Character group active triggers character lore PUT
@@ -64,7 +64,7 @@ When a group is active, its filename is required and SHALL be auto-filled if bla
 - **THEN** the form SHALL issue exactly one story-init call and one character lore PUT, the lore PUT URL SHALL use the auto-derived character filename, and SHALL NOT issue a world_info lore PUT
 
 #### Scenario: World_info group active triggers world_info lore PUT
-- **WHEN** the user fills 世界典籍名稱 and 世界典籍內容, leaves character name+body empty, and clicks 建立
+- **WHEN** the user fills 世界篇章名稱 and 世界篇章內容, leaves character name+body empty, and clicks 建立
 - **THEN** the form SHALL issue exactly one story-init call and one world_info lore PUT, and SHALL NOT issue a character lore PUT
 
 #### Scenario: Default world_info filename alone does not activate the group
@@ -76,7 +76,7 @@ When a group is active, its filename is required and SHALL be auto-filled if bla
 - **THEN** the form SHALL block submission, display "請填寫名稱與內容，或將兩者都留空" beside the character group, and issue no network calls
 
 #### Scenario: Partial world_info group blocks submission
-- **WHEN** the user enters 世界典籍名稱 but leaves 世界典籍內容 empty
+- **WHEN** the user enters 世界篇章名稱 but leaves 世界篇章內容 empty
 - **THEN** the form SHALL block submission, display the same message beside the world_info group, and issue no network calls
 
 ### Requirement: Submission orchestration and call sequence
@@ -117,11 +117,11 @@ While the calls are in flight, the submit button SHALL be disabled and the statu
 
 #### Scenario: Character PUT failure halts before world_info
 - **WHEN** the character PUT returns a non-2xx response
-- **THEN** the page SHALL NOT issue the world_info PUT, SHALL surface the error inline with the message "建立角色典籍失敗：<server message>", and SHALL NOT navigate
+- **THEN** the page SHALL NOT issue the world_info PUT, SHALL surface the error inline with the message "建立角色篇章失敗：<server message>", and SHALL NOT navigate
 
 #### Scenario: World_info PUT failure does not roll back prior writes
 - **WHEN** the world_info PUT returns a non-2xx response after the character PUT succeeded
-- **THEN** the page SHALL surface the error inline with the message "建立世界典籍失敗：<server message>", SHALL NOT navigate, SHALL NOT delete the already-written character lore file, and SHALL allow the user to fix the world_info fields and retry; on retry the previously-successful steps MAY be re-issued because both the init endpoint and lore PUT are idempotent
+- **THEN** the page SHALL surface the error inline with the message "建立世界篇章失敗：<server message>", SHALL NOT navigate, SHALL NOT delete the already-written character lore file, and SHALL allow the user to fix the world_info fields and retry; on retry the previously-successful steps MAY be re-issued because both the init endpoint and lore PUT are idempotent
 
 #### Scenario: Existing story shows a non-blocking notice and proceeds
 - **WHEN** the init POST returns HTTP 200 because the story directory already exists
@@ -135,24 +135,24 @@ While the calls are in flight, the submit button SHALL be disabled and the statu
 
 Because the lore PUT endpoint silently overwrites any existing file at the same path (`writer/routes/lore.ts` `handleWritePassage` does no preflight and returns 200 on overwrite), Quick-Add SHALL itself perform a preflight before each active lore group's PUT.
 
-The preflight is a `GET /api/lore/story/:series/:story/<filename>` against the *same scope-relative path* the PUT would use (no `_lore/` segment). A 200 response means the file already exists; a 404 means it does not. **Any other response status (e.g., 401, 403, 500) and any thrown network error SHALL be treated as a preflight failure**: the form SHALL surface an inline error "預檢典籍失敗：<reason>" beside the submit area, SHALL abort the submission immediately, and SHALL NOT issue any `POST /init` or lore PUT request.
+The preflight is a `GET /api/lore/story/:series/:story/<filename>` against the *same scope-relative path* the PUT would use (no `_lore/` segment). A 200 response means the file already exists; a 404 means it does not. **Any other response status (e.g., 401, 403, 500) and any thrown network error SHALL be treated as a preflight failure**: the form SHALL surface an inline error "預檢篇章失敗：<reason>" beside the submit area, SHALL abort the submission immediately, and SHALL NOT issue any `POST /init` or lore PUT request.
 
-Acknowledgement is **per-resolved-filename**: the form SHALL track, for each lore group, the exact filename that the user explicitly acknowledged via the 覆寫現有典籍 checkbox. Whenever the resolved filename for a group changes (because the user edited the filename input or the source name used for derivation), any prior acknowledgement for that group SHALL be cleared and the form SHALL re-run preflight on the next submit.
+Acknowledgement is **per-resolved-filename**: the form SHALL track, for each lore group, the exact filename that the user explicitly acknowledged via the 覆寫現有篇章 checkbox. Whenever the resolved filename for a group changes (because the user edited the filename input or the source name used for derivation), any prior acknowledgement for that group SHALL be cleared and the form SHALL re-run preflight on the next submit.
 
 When the preflight returns 200 for a group, the form SHALL:
 
-- Surface an inline warning beside the group: "已存在同名典籍：<filename>".
-- Render an "覆寫現有典籍" checkbox (unchecked by default) beside the warning.
+- Surface an inline warning beside the group: "已存在同名篇章：<filename>".
+- Render an "覆寫現有篇章" checkbox (unchecked by default) beside the warning.
 - Disable the 建立 button until either (a) the user toggles the overwrite checkbox on for the *current* resolved filename of every colliding group, or (b) the user changes the offending filename to one that no longer collides (re-running the preflight).
 
 Once all colliding groups are explicitly acknowledged via the checkbox for their current resolved filename, the form SHALL proceed with the PUT(s) as normal.
 
 #### Scenario: Preflight detects an existing character file
 - **WHEN** the user submits with the character group active and the preflight GET returns 200
-- **THEN** the form SHALL NOT issue the character PUT, SHALL surface "已存在同名典籍：<filename>" beside the character group, SHALL render an unchecked 覆寫現有典籍 checkbox, and SHALL disable the 建立 button
+- **THEN** the form SHALL NOT issue the character PUT, SHALL surface "已存在同名篇章：<filename>" beside the character group, SHALL render an unchecked 覆寫現有篇章 checkbox, and SHALL disable the 建立 button
 
 #### Scenario: Overwrite checkbox unblocks the write
-- **WHEN** a collision was surfaced for a group and the user toggles the 覆寫現有典籍 checkbox on, then clicks 建立
+- **WHEN** a collision was surfaced for a group and the user toggles the 覆寫現有篇章 checkbox on, then clicks 建立
 - **THEN** the form SHALL re-run the preflight (still returns 200) and SHALL proceed with the PUT for that group, treating the overwrite as confirmed
 
 #### Scenario: Preflight 404 proceeds without prompting
@@ -161,15 +161,15 @@ Once all colliding groups are explicitly acknowledged via the checkbox for their
 
 #### Scenario: Preflight non-200/non-404 status fails closed
 - **WHEN** the preflight GET returns 401, 403, 500, or any status other than 200/404
-- **THEN** the form SHALL surface "預檢典籍失敗：<status>" inline, SHALL NOT issue the `POST /init` request, and SHALL NOT issue any lore PUT
+- **THEN** the form SHALL surface "預檢篇章失敗：<status>" inline, SHALL NOT issue the `POST /init` request, and SHALL NOT issue any lore PUT
 
 #### Scenario: Preflight network error fails closed
 - **WHEN** the preflight `fetch()` throws (e.g., offline, DNS failure)
-- **THEN** the form SHALL surface "預檢典籍失敗：<error message>" inline, and SHALL NOT issue any subsequent request
+- **THEN** the form SHALL surface "預檢篇章失敗：<error message>" inline, and SHALL NOT issue any subsequent request
 
 #### Scenario: Filename change after acknowledgement re-runs preflight
 - **WHEN** the user acknowledged a collision for `Hero.md`, then edits 角色檔案名稱 to `Other.md`, then clicks 建立
-- **THEN** the prior acknowledgement SHALL be cleared, the form SHALL re-run the preflight against `Other.md`, and SHALL re-block submission with a fresh unchecked 覆寫現有典籍 checkbox if `Other.md` also collides
+- **THEN** the prior acknowledgement SHALL be cleared, the form SHALL re-run the preflight against `Other.md`, and SHALL re-block submission with a fresh unchecked 覆寫現有篇章 checkbox if `Other.md` also collides
 
 #### Scenario: Retry after a partial failure does not re-write previously-successful files
 - **WHEN** the character PUT succeeded but the world_info PUT failed in the same submission, and the user fixes the world_info field and clicks 建立 again
@@ -206,7 +206,7 @@ If the resolved filename fails validation, the form SHALL block submission and d
 - **THEN** the form SHALL block submission with the validation error and SHALL NOT issue the lore PUT
 
 #### Scenario: Underscore-prefixed filename is rejected
-- **WHEN** the user enters `_hidden.md` in 世界典籍檔案名稱
+- **WHEN** the user enters `_hidden.md` in 世界篇章檔案名稱
 - **THEN** the form SHALL block submission with the validation error
 
 ### Requirement: Series and story name validation
