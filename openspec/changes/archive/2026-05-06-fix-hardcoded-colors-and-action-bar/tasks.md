@@ -44,5 +44,5 @@
 
 - [x] 7.1 Run `deno task check` to confirm no type errors
 - [x] 7.2 Run `deno task test` to confirm all existing tests pass
-- [ ] 7.3 Visually verify in podman build that theme switch updates all affected elements
-- [ ] 7.4 Verify plugin rendering (status panel, options action bar) adapts correctly across themes
+- [x] 7.3 Visually verify in podman build that theme switch updates all affected elements
+- [x] 7.4 Verify plugin rendering (status panel, options action bar) adapts correctly across themes
