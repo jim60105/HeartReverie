@@ -88,9 +88,9 @@ describe("QuickAddPage", () => {
         "角色名稱",
         "角色檔案名稱",
         "角色設定內容",
-        "世界典籍名稱",
-        "世界典籍檔案名稱",
-        "世界典籍內容",
+        "世界篇章名稱",
+        "世界篇章檔案名稱",
+        "世界篇章內容",
       ]),
     );
   });
@@ -267,7 +267,7 @@ describe("QuickAddPage", () => {
     await wrapper.find("#qa-char-body").setValue("desc");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
-    expect(wrapper.text()).toContain("已存在同名典籍");
+    expect(wrapper.text()).toContain("已存在同名篇章");
     expect(putCount).toBe(0);
     // Toggle overwrite then resubmit
     const cb = wrapper.find(".collision input[type='checkbox']");
@@ -388,7 +388,7 @@ describe("QuickAddPage", () => {
     await flushPromises();
     expect(calls.filter((c) => (c.init?.method ?? "GET") === "POST")).toHaveLength(0);
     expect(calls.filter((c) => c.init?.method === "PUT")).toHaveLength(0);
-    expect(wrapper.text()).toContain("預檢典籍失敗");
+    expect(wrapper.text()).toContain("預檢篇章失敗");
   });
 
   it("preflight 500 surfaces inline error and aborts before init/PUT", async () => {
@@ -412,7 +412,7 @@ describe("QuickAddPage", () => {
     await wrapper.find("form").trigger("submit");
     await flushPromises();
     expect(calls.filter((c) => (c.init?.method ?? "GET") === "POST")).toHaveLength(0);
-    expect(wrapper.text()).toContain("預檢典籍失敗");
+    expect(wrapper.text()).toContain("預檢篇章失敗");
   });
 
   it("preflight network throw surfaces inline error and aborts", async () => {
@@ -429,7 +429,7 @@ describe("QuickAddPage", () => {
     await wrapper.find("#qa-char-body").setValue("d");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
-    expect(wrapper.text()).toContain("預檢典籍失敗");
+    expect(wrapper.text()).toContain("預檢篇章失敗");
   });
 
   it("changing the filename after acknowledging clears the ack and re-blocks if new filename also collides", async () => {
@@ -456,15 +456,15 @@ describe("QuickAddPage", () => {
     await wrapper.find("#qa-char-body").setValue("d");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
-    expect(wrapper.text()).toContain("已存在同名典籍：Hero.md");
+    expect(wrapper.text()).toContain("已存在同名篇章：Hero.md");
     await wrapper.find(".collision input[type='checkbox']").setValue(true);
     // User changes the filename BEFORE submitting again — ack should reset.
     await wrapper.find("#qa-char-fn").setValue("OtherName.md");
-    expect(wrapper.text()).not.toContain("已存在同名典籍：Hero.md");
+    expect(wrapper.text()).not.toContain("已存在同名篇章：Hero.md");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
     // New filename also collides (mock returns 200 for any GET).
-    expect(wrapper.text()).toContain("已存在同名典籍：OtherName.md");
+    expect(wrapper.text()).toContain("已存在同名篇章：OtherName.md");
     expect(putCount).toBe(0);
   });
 
@@ -545,7 +545,7 @@ describe("QuickAddPage", () => {
     await flushPromises();
     expect(charPutCount).toBe(1);
     expect(wiPutCount).toBe(1);
-    expect(wrapper.text()).toContain("建立世界典籍失敗");
+    expect(wrapper.text()).toContain("建立世界篇章失敗");
     // Retry succeeds for world_info.
     wiPutShouldFail = false;
     const charGetBefore = charGetCount;

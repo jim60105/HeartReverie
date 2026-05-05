@@ -199,6 +199,16 @@ details[open] summary::before {
 
 /* ── Button Utilities ── */
 
+.themed-btn {
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  background: var(--btn-bg);
+  padding: 8px 16px;
+  color: inherit;
+  cursor: pointer;
+  font-size: inherit;
+}
+
 .themed-btn:hover {
   border-color: var(--btn-hover-border) !important;
   background: var(--btn-hover-bg) !important;
