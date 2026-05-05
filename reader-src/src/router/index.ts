@@ -11,6 +11,8 @@ const ThemeSettingsPage = () => import("@/components/ThemeSettingsPage.vue");
 const QuickAddPage = () => import("@/components/QuickAddPage.vue");
 const ImportCharacterCardPage = () =>
   import("@/components/ImportCharacterCardPage.vue");
+const PluginSettingsPage = () =>
+  import("@/components/PluginSettingsPage.vue");
 
 export const settingsChildren: RouteRecordRaw[] = [
   {
@@ -36,6 +38,12 @@ export const settingsChildren: RouteRecordRaw[] = [
     name: "settings-theme",
     component: ThemeSettingsPage,
     meta: { title: "主題" },
+  },
+  {
+    path: "plugins/:pluginName",
+    name: "settings-plugin",
+    component: PluginSettingsPage,
+    props: true,
   },
 ];
 

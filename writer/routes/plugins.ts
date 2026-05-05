@@ -32,6 +32,7 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       description: p.description,
       type: p.type,
       tags: p.tags || [],
+      hasSettings: !!p.settingsSchema,
       hasFrontendModule: !!p.frontendModule,
       displayStripTags: p.displayStripTags || [],
       frontendStyles: pluginManager.getPluginStyles(p.name).map(

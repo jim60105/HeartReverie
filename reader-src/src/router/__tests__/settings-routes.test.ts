@@ -70,10 +70,12 @@ describe("settings route configuration", () => {
     expect(lore!.component).toBeDefined();
   });
 
-  it("settingsChildren entries all have name and meta.title", () => {
+  it("settingsChildren entries all have name and meta.title (except dynamic plugin route)", () => {
     for (const child of settingsChildren) {
       expect(child.name).toBeDefined();
-      expect(child.meta?.title).toBeDefined();
+      if (child.name !== "settings-plugin") {
+        expect(child.meta?.title).toBeDefined();
+      }
     }
   });
 });

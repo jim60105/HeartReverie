@@ -101,7 +101,14 @@ function renderChapter(
   }
 
   // 2. Plugin-driven tag extraction and rendering (third-party plugins)
-  const renderContext: FrontendRenderContext = { text, placeholderMap, options };
+  const renderContext: FrontendRenderContext = {
+    text,
+    placeholderMap,
+    options,
+    series: options.series,
+    story: options.story,
+    chapterNumber: options.chapterNumber,
+  };
   frontendHooks.dispatch("frontend-render", renderContext);
   text = renderContext.text;
 
