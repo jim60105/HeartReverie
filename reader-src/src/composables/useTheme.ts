@@ -10,8 +10,23 @@ const currentThemeId = ref<string>(
 );
 const themes = ref<Array<{ id: string; label: string }>>([]);
 
-function escapeForCssUrl(value: string): string {
-  return value.replace(/'/g, "\\'");
+function applyHighlightOverride(color: string): void {
+  const id = "theme-highlight-override";
+  let style = document.getElementById(id) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = id;
+    document.head.appendChild(style);
+  }
+  style.textContent =
+    "::highlight(dialogue-quote-straight)," +
+    "::highlight(dialogue-quote-curly)," +
+    "::highlight(dialogue-quote-guillemet)," +
+    "::highlight(dialogue-quote-corner)," +
+    "::highlight(dialogue-quote-corner-half)," +
+    "::highlight(dialogue-quote-book){color:" +
+    color +
+    "!important}";
 }
 
 function applyTheme(theme: ThemePayload): void {
@@ -22,9 +37,12 @@ function applyTheme(theme: ThemePayload): void {
   if (theme.colorScheme) {
     root.style.setProperty("color-scheme", theme.colorScheme);
   }
-  document.body.style.backgroundImage = theme.backgroundImage
-    ? `url('${escapeForCssUrl(theme.backgroundImage)}')`
-    : "";
+  // backgroundImage is a raw CSS value (e.g. "url('/assets/heart.webp')" or gradient)
+  document.body.style.backgroundImage = theme.backgroundImage || "none";
+  // ::highlight() pseudo-elements cannot resolve var() from ancestors;
+  // inject literal color so dialogue-colorize plugin respects the theme.
+  const textName = theme.palette["--text-name"];
+  if (textName) applyHighlightOverride(textName);
 }
 
 async function listThemes(): Promise<void> {

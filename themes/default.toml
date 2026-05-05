@@ -1,10 +1,12 @@
 id = "default"
-label = "心夢預設"
+label = "浮心夜夢"
 colorScheme = "dark"
-backgroundImage = "/assets/heart.webp"
+backgroundImage = "url('/assets/heart.webp')"
 
 [palette]
 header-height            = "34px"
+page-bg                  = "#0f0a0c"
+page-overlay             = "rgba(0, 0, 0, 0.5)"
 panel-bg                 = "linear-gradient(145deg, #1a0810, #220c16)"
 border-color             = "#6d1a2a"
 border-inner             = "rgba(255, 80, 120, 0.15)"
