@@ -23,6 +23,8 @@ interface SchemaProperty {
   description?: string;
   default?: unknown;
   enum?: unknown[];
+  format?: string;
+  items?: { type?: string };
   "x-options-url"?: string;
   "x-input-type"?: string;
 }
@@ -116,9 +118,12 @@ async function save(): Promise<void> {
 }
 
 function getFieldType(prop: SchemaProperty, key: string): string {
-  if (prop["x-input-type"] === "password") return "password";
-  if (prop.enum || dynamicOptions.value[key]) return "select";
-  if (dynamicOptionsFailed.value.has(key) && prop["x-options-url"]) return "text";
+  if (prop["x-input-type"] === "password" || prop.format === "password") return "password";
+  if (prop.type === "array" && prop["x-options-url"]) return "multi-combobox";
+  if (prop.type === "array") return "tags";
+  if (prop.enum) return "select";
+  if (prop["x-options-url"]) return "combobox";
+  if (dynamicOptions.value[key]) return "select";
   switch (prop.type) {
     case "boolean":
       return "checkbox";
@@ -138,6 +143,24 @@ function getOptions(prop: SchemaProperty, key: string): string[] {
 
 function updateField(key: string, value: unknown): void {
   settings.value = { ...settings.value, [key]: value };
+}
+
+function getArrayValue(key: string): string[] {
+  const val = settings.value[key];
+  return Array.isArray(val) ? val.map(String) : [];
+}
+
+function addToArray(key: string, value: string): void {
+  if (!value.trim()) return;
+  const current = getArrayValue(key);
+  if (!current.includes(value.trim())) {
+    updateField(key, [...current, value.trim()]);
+  }
+}
+
+function removeFromArray(key: string, index: number): void {
+  const current = getArrayValue(key);
+  updateField(key, current.filter((_, i) => i !== index));
 }
 
 const schemaProperties = computed(() => {
@@ -201,7 +224,7 @@ watch(pluginName, async () => {
           @change="updateField(field.key, ($event.target as HTMLInputElement).checked)"
         />
 
-        <!-- Select -->
+        <!-- Select (static enum) -->
         <select
           v-else-if="field.fieldType === 'select'"
           :id="`field-${field.key}`"
@@ -218,6 +241,76 @@ watch(pluginName, async () => {
             {{ opt }}
           </option>
         </select>
+
+        <!-- Combobox (free text + dynamic dropdown) -->
+        <div v-else-if="field.fieldType === 'combobox'" class="combobox-wrapper">
+          <input
+            :id="`field-${field.key}`"
+            type="text"
+            :value="settings[field.key] as string ?? ''"
+            :list="`datalist-${field.key}`"
+            class="field-input"
+            :placeholder="field.options.length ? '選擇或輸入…' : '輸入值…'"
+            @input="updateField(field.key, ($event.target as HTMLInputElement).value)"
+          />
+          <datalist :id="`datalist-${field.key}`">
+            <option
+              v-for="opt in field.options"
+              :key="opt"
+              :value="opt"
+            />
+          </datalist>
+        </div>
+
+        <!-- Multi-combobox (array + dynamic dropdown) -->
+        <div v-else-if="field.fieldType === 'multi-combobox'" class="multi-combobox">
+          <div class="tags-list">
+            <span
+              v-for="(tag, idx) in getArrayValue(field.key)"
+              :key="idx"
+              class="tag-chip"
+            >
+              {{ tag }}
+              <button type="button" class="tag-remove" @click="removeFromArray(field.key, idx)">×</button>
+            </span>
+          </div>
+          <input
+            :id="`field-${field.key}`"
+            type="text"
+            :list="`datalist-${field.key}`"
+            class="field-input"
+            :placeholder="field.options.length ? '選擇或輸入後按 Enter…' : '輸入後按 Enter…'"
+            @keydown.enter.prevent="addToArray(field.key, ($event.target as HTMLInputElement).value); ($event.target as HTMLInputElement).value = ''"
+          />
+          <datalist :id="`datalist-${field.key}`">
+            <option
+              v-for="opt in field.options"
+              :key="opt"
+              :value="opt"
+            />
+          </datalist>
+        </div>
+
+        <!-- Tags (array without options) -->
+        <div v-else-if="field.fieldType === 'tags'" class="multi-combobox">
+          <div class="tags-list">
+            <span
+              v-for="(tag, idx) in getArrayValue(field.key)"
+              :key="idx"
+              class="tag-chip"
+            >
+              {{ tag }}
+              <button type="button" class="tag-remove" @click="removeFromArray(field.key, idx)">×</button>
+            </span>
+          </div>
+          <input
+            :id="`field-${field.key}`"
+            type="text"
+            class="field-input"
+            placeholder="輸入後按 Enter…"
+            @keydown.enter.prevent="addToArray(field.key, ($event.target as HTMLInputElement).value); ($event.target as HTMLInputElement).value = ''"
+          />
+        </div>
 
         <!-- Number -->
         <input
@@ -347,5 +440,43 @@ watch(pluginName, async () => {
 .save-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.multi-combobox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  background: var(--item-bg);
+  border: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  color: var(--text-main);
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: var(--text-label);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.1rem;
+}
+
+.tag-remove:hover {
+  color: var(--text-italic);
 }
 </style>
