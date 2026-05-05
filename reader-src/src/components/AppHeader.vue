@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useChapterNav } from "@/composables/useChapterNav";
 import StorySelector from "./StorySelector.vue";
+import ToolsMenu from "./ToolsMenu.vue";
 
 const router = useRouter();
 
@@ -51,6 +52,8 @@ function openSettings() {
       </button>
 
       <span class="header-spacer"></span>
+
+      <ToolsMenu />
 
       <button
         class="themed-btn header-btn header-btn--icon"

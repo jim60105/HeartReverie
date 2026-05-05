@@ -25,6 +25,12 @@ const reloadToLastMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("vue-router", () => ({
   useRouter: () => mockRouter,
+  useRoute: () => ({ fullPath: "/" }),
+}));
+
+vi.mock("@/router", () => ({
+  toolsChildren: [],
+  default: {},
 }));
 
 vi.mock("@/composables/useChapterNav", () => ({
