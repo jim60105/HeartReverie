@@ -1,6 +1,10 @@
 # Theme System
 
-## ADDED Requirements
+## Purpose
+
+Provides a TOML-driven theming capability that lets operators ship multiple visual themes (palette + background image + color-scheme hint) and lets readers pick one through a settings page. The selection is persisted client-side and applied to `document.documentElement` as CSS custom properties, with a small static boot script preventing flash-of-unstyled-content on reload.
+
+## Requirements
 
 ### Requirement: Theme directory configuration
 
@@ -25,7 +29,12 @@ Each theme file SHALL be a valid TOML document with the following top-level stru
 - `id` — non-empty kebab-case string. The value MUST equal the file basename without the `.toml` extension.
 - `label` — non-empty human-readable string used as the dropdown label.
 - `colorScheme` — optional string, one of `"light"` or `"dark"`. Defaults to `"dark"`.
-- `backgroundImage` — optional string. When non-empty, the value MUST be either (a) a same-origin absolute path beginning with a single `/` (e.g. `/assets/heart.webp`) and NOT beginning with `//`, or (b) a `data:` URL (e.g. `data:image/png;base64,...`). Empty string or missing key SHALL mean "no background image". Any other value (off-origin URL such as `http(s)://…`, protocol-relative `//…`, relative path, `file://`) SHALL be rejected by the loader. This restriction matches the project's CSP `img-src 'self' data:`; off-origin values would be silently blocked at paint time.
+- `backgroundImage` — optional string. When non-empty, the value MUST be one of:
+  - `url('/<same-origin-path>')` — a `url()` wrapper around a single-quoted absolute path beginning with `/` (e.g. `url('/assets/heart.webp')`).
+  - `url('data:<…>')` — a `url()` wrapper around a single-quoted `data:` URL (e.g. `url('data:image/png;base64,iVBORw0KGgo')`).
+  - A CSS gradient function call: `linear-gradient(...)`, `radial-gradient(...)`, `conic-gradient(...)`, `repeating-linear-gradient(...)`, `repeating-radial-gradient(...)`, or `repeating-conic-gradient(...)`.
+
+  Empty string or missing key SHALL mean "no background image". Any other value (a bare path without the `url()` wrapper, an off-origin URL such as `http(s)://…`, protocol-relative `//…`, relative path, `file://`, an unwrapped `data:` URL, etc.) SHALL be rejected by the loader. The `url()` wrappers MUST use single quotes around the URL contents to match the project's CSP (`img-src 'self' data:`); off-origin values would be silently blocked at paint time.
 - `[palette]` — table whose keys are CSS custom-property names **without** the leading `--`, and whose values are strings applied verbatim as the property value.
 
 The server SHALL accept any string value in `[palette]`, including CSS expressions such as `linear-gradient(...)`, `rgba(...)`, `clamp(...)`, and quoted font-family lists; it SHALL NOT validate or transform palette values beyond requiring them to be strings.
@@ -60,15 +69,30 @@ The server SHALL accept any string value in `[palette]`, including CSS expressio
 - **WHEN** the server starts
 - **THEN** the file SHALL be skipped with an error logged
 
-#### Scenario: data: URL backgroundImage is accepted
-- **GIVEN** a file `themes/inline.toml` whose body declares `backgroundImage = "data:image/png;base64,iVBORw0KGgo..."`
+#### Scenario: Bare same-origin path (without url() wrapper) is rejected
+- **GIVEN** a file `themes/bare.toml` whose body declares `backgroundImage = "/assets/heart.webp"`
 - **WHEN** the server starts
-- **THEN** the theme SHALL load successfully and `GET /api/themes/inline` SHALL return the `data:` URL verbatim in the `backgroundImage` field
+- **THEN** the file SHALL be skipped with an error logged (the value MUST be wrapped as `url('/assets/heart.webp')`)
 
-#### Scenario: Same-origin path backgroundImage is accepted
-- **GIVEN** a file `themes/with-path.toml` whose body declares `backgroundImage = "/assets/heart.webp"`
+#### Scenario: Relative path backgroundImage is rejected
+- **GIVEN** a file `themes/relative.toml` whose body declares `backgroundImage = "assets/bg.jpg"`
 - **WHEN** the server starts
-- **THEN** the theme SHALL load successfully and `GET /api/themes/with-path` SHALL return `/assets/heart.webp` in the `backgroundImage` field
+- **THEN** the file SHALL be skipped with an error logged
+
+#### Scenario: url() with same-origin path is accepted
+- **GIVEN** a file `themes/with-path.toml` whose body declares `backgroundImage = "url('/assets/heart.webp')"`
+- **WHEN** the server starts
+- **THEN** the theme SHALL load successfully and `GET /api/themes/with-path` SHALL return `url('/assets/heart.webp')` verbatim in the `backgroundImage` field
+
+#### Scenario: url() with data: URL is accepted
+- **GIVEN** a file `themes/inline.toml` whose body declares `backgroundImage = "url('data:image/png;base64,iVBORw0KGgo')"`
+- **WHEN** the server starts
+- **THEN** the theme SHALL load successfully and `GET /api/themes/inline` SHALL return the wrapped value verbatim in the `backgroundImage` field
+
+#### Scenario: CSS gradient backgroundImage is accepted
+- **GIVEN** a file `themes/gradient.toml` whose body declares `backgroundImage = "linear-gradient(160deg, #F5F0E6 0%, #E8E0D2 100%)"`
+- **WHEN** the server starts
+- **THEN** the theme SHALL load successfully and `GET /api/themes/gradient` SHALL return the gradient value verbatim in the `backgroundImage` field
 
 #### Scenario: Empty backgroundImage is accepted
 - **GIVEN** a file `themes/no-bg.toml` that omits `backgroundImage` (or sets it to `""`)
@@ -98,9 +122,9 @@ The server SHALL expose `GET /api/themes` returning a JSON array `[{ "id": strin
 The server SHALL expose `GET /api/themes/:id` returning the parsed theme as JSON: `{ "id": string, "label": string, "colorScheme": string, "backgroundImage": string, "palette": { "--<name>": "<value>", ... } }`. Palette keys SHALL include the leading `--` (the loader prepends it; TOML files store keys without). If the id is unknown, the response SHALL be HTTP 404 with an RFC 9457 Problem Details body. The endpoint SHALL NOT require authentication.
 
 #### Scenario: Returns full theme JSON
-- **GIVEN** the `default` theme is loaded with `palette.panel-bg = "linear-gradient(...)"` and `backgroundImage = "/assets/heart.webp"`
+- **GIVEN** the `default` theme is loaded with `palette.panel-bg = "linear-gradient(...)"` and `backgroundImage = "url('/assets/heart.webp')"`
 - **WHEN** a client sends `GET /api/themes/default`
-- **THEN** the response SHALL be HTTP 200 and the JSON body SHALL contain `palette["--panel-bg"] === "linear-gradient(...)"` and `backgroundImage === "/assets/heart.webp"`
+- **THEN** the response SHALL be HTTP 200 and the JSON body SHALL contain `palette["--panel-bg"] === "linear-gradient(...)"` and `backgroundImage === "url('/assets/heart.webp')"`
 
 #### Scenario: Unknown id returns 404
 - **WHEN** a client sends `GET /api/themes/no-such-theme`
@@ -114,9 +138,9 @@ The server SHALL expose `GET /api/themes/:id` returning the parsed theme as JSON
 
 The repository SHALL include three theme files under `themes/` at the project root:
 
-- `themes/default.toml` — its `[palette]` table SHALL contain a key for every CSS custom property declared in `reader-src/src/styles/theme.css` and the value of each key SHALL be byte-for-byte identical to that property's value in `theme.css`. Its `backgroundImage` SHALL be `/assets/heart.webp`. Its `id` SHALL be `default`.
-- `themes/light.toml` — a light colour scheme (`colorScheme = "light"`), no `backgroundImage`. Id `light`.
-- `themes/dark.toml` — a neutral dark colour scheme (`colorScheme = "dark"`), no `backgroundImage`. Id `dark`.
+- `themes/default.toml` — its `[palette]` table SHALL contain a key for every CSS custom property declared in `reader-src/src/styles/theme.css` and the value of each key SHALL be byte-for-byte identical to that property's value in `theme.css`. Its `backgroundImage` SHALL be `url('/assets/heart.webp')`. Its `id` SHALL be `default`.
+- `themes/light.toml` — a light colour scheme (`colorScheme = "light"`) whose `backgroundImage` SHALL be a CSS `linear-gradient(...)` value (paper-tinted warm light gradient). Id `light`.
+- `themes/dark.toml` — a neutral dark colour scheme (`colorScheme = "dark"`) whose `backgroundImage` SHALL be a CSS `linear-gradient(...)` value (subtle dark gradient). Id `dark`.
 
 #### Scenario: default.toml reproduces the current palette verbatim
 - **WHEN** `themes/default.toml` is parsed and its `palette` is compared to the declarations in `reader-src/src/styles/theme.css`
@@ -128,22 +152,27 @@ The repository SHALL include three theme files under `themes/` at the project ro
 
 ### Requirement: Frontend applies CSS variables to :root
 
-The SPA SHALL provide a `useTheme()` composable that, given a parsed theme JSON object, applies every entry in `palette` to `document.documentElement.style` via `setProperty(name, value)` (where `name` includes the leading `--`), sets `color-scheme` if `colorScheme` is present, and sets `document.body.style.backgroundImage` to `url('<backgroundImage>')` (with the value escaped) when `backgroundImage` is non-empty, or to the empty string otherwise.
+The SPA SHALL provide a `useTheme()` composable that, given a parsed theme JSON object, applies every entry in `palette` to `document.documentElement.style` via `setProperty(name, value)` (where `name` includes the leading `--`), sets `color-scheme` if `colorScheme` is present, and sets `document.body.style.backgroundImage` to the `backgroundImage` value verbatim (which is already a valid CSS `background-image` token such as `url('…')` or a gradient function call) when non-empty, or to the literal CSS keyword `none` when empty.
 
 #### Scenario: Palette is applied to documentElement
 - **GIVEN** a theme with `palette["--text-main"] = "rgba(207, 207, 197, 1)"`
 - **WHEN** `useTheme().applyTheme(theme)` is called
 - **THEN** `document.documentElement.style.getPropertyValue("--text-main")` SHALL equal `"rgba(207, 207, 197, 1)"`
 
-#### Scenario: Background image is applied to body
-- **GIVEN** a theme with `backgroundImage = "/assets/heart.webp"`
+#### Scenario: url() backgroundImage is applied to body verbatim
+- **GIVEN** a theme with `backgroundImage = "url('/assets/heart.webp')"`
 - **WHEN** `useTheme().applyTheme(theme)` is called
-- **THEN** `document.body.style.backgroundImage` SHALL equal `url("/assets/heart.webp")` (browser-normalised form)
+- **THEN** `document.body.style.backgroundImage` SHALL be set to that value verbatim (the browser MAY normalise the surrounding quote style)
+
+#### Scenario: Gradient backgroundImage is applied to body verbatim
+- **GIVEN** a theme with `backgroundImage = "linear-gradient(160deg, #F5F0E6 0%, #E8E0D2 100%)"`
+- **WHEN** `useTheme().applyTheme(theme)` is called
+- **THEN** `document.body.style.backgroundImage` SHALL contain the gradient function call
 
 #### Scenario: Empty backgroundImage clears the body image
 - **GIVEN** a theme with `backgroundImage = ""`
 - **WHEN** `useTheme().applyTheme(theme)` is called
-- **THEN** `document.body.style.backgroundImage` SHALL be the empty string (i.e. cleared)
+- **THEN** `document.body.style.backgroundImage` SHALL be set to `none` (clearing any previous image)
 
 ### Requirement: Theme selection persistence
 
@@ -161,7 +190,7 @@ The frontend SHALL persist the user's selected theme id in `localStorage` under 
 
 ### Requirement: FOUC prevention via static boot script
 
-The project SHALL ship a static JavaScript file at `reader-src/public/theme-boot.js` (which Vite copies verbatim to the dist root, served as a same-origin asset at `/theme-boot.js`). The `reader-src/index.html` document SHALL include `<script src="/theme-boot.js"></script>` placed **before** the `<script type="module" src="/src/main.ts">` tag. The boot script SHALL synchronously read `localStorage["heartReverie.themeId"]` and `localStorage["heartReverie.themeCache.<id>"]`, parse the cached JSON, and apply the cached `palette` entries to `document.documentElement.style` plus the `backgroundImage` to `document.body.style.backgroundImage` (deferring the body-style write via a `DOMContentLoaded` listener if `document.body` is not yet present). The script SHALL be wrapped in a try/catch that swallows all errors so a corrupt cache cannot break page load. The script SHALL NOT be inlined into `index.html` because the project's CSP (`script-src 'self'`, no `'unsafe-inline'`, no nonce) refuses inline scripts.
+The project SHALL ship a static JavaScript file at `reader-src/public/theme-boot.js` (which Vite copies verbatim to the dist root, served as a same-origin asset at `/theme-boot.js`). The `reader-src/index.html` document SHALL include `<script src="/theme-boot.js"></script>` placed **before** the `<script type="module" src="/src/main.ts">` tag. The boot script SHALL synchronously read `localStorage["heartReverie.themeId"]` and `localStorage["heartReverie.themeCache.<id>"]`, parse the cached JSON, and apply the cached `palette` entries to `document.documentElement.style` plus assign the cached `backgroundImage` value verbatim to `document.body.style.backgroundImage` (or `none` when empty) — deferring the body-style write via a `DOMContentLoaded` listener if `document.body` is not yet present. The script SHALL be wrapped in a try/catch that swallows all errors so a corrupt cache cannot break page load. The script SHALL NOT be inlined into `index.html` because the project's CSP (`script-src 'self'`, no `'unsafe-inline'`, no nonce) refuses inline scripts.
 
 #### Scenario: Cached theme paints with the first frame
 - **GIVEN** `localStorage.heartReverie.themeId = "light"` and `localStorage["heartReverie.themeCache.light"]` contains a valid serialised theme
