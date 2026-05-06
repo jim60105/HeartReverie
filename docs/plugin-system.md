@@ -26,7 +26,7 @@ plugins/                       ← 內建 plugin 目錄
 │   ├── frontend.js
 │   └── prompt-fragments/
 │       └── think-before-reply.md
-└── ...（共 7 個 plugin）
+└── ...（共 8 個 plugin）
 ```
 
 Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不同欄位：
@@ -39,6 +39,8 @@ Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不
 - **前端模組**：透過 `frontendModule` 提供瀏覽器端的自訂標籤渲染邏輯
 - **前端樣式注入**：透過 `frontendStyles` 宣告 CSS 樣式表路徑，系統在前端初始化時自動注入 `<link rel="stylesheet">` 至 `<head>`
 - **動作按鈕**：透過 `actionButtons` 宣告閱讀器 UI 上的互動按鈕，搭配前端 `action-button:click` hook 與後端 `POST /api/plugins/:pluginName/run-prompt` 路由，可觸發自訂提示詞並把回應接回章節檔，詳見「[動作按鈕（Action Buttons）](#動作按鈕action-buttons)」章節
+- **可設定項目**：透過 `settingsSchema` 宣告 JSON Schema，系統自動提供 `GET/PUT /api/plugins/:name/settings` 端點與閱讀器內的設定頁，詳見「[Plugin Settings](#plugin-settings)」章節
+- **自訂 API 路由**：後端模組可額外匯出 `registerRoutes(context)`，將自家路由掛載於 `/api/plugins/:name/*` 命名空間下並共用 passphrase 驗證，詳見「[Plugin 自訂 API 路由](#plugin-自訂-api-路由)」章節
 
 ## Plugin Manifest 規格
 
@@ -58,6 +60,7 @@ Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不
 | `displayStripTags` | `array` | ❌ | 前端顯示時移除的標籤或正規表達式 |
 | `frontendStyles` | `array` | ❌ | 前端 CSS 樣式表路徑列表（相對於 plugin 目錄），見「前端樣式注入」章節 |
 | `actionButtons` | `array` | ❌ | 動作按鈕宣告，見「[動作按鈕（Action Buttons）](#動作按鈕action-buttons)」章節 |
+| `settingsSchema` | `object` | ❌ | JSON Schema（draft-07）描述 plugin 可設定項目，見「[Plugin Settings](#plugin-settings)」章節 |
 | `parameters` | `array` | ❌ | 自訂 Vento 模板參數宣告 |
 
 ### Plugin 類型
@@ -66,7 +69,7 @@ Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不
 
 | 類型 | 說明 | 範例 |
 |------|------|------|
-| `prompt-only` | 僅提供提示詞片段，不包含後端或前端邏輯 | imgthink、start-hints |
+| `prompt-only` | 僅提供提示詞片段，不包含後端或前端邏輯 | start-hints、writestyle |
 | `hook-only` | 僅透過後端 hook 參與生命週期，不提供提示詞 | — |
 | `full-stack` | 同時包含提示詞片段、後端模組、前端模組 | context-compaction、thinking |
 | `frontend-only` | 僅提供前端模組 | — |
@@ -102,6 +105,8 @@ Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不
 模組路徑必須通過路徑包含檢查——解析後的絕對路徑必須位於 plugin 目錄內部，否則跳過載入。
 
 若模組同時匯出 `getDynamicVariables(context)` 函式，系統會在渲染提示詞時呼叫該函式，取得動態模板變數（見「動態變數」章節）。
+
+若模組同時匯出 `registerRoutes(context)` 函式，系統會在 `createApp()` 期間呼叫一次，將 plugin 自訂的 HTTP 路由掛載於 `/api/plugins/:name/*` 之下（見「[Plugin 自訂 API 路由](#plugin-自訂-api-路由)」章節）。
 
 ### 動態變數
 
@@ -211,7 +216,7 @@ LLM 回應中包含 plugin 定義的 XML 標籤，這些標籤會隨回應一同
 ```json
 {
   "promptStripTags": ["disclaimer", "user_message"],
-  "displayStripTags": ["disclaimer", "imgthink"]
+  "displayStripTags": ["disclaimer", "scratchpad"]
 }
 ```
 
@@ -318,7 +323,7 @@ logger.error('Operation failed', { error: err.message });
 
 | 階段 | 用途 | Context 參數 |
 |------|------|-------------|
-| `frontend-render` | 自訂內容渲染（例如將 `<options>` 轉為互動式 UI） | `{ text, placeholderMap, options }` — 其中 `options` 為 `{ isLastChapter: boolean }` |
+| `frontend-render` | 自訂內容渲染（例如將 `<options>` 轉為互動式 UI） | `{ text, placeholderMap, options, series?, story?, chapterNumber? }` — 其中 `options` 為 `{ isLastChapter: boolean, series?, story?, chapterNumber? }`；`series`／`story`／`chapterNumber` 在後端模式下提供，前端模式或尚未載入故事時可能為 `undefined` |
 | `notification` | 通知觸發（LLM 回應完成/錯誤時由核心派發） | `{ event, data, notify }` — `event` 為 `'chat:done'` 或 `'chat:error'`，`notify` 為通知函式 |
 | `chat:send:before` | 使用者送出訊息前，允許 plugin 改寫將送出的文字 | `{ message, mode }` — `mode` 為 `'send'` 或 `'resend'`；若 handler `return` 一個字串，該字串將覆蓋 `context.message`（pipeline 行為） |
 | `chapter:render:after` | 章節 Markdown 渲染完成後，允許 plugin 後處理 token 陣列 | `{ tokens, rawMarkdown, options }` — 可直接變更 `tokens`（push/replace/mutate `.content`）；任何新增或 `.content` 變動的 `html` token 會被系統再次以 DOMPurify 重新消毒 |
@@ -719,9 +724,157 @@ Emit the JSON patch now.
 
 > 範本必須至少包含一個 `{{ message "user" }}…{{ /message }}` 區塊；否則後端會回 422 `multi-message:no-user-message`，與一般聊天的契約一致。
 
+## Plugin Settings
+
+Plugin 可透過在 manifest 中宣告 `settingsSchema` 取得一組由系統提供的設定 API 與閱讀器內建的設定頁。設定值持久儲存於 `playground/_plugins/<pluginName>/config.json`，與其他使用者資料一起保留於 `PLAYGROUND_DIR`。
+
+完整規格見 [`openspec/specs/plugin-settings/spec.md`](../openspec/specs/plugin-settings/spec.md)。
+
+### 宣告 `settingsSchema`
+
+`settingsSchema` 為 JSON Schema（draft-07 相容），且必須是物件型 schema（`type: "object"` 且帶 `properties`）。Plugin 載入時 PluginManager 會驗證頂層結構；不符規格者會被忽略並記錄警告。
+
+```json
+{
+  "name": "sd-webui-image-gen",
+  "version": "1.0.0",
+  "description": "Generate scene images via Automatic1111 / Stable Diffusion WebUI",
+  "type": "full-stack",
+  "backendModule": "./handler.ts",
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "endpoint": {
+        "type": "string",
+        "title": "WebUI Endpoint",
+        "default": "http://localhost:7860"
+      },
+      "apiKey": {
+        "type": "string",
+        "title": "API Key",
+        "format": "password"
+      },
+      "model": {
+        "type": "string",
+        "title": "Checkpoint",
+        "x-options-url": "/api/plugins/sd-webui-image-gen/proxy/sd-models"
+      },
+      "samplers": {
+        "type": "array",
+        "title": "Allowed Samplers",
+        "items": { "type": "string" },
+        "x-options-url": "/api/plugins/sd-webui-image-gen/proxy/samplers"
+      },
+      "negativePromptKeywords": {
+        "type": "array",
+        "title": "Negative Prompt Keywords",
+        "items": { "type": "string" }
+      },
+      "enabled": { "type": "boolean", "default": true }
+    }
+  }
+}
+```
+
+### Settings 端點
+
+| 端點 | 說明 |
+|------|------|
+| `GET /api/plugins/:name/settings-schema` | 回傳 plugin 宣告的 JSON Schema，供前端動態產生表單。Plugin 未宣告時回 404 |
+| `GET /api/plugins/:name/settings` | 回傳 schema 的預設值與 `config.json` 已存值合併後的物件。Plugin 未宣告 settings 時回 404 |
+| `PUT /api/plugins/:name/settings` | 以 `settingsSchema` 驗證 request body，通過後寫入 `config.json` 並回 `{ ok: true }`；驗證失敗回 400 並附帶錯誤訊息 |
+
+`config.json` 所在目錄會在第一次 `PUT` 時遞迴建立。`GET /api/plugins` 的回應中對應 plugin 會帶 `hasSettings: true`。
+
+### 設定頁與輸入欄位種類
+
+閱讀器側欄會自動列出所有 `hasSettings: true` 的 plugin，路由為 `/settings/plugins/:name`。`PluginSettingsPage` 元件根據每個欄位的 schema 屬性決定渲染方式：
+
+| 條件 | 元件 |
+|------|------|
+| `format: "password"` 或 `x-input-type: "password"` | 密碼輸入欄 |
+| `type: "boolean"` | checkbox |
+| `type: "number"` 或 `type: "integer"` | number input |
+| `enum` 列舉 | `<select>` 下拉清單 |
+| `x-options-url` + `type: "string"` | **combobox**（自由文字 + datalist 候選） |
+| `x-options-url` + `type: "array"` | **multi-combobox**（tag 列表 + datalist 候選） |
+| `type: "array"`（無 `x-options-url`） | **tags**（按 Enter 新增、`×` 移除） |
+| 其餘 `type: "string"` | 純文字 input |
+
+`x-options-url` 為 HeartReverie 自有的 JSON Schema 擴充屬性。前端會在載入 schema 後對該 URL 發出 GET（帶上 passphrase 標頭），預期回應為字串陣列；失敗時欄位優雅降級為自由文字輸入。常見用法是讓 plugin 在自家 `registerRoutes` 提供的代理路由（如 `/api/plugins/<name>/proxy/sd-models`）上回傳即時可用的選項清單。
+
+### Plugin 端取用設定
+
+Plugin 後端模組可在 `registerRoutes(context)` 中以 `context.getSettings()` / `context.saveSettings(...)` 讀寫自身設定（見下節）。在一般 hook handler（`prompt-assembly`、`post-response` 等）中需要設定值時，目前可透過呼叫 `getPluginSettings()` 等同等的內部 helper，或在 `register()` 時將 setting 讀進閉包。
+
+## Plugin 自訂 API 路由
+
+後端模組可在 `register`／`getDynamicVariables` 之外，額外匯出 `registerRoutes(context)` 函式。系統會在 `createApp()` 期間呼叫一次，並把該 plugin 自家的 Hono routes 掛載到 `/api/plugins/:name/*` 命名空間下；所有路由自動共用 passphrase 認證 middleware。
+
+完整規格見 [`openspec/specs/plugin-core/spec.md`](../openspec/specs/plugin-core/spec.md) 的「Plugin route registration」需求。
+
+### 簽章
+
+```typescript
+// writer/types.ts
+export interface PluginRouteContext {
+  readonly app: Hono;            // 整個 Hono app；plugin 應只在自己的 basePath 下註冊
+  readonly basePath: string;     // "/api/plugins/<pluginName>"
+  readonly logger: Logger;       // 已綁定 plugin 名稱的結構化 logger
+  readonly getSettings: () => Promise<Record<string, unknown>>;
+  readonly saveSettings: (settings: Record<string, unknown>) => Promise<void>;
+  readonly config: AppConfig;    // 唯讀的全域設定（PLAYGROUND_DIR 等）
+}
+```
+
+`registerRoutes` 可為同步或非同步。若回傳 Promise，系統會在 `initPluginRoutes(app)` 中等待所有 plugin 完成註冊後才開放服務。
+
+### 範例
+
+```typescript
+// handler.ts
+import type { PluginRegisterContext, PluginRouteContext } from "../../writer/types.ts";
+
+export function register({ hooks, logger }: PluginRegisterContext): void {
+  // ...一般 hook 註冊
+}
+
+export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
+  const { app, basePath, logger, getSettings } = ctx;
+
+  // 代理 SD WebUI 的 /sdapi/v1/sd-models，將結果作為 settingsSchema 的 x-options-url 候選
+  app.get(`${basePath}/proxy/sd-models`, async (c) => {
+    const settings = await getSettings();
+    const endpoint = String(settings.endpoint ?? "http://localhost:7860");
+    try {
+      const res = await fetch(`${endpoint}/sdapi/v1/sd-models`);
+      if (!res.ok) return c.json([], 200);
+      const models = (await res.json()) as Array<{ title: string }>;
+      return c.json(models.map((m) => m.title));
+    } catch (err) {
+      logger.warn("sd-webui proxy failed", { error: String(err) });
+      return c.json([]);
+    }
+  });
+
+  // 觸發圖片生成；寫入 PLAYGROUND_DIR/<series>/<story>/_images/ 後由 story-image-serving 路由提供出去
+  app.post(`${basePath}/generate`, async (c) => {
+    // ...
+    return c.json({ ok: true });
+  });
+}
+```
+
+### 限制與安全
+
+- 路由只能掛載於自家 `basePath` 之下；註冊在 `basePath` 之外的 path 雖然技術上可達，但會遭路徑檢查或前端 `/plugins/...` 命名空間阻擋。Plugin 應永遠以 `${basePath}/...` 為前綴。
+- 所有 `/api/plugins/:name/*` 路徑共用全域 passphrase 認證——plugin 不需自行驗證 passphrase。
+- `registerRoutes` 異常或 `Promise` reject 會被記錄但不會阻止伺服器啟動；其他 plugin 仍會繼續初始化。
+- 路由命名建議冪等的 REST 風格（`proxy/...`、`generate`、`status` 等），避免與既有 `settings`／`settings-schema`／`run-prompt` 等系統路徑衝突。
+
 ## API 端點
 
-系統提供兩個與 plugin 相關的 API 端點：
+系統提供下列與 plugin 相關的 API 端點。除非另有說明，所有端點皆受 passphrase 認證 middleware 保護。
 
 ### GET /api/plugins
 
@@ -737,10 +890,14 @@ Emit the JSON patch now.
     "tags": ["thinking", "think"],
     "displayStripTags": [],
     "hasFrontendModule": true,
-    "frontendStyles": []
+    "hasSettings": false,
+    "frontendStyles": [],
+    "actionButtons": []
   }
 ]
 ```
+
+`hasSettings` 為 `true` 時，前端會在設定頁側欄列出該 plugin 的設定分頁（路由：`/settings/plugins/:name`）。
 
 ### GET /api/plugins/parameters
 
@@ -754,6 +911,25 @@ Emit the JSON patch now.
 ```
 
 此端點供前端的提示詞編輯器使用，讓使用者在編輯模板時查看可用變數。
+
+### Plugin Settings 端點
+
+詳見「[Plugin Settings](#plugin-settings)」章節：
+
+- `GET /api/plugins/:name/settings-schema` — 取得 plugin 的 JSON Schema
+- `GET /api/plugins/:name/settings` — 取得已合併預設值的目前設定
+- `PUT /api/plugins/:name/settings` — 驗證並儲存新設定
+
+### Story Image Serving 端點
+
+供 plugin（例如 sd-webui-image-gen）使用，將生成的圖片從故事目錄下的 `_images/` 子目錄提供出來。詳細規格見 [`openspec/specs/story-image-serving/spec.md`](../openspec/specs/story-image-serving/spec.md)。
+
+| 端點 | 說明 |
+|------|------|
+| `GET /api/stories/:series/:story/images/:filename` | 提供 `PLAYGROUND_DIR/<series>/<story>/_images/<filename>` 的二進位圖片。`filename` 必須符合 `^[\w\-\.]+$`，並排除任何含 `..` 的請求。Content-Type 依副檔名推導（`.avif`／`.webp`／`.png`／`.jpg`／`.jpeg`／`.gif`／`.svg`），並附 `Cache-Control: public, immutable`。 |
+| `GET /api/stories/:series/:story/image-metadata?chapter=<N>` | 回傳 `{ images: [...] }`，從 `_images/_metadata.json` 讀取，可選 `chapter` 查詢參數過濾單章。檔案不存在時回 `{ images: [] }`。 |
+
+`/api/*` 的 body limit 為 10 MB，以容納 sd-webui 等服務回傳的 base64 圖片。
 
 ## 安全機制
 
@@ -903,7 +1079,7 @@ export function register(hooks) {
 | Plugin | 類型 | 功能 |
 |--------|------|------|
 | context-compaction | full-stack | 長篇脈絡壓縮，自動摘要早期章節 |
-| imgthink | prompt-only | 圖像思考標籤處理 |
+| dialogue-colorize | frontend-only | 對話標籤上色顯示 |
 | polish | full-stack | 一鍵文學潤飾改寫；貢獻 `✨ 潤飾` 動作按鈕（`visibleWhen: "last-chapter-backend"`），以 `replace: true` 原子覆寫最新章節。前端模組為薄層 action-button click 接線 |
 | start-hints | prompt-only | 首輪章節開場引導提示，含提示詞與顯示標籤清除 |
 | thinking | full-stack | 回覆前思考指令與折疊 `<thinking>`/`<think>` 標籤為可展開的 details 元素 |

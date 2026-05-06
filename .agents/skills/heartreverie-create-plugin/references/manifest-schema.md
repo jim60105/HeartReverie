@@ -8,6 +8,7 @@
 - [Prompt Fragments](#prompt-fragments)
 - [Tag Strip Patterns](#tag-strip-patterns)
 - [Parameters](#parameters)
+- [Plugin Settings](#plugin-settings)
 - [Security Constraints](#security-constraints)
 - [Complete Examples by Type](#complete-examples-by-type)
 
@@ -45,6 +46,7 @@
 | `promptStripTags` | `array` | Tags/regex to strip from `previousContext` when building prompts |
 | `displayStripTags` | `array` | Tags/regex to strip from frontend display |
 | `parameters` | `array` | Custom Vento template parameters exposed to the template editor |
+| `settingsSchema` | `object` | JSON Schema (draft-07 compatible, must be `type: "object"` with a `properties` record) describing user-configurable settings. When present, the system exposes settings endpoints and a settings page in the reader. See [Plugin Settings](#plugin-settings). |
 
 ## Prompt Fragments
 
@@ -161,7 +163,82 @@ The `parameters` array declares custom Vento template parameters that appear in 
 
 > Note: Prompt fragment variables are automatically registered as parameters. Only use the `parameters` field for non-fragment variables that your backend hook injects into the template context.
 
-## Security Constraints
+## Plugin Settings
+
+A plugin declares user-configurable settings by adding a `settingsSchema` JSON Schema object to its manifest. The schema MUST be an object schema (`type: "object"` with a `properties` record); other shapes are rejected at load time.
+
+When `settingsSchema` is present:
+
+- `GET /api/plugins` reports `hasSettings: true` for the plugin.
+- The reader shows a settings tab at `/settings/plugins/<name>` with an auto-generated form.
+- `GET /api/plugins/<name>/settings-schema` returns the schema for the form.
+- `GET /api/plugins/<name>/settings` returns `{ ...defaults from schema, ...saved values }`.
+- `PUT /api/plugins/<name>/settings` validates the body against the schema and writes it to `playground/_plugins/<name>/config.json`. Validation failure returns 400.
+
+### Field Type → Frontend Input Mapping
+
+The settings page picks an input widget per property based on the schema:
+
+| Schema property | Rendered widget |
+|-----------------|------------------|
+| `format: "password"` or `x-input-type: "password"` | password input |
+| `type: "boolean"` | checkbox |
+| `type: "number"` / `type: "integer"` | number input |
+| `enum: [...]` | `<select>` dropdown |
+| `type: "string"` + `x-options-url` | combobox (free text + `<datalist>`) |
+| `type: "array"` + `x-options-url` | multi-combobox (tag chips + `<datalist>`) |
+| `type: "array"` (no `x-options-url`) | tags input (Enter to add, `×` to remove) |
+| any other `type: "string"` | text input |
+
+`x-options-url` is a HeartReverie-specific JSON Schema extension. The frontend GETs the URL with passphrase headers and expects a JSON array of strings; on failure the field gracefully degrades to a free-text input. Plugins typically point this at a route they expose via `registerRoutes` (e.g. `/api/plugins/<name>/proxy/sd-models`) so dropdown options reflect live external state.
+
+### Example: settings-aware plugin
+
+```json
+{
+  "name": "sd-webui-image-gen",
+  "version": "1.0.0",
+  "description": "Generate scene images via Automatic1111 / Stable Diffusion WebUI",
+  "type": "full-stack",
+  "backendModule": "./handler.ts",
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "endpoint": {
+        "type": "string",
+        "title": "WebUI Endpoint",
+        "default": "http://localhost:7860"
+      },
+      "apiKey": {
+        "type": "string",
+        "title": "API Key",
+        "format": "password"
+      },
+      "model": {
+        "type": "string",
+        "title": "Checkpoint",
+        "x-options-url": "/api/plugins/sd-webui-image-gen/proxy/sd-models"
+      },
+      "samplers": {
+        "type": "array",
+        "title": "Allowed Samplers",
+        "items": { "type": "string" },
+        "x-options-url": "/api/plugins/sd-webui-image-gen/proxy/samplers"
+      },
+      "negativeKeywords": {
+        "type": "array",
+        "title": "Negative Prompt Keywords",
+        "items": { "type": "string" }
+      },
+      "enabled": { "type": "boolean", "default": true }
+    }
+  }
+}
+```
+
+Backend handlers can read/write the saved settings through `registerRoutes`'s `getSettings` / `saveSettings` helpers — see [`hook-api.md`](./hook-api.md#registerroutes-export).
+
+
 
 ### Name Validation
 

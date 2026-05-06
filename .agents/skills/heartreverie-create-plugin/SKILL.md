@@ -180,6 +180,8 @@ For the 3 active hook stages and their context parameters, read `references/hook
 
 Backend code style: ESM, **double quotes**, semicolons, `async/await`, JSDoc comments. Use `context.logger ?? logger` pattern in hook handlers for request-scoped logging.
 
+The same module MAY additionally export `registerRoutes(context)` (sync or async) to mount custom HTTP endpoints under `/api/plugins/<name>/*` — useful for proxying external services or backing `x-options-url` dropdowns in the settings page. See [`references/hook-api.md`](./references/hook-api.md#registerroutes-export) for the full `PluginRouteContext` contract.
+
 ## Step 7: Create Frontend Module (if applicable)
 
 For plugins with `frontendModule`, create the module using the Extract → Placeholder → Reinsert pattern:
@@ -330,6 +332,32 @@ Available variables include the core set (`previous_context`, `user_input` (defa
 
 Add a short usage paragraph to the plugin's `README.md` describing what the button does and when it appears.
 
+## Step 8.5: Add Plugin Settings (optional)
+
+If the plugin needs user-configurable values (API endpoints, secret keys, dropdown selections, allow-lists), declare a `settingsSchema` in the manifest. The reader auto-renders a settings page at `/settings/plugins/<name>` and exposes `GET`/`PUT /api/plugins/<name>/settings` plus `GET /api/plugins/<name>/settings-schema`. Saved values land in `playground/_plugins/<name>/config.json`.
+
+Ask: **Does the user need to change anything at runtime without editing the plugin source?** If yes, add a `settingsSchema`.
+
+The schema MUST be `type: "object"` with a `properties` record (other shapes are rejected at load time). Each property maps to an input widget — see the field-type table in [`references/manifest-schema.md`](./references/manifest-schema.md#plugin-settings).
+
+```json
+"settingsSchema": {
+  "type": "object",
+  "properties": {
+    "endpoint":   { "type": "string",  "title": "API Endpoint", "default": "https://api.example.com" },
+    "apiKey":     { "type": "string",  "title": "API Key", "format": "password" },
+    "model":      { "type": "string",  "title": "Model", "enum": ["small", "medium", "large"] },
+    "samplers":   { "type": "array",   "title": "Allowed Samplers", "items": { "type": "string" }, "x-options-url": "/api/plugins/<name>/proxy/samplers" },
+    "blocklist":  { "type": "array",   "title": "Blocked Keywords", "items": { "type": "string" } },
+    "enabled":    { "type": "boolean", "default": true }
+  }
+}
+```
+
+Backend handlers read settings via the `getSettings()` helper inside `registerRoutes(context)`; mutations go through `saveSettings(...)` (it validates against the schema before writing).
+
+Hooks running outside `registerRoutes` (e.g. `post-response`) can fetch settings through the same `PluginManager` API the routes use — typically by calling a small helper your plugin exposes, or by reading the JSON file directly under `<rootDir>/playground/_plugins/<name>/config.json`.
+
 ## Step 9: Generate README.md
 
 Create `plugins/<name>/README.md` in Traditional Chinese (zh-TW):
@@ -374,4 +402,5 @@ Run these checks before considering the plugin complete:
 3. **File existence**: All files referenced in manifest exist (`promptFragments[].file`, `backendModule`, `frontendModule`)
 4. **Path safety**: All file paths resolve within `plugins/<name>/` (no `../` traversal)
 5. **system.md integration**: If prompt fragments use named variables, confirm `{{ variable_name }}` exists in `system.md`
-6. **Run tests**: `deno test --allow-read --allow-write --allow-env --allow-net` to verify nothing is broken
+6. **`settingsSchema` validity** (if present): top-level must be `type: "object"` with a `properties` record; otherwise it is silently ignored at load time
+7. **Run tests**: `deno test --allow-read --allow-write --allow-env --allow-net` to verify nothing is broken
