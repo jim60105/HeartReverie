@@ -9,6 +9,7 @@
   - [Priority System](#priority-system)
   - [Error Handling](#error-handling)
   - [Plugin Logger](#plugin-logger)
+  - [`registerRoutes` Export](#registerroutes-export)
 - [Frontend Hooks](#frontend-hooks)
   - [Frontend Registration Pattern](#frontend-registration-pattern)
   - [The Placeholder Pattern](#the-placeholder-pattern)
@@ -21,6 +22,11 @@
 ## Backend Hooks
 
 Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger }` — a `PluginHooks` interface for hook registration and a pre-scoped `Logger` for structured logging.
+
+In addition to `register`, a backend module MAY export:
+
+- `getDynamicVariables(context)` — supplies values for variables declared in `parameters`. See `manifest-schema.md`.
+- `registerRoutes(context)` — mounts custom HTTP endpoints for the plugin under `/api/plugins/<name>/*`. See [`registerRoutes` Export](#registerroutes-export).
 
 ### Hook Stages
 
@@ -152,6 +158,53 @@ log.warn("Binary not found", { path: "/usr/bin/tool" });
 log.error("Execution failed", { exitCode: 1, stderr: "..." });
 ```
 
+### `registerRoutes` Export
+
+A backend module may also export `registerRoutes(context)` to mount custom HTTP endpoints under `/api/plugins/<name>/*`. The function may be `async` (the server awaits all pending plugin route registrations during `initPluginRoutes(app)` before serving traffic).
+
+**Context (`PluginRouteContext`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `app` | `Hono` | The plugin's own Hono sub-app. Routes registered here are mounted at `basePath`. |
+| `basePath` | `string` | The mount prefix, e.g. `/api/plugins/sd-webui-image-gen`. |
+| `logger` | `Logger` | Pre-scoped logger for this plugin. |
+| `getSettings` | `() => Promise<Record<string, unknown>>` | Reads the merged saved settings (defaults from `settingsSchema` ∪ values from `playground/_plugins/<name>/config.json`). Returns `{}` if the plugin declares no `settingsSchema`. |
+| `saveSettings` | `(settings) => Promise<void>` | Validates against the schema (if any) then writes the file. Throws on validation failure. |
+| `config` | `AppConfig` | The shared app config (passphrase mode, paths, etc.). |
+
+**TypeScript example:**
+
+```typescript
+import type { PluginRouteContext } from "../../writer/types.ts";
+
+export async function registerRoutes(context: PluginRouteContext): Promise<void> {
+  const { app, logger, getSettings } = context;
+
+  // Proxy that returns a string array for x-options-url consumption.
+  app.get("/proxy/sd-models", async (c) => {
+    const settings = await getSettings();
+    const endpoint = (settings.endpoint as string) ?? "http://localhost:7860";
+    try {
+      const res = await fetch(`${endpoint}/sdapi/v1/sd-models`);
+      if (!res.ok) return c.json([], 200);
+      const models = (await res.json()) as Array<{ title: string }>;
+      return c.json(models.map((m) => m.title));
+    } catch (err) {
+      logger.warn("sd-models proxy failed", { error: String(err) });
+      return c.json([], 200);
+    }
+  });
+}
+```
+
+**Security notes:**
+
+- Routes inherit the global passphrase middleware — clients must send the same authentication header used by the rest of `/api/*`.
+- The body limit on `/api/*` is 10 MB (raised from 1 MB to support base64 image payloads).
+- Plugin routes MUST stay within their own `basePath`. Do not attempt to register routes outside it; the runtime mounts the sub-app under the prefix.
+- Treat saved settings as untrusted input on the wire path — always re-validate before forwarding to external services.
+
 ---
 
 ## Frontend Hooks
@@ -162,16 +215,18 @@ Frontend modules are ES modules loaded by the browser. They register synchronous
 
 | Stage | Purpose | Context Parameters |
 |-------|---------|-------------------|
-| `frontend-render` | Custom tag extraction and rendering | `{ text, placeholderMap, options }` |
+| `frontend-render` | Custom tag extraction and rendering | `{ text, placeholderMap, options, series?, story?, chapterNumber? }` |
 | `notification` | Browser notification when events occur (e.g., `chat:done`) | `{ event, data, notify }` |
 | `chat:send:before` | Transform the user message just before it is sent (pipeline) | `{ message, mode }` — `mode` is `'send'` or `'resend'`. If a handler returns a `string`, it replaces `context.message` for subsequent handlers. |
-| `chapter:render:after` | Post-process the token array after Markdown + initial DOMPurify pass | `{ tokens, rawMarkdown, options }` — mutate `tokens` freely; the system re-sanitizes any newly added or `.content`-mutated `html` tokens after dispatch. |
+| `chapter:render:after` | Post-process the token array after Markdown + initial DOMPurify pass | `{ tokens, rawMarkdown, options, series?, story?, chapterNumber? }` — mutate `tokens` freely; the system re-sanitizes any newly added or `.content`-mutated `html` tokens after dispatch. |
 | `story:switch` | Informational: fires when the active series/story changes | `{ series, story, previousSeries, previousStory }` — `previousSeries`/`previousStory` are `null` on first load; `series`/`story` are always non-null strings. |
 | `chapter:change` | Informational: fires when the displayed chapter changes | `{ chapter, index, previousIndex, series, story }` — `chapter` matches `ChapterData.number`; `previousIndex` is `null` on first load. |
 
 - `text` (`string`): The raw LLM output text before Markdown parsing
 - `placeholderMap` (`Map<string, string>`): Map of placeholder strings → rendered HTML
-- `options` (`object`): Render options (e.g., `{ isLastChapter }`)
+- `options` (`object`): Render options (e.g., `{ isLastChapter }`); for `frontend-render` and `chapter:render:after` it also carries the same optional `series` / `story` / `chapterNumber` fields when known
+- `series` / `story` (`string`, optional): Active series and story slugs — present when the chapter is rendered in the context of an open story (i.e. not in the bare reader homepage)
+- `chapterNumber` (`number`, optional): 1-based chapter number — present alongside `series`/`story`
 
 ### Frontend Registration Pattern
 
