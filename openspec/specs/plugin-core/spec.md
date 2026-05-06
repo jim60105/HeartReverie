@@ -28,6 +28,26 @@ Each plugin SHALL have a `plugin.json` (or `plugin.yaml`) manifest file in its r
 - **WHEN** a plugin directory contains a `plugin.json` with `"frontendStyles": ["styles.css"]` and the file exists within the plugin directory
 - **THEN** the loader SHALL parse the manifest, record the CSS asset, and register the plugin with its declared stylesheets available for frontend injection
 
+The plugin manifest (`plugin.json`) SHALL support the following additional optional fields:
+
+- `settingsSchema` — a JSON Schema object defining the plugin's configurable settings. When present, the plugin system SHALL expose settings API endpoints and the frontend SHALL render a settings page for this plugin.
+- The backend module MAY export a `registerRoutes` function accepting `(app: Hono, basePath: string)` that registers custom HTTP routes under the plugin's namespace.
+
+#### Scenario: Plugin with settingsSchema is discovered
+
+- **WHEN** the plugin manager loads a plugin whose manifest contains a valid `settingsSchema` object
+- **THEN** the plugin SHALL be flagged as having settings, and `GET /api/plugins` SHALL include `hasSettings: true` in that plugin's metadata
+
+#### Scenario: Plugin without settingsSchema has no settings endpoints
+
+- **WHEN** a client requests `GET /api/plugins/no-settings-plugin/settings`
+- **THEN** the server SHALL respond with 404
+
+#### Scenario: Plugin backend module registers custom routes
+
+- **WHEN** a plugin's backend module exports a `registerRoutes(app, basePath)` function
+- **THEN** the plugin manager SHALL call it during plugin loading, mounting routes at `/api/plugins/<pluginName>/`
+
 ### Requirement: Plugin discovery and loading
 
 The server SHALL scan the built-in plugins directory (`plugins/`) at startup to discover and load plugins. The server SHALL also scan an external plugin path specified by the `PLUGIN_DIR` environment variable if set. File system operations SHALL use Deno native APIs (`Deno.readDir()`, `Deno.readTextFile()`). Path operations SHALL use `@std/path`. Dynamic module loading SHALL use `import()` which is compatible in both Node.js and Deno. The frontend SHALL discover available plugins via a `GET /api/plugins` endpoint that returns the list of loaded plugins with their manifest metadata and enabled status. Frontend plugin loading SHALL be managed by a `usePlugins()` composable that handles discovery, dynamic import of `frontend.js` modules, and hook registration. The plugin contract (`export function register(hooks)` in `frontend.js`) SHALL remain unchanged for backward compatibility with existing plugin modules. The `initPlugins()` initialization logic SHALL move into the `usePlugins()` composable's initialization. The existing backend plugin directory structure SHALL remain unchanged — this refactor only affects frontend module loading.
@@ -256,4 +276,18 @@ Plugin manifests SHALL accept an optional `actionButtons` field at the top level
 #### Scenario: Unknown visibleWhen value rejected
 - **WHEN** an `actionButtons` entry sets `"visibleWhen": "always"` or any other value outside the v1 enum
 - **THEN** the loader SHALL drop that entry with a warning and SHALL NOT default it silently to a different value
+
+### Requirement: Plugin route registration
+
+The plugin system SHALL allow backend modules to register custom HTTP routes by exporting a `registerRoutes(app, basePath)` function. The core SHALL mount these routes at `/api/plugins/:pluginName/` and SHALL apply passphrase authentication middleware to all plugin routes. Plugin routes SHALL NOT be able to escape their namespace prefix.
+
+#### Scenario: Plugin route responds to request
+
+- **WHEN** a plugin named `sd-webui-image-gen` registers a route handler for `GET /proxy/sd-models`
+- **THEN** the route SHALL be accessible at `GET /api/plugins/sd-webui-image-gen/proxy/sd-models` with passphrase protection
+
+#### Scenario: Plugin route isolated to namespace
+
+- **WHEN** a plugin attempts to register a route at a path outside its namespace
+- **THEN** the plugin manager SHALL prevent the route from being accessible outside `/api/plugins/<pluginName>/`
 
