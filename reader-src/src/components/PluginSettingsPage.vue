@@ -16,6 +16,8 @@ const dynamicOptionsFailed = ref<Set<string>>(new Set());
 const loading = ref(true);
 const saving = ref(false);
 const error = ref("");
+const actionLoading = ref<Record<string, boolean>>({});
+const actionResult = ref<Record<string, { ok: boolean; error?: string } | null>>({});
 
 interface SchemaProperty {
   type?: string;
@@ -27,6 +29,15 @@ interface SchemaProperty {
   items?: { type?: string };
   "x-options-url"?: string;
   "x-input-type"?: string;
+}
+
+interface SchemaAction {
+  id: string;
+  label: string;
+  url: string;
+  method?: string;
+  bodyFields?: string[];
+  reloadOptionsOnSuccess?: boolean;
 }
 
 async function loadSchema(): Promise<void> {
@@ -92,6 +103,38 @@ async function loadDynamicOption(key: string, url: string): Promise<void> {
     }
   } catch {
     dynamicOptionsFailed.value.add(key);
+  }
+}
+
+async function executeAction(action: SchemaAction): Promise<void> {
+  actionLoading.value = { ...actionLoading.value, [action.id]: true };
+  actionResult.value = { ...actionResult.value, [action.id]: null };
+  try {
+    const body: Record<string, unknown> = {};
+    if (action.bodyFields) {
+      for (const field of action.bodyFields) {
+        body[field] = settings.value[field] ?? "";
+      }
+    }
+    const res = await fetch(action.url, {
+      method: action.method || "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" } as Record<string, string>,
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json()) as { ok: boolean; error?: string };
+    actionResult.value = { ...actionResult.value, [action.id]: data };
+
+    if (data.ok && action.reloadOptionsOnSuccess) {
+      dynamicOptionsFailed.value = new Set();
+      await loadDynamicOptionsForSchema();
+    }
+  } catch {
+    actionResult.value = {
+      ...actionResult.value,
+      [action.id]: { ok: false, error: "網路錯誤，無法執行操作" },
+    };
+  } finally {
+    actionLoading.value = { ...actionLoading.value, [action.id]: false };
   }
 }
 
@@ -163,6 +206,12 @@ function removeFromArray(key: string, index: number): void {
   updateField(key, current.filter((_, i) => i !== index));
 }
 
+const schemaActions = computed((): SchemaAction[] => {
+  if (!schema.value) return [];
+  const actions = (schema.value as Record<string, unknown>)["x-actions"];
+  return Array.isArray(actions) ? (actions as SchemaAction[]) : [];
+});
+
 const schemaProperties = computed(() => {
   if (!schema.value) return [];
   const properties = (schema.value as Record<string, unknown>).properties as
@@ -202,6 +251,31 @@ watch(pluginName, async () => {
     <p v-else-if="error" class="status-message error-message">{{ error }}</p>
 
     <form v-else-if="schema" class="settings-form" @submit.prevent="save">
+      <!-- Actions (x-actions) -->
+      <div v-if="schemaActions.length" class="actions-section">
+        <div
+          v-for="action in schemaActions"
+          :key="action.id"
+          class="action-item"
+        >
+          <button
+            type="button"
+            class="action-btn themed-btn"
+            :disabled="actionLoading[action.id]"
+            @click="executeAction(action)"
+          >
+            {{ actionLoading[action.id] ? "測試中…" : action.label }}
+          </button>
+          <span
+            v-if="actionResult[action.id]"
+            class="action-result"
+            :class="actionResult[action.id]?.ok ? 'result-success' : 'result-error'"
+          >
+            {{ actionResult[action.id]?.ok ? "✓ 連線成功" : `✗ ${actionResult[action.id]?.error || '連線失敗'}` }}
+          </span>
+        </div>
+      </div>
+
       <div
         v-for="field in schemaProperties"
         :key="field.key"
@@ -377,6 +451,52 @@ watch(pluginName, async () => {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+.actions-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  background: var(--btn-bg);
+  color: var(--text-label);
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: var(--font-antique), var(--font-system-ui);
+}
+
+.action-btn:hover:not(:disabled) {
+  background: var(--btn-active-bg);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-result {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.result-success {
+  color: #4caf50;
+}
+
+.result-error {
+  color: #f44336;
 }
 
 .form-field {

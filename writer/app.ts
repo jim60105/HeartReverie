@@ -207,27 +207,6 @@ export function createApp(deps: AppDeps): Hono {
     serveStatic({ root: readerRelative })
   );
 
-  // SPA fallback: serve index.html for unmatched GET requests (HTML5 history mode)
-  app.get("*", async (c) => {
-    const path = new URL(c.req.url).pathname;
-    // Don't fallback for API, plugin, asset, or JS routes
-    if (
-      path.startsWith("/api/") ||
-      path.startsWith("/plugins/") ||
-      path.startsWith("/assets/") ||
-      path.startsWith("/js/")
-    ) {
-      return c.json(problemJson("Not Found", 404, "Resource not found"), 404);
-    }
-    const indexPath = join(deps.config.READER_DIR, "index.html");
-    try {
-      const content = await Deno.readTextFile(indexPath);
-      return c.html(content);
-    } catch {
-      return c.json(problemJson("Not Found", 404, "index.html not found"), 404);
-    }
-  });
-
   return app;
 }
 
@@ -242,4 +221,31 @@ export async function initPluginRoutes(app: Hono): Promise<void> {
     await Promise.all(pending);
     delete (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits;
   }
+}
+
+/**
+ * Register the SPA fallback route. MUST be called after initPluginRoutes()
+ * so that async plugin GET routes are already in the router and won't be
+ * shadowed by the catch-all.
+ */
+export function registerSpaFallback(app: Hono, config: { READER_DIR: string }): void {
+  app.get("*", async (c) => {
+    const path = new URL(c.req.url).pathname;
+    // Don't fallback for API, plugin, asset, or JS routes
+    if (
+      path.startsWith("/api/") ||
+      path.startsWith("/plugins/") ||
+      path.startsWith("/assets/") ||
+      path.startsWith("/js/")
+    ) {
+      return c.json(problemJson("Not Found", 404, "Resource not found"), 404);
+    }
+    const indexPath = join(config.READER_DIR, "index.html");
+    try {
+      const content = await Deno.readTextFile(indexPath);
+      return c.html(content);
+    } catch {
+      return c.json(problemJson("Not Found", 404, "index.html not found"), 404);
+    }
+  });
 }
