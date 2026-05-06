@@ -15,7 +15,7 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { createApp } from "../../../writer/app.ts";
+import { createApp, registerSpaFallback } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import type { Hono } from "@hono/hono";
@@ -68,6 +68,7 @@ Deno.test({ name: "SPA fallback", sanitizeOps: false, sanitizeResources: false, 
     buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     verifyPassphrase,
   } as AppDeps);
+  registerSpaFallback(app, { READER_DIR: readerDir });
 
   try {
     await t.step("GET /unknown/path returns index.html (SPA fallback)", async () => {

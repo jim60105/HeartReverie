@@ -24,7 +24,7 @@ import { createSafePath, verifyPassphrase } from "./lib/middleware.ts";
 import { createTemplateEngine } from "./lib/template.ts";
 import { createStoryEngine } from "./lib/story.ts";
 import { loadThemes } from "./lib/themes.ts";
-import { createApp, initPluginRoutes } from "./app.ts";
+import { createApp, initPluginRoutes, registerSpaFallback } from "./app.ts";
 
 // ── Initialize logger first ────────────────────────────────────
 await initLogger();
@@ -57,6 +57,7 @@ const app = createApp({
   verifyPassphrase,
 });
 await initPluginRoutes(app);
+registerSpaFallback(app, config);
 
 // ── Start server (plain HTTP only — TLS is the operator's job) ──
 const serveOptions: Deno.ServeTcpOptions = {
