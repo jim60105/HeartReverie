@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRoute } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import { useNotification } from "@/composables/useNotification";
@@ -18,6 +18,9 @@ const saving = ref(false);
 const error = ref("");
 const actionLoading = ref<Record<string, boolean>>({});
 const actionResult = ref<Record<string, { ok: boolean; error?: string } | null>>({});
+const comboboxOpen = ref<Record<string, boolean>>({});
+const comboboxFilter = ref<Record<string, string>>({});
+const comboboxHighlight = ref<Record<string, number>>({});
 
 interface SchemaProperty {
   type?: string;
@@ -190,7 +193,14 @@ function updateField(key: string, value: unknown): void {
 
 function getArrayValue(key: string): string[] {
   const val = settings.value[key];
-  return Array.isArray(val) ? val.map(String) : [];
+  if (Array.isArray(val)) return val.map(String);
+  // Legacy migration: coerce string to single-element array
+  if (typeof val === "string" && val.trim()) {
+    const arr = [val.trim()];
+    settings.value = { ...settings.value, [key]: arr };
+    return arr;
+  }
+  return [];
 }
 
 function addToArray(key: string, value: string): void {
@@ -205,6 +215,93 @@ function removeFromArray(key: string, index: number): void {
   const current = getArrayValue(key);
   updateField(key, current.filter((_, i) => i !== index));
 }
+
+function getFilteredOptions(field: { key: string; options: string[] }): string[] {
+  const filter = (comboboxFilter.value[field.key] || "").toLowerCase();
+  if (!filter) return field.options;
+  return field.options.filter(opt => opt.toLowerCase().includes(filter));
+}
+
+function isOptionSelected(field: { key: string }, opt: string): boolean {
+  return getArrayValue(field.key).includes(opt);
+}
+
+function openCombobox(key: string): void {
+  for (const k of Object.keys(comboboxOpen.value)) {
+    if (k !== key) comboboxOpen.value[k] = false;
+  }
+  comboboxOpen.value = { ...comboboxOpen.value, [key]: true };
+  comboboxHighlight.value = { ...comboboxHighlight.value, [key]: -1 };
+}
+
+function closeCombobox(key: string): void {
+  comboboxOpen.value = { ...comboboxOpen.value, [key]: false };
+}
+
+function comboboxAddOption(key: string, value: string): void {
+  if (!value.trim()) return;
+  const current = getArrayValue(key);
+  if (!current.includes(value.trim())) {
+    updateField(key, [...current, value.trim()]);
+  }
+  comboboxFilter.value = { ...comboboxFilter.value, [key]: "" };
+  comboboxHighlight.value = { ...comboboxHighlight.value, [key]: -1 };
+}
+
+function handleComboboxKeydown(event: KeyboardEvent, field: { key: string; options: string[] }): void {
+  const key = field.key;
+  const filtered = getFilteredOptions(field);
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    if (!comboboxOpen.value[key]) openCombobox(key);
+    const current = comboboxHighlight.value[key] ?? -1;
+    comboboxHighlight.value = { ...comboboxHighlight.value, [key]: (current + 1) % (filtered.length || 1) };
+    scrollHighlightedIntoView(key);
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    if (!comboboxOpen.value[key]) openCombobox(key);
+    const current = comboboxHighlight.value[key] ?? 0;
+    comboboxHighlight.value = { ...comboboxHighlight.value, [key]: current <= 0 ? filtered.length - 1 : current - 1 };
+    scrollHighlightedIntoView(key);
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    const highlight = comboboxHighlight.value[key] ?? -1;
+    if (highlight >= 0 && highlight < filtered.length) {
+      comboboxAddOption(key, filtered[highlight]);
+    } else {
+      const text = comboboxFilter.value[key] || "";
+      comboboxAddOption(key, text);
+    }
+  } else if (event.key === "Escape") {
+    closeCombobox(key);
+  }
+}
+
+function scrollHighlightedIntoView(key: string): void {
+  nextTick(() => {
+    const safeKey = CSS.escape(key);
+    const el = document.querySelector(`.dropdown-panel[data-field="${safeKey}"] .dropdown-option.highlighted`);
+    el?.scrollIntoView({ block: "nearest" });
+  });
+}
+
+function handleClickOutside(event: MouseEvent): void {
+  const target = event.target as Element;
+  if (!target.closest(".multi-combobox")) {
+    for (const key of Object.keys(comboboxOpen.value)) {
+      comboboxOpen.value[key] = false;
+    }
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("mousedown", handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", handleClickOutside);
+});
 
 const schemaActions = computed((): SchemaAction[] => {
   if (!schema.value) return [];
@@ -238,6 +335,9 @@ watch(pluginName, async () => {
   loading.value = true;
   dynamicOptions.value = {};
   dynamicOptionsFailed.value = new Set();
+  comboboxOpen.value = {};
+  comboboxFilter.value = {};
+  comboboxHighlight.value = {};
   await Promise.all([loadSchema(), loadSettings()]);
   loading.value = false;
 });
@@ -348,21 +448,54 @@ watch(pluginName, async () => {
               <button type="button" class="tag-remove" @click="removeFromArray(field.key, idx)">×</button>
             </span>
           </div>
-          <input
-            :id="`field-${field.key}`"
-            type="text"
-            :list="`datalist-${field.key}`"
-            class="field-input"
-            :placeholder="field.options.length ? '選擇或輸入後按 Enter…' : '輸入後按 Enter…'"
-            @keydown.enter.prevent="addToArray(field.key, ($event.target as HTMLInputElement).value); ($event.target as HTMLInputElement).value = ''"
-          />
-          <datalist :id="`datalist-${field.key}`">
-            <option
-              v-for="opt in field.options"
-              :key="opt"
-              :value="opt"
+          <div class="input-row">
+            <input
+              :id="`field-${field.key}`"
+              type="text"
+              class="field-input combobox-input"
+              :value="comboboxFilter[field.key] || ''"
+              :placeholder="field.options.length ? '選擇或輸入…' : '輸入值…'"
+              autocomplete="off"
+              role="combobox"
+              :aria-expanded="!!comboboxOpen[field.key]"
+              :aria-controls="`dropdown-${field.key}`"
+              @input="comboboxFilter[field.key] = ($event.target as HTMLInputElement).value; comboboxHighlight[field.key] = -1"
+              @focus="openCombobox(field.key)"
+              @keydown="handleComboboxKeydown($event, field)"
             />
-          </datalist>
+            <button
+              type="button"
+              class="chevron-btn"
+              tabindex="-1"
+              aria-label="開啟選項"
+              @mousedown.prevent="if (comboboxOpen[field.key]) { closeCombobox(field.key) } else { openCombobox(field.key); ($event.target as HTMLElement).closest('.input-row')?.querySelector<HTMLInputElement>('.combobox-input')?.focus() }"
+            >▼</button>
+            <div
+              v-show="comboboxOpen[field.key] && field.options.length"
+              :id="`dropdown-${field.key}`"
+              class="dropdown-panel"
+              :data-field="field.key"
+              role="listbox"
+            >
+              <div
+                v-for="(opt, optIdx) in getFilteredOptions(field)"
+                :key="opt"
+                class="dropdown-option"
+                :class="{
+                  dimmed: isOptionSelected(field, opt),
+                  highlighted: comboboxHighlight[field.key] === optIdx
+                }"
+                role="option"
+                :aria-selected="isOptionSelected(field, opt)"
+                @mousedown.prevent="comboboxAddOption(field.key, opt)"
+              >
+                {{ opt }}
+              </div>
+              <div v-if="getFilteredOptions(field).length === 0" class="dropdown-empty">
+                無符合選項
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Tags (array without options) -->
@@ -598,5 +731,74 @@ watch(pluginName, async () => {
 
 .tag-remove:hover {
   color: var(--text-italic);
+}
+
+.input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.combobox-input {
+  flex: 1;
+  padding-right: 2rem;
+}
+
+.chevron-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary, #888);
+  font-size: 0.75rem;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.chevron-btn:hover {
+  color: var(--text-primary, #fff);
+}
+
+.dropdown-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-secondary, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  margin-top: 2px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.dropdown-option {
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.1s;
+}
+
+.dropdown-option:hover {
+  background: var(--bg-hover, #3a3a3a);
+}
+
+.dropdown-option.highlighted {
+  background: var(--bg-hover, #3a3a3a);
+}
+
+.dropdown-option.dimmed {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.dropdown-empty {
+  padding: 0.5rem 0.75rem;
+  color: var(--text-secondary, #888);
+  font-size: 0.85rem;
+  font-style: italic;
 }
 </style>

@@ -26,6 +26,7 @@
     "npm:typescript@6": "6.0.2",
     "npm:ventojs@^2.3.1": "2.3.1",
     "npm:vite@8": "8.0.8",
+    "npm:vitest@*": "4.1.4_@vitest+coverage-v8@4.1.4_happy-dom@20.9.0_vite@8.0.8",
     "npm:vitest@3": "3.2.4_happy-dom@20.9.0",
     "npm:vitest@4": "4.1.4_@vitest+coverage-v8@4.1.4_happy-dom@20.9.0_vite@8.0.8",
     "npm:vue-router@^5.0.4": "5.0.4_vue@3.5.32__typescript@6.0.2_typescript@6.0.2",
