@@ -115,8 +115,9 @@ STOPSIGNAL SIGTERM
 # (which honours the inherited umask) preserve OpenShift arbitrary-UID
 # + shared-GID-0 group-write semantics. The trailing `exec` replaces the
 # shell with Deno so signal forwarding from dumb-init reaches it directly.
+# --allow-ffi: Required by Sharp's native N-API bindings (libvips).
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "umask 0002 && exec deno run --allow-net --allow-read --allow-write --allow-env --allow-run writer/server.ts"]
+CMD ["sh", "-c", "umask 0002 && exec deno run --allow-net --allow-read --allow-write --allow-env --allow-run --allow-ffi writer/server.ts"]
 
 ARG VERSION
 ARG RELEASE
