@@ -1,0 +1,18 @@
+schema: spec-driven
+artifacts:
+  - id: proposal
+    outputPath: proposal.md
+    status: done
+  - id: design
+    outputPath: design.md
+    status: done
+  - id: specs
+    outputPath: "specs/**/*.md"
+    status: done
+    note: >
+      Cross-cutting non-functional change. No existing spec contracts are altered
+      (error responses remain RFC 9457 Problem Details). A new cross-cutting spec
+      documents the error-handling conventions enforced by this change.
+  - id: tasks
+    outputPath: tasks.md
+    status: done
