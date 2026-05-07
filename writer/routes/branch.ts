@@ -24,6 +24,9 @@ import type { AppDeps } from "../types.ts";
 
 const log = createLogger("file");
 
+/** Allow only simple filenames — rejects path traversal and separators. */
+const SAFE_FILENAME_RE = /^[\w\-\.]+$/;
+
 /**
  * Recursively copy a directory, preserving default file/dir modes. Used for
  * duplicating the story-scoped `_lore/` directory during branch creation.
@@ -181,6 +184,55 @@ export function registerBranchRoutes(
 
         // Copy usage records filtered to `chapter <= fromChapter`.
         await copyUsage(srcDir, destDir, fromChapter);
+
+        // Copy story config (best-effort)
+        try {
+          await Deno.copyFile(join(srcDir, "_config.json"), join(destDir, "_config.json"));
+        } catch (err: unknown) {
+          if (!(err instanceof Deno.errors.NotFound)) {
+            log.warn(`[branch] Failed to copy _config.json: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
+        // Copy image metadata filtered to branched chapters (excluding "generating" entries)
+        let filteredEntries: Array<{ filename: string; chapter: number; [key: string]: unknown }> = [];
+        try {
+          const metaRaw = await Deno.readTextFile(join(srcDir, "_images", "_metadata.json"));
+          const metadata = JSON.parse(metaRaw) as { images: Array<{ filename: string; chapter: number; status: string; [key: string]: unknown }> };
+          filteredEntries = metadata.images.filter(
+            (entry) => entry.chapter <= fromChapter && entry.status !== "generating" &&
+              typeof entry.filename === "string" && SAFE_FILENAME_RE.test(entry.filename) && !entry.filename.includes(".."),
+          );
+          if (filteredEntries.length > 0) {
+            await Deno.mkdir(join(destDir, "_images"), { recursive: true });
+            await Deno.writeTextFile(
+              join(destDir, "_images", "_metadata.json"),
+              JSON.stringify({ images: filteredEntries }, null, 2),
+            );
+          }
+        } catch (err: unknown) {
+          if (!(err instanceof Deno.errors.NotFound)) {
+            log.warn(`[branch] Failed to copy image metadata: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
+        // Copy image files referenced by filtered metadata entries
+        if (filteredEntries.length > 0) {
+          await Deno.mkdir(join(destDir, "_images"), { recursive: true });
+          for (const entry of filteredEntries) {
+            if (!entry.filename) continue;
+            try {
+              await Deno.copyFile(
+                join(srcDir, "_images", entry.filename),
+                join(destDir, "_images", entry.filename),
+              );
+            } catch (err: unknown) {
+              if (!(err instanceof Deno.errors.NotFound)) {
+                log.warn(`[branch] Failed to copy image file ${entry.filename}: ${err instanceof Error ? err.message : String(err)}`);
+              }
+            }
+          }
+        }
 
         log.info("Story branched", {
           op: "branch",
