@@ -28,7 +28,9 @@ export type LogCategory =
   | "ws"
   | "http"
   | "system"
-  | "themes";
+  | "themes"
+  | "generation"
+  | "lore";
 
 /** A single structured log entry. */
 export interface LogEntry {
@@ -94,13 +96,27 @@ const encoder = new TextEncoder();
 
 let writeQueue: Promise<void> = Promise.resolve();
 let llmWriteQueue: Promise<void> = Promise.resolve();
+let lastLogWriteErrorTime = 0;
+let logWriteFailureCount = 0;
 
 function enqueueWrite(entry: LogEntry): void {
-  writeQueue = writeQueue.then(() => writeToFile(entry)).catch(() => {});
+  writeQueue = writeQueue.then(() => writeToFile(entry)).catch((err: unknown) => {
+    const now = Date.now();
+    if (now - lastLogWriteErrorTime > 60_000) {
+      lastLogWriteErrorTime = now;
+      console.error(`[logger] Write queue error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
 }
 
 function enqueueLlmWrite(entry: LogEntry): void {
-  llmWriteQueue = llmWriteQueue.then(() => writeToLlmFile(entry)).catch(() => {});
+  llmWriteQueue = llmWriteQueue.then(() => writeToLlmFile(entry)).catch((err: unknown) => {
+    const now = Date.now();
+    if (now - lastLogWriteErrorTime > 60_000) {
+      lastLogWriteErrorTime = now;
+      console.error(`[logger] Write queue error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
 }
 
 // ── File rotation ───────────────────────────────────────────────
@@ -171,8 +187,15 @@ async function writeToFile(entry: LogEntry): Promise<void> {
   try {
     await logFile.write(bytes);
     currentFileSize += bytes.length;
-  } catch {
-    // Silently skip file write errors to avoid cascading failures
+    if (logWriteFailureCount > 0) {
+      console.info(`[logger] Log file write recovered after ${logWriteFailureCount} failed attempts`);
+      logWriteFailureCount = 0;
+    }
+  } catch (err: unknown) {
+    logWriteFailureCount++;
+    if (logWriteFailureCount === 1) {
+      console.error(`[logger] Log file write failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }
 
@@ -189,8 +212,15 @@ async function writeToLlmFile(entry: LogEntry): Promise<void> {
   try {
     await llmLogFile.write(bytes);
     llmCurrentFileSize += bytes.length;
-  } catch {
-    // Silently skip file write errors to avoid cascading failures
+    if (logWriteFailureCount > 0) {
+      console.info(`[logger] Log file write recovered after ${logWriteFailureCount} failed attempts`);
+      logWriteFailureCount = 0;
+    }
+  } catch (err: unknown) {
+    logWriteFailureCount++;
+    if (logWriteFailureCount === 1) {
+      console.error(`[logger] Log file write failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }
 

@@ -303,8 +303,12 @@ export async function runPluginActionWithDeps(
   let promptContent: string;
   try {
     promptContent = await Deno.readTextFile(resolvedPromptPath);
-  } catch {
-    return { ok: false, aborted: false, problem: pluginActionProblems.promptFileNotFound(), status: 400 };
+  } catch (err: unknown) {
+    if (err instanceof Deno.errors.NotFound) {
+      return { ok: false, aborted: false, problem: pluginActionProblems.promptFileNotFound(), status: 400 };
+    }
+    log.warn(`[plugin-actions] Prompt file read error: ${err instanceof Error ? err.message : String(err)}`);
+    return { ok: false, aborted: false, problem: problemJson("Internal Server Error", 500, "Prompt file read failed"), status: 500 };
   }
 
   let llmConfig;
@@ -489,7 +493,13 @@ export function registerPluginActionRoutes(
 ): void {
   app.post("/api/plugins/:pluginName/run-prompt", async (c) => {
     const pluginName = c.req.param("pluginName") ?? "";
-    const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.json();
+    } catch (err: unknown) {
+      log.warn(`[POST /api/plugins/run-prompt] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+      return c.json(problemJson("Bad Request", 400, "Invalid JSON in request body"), 400);
+    }
     const controller = new AbortController();
     // Tie the AbortController to the request's underlying connection.
     const reqSignal = c.req.raw.signal;

@@ -103,8 +103,13 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       return new Response(content, {
         headers: { "Content-Type": "application/javascript" },
       });
-    } catch {
-      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    } catch (err: unknown) {
+      if (err instanceof Deno.errors.NotFound) {
+        return c.json(problemJson("Not Found", 404, "Not found"), 404);
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn(`[GET /plugins/_shared] File serving error: ${message}`);
+      return c.json(problemJson("Internal Server Error", 500, "Internal server error"), 500);
     }
   });
 
@@ -127,8 +132,13 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
           return new Response(content, {
             headers: { "Content-Type": "application/javascript" },
           });
-        } catch {
-          return c.json(problemJson("Not Found", 404, "Not found"), 404);
+        } catch (err: unknown) {
+          if (err instanceof Deno.errors.NotFound) {
+            return c.json(problemJson("Not Found", 404, "Not found"), 404);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          log.warn(`[GET /plugins/:plugin/module] File serving error: ${message}`);
+          return c.json(problemJson("Internal Server Error", 500, "Internal server error"), 500);
         }
       });
     }
@@ -160,8 +170,13 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
           return new Response(content, {
             headers: { "Content-Type": "text/css; charset=utf-8" },
           });
-        } catch {
-          return c.json(problemJson("Not Found", 404, "Not found"), 404);
+        } catch (err: unknown) {
+          if (err instanceof Deno.errors.NotFound) {
+            return c.json(problemJson("Not Found", 404, "Not found"), 404);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          log.warn(`[GET /plugins/:plugin/css] File serving error: ${message}`);
+          return c.json(problemJson("Internal Server Error", 500, "Internal server error"), 500);
         }
       });
     }

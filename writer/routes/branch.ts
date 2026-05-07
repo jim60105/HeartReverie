@@ -80,13 +80,16 @@ export function registerBranchRoutes(
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[POST /api/stories/:series/:name/branch] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to access source story"), 500);
       }
 
       let body: unknown;
       try {
         body = await c.req.json();
-      } catch {
+      } catch (err: unknown) {
+        log.warn(`[POST /api/branch] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
         return c.json(problemJson("Bad Request", 400, "Malformed JSON body"), 400);
       }
       if (typeof body !== "object" || body === null) {

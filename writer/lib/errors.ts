@@ -192,3 +192,18 @@ export function levenshtein(a: string, b: string): number {
           : 1 + Math.min(dp[i - 1]![j]!, dp[i]![j - 1]!, dp[i - 1]![j - 1]!);
   return dp[m]![n]!;
 }
+
+/**
+ * Safely serialize an error for structured logging.
+ * Extracts name, message, and stack from Error instances.
+ */
+export function serializeError(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      ...(error.stack ? { stack: error.stack } : {}),
+    };
+  }
+  return { message: String(error) };
+}

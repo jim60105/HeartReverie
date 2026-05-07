@@ -101,8 +101,9 @@ export async function listChapterFiles(dir: string): Promise<string[]> {
     for await (const entry of Deno.readDir(dir)) {
       entries.push(entry.name);
     }
-  } catch {
-    return [];
+  } catch (err: unknown) {
+    if (err instanceof Deno.errors.NotFound) return [];
+    throw err;
   }
   return entries
     .filter((f) => /^\d+\.md$/.test(f))

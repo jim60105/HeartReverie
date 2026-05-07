@@ -172,7 +172,9 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       }
 
       return c.json([...tags].sort());
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(`[GET /api/lore/tags] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to list tags"), 500);
     }
   });
@@ -199,7 +201,9 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       }
 
       return c.json(passages.map(passageToMeta));
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(`[GET /api/lore/:scope] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to list passages"), 500);
     }
   }
@@ -252,6 +256,8 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       if (err instanceof Deno.errors.NotFound) {
         return c.json(problemJson("Not Found", 404, "Passage not found"), 404);
       }
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(`[GET /api/lore/:scope/:path] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to read passage"), 500);
     }
   }
@@ -299,7 +305,8 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
     let body: Record<string, unknown>;
     try {
       body = await c.req.json() as Record<string, unknown>;
-    } catch {
+    } catch (err: unknown) {
+      log.warn(`[PUT /api/lore] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
       return c.json(problemJson("Bad Request", 400, "Invalid JSON body"), 400);
     }
 
@@ -312,14 +319,26 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
 
     try {
       await Deno.mkdir(dirname(filePath), { recursive: true, mode: 0o775 });
-      const isNew = await Deno.stat(filePath).then(() => false).catch(() => true);
+      let isNew = false;
+      try {
+        await Deno.stat(filePath);
+      } catch (err: unknown) {
+        if (err instanceof Deno.errors.NotFound) {
+          isNew = true;
+        } else {
+          log.warn(`[lore] Stat failed for passage: ${err instanceof Error ? err.message : String(err)}`);
+          return c.json(problemJson("Internal Server Error", 500, "Failed to check passage status"), 500);
+        }
+      }
       await Deno.writeTextFile(filePath, fileContent, { mode: 0o664 });
       log.info("Lore passage written", { op: "write", path: filePath, bytes: new TextEncoder().encode(fileContent).length, isNew });
       return c.json(
         { message: isNew ? "Passage created" : "Passage updated" },
         isNew ? 201 : 200,
       );
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(`[PUT /api/lore/:scope/:path] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to write passage"), 500);
     }
   }
@@ -372,6 +391,8 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       if (err instanceof Deno.errors.NotFound) {
         return c.json(problemJson("Not Found", 404, "Passage not found"), 404);
       }
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(`[DELETE /api/lore/:scope/:path] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to delete passage"), 500);
     }
   }

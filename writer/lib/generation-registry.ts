@@ -13,6 +13,10 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("generation");
+
 /**
  * In-process registry tracking active LLM generations per story.
  *
@@ -69,7 +73,10 @@ export function clearGenerationActive(series: string, name: string): void {
 export function tryMarkGenerationActive(series: string, name: string): boolean {
   const key = keyOf(series, name);
   const prev = activeGenerations.get(key) ?? 0;
-  if (prev > 0) return false;
+  if (prev > 0) {
+    log.debug(`[generation-registry] Lock rejected for ${key} (already active: ${prev})`);
+    return false;
+  }
   activeGenerations.set(key, 1);
   return true;
 }
