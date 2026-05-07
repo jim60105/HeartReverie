@@ -76,10 +76,10 @@
 
 ## 10. Verification
 
-- [ ] 10.1 **Type check** — Run `deno check writer/server.ts` and verify no new type errors are introduced by the changes.
+- [x] 10.1 **Type check** — Run `deno check writer/server.ts` and verify no new type errors are introduced by the changes.
 
-- [ ] 10.2 **Container build** — Run `podman build` (or equivalent) to verify the container image builds successfully with all changes.
+- [x] 10.2 **Container build** — Run `podman build` (or equivalent) to verify the container image builds successfully with all changes.
 
-- [ ] 10.3 **Test suite** — Run `deno test` to verify existing tests pass. If the project has integration tests that exercise error paths, verify they still pass or update assertions to expect the new log output / response codes.
+- [x] 10.3 **Test suite** — Run `deno test` to verify existing tests pass. If the project has integration tests that exercise error paths, verify they still pass or update assertions to expect the new log output / response codes.
 
-- [ ] 10.4 **Manual smoke test** — Start the dev server and verify: (a) normal story listing works, (b) accessing a non-existent story returns 404 (not 500), (c) server logs show error entries for intentionally triggered failures.
+- [x] 10.4 **Manual smoke test** — Start the dev server and verify: (a) normal story listing works, (b) accessing a non-existent story returns 404 (not 500), (c) server logs show error entries for intentionally triggered failures.
