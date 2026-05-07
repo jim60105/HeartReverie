@@ -15,8 +15,11 @@
 
 import { join } from "@std/path";
 import { problemJson } from "../lib/errors.ts";
+import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
+
+const log = createLogger("file");
 
 const FILENAME_RE = /^[\w\-\.]+$/;
 
@@ -82,8 +85,11 @@ export function registerImageRoutes(app: Hono, deps: Pick<AppDeps, "safePath">):
       }
 
       return c.json({ images });
-    } catch {
-      return c.json({ images: [] });
+    } catch (err: unknown) {
+      if (err instanceof Deno.errors.NotFound) return c.json({ images: [] });
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(`[GET /api/stories/:series/:name/image-metadata] ${message}`);
+      return c.json(problemJson("Internal Server Error", 500, "Failed to read image metadata"), 500);
     }
   });
 }

@@ -492,7 +492,8 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       let raw: unknown;
       try {
         raw = JSON.parse(payload);
-      } catch {
+      } catch (err: unknown) {
+        log.debug(`[chat:stream] Malformed JSON chunk (${payload.length} bytes): ${payload.slice(0, 200)}`);
         return;
       }
       if (typeof raw !== "object" || raw === null) return;
@@ -883,8 +884,11 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       if (tpl.source === "custom") {
         templateOverride = tpl.content;
       }
-    } catch {
-      // No custom file and no system.md readable — proceed with default rendering
+    } catch (err: unknown) {
+      if (!(err instanceof Deno.errors.NotFound)) {
+        log.error(`[chat] Failed to read system prompt: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      // NotFound is expected — proceed with default
     }
   }
 
@@ -987,8 +991,11 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
       if (tpl.source === "custom") {
         templateOverride = tpl.content;
       }
-    } catch {
-      // fall through to default rendering
+    } catch (err: unknown) {
+      if (!(err instanceof Deno.errors.NotFound)) {
+        log.error(`[chat] Failed to read system prompt: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      // NotFound is expected — proceed with default
     }
   }
 

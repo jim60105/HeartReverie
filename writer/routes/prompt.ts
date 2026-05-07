@@ -42,14 +42,22 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
     try {
       const result = await readTemplate(config);
       return c.json(result);
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(`[GET /api/template] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to read template"), 500);
     }
   });
 
   app.put("/api/template", async (c) => {
     try {
-      const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+      let body: Record<string, unknown>;
+      try {
+        body = await c.req.json();
+      } catch (err: unknown) {
+        log.warn(`[PUT /api/template] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+        return c.json(problemJson("Bad Request", 400, "Invalid JSON in request body"), 400);
+      }
       const content: unknown = body.content;
       if (typeof content !== "string" || content.trim().length === 0) {
         return c.json(problemJson("Bad Request", 400, "Content required"), 400);
@@ -97,7 +105,13 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
     "/api/stories/:series/:name/preview-prompt",
     validateParams,
     async (c) => {
-      const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+      let body: Record<string, unknown>;
+      try {
+        body = await c.req.json();
+      } catch (err: unknown) {
+        log.warn(`[POST /api/preview-prompt] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+        return c.json(problemJson("Bad Request", 400, "Invalid JSON in request body"), 400);
+      }
       const message: unknown = body.message;
       const template: unknown = body.template;
       if (typeof message !== "string" || message.trim().length === 0) {
@@ -122,8 +136,12 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
             if (tpl.source === "custom") {
               templateOverride = tpl.content;
             }
-          } catch {
-            // No custom file readable — proceed with default rendering
+          } catch (err: unknown) {
+            if (!(err instanceof Deno.errors.NotFound)) {
+              log.error(`[prompt] Template read failed: ${err instanceof Error ? err.message : String(err)}`);
+              return c.json(problemJson("Internal Server Error", 500, "Failed to read prompt template"), 500);
+            }
+            // NotFound → use default rendering
           }
         }
 

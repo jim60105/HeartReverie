@@ -47,7 +47,13 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
     validateParams,
     async (c) => {
       // Validate message body
-      const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+      let body: Record<string, unknown>;
+      try {
+        body = await c.req.json();
+      } catch (err: unknown) {
+        log.warn(`[POST /api/chat] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+        return c.json(problemJson("Bad Request", 400, "Invalid JSON in request body"), 400);
+      }
       const message: unknown = body.message;
       const template: unknown = body.template;
       if (typeof message !== "string" || message.trim().length === 0) {

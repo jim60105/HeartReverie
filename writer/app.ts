@@ -244,8 +244,10 @@ export function registerSpaFallback(app: Hono, config: { READER_DIR: string }): 
     try {
       const content = await Deno.readTextFile(indexPath);
       return c.html(content);
-    } catch {
-      return c.json(problemJson("Not Found", 404, "index.html not found"), 404);
+    } catch (err: unknown) {
+      if (err instanceof Deno.errors.NotFound) return c.notFound();
+      httpLog.error(`[SPA fallback] Failed to serve index.html: ${err instanceof Error ? err.message : String(err)}`);
+      return c.text("Internal Server Error", 500);
     }
   });
 }

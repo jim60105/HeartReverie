@@ -29,6 +29,16 @@ const log = createLogger("ws");
 const authLog = createLogger("auth");
 const fileLog = createLogger("file");
 
+const wsErrorLastLog = new Map<string, number>();
+function logWsError(op: string, err: unknown) {
+  const now = Date.now();
+  const last = wsErrorLastLog.get(op) ?? 0;
+  if (now - last > 5000) {
+    wsErrorLastLog.set(op, now);
+    log.debug(`[ws:poll] ${op} error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 const IDLE_TIMEOUT_MS = 60_000;
 const MAX_MESSAGE_LENGTH = 100_000;
 
@@ -147,7 +157,8 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
             for await (const entry of Deno.readDir(storyDir)) {
               entries.push(entry.name);
             }
-          } catch {
+          } catch (err: unknown) {
+            logWsError("dir-read", err);
             return; // Directory may not exist yet
           }
 
@@ -179,7 +190,8 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
                 if (parsed?.entries && Array.isArray(parsed.entries)) {
                   stateDiff = parsed;
                 }
-              } catch {
+              } catch (err: unknown) {
+                logWsError("diff-read", err);
                 // No diff file — that's fine
               }
 
@@ -200,11 +212,13 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
                   stateDiff,
                 });
               }
-            } catch {
+            } catch (err: unknown) {
+              logWsError("chapter-read", err);
               // File may be in the process of being written
             }
           }
-        } catch {
+        } catch (err: unknown) {
+          logWsError("poll", err);
           // Ignore errors in polling
         }
       }, 1_000);

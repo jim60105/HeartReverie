@@ -72,6 +72,8 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[GET /api/stories/:series/:name/chapters] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to list chapters"), 500);
       }
     }
@@ -122,6 +124,8 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Chapter not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[GET /api/stories/:series/:name/chapters/:number] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to read chapter"), 500);
       }
     }
@@ -164,6 +168,8 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[DELETE /api/stories/:series/:name/chapters/last] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to delete chapter"), 500);
       }
     }
@@ -218,6 +224,8 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Chapter not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[PUT /api/stories/:series/:name/chapters/:number] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to stat chapter"), 500);
       }
 
@@ -279,6 +287,8 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[DELETE /api/stories/:series/:name/chapters/after/:number] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to access story"), 500);
       }
 
@@ -341,12 +351,15 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         try {
           await Deno.stat(filePath);
           return c.json({ message: "Story already exists" }, 200);
-        } catch {
+        } catch (err: unknown) {
+          if (!(err instanceof Deno.errors.NotFound)) throw err;
           await Deno.writeTextFile(filePath, "", { mode: 0o664 });
           log.info("Story initialized", { op: "write", path: filePath, bytes: 0 });
           return c.json({ message: "Story initialized" }, 201);
         }
-      } catch {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[POST /api/stories/:series/:name/init] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to initialize story"), 500);
       }
     }

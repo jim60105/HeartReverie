@@ -14,6 +14,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join, relative } from "@std/path";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("lore");
 
 // ── Types ──
 
@@ -270,13 +273,15 @@ export async function collectPassagesFromScope(
               if (passage) passages.push(passage);
             }
           }
-        } catch {
-          // Subdirectory read error — skip
+        } catch (err: unknown) {
+          if (err instanceof Deno.errors.NotFound) continue;
+          throw err;
         }
       }
     }
-  } catch {
-    // Scope directory may not exist — return empty
+  } catch (err: unknown) {
+    if (err instanceof Deno.errors.NotFound) return [];
+    throw err;
   }
 
   return passages;
@@ -310,7 +315,10 @@ async function readPassage(
       effectiveTags,
       content,
     };
-  } catch {
+  } catch (err: unknown) {
+    if (!(err instanceof Deno.errors.NotFound)) {
+      log.warn(`[lore:readPassage] Failed to read ${filepath}: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return null;
   }
 }

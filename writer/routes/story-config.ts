@@ -52,6 +52,8 @@ export function registerStoryConfigRoutes(
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[GET /api/:series/:name/config] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to stat story directory"), 500);
       }
       try {
@@ -61,6 +63,8 @@ export function registerStoryConfigRoutes(
         if (err instanceof StoryConfigValidationError) {
           return c.json(problemJson("Unprocessable Entity", 422, err.message), 422);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[GET /api/:series/:name/config] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to read story config"), 500);
       }
     },
@@ -88,6 +92,8 @@ export function registerStoryConfigRoutes(
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[PUT /api/:series/:name/config] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to stat story directory"), 500);
       }
 
@@ -109,6 +115,8 @@ export function registerStoryConfigRoutes(
         if (err instanceof StoryConfigNotFoundError) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`[PUT /api/:series/:name/config] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to write story config"), 500);
       }
     },
