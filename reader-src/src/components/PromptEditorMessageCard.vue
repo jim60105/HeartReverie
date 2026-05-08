@@ -220,7 +220,7 @@ function confirmDelete() {
   gap: 8px;
   border: 1px solid var(--item-border);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--item-bg);
   padding: 12px;
 }
 
@@ -376,7 +376,7 @@ function confirmDelete() {
   margin-top: 4px;
   border: 1px solid var(--item-border);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--reading-tint);
   padding: 6px;
   max-width: 360px;
 }
@@ -413,7 +413,7 @@ function confirmDelete() {
 .card-body {
   border: 1px solid var(--item-border);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--item-bg);
   padding: 8px;
   width: 100%;
   min-height: 96px;
