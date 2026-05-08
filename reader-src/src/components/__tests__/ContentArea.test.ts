@@ -101,17 +101,52 @@ describe("ContentArea", () => {
     expect(sidebar.text()).toContain("B");
   });
 
-  it("WHEN renderEpoch bumps THEN sidebar is re-relocated against the latest DOM", async () => {
+  it("WHEN renderEpoch bumps with same content THEN sidebar keeps existing panels and duplicates are removed", async () => {
     currentContentRef.value = "第 1 章內容";
-    let panels = "<div class='plugin-sidebar'>old</div>";
 
     const wrapper = mount(ContentArea, {
       global: {
         stubs: {
           ChapterContent: {
             props: ["rawMarkdown", "isLastChapter"],
-            template: `<div class='chapter-stub' v-html="$options.__panels"></div>`,
-            __panels: panels,
+            template: `<div class='chapter-stub'><div class='plugin-sidebar'>populated</div></div>`,
+          },
+        },
+      },
+    });
+
+    await nextTick();
+    await nextTick();
+
+    let sidebar = wrapper.find(".sidebar");
+    expect(sidebar.findAll(".plugin-sidebar")).toHaveLength(1);
+    expect(sidebar.text()).toContain("populated");
+
+    // Simulate epoch bump producing a duplicate empty panel in content (as
+    // happens when v-html re-renders the same markdown). The sidebar's
+    // populated panel must be preserved, and the duplicate removed.
+    const stub = wrapper.find(".chapter-stub").element as HTMLElement;
+    stub.innerHTML = "<div class='plugin-sidebar'></div>";
+    renderEpochRef.value++;
+    await nextTick();
+    await nextTick();
+
+    sidebar = wrapper.find(".sidebar");
+    expect(sidebar.findAll(".plugin-sidebar")).toHaveLength(1);
+    expect(sidebar.text()).toContain("populated");
+    // Duplicate in content should be removed.
+    expect(stub.querySelectorAll(".plugin-sidebar")).toHaveLength(0);
+  });
+
+  it("WHEN content text changes THEN sidebar is re-relocated against the latest DOM", async () => {
+    currentContentRef.value = "第 1 章內容";
+
+    const wrapper = mount(ContentArea, {
+      global: {
+        stubs: {
+          ChapterContent: {
+            props: ["rawMarkdown", "isLastChapter"],
+            template: `<div class='chapter-stub'><div class='plugin-sidebar'>old</div></div>`,
           },
         },
       },
@@ -124,10 +159,10 @@ describe("ContentArea", () => {
     expect(sidebar.findAll(".plugin-sidebar")).toHaveLength(1);
     expect(sidebar.text()).toContain("old");
 
-    // Simulate plugin re-rendering and content invalidation: edit DOM directly,
-    // then bump renderEpoch.
+    // Navigate to a different chapter (content text changes).
     const stub = wrapper.find(".chapter-stub").element as HTMLElement;
     stub.innerHTML = "<div class='plugin-sidebar'>new</div>";
+    currentContentRef.value = "第 2 章內容";
     renderEpochRef.value++;
     await nextTick();
     await nextTick();

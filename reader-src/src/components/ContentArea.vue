@@ -17,14 +17,14 @@ const contentRef = ref<HTMLElement | null>(null);
 // Relocate plugin-rendered .plugin-sidebar elements from content to sidebar.
 // Any plugin can opt into sidebar placement by adding the .plugin-sidebar class.
 // The watch tracks renderEpoch so byte-identical content commits and
-// pluginsReady transitions both trigger a re-relocation.
+// pluginsReady transitions both trigger a re-relocation pass.
 //
-// To prevent destroying already-relocated panels when a non-content trigger
-// (e.g. pluginsReady) fires without a v-html remount, the sidebar is only
-// cleared when (a) content-related triggers changed, or (b) new panels are
-// found in the content area waiting for relocation.
-let prevContent: string | null | undefined;
-let prevEpoch: number | undefined;
+// Content-change detection uses the raw text of currentContent (not
+// renderEpoch) so that epoch bumps that merely re-render the same markdown
+// (e.g. from redundant commitContent calls via WebSocket/polling) do NOT
+// destroy already-populated sidebar panels. Duplicate empty panels produced
+// by such re-renders are removed from content instead.
+let prevContentKey: string | undefined;
 
 const sidebarTriggers = computed(() => [
   currentContent.value,
@@ -36,50 +36,55 @@ const sidebarTriggers = computed(() => [
 
 watch(
   sidebarTriggers,
-  async () => {
-    await nextTick();
-    const wrapper = contentRef.value;
-    if (!wrapper) return;
-    const sidebar = wrapper.querySelector(".sidebar");
-    if (!sidebar) return;
+  () => {
+    nextTick(() => {
+      // Read latest reactive state inside nextTick so overlapping callbacks
+      // always process the final settled state (idempotent).
+      const settled = pluginsSettled.value;
+      const content = currentContent.value;
 
-    if (!pluginsSettled.value || !currentContent.value) {
-      sidebar.innerHTML = "";
-      prevContent = currentContent.value;
-      prevEpoch = renderEpoch.value;
-      return;
-    }
+      const wrapper = contentRef.value;
+      if (!wrapper) return;
+      const sidebar = wrapper.querySelector(".sidebar");
+      if (!sidebar) return;
 
-    // Detect whether content-related triggers changed (v-html was remounted).
-    const contentChanged =
-      prevContent === undefined ||
-      prevContent !== currentContent.value ||
-      prevEpoch !== renderEpoch.value;
-    prevContent = currentContent.value;
-    prevEpoch = renderEpoch.value;
-
-    // Look for panels in the content area that haven't been relocated yet.
-    const panels = [...wrapper.querySelectorAll(".plugin-sidebar")].filter(
-      (el) => !sidebar.contains(el),
-    );
-
-    if (panels.length > 0) {
-      const sidebarHasPanels = sidebar.querySelector(".plugin-sidebar") !== null;
-      if (contentChanged || !sidebarHasPanels) {
-        // Content changed or sidebar is empty — full relocation.
+      if (!settled || !content) {
         sidebar.innerHTML = "";
-        panels.forEach((panel) => sidebar.appendChild(panel));
-      } else {
-        // Same content re-render produced duplicate panels while the sidebar
-        // already holds (possibly populated) panels. Remove the duplicates
-        // from content so the next watch trigger doesn't replace the sidebar.
-        panels.forEach((panel) => panel.remove());
+        prevContentKey = undefined;
+        return;
       }
-    } else if (contentChanged) {
-      // Content changed but no new panels — clear stale panels.
-      sidebar.innerHTML = "";
-    }
-    // Non-content trigger with no new panels: keep existing sidebar intact.
+
+      // Semantic content change = the actual chapter text changed (e.g.
+      // navigation to a different chapter). Epoch-only bumps with identical
+      // text are NOT treated as content changes.
+      const contentChanged =
+        prevContentKey === undefined || prevContentKey !== content;
+      prevContentKey = content;
+
+      // Look for panels in the content area that haven't been relocated yet.
+      const panels = [...wrapper.querySelectorAll(".plugin-sidebar")].filter(
+        (el) => !sidebar.contains(el),
+      );
+
+      if (panels.length > 0) {
+        const sidebarHasPanels =
+          sidebar.querySelector(".plugin-sidebar") !== null;
+        if (contentChanged || !sidebarHasPanels) {
+          // Content changed or sidebar is empty — full relocation.
+          sidebar.innerHTML = "";
+          panels.forEach((panel) => sidebar.appendChild(panel));
+        } else {
+          // Same content re-render produced duplicate panels while the sidebar
+          // already holds (possibly populated) panels. Remove the duplicates
+          // from content so the next watch trigger doesn't replace the sidebar.
+          panels.forEach((panel) => panel.remove());
+        }
+      } else if (contentChanged) {
+        // Content changed but no new panels — clear stale panels.
+        sidebar.innerHTML = "";
+      }
+      // Non-content trigger with no new panels: keep existing sidebar intact.
+    });
   },
   { flush: "post", immediate: true },
 );
