@@ -64,9 +64,17 @@ watch(
     );
 
     if (panels.length > 0) {
-      // New panels available — clear stale sidebar and relocate.
-      sidebar.innerHTML = "";
-      panels.forEach((panel) => sidebar.appendChild(panel));
+      const sidebarHasPanels = sidebar.querySelector(".plugin-sidebar") !== null;
+      if (contentChanged || !sidebarHasPanels) {
+        // Content changed or sidebar is empty — full relocation.
+        sidebar.innerHTML = "";
+        panels.forEach((panel) => sidebar.appendChild(panel));
+      } else {
+        // Same content re-render produced duplicate panels while the sidebar
+        // already holds (possibly populated) panels. Remove the duplicates
+        // from content so the next watch trigger doesn't replace the sidebar.
+        panels.forEach((panel) => panel.remove());
+      }
     } else if (contentChanged) {
       // Content changed but no new panels — clear stale panels.
       sidebar.innerHTML = "";
