@@ -17,8 +17,15 @@ const contentRef = ref<HTMLElement | null>(null);
 // Relocate plugin-rendered .plugin-sidebar elements from content to sidebar.
 // Any plugin can opt into sidebar placement by adding the .plugin-sidebar class.
 // The watch tracks renderEpoch so byte-identical content commits and
-// pluginsReady transitions both trigger a re-relocation; the sidebar is
-// always cleared first so stale panels from a previous chapter cannot leak.
+// pluginsReady transitions both trigger a re-relocation.
+//
+// To prevent destroying already-relocated panels when a non-content trigger
+// (e.g. pluginsReady) fires without a v-html remount, the sidebar is only
+// cleared when (a) content-related triggers changed, or (b) new panels are
+// found in the content area waiting for relocation.
+let prevContent: string | null | undefined;
+let prevEpoch: number | undefined;
+
 const sidebarTriggers = computed(() => [
   currentContent.value,
   isLastChapter.value,
@@ -36,12 +43,35 @@ watch(
     const sidebar = wrapper.querySelector(".sidebar");
     if (!sidebar) return;
 
-    sidebar.innerHTML = "";
+    if (!pluginsSettled.value || !currentContent.value) {
+      sidebar.innerHTML = "";
+      prevContent = currentContent.value;
+      prevEpoch = renderEpoch.value;
+      return;
+    }
 
-    if (!pluginsSettled.value || !currentContent.value) return;
+    // Detect whether content-related triggers changed (v-html was remounted).
+    const contentChanged =
+      prevContent === undefined ||
+      prevContent !== currentContent.value ||
+      prevEpoch !== renderEpoch.value;
+    prevContent = currentContent.value;
+    prevEpoch = renderEpoch.value;
 
-    const panels = wrapper.querySelectorAll(".plugin-sidebar");
-    panels.forEach((panel) => sidebar.appendChild(panel));
+    // Look for panels in the content area that haven't been relocated yet.
+    const panels = [...wrapper.querySelectorAll(".plugin-sidebar")].filter(
+      (el) => !sidebar.contains(el),
+    );
+
+    if (panels.length > 0) {
+      // New panels available — clear stale sidebar and relocate.
+      sidebar.innerHTML = "";
+      panels.forEach((panel) => sidebar.appendChild(panel));
+    } else if (contentChanged) {
+      // Content changed but no new panels — clear stale panels.
+      sidebar.innerHTML = "";
+    }
+    // Non-content trigger with no new panels: keep existing sidebar intact.
   },
   { flush: "post", immediate: true },
 );
