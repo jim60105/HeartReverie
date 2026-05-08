@@ -208,7 +208,7 @@ text-main = "#000"
   });
 });
 
-Deno.test("themes: listThemes returns alphabetically sorted list", async () => {
+Deno.test("themes: listThemes returns custom themes in alphabetical order", async () => {
   await withTmpDir(async (dir) => {
     const makeToml = (id: string, label: string) => `
 id = "${id}"
@@ -225,6 +225,31 @@ text-main = "#000"
       { id: "alpha", label: "Alpha" },
       { id: "mid", label: "Mid" },
       { id: "zebra", label: "Zebra" },
+    ]);
+  });
+});
+
+Deno.test("themes: listThemes returns priority order (default > built-in > custom)", async () => {
+  await withTmpDir(async (dir) => {
+    const makeToml = (id: string, label: string) => `
+id = "${id}"
+label = "${label}"
+[palette]
+text-main = "#000"
+`;
+    await Deno.writeTextFile(`${dir}/default.toml`, makeToml("default", "Default"));
+    await Deno.writeTextFile(`${dir}/light.toml`, makeToml("light", "Light"));
+    await Deno.writeTextFile(`${dir}/dark.toml`, makeToml("dark", "Dark"));
+    await Deno.writeTextFile(`${dir}/cyberpunk.toml`, makeToml("cyberpunk", "Cyberpunk"));
+    await Deno.writeTextFile(`${dir}/autumn.toml`, makeToml("autumn", "Autumn"));
+    await loadThemes(dir);
+    const list = listThemes();
+    assertEquals(list, [
+      { id: "default", label: "Default" },
+      { id: "dark", label: "Dark" },
+      { id: "light", label: "Light" },
+      { id: "autumn", label: "Autumn" },
+      { id: "cyberpunk", label: "Cyberpunk" },
     ]);
   });
 });

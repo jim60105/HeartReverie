@@ -23,6 +23,9 @@ const KEBAB_CASE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const SAFE_BG =
   /^(?:url\(\s*'\/[^']*'\s*\)|url\(\s*'data:[^']*'\s*\)|(?:linear|radial|conic|repeating-linear|repeating-radial|repeating-conic)-gradient\([\s\S]+\))$/;
 
+const DEFAULT_THEME_ID = "default";
+const BUILTIN_THEME_IDS = new Set(["light", "dark"]);
+
 export interface Theme {
   readonly id: string;
   readonly label: string;
@@ -138,8 +141,19 @@ export function getTheme(id: string): Theme | null {
 
 export function listThemes(): Array<{ id: string; label: string }> {
   return [...index.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => {
+      const pa = themeSortPriority(a);
+      const pb = themeSortPriority(b);
+      if (pa !== pb) return pa - pb;
+      return a.localeCompare(b);
+    })
     .map(([, t]) => ({ id: t.id, label: t.label }));
+}
+
+function themeSortPriority(id: string): number {
+  if (id === DEFAULT_THEME_ID) return 0;
+  if (BUILTIN_THEME_IDS.has(id)) return 1;
+  return 2;
 }
 
 export async function refreshThemes(dir: string): Promise<ThemeIndex> {
