@@ -139,7 +139,7 @@ The server SHALL expose `GET /api/themes/:id` returning the parsed theme as JSON
 The repository SHALL include three theme files under `themes/` at the project root:
 
 - `themes/default.toml` — its `[palette]` table SHALL contain a key for every CSS custom property declared in `reader-src/src/styles/theme.css` and the value of each key SHALL be byte-for-byte identical to that property's value in `theme.css`. Its `backgroundImage` SHALL be `url('/assets/heart.webp')`. Its `id` SHALL be `default`.
-- `themes/light.toml` — a light colour scheme (`colorScheme = "light"`) whose `backgroundImage` SHALL be a CSS `linear-gradient(...)` value (paper-tinted warm light gradient). Id `light`.
+- `themes/light.toml` — a light colour scheme (`colorScheme = "light"`) whose `backgroundImage` SHALL be `url('/assets/paper.webp')` (warm paper texture). Id `light`.
 - `themes/dark.toml` — a neutral dark colour scheme (`colorScheme = "dark"`) whose `backgroundImage` SHALL be a CSS `linear-gradient(...)` value (subtle dark gradient). Id `dark`.
 
 #### Scenario: default.toml reproduces the current palette verbatim
