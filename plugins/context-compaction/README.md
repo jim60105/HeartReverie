@@ -16,14 +16,25 @@
 
 ## 設定
 
-外掛透過 `compaction-config.yaml` 進行設定，支援兩個層級（高優先覆寫低優先）：
+外掛支援以下幾種設定來源，優先順序由高至低：
 
-1. **故事層級**：`playground/{series}/{name}/compaction-config.yaml`
-2. **系列層級**：`playground/{series}/compaction-config.yaml`
+1. **故事層級 YAML**：`playground/{series}/{name}/compaction-config.yaml`
+2. **系列層級 YAML**：`playground/{series}/compaction-config.yaml`
+3. **全域 plugin 設定（閱讀器 UI）**：由引擎管理，存放於 `playground/_plugins/context-compaction/config.json`
+4. **內建預設值**：`recentChapters: 3`、`enabled: true`
 
-若兩個層級都不存在設定檔，外掛使用預設值。
+YAML 之間採「擇一」語意：若故事層級 YAML 存在，系列層級 YAML 不會被讀取，兩者不會合併。被選中的 YAML 之下，全域 plugin 設定會以 **欄位層級** 的方式補上 YAML 沒有指定的欄位；最後再由內建預設值補齊。
+
+每一層在合併前都會做型別與範圍檢查（`recentChapters` 必須是正整數，`enabled` 必須是布林）；不符合的欄位會被丟掉，由下一層補上。
 
 ### 設定欄位
+
+| 欄位 | 類型 | 預設值 | 說明 |
+|------|------|--------|------|
+| `recentChapters` | 整數（≥ 1） | `3` | 保留全文的近期章節數（L2 視窗大小） |
+| `enabled` | 布林 | `true` | 設為 `false` 時外掛不修改 `previous_context` |
+
+#### 透過 YAML 設定
 
 ```yaml
 # 近期章節數（L2 視窗大小），保留全文不壓縮
@@ -33,10 +44,18 @@ recentChapters: 3
 enabled: true
 ```
 
-| 欄位 | 類型 | 預設值 | 說明 |
-|------|------|--------|------|
-| `recentChapters` | 整數 | `3` | 保留全文的近期章節數（L2 視窗大小） |
-| `enabled` | 布林 | `true` | 設為 `false` 時外掛不修改 `previous_context` |
+#### 透過閱讀器 UI 設定（全域）
+
+外掛 manifest 透過 `settingsSchema` 宣告了上述兩個欄位，引擎會在閱讀器設定頁自動產生對應的表單。打開閱讀器 → 設定 → 外掛 → `context-compaction`，即可調整 `recentChapters` 和 `enabled`。儲存後寫入 `playground/_plugins/context-compaction/config.json`，下一次對話即生效，無需重啟後端。
+
+注意：UI 設定屬於 **全域**（影響整個安裝），若要針對個別故事或系列設定，請使用對應的 `compaction-config.yaml`。
+
+#### 範例：YAML 與 UI 並用
+
+- 全域 UI 設定 `recentChapters: 5`、`enabled: true`
+- 故事 A 沒有 `compaction-config.yaml` → 使用 `recentChapters: 5`、`enabled: true`
+- 故事 B 有 `compaction-config.yaml` 內容為 `recentChapters: 2` → 使用 `recentChapters: 2`、`enabled: true`（`enabled` 由全域 UI 設定補上）
+- 故事 C 有 `compaction-config.yaml` 內容為 `enabled: false` → 使用 `recentChapters: 5`（由全域 UI 補上）、`enabled: false`
 
 ## 回退行為
 

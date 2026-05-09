@@ -12,5 +12,24 @@
   ],
   "promptStripTags": ["chapter_summary"],
   "displayStripTags": ["chapter_summary"],
-  "backendModule": "./handler.ts"
+  "backendModule": "./handler.ts",
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "recentChapters": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 3,
+        "title": "近期章節數（L2 視窗）",
+        "description": "保留全文不壓縮的最近章節數。較大的值會保留更多原文細節，但會增加 token 消耗。最小值為 1。"
+      },
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "title": "啟用情境壓縮",
+        "description": "關閉後本外掛將不修改 previous_context，等同未安裝外掛。故事或系列層級的 compaction-config.yaml 若指定此欄位，會覆寫此處的全域設定。"
+      }
+    }
+  }
 }
+

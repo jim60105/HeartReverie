@@ -40,7 +40,9 @@ export function register({ hooks, logger }: PluginRegisterContext): void {
     // Derive playground dir from storyDir (playground/{series}/{name}/)
     const playgroundDir = dirname(dirname(storyDir));
 
-    const config = await loadCompactionConfig(storyDir, series, playgroundDir);
+    const config = await loadCompactionConfig(storyDir, series, playgroundDir, {
+      onWarn: (message, detail) => log.warn(message, detail),
+    });
 
     if (!config.enabled) {
       log.debug("Context compaction disabled by config", { storyDir, series });
