@@ -51,7 +51,7 @@ The reader source today declares **zero** component-local CSS variables (verifie
 - **WHEN** `reader-src/src/components/PluginSettingsPage.vue` is searched for `var(--bg-secondary` or `var(--bg-hover` or `var(--bg-primary` or `var(--bg-tertiary`
 - **THEN** zero matches SHALL be found
 - **AND** the `.dropdown-options` rule SHALL use `var(--item-bg, #2a2a2a)` for its background
-- **AND** the `.dropdown-option:hover` and `.dropdown-option--selected` rules SHALL use `var(--btn-hover-bg, #3a3a3a)` for their backgrounds
+- **AND** the `.dropdown-option:hover` and `.dropdown-option.highlighted` rules SHALL use `var(--btn-hover-bg, #3a3a3a)` for their backgrounds
 - **AND** the rendered dropdown-options panel SHALL track the active theme: switching themes updates the panel and hover backgrounds without a page reload
 
 #### Scenario: PromptPreview message card and role badge use declared or inlined backgrounds
