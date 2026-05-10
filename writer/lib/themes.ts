@@ -24,7 +24,7 @@ const SAFE_BG =
   /^(?:url\(\s*'\/[^']*'\s*\)|url\(\s*'data:[^']*'\s*\)|(?:linear|radial|conic|repeating-linear|repeating-radial|repeating-conic)-gradient\([\s\S]+\))$/;
 
 const DEFAULT_THEME_ID = "default";
-const BUILTIN_THEME_IDS = new Set(["light", "dark"]);
+const BUILTIN_THEME_IDS = new Set(["default", "light", "dark"]);
 
 export interface Theme {
   readonly id: string;
