@@ -29,6 +29,7 @@ interface ConfigOpts {
   reasoningEnabled?: boolean;
   reasoningEffort?: ReasoningEffort;
   reasoningOmit?: boolean;
+  maxCompletionTokens?: number | null;
 }
 
 function buildConfig(tmpDir: string, opts: ConfigOpts = {}): AppConfig {
@@ -36,6 +37,7 @@ function buildConfig(tmpDir: string, opts: ConfigOpts = {}): AppConfig {
     reasoningEnabled = true,
     reasoningEffort = "high",
     reasoningOmit = false,
+    maxCompletionTokens = 4096,
   } = opts;
   const llmDefaults: LlmConfig = {
     model: "default-model",
@@ -49,7 +51,7 @@ function buildConfig(tmpDir: string, opts: ConfigOpts = {}): AppConfig {
     topA: 1,
     reasoningEnabled,
     reasoningEffort,
-    maxCompletionTokens: 4096,
+    maxCompletionTokens,
   };
   return {
     ROOT_DIR: "/x",
@@ -70,7 +72,7 @@ function buildConfig(tmpDir: string, opts: ConfigOpts = {}): AppConfig {
     LLM_REASONING_ENABLED: reasoningEnabled,
     LLM_REASONING_EFFORT: reasoningEffort,
     LLM_REASONING_OMIT: reasoningOmit,
-    LLM_MAX_COMPLETION_TOKENS: 4096,
+    LLM_MAX_COMPLETION_TOKENS: maxCompletionTokens,
     llmDefaults,
     THEME_DIR: "./themes/",
     PROMPT_FILE: "x",
@@ -304,6 +306,60 @@ Deno.test({
       } finally {
         cap.restore();
       }
+    } finally {
+      Deno.env.delete("LLM_API_KEY");
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "chat-shared: max_completion_tokens omitted when merged value is null",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    Deno.env.set("LLM_API_KEY", "k");
+    const tmpDir = await Deno.makeTempDir({ prefix: "chat-mct-null-" });
+    try {
+      await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+      const cap = captureUpstreamFetch();
+      try {
+        await runOnce(tmpDir, buildConfig(tmpDir, { maxCompletionTokens: null }));
+      } finally {
+        cap.restore();
+      }
+      assert(
+        !Object.prototype.hasOwnProperty.call(
+          cap.captured.body!,
+          "max_completion_tokens",
+        ),
+        `expected max_completion_tokens to be absent from upstream body; got: ${
+          JSON.stringify(cap.captured.body)
+        }`,
+      );
+    } finally {
+      Deno.env.delete("LLM_API_KEY");
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "chat-shared: max_completion_tokens present when merged value is a positive integer",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    Deno.env.set("LLM_API_KEY", "k");
+    const tmpDir = await Deno.makeTempDir({ prefix: "chat-mct-int-" });
+    try {
+      await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+      const cap = captureUpstreamFetch();
+      try {
+        await runOnce(tmpDir, buildConfig(tmpDir, { maxCompletionTokens: 8192 }));
+      } finally {
+        cap.restore();
+      }
+      assertEquals(cap.captured.body!.max_completion_tokens, 8192);
     } finally {
       Deno.env.delete("LLM_API_KEY");
       await Deno.remove(tmpDir, { recursive: true });

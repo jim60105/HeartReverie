@@ -54,9 +54,12 @@ export interface LlmConfig {
   /**
    * Upper bound on tokens the LLM may generate (sent as `max_completion_tokens`
    * in the OpenAI-compatible request body — covers reasoning + content combined
-   * for reasoning-capable models). Must be a positive safe integer.
+   * for reasoning-capable models). Must be a positive safe integer, OR `null`
+   * meaning "no application-level limit; let the upstream provider decide" —
+   * in which case the `max_completion_tokens` key is omitted from the upstream
+   * request body entirely.
    */
-  readonly maxCompletionTokens: number;
+  readonly maxCompletionTokens: number | null;
 }
 
 /**
@@ -85,7 +88,7 @@ export interface AppConfig {
   readonly LLM_REASONING_ENABLED: boolean;
   readonly LLM_REASONING_EFFORT: ReasoningEffort;
   readonly LLM_REASONING_OMIT: boolean;
-  readonly LLM_MAX_COMPLETION_TOKENS: number;
+  readonly LLM_MAX_COMPLETION_TOKENS: number | null;
   readonly THEME_DIR: string;
   readonly PROMPT_FILE: string;
   /** Defaults for per-story LLM overrides, assembled from the flat `LLM_*` env vars. */
@@ -499,7 +502,7 @@ export interface LlmDefaultsResponse {
   readonly topA: number;
   readonly reasoningEnabled: boolean;
   readonly reasoningEffort: ReasoningEffort;
-  readonly maxCompletionTokens: number;
+  readonly maxCompletionTokens: number | null;
 }
 
 /** RFC 9457 Problem Details response shape. */

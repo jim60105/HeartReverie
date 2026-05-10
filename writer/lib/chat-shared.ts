@@ -255,6 +255,9 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     mode: writeMode.kind,
     model: llmConfig.model,
     temperature: llmConfig.temperature,
+    reasoningEnabled: llmConfig.reasoningEnabled,
+    reasoningEffort: llmConfig.reasoningEffort,
+    maxCompletionTokens: llmConfig.maxCompletionTokens,
     messageCount: messages.length,
     roleCounts,
   });
@@ -296,8 +299,10 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     repetition_penalty: llmConfig.repetitionPenalty,
     min_p: llmConfig.minP,
     top_a: llmConfig.topA,
-    max_completion_tokens: llmConfig.maxCompletionTokens,
   };
+  if (llmConfig.maxCompletionTokens !== null) {
+    requestBody.max_completion_tokens = llmConfig.maxCompletionTokens;
+  }
   if (!config.LLM_REASONING_OMIT) {
     requestBody.reasoning = llmConfig.reasoningEnabled
       ? { enabled: true, effort: llmConfig.reasoningEffort }

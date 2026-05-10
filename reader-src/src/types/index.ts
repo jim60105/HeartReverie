@@ -601,7 +601,7 @@ export interface StoryLlmConfig {
   topA?: number;
   reasoningEnabled?: boolean;
   reasoningEffort?: ReasoningEffort;
-  maxCompletionTokens?: number;
+  maxCompletionTokens?: number | null;
 }
 
 /**
@@ -623,7 +623,7 @@ export interface LlmDefaultsResponse {
   topA: number;
   reasoningEnabled: boolean;
   reasoningEffort: ReasoningEffort;
-  maxCompletionTokens: number;
+  maxCompletionTokens: number | null;
 }
 
 export interface UseStoryLlmConfigReturn {

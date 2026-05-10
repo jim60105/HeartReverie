@@ -144,7 +144,7 @@ Deno.test("LLM_REASONING_EFFORT rejects mixed-case (case-sensitive)", async () =
   assertEquals(r.effort, "xhigh");
 });
 
-async function evalMaxTokens(env: Record<string, string>): Promise<{ value: number; stderr: string }> {
+async function evalMaxTokens(env: Record<string, string>): Promise<{ value: number | null; stderr: string }> {
   const script = `
     const c = await import("./writer/lib/config.ts");
     console.log(JSON.stringify({ value: c.LLM_MAX_COMPLETION_TOKENS }));
@@ -153,9 +153,9 @@ async function evalMaxTokens(env: Record<string, string>): Promise<{ value: numb
   return { value: JSON.parse(stdout).value, stderr };
 }
 
-Deno.test("LLM_MAX_COMPLETION_TOKENS defaults to 4096 when unset", async () => {
+Deno.test("LLM_MAX_COMPLETION_TOKENS defaults to null when unset", async () => {
   const r = await evalMaxTokens({});
-  assertEquals(r.value, 4096);
+  assertEquals(r.value, null);
 });
 
 Deno.test("LLM_MAX_COMPLETION_TOKENS accepts valid positive integers", async () => {
@@ -165,10 +165,10 @@ Deno.test("LLM_MAX_COMPLETION_TOKENS accepts valid positive integers", async () 
   }
 });
 
-Deno.test("LLM_MAX_COMPLETION_TOKENS rejects zero / negative / fractional / scientific / leading-zero / non-numeric", async () => {
+Deno.test("LLM_MAX_COMPLETION_TOKENS rejects zero / negative / fractional / scientific / leading-zero / non-numeric → null", async () => {
   for (const bad of ["0", "-5", "1.5", "1e3", "01024", "4096abc", "  ", "abc"]) {
     const r = await evalMaxTokens({ LLM_MAX_COMPLETION_TOKENS: bad });
-    assertEquals(r.value, 4096, `expected fallback for input "${bad}"`);
+    assertEquals(r.value, null, `expected null fallback for input "${bad}"`);
     if (bad.trim() !== "") {
       // non-empty invalid values should also emit a warn log
       assert(
@@ -179,11 +179,20 @@ Deno.test("LLM_MAX_COMPLETION_TOKENS rejects zero / negative / fractional / scie
   }
 });
 
-Deno.test("LLM_MAX_COMPLETION_TOKENS rejects unsafe integers", async () => {
+Deno.test("LLM_MAX_COMPLETION_TOKENS rejects unsafe integers → null", async () => {
   // 2^53 = 9007199254740992 is *exactly* MAX_SAFE_INTEGER + 1
   const r = await evalMaxTokens({ LLM_MAX_COMPLETION_TOKENS: "9007199254740993" });
-  assertEquals(r.value, 4096);
+  assertEquals(r.value, null);
   assert(r.stderr.includes("LLM_MAX_COMPLETION_TOKENS"));
+});
+
+Deno.test("LLM_MAX_COMPLETION_TOKENS empty string defaults to null silently", async () => {
+  const r = await evalMaxTokens({ LLM_MAX_COMPLETION_TOKENS: "" });
+  assertEquals(r.value, null);
+  assert(
+    !r.stderr.includes("LLM_MAX_COMPLETION_TOKENS"),
+    `expected silent fallback for empty string; got stderr: ${r.stderr}`,
+  );
 });
 
 Deno.test("LLM_MODEL defaults to deepseek/deepseek-v4-pro when unset", async () => {

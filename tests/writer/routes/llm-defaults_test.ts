@@ -131,3 +131,64 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "GET /api/llm-defaults: maxCompletionTokens is null when env LLM_MAX_COMPLETION_TOKENS is unset",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    Deno.env.set("PASSPHRASE", PASSPHRASE);
+    try {
+      const nullDefaults: LlmConfig = { ...llmDefaults, maxCompletionTokens: null };
+      const app = createApp({
+        config: {
+          READER_DIR: "/nonexistent-reader",
+          PLAYGROUND_DIR: "/nonexistent-playground",
+          ROOT_DIR: "/nonexistent-root",
+          THEME_DIR: "./themes/",
+          LLM_API_URL: "https://example.test/chat/completions",
+          LLM_MODEL: nullDefaults.model,
+          LLM_TEMPERATURE: nullDefaults.temperature,
+          LLM_FREQUENCY_PENALTY: nullDefaults.frequencyPenalty,
+          LLM_PRESENCE_PENALTY: nullDefaults.presencePenalty,
+          LLM_TOP_K: nullDefaults.topK,
+          LLM_TOP_P: nullDefaults.topP,
+          LLM_REPETITION_PENALTY: nullDefaults.repetitionPenalty,
+          LLM_MIN_P: nullDefaults.minP,
+          LLM_TOP_A: nullDefaults.topA,
+          LLM_REASONING_ENABLED: true,
+          LLM_REASONING_EFFORT: "high",
+          LLM_REASONING_OMIT: false,
+          LLM_MAX_COMPLETION_TOKENS: null,
+          llmDefaults: nullDefaults,
+        } as unknown as AppConfig,
+        safePath: createSafePath("/nonexistent-playground"),
+        pluginManager: {
+          getPlugins: () => [],
+          getParameters: () => [],
+          getPluginDir: () => null,
+          getBuiltinDir: () => "/nonexistent-plugins",
+          getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+          getStripTagPatterns: () => null,
+        } as unknown as PluginManager,
+        hookDispatcher: new HookDispatcher(),
+        buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+        verifyPassphrase,
+      });
+      const res = await app.fetch(
+        new Request("http://localhost/api/llm-defaults", {
+          headers: { "x-passphrase": PASSPHRASE },
+        }),
+      );
+      assertEquals(res.status, 200);
+      const body = await res.json();
+      // The key must be present (lock-step with whitelist) AND its value must be JSON null,
+      // so the frontend can distinguish "no app-level limit" from "key absent / unknown".
+      assert("maxCompletionTokens" in body);
+      assertEquals(body.maxCompletionTokens, null);
+    } finally {
+      Deno.env.delete("PASSPHRASE");
+    }
+  },
+});

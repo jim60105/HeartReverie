@@ -87,17 +87,30 @@ function validateLlmDefaultsBody(body: unknown): LlmDefaultsResponse {
   out.model = src.model;
   for (const key of NUMERIC_KEYS) {
     const v = src[key];
+    if (key === "maxCompletionTokens") {
+      // Special case: `null` is a valid sentinel meaning "no application-level
+      // token limit; let the upstream provider decide".
+      if (v === null) {
+        out[key] = null;
+        continue;
+      }
+      if (typeof v !== "number" || !Number.isFinite(v)) {
+        throw new LlmDefaultsValidationError(
+          `Field '${key}' must be a finite number or null`,
+        );
+      }
+      if (!Number.isSafeInteger(v) || v <= 0) {
+        throw new LlmDefaultsValidationError(
+          "Field 'maxCompletionTokens' must be a positive integer or null",
+        );
+      }
+      out[key] = v;
+      continue;
+    }
     if (typeof v !== "number" || !Number.isFinite(v)) {
       throw new LlmDefaultsValidationError(
         `Field '${key}' must be a finite number`,
       );
-    }
-    if (key === "maxCompletionTokens") {
-      if (!Number.isSafeInteger(v) || v <= 0) {
-        throw new LlmDefaultsValidationError(
-          "Field 'maxCompletionTokens' must be a positive integer",
-        );
-      }
     }
     out[key] = v;
   }
