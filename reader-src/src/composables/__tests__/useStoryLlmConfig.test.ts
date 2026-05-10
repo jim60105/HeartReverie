@@ -211,6 +211,16 @@ describe("useStoryLlmConfig", () => {
       expect(api.defaultsError.value).toContain("maxCompletionTokens");
     });
 
+    it("accepts null maxCompletionTokens (no app-level limit)", async () => {
+      mockFetch({ ...VALID_DEFAULTS, maxCompletionTokens: null });
+      const api = await getApi();
+      await api.loadLlmDefaults();
+
+      expect(api.defaultsError.value).toBeNull();
+      expect(api.defaults.value).not.toBeNull();
+      expect(api.defaults.value?.maxCompletionTokens).toBeNull();
+    });
+
     it("toggles defaultsLoading flag around the request", async () => {
       mockFetch(VALID_DEFAULTS);
       const api = await getApi();

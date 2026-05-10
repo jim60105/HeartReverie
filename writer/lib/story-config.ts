@@ -126,12 +126,19 @@ export function validateStoryLlmConfig(input: unknown): StoryLlmConfigOverrides 
 
   if (Object.prototype.hasOwnProperty.call(src, "maxCompletionTokens")) {
     const v = src.maxCompletionTokens;
-    if (v !== null && v !== undefined) {
-      if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) {
-        throw new StoryConfigValidationError(
-          "Field 'maxCompletionTokens' must be a positive integer",
-        );
-      }
+    if (v === undefined) {
+      // undefined → skip (treat as not present, fall through to env default)
+    } else if (v === null) {
+      // Explicit null is a meaningful override carrying "no application-level
+      // limit; let the upstream provider decide". Preserve it verbatim so the
+      // merge step can distinguish "key absent → fall through to env default"
+      // from "key explicitly null → override env default to null".
+      out.maxCompletionTokens = null;
+    } else if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) {
+      throw new StoryConfigValidationError(
+        "Field 'maxCompletionTokens' must be a positive integer or null",
+      );
+    } else {
       out.maxCompletionTokens = v;
     }
   }

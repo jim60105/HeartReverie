@@ -73,6 +73,7 @@ deno task build:reader
 | `LLM_REPETITION_PENALTY` | — | `1.2` | 重複懲罰 |
 | `LLM_MIN_P` | — | `0` | Min-P 取樣 |
 | `LLM_TOP_A` | — | `1` | Top-A 取樣 |
+| `LLM_MAX_COMPLETION_TOKENS` | — | （未設定 = 不限制） | 每次回應的 token 上限（傳給上游 `max_completion_tokens`）。留空表示不設應用層上限，由模型供應商決定；若要設定，必須為正整數 |
 | `PLUGIN_DIR` | — | — | 外部外掛目錄（絕對路徑） |
 | `PLAYGROUND_DIR` | — | `./playground` | 故事資料根目錄 |
 | `READER_DIR` | — | `./reader-dist` | 前端靜態檔案根目錄 |

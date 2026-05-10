@@ -196,8 +196,19 @@ Deno.test("validateStoryLlmConfig", async (t) => {
     });
   });
 
+  await t.step("preserves explicit null maxCompletionTokens as 'no limit' override", () => {
+    // Per spec: `null` is a meaningful override carrying the semantics
+    // "no application-level limit; let the upstream provider decide".
+    // The validator MUST preserve `null` (NOT strip it) so the merge step
+    // can distinguish "key absent → fall through" from "key explicitly null
+    // → override env default to null".
+    assertEquals(validateStoryLlmConfig({ maxCompletionTokens: null }), {
+      maxCompletionTokens: null,
+    });
+  });
+
   await t.step("rejects non-positive / fractional / non-integer maxCompletionTokens", () => {
-    for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "100"]) {
+    for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "100", true]) {
       assertThrows(
         () => validateStoryLlmConfig({ maxCompletionTokens: bad as unknown as number }),
         Error,
@@ -214,7 +225,7 @@ Deno.test("validateStoryLlmConfig", async (t) => {
     );
   });
 
-  await t.step("skips maxCompletionTokens when undefined", () => {
+  await t.step("skips maxCompletionTokens when undefined (still strips undefined, only null is preserved)", () => {
     assertEquals(
       validateStoryLlmConfig({ model: "x", maxCompletionTokens: undefined }),
       { model: "x" },
@@ -374,6 +385,35 @@ Deno.test("resolveStoryLlmConfig merges defaults with overrides", async () => {
     assertEquals(merged.model, "override-model");
     assertEquals(merged.topK, defaults.topK);
     assertEquals(merged.frequencyPenalty, defaults.frequencyPenalty);
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+Deno.test("resolveStoryLlmConfig: explicit null maxCompletionTokens overrides non-null env default", async () => {
+  // Per spec: `null` in `_config.json` is an EXPLICIT override that replaces
+  // the env default with `null`, in contrast to the default fall-through-on-null
+  // semantics applied to every other field.
+  const tmpDir = await Deno.makeTempDir({ prefix: "story-config-null-merge-" });
+  try {
+    const envDefaults = { ...defaults, maxCompletionTokens: 4096 };
+    await writeStoryLlmConfig(tmpDir, { maxCompletionTokens: null });
+    const merged = await resolveStoryLlmConfig(tmpDir, envDefaults);
+    assertEquals(merged.maxCompletionTokens, null);
+    // Other fields fall through to env defaults unchanged.
+    assertEquals(merged.temperature, envDefaults.temperature);
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+Deno.test("resolveStoryLlmConfig: missing maxCompletionTokens falls through to env default", async () => {
+  const tmpDir = await Deno.makeTempDir({ prefix: "story-config-fallthrough-" });
+  try {
+    const envDefaults = { ...defaults, maxCompletionTokens: 4096 };
+    await writeStoryLlmConfig(tmpDir, { temperature: 0.5 });
+    const merged = await resolveStoryLlmConfig(tmpDir, envDefaults);
+    assertEquals(merged.maxCompletionTokens, 4096);
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }

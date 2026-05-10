@@ -224,7 +224,6 @@ describe("LlmSettingsPage", () => {
     ["0", "zero"],
     ["-5", "negative"],
     ["abc", "non-numeric"],
-    [" ", "whitespace"],
   ])("rejects invalid maxCompletionTokens input %j (%s)", async (input) => {
     const wrapper = mount(LlmSettingsPage);
     await flushPromises();
@@ -239,6 +238,27 @@ describe("LlmSettingsPage", () => {
       expect.objectContaining({ level: "error" }),
     );
   });
+
+  it.each([
+    ["", "empty string"],
+    [" ", "whitespace only"],
+    ["   ", "multiple spaces"],
+  ])(
+    "serializes %j (%s) maxCompletionTokens as null (no app-level limit)",
+    async (input) => {
+      const wrapper = mount(LlmSettingsPage);
+      await flushPromises();
+      const x = exposed(wrapper);
+      x.enabledMap.maxCompletionTokens = true;
+      x.valueMap.maxCompletionTokens = input;
+      await x.handleSave();
+      await flushPromises();
+
+      expect(saveConfigMock).toHaveBeenCalledTimes(1);
+      const payload = saveConfigMock.mock.calls[0]![2] as StoryLlmConfig;
+      expect(payload).toEqual({ maxCompletionTokens: null });
+    },
+  );
 
   it("accepts a valid positive-integer maxCompletionTokens string", async () => {
     const wrapper = mount(LlmSettingsPage);

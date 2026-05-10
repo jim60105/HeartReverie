@@ -206,24 +206,36 @@ function collectPayload(): StoryLlmConfig | null {
       }
       (payload as Record<string, unknown>)[f.key] = raw;
     } else {
-      const num = Number(raw);
-      if (raw === "" || !Number.isFinite(num)) {
-        notify({ title: "欄位錯誤", body: `${f.label} 必須為數字`, level: "error" });
-        return null;
-      }
+      // Special case: maxCompletionTokens permits the empty input as a
+      // sentinel for `null` (= "no application-level limit; let the upstream
+      // provider decide"). Non-empty values still go through the strict
+      // positive-safe-integer guard.
       if (f.key === "maxCompletionTokens") {
-        // Strict positive-integer lexical guard (no exponent notation, no
-        // leading zeros, no decimals). Using regex on the raw text avoids
-        // silently accepting values like "1e3" that Number() would parse
-        // into a finite safe integer.
-        if (!/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(num) || num <= 0) {
+        if (raw === "") {
+          (payload as Record<string, unknown>)[f.key] = null;
+          continue;
+        }
+        const num = Number(raw);
+        if (
+          !/^[1-9]\d*$/.test(raw) ||
+          !Number.isFinite(num) ||
+          !Number.isSafeInteger(num) ||
+          num <= 0
+        ) {
           notify({
             title: "欄位錯誤",
-            body: `${f.label} 必須為正整數`,
+            body: `${f.label} 必須為正整數，或留空表示不設上限`,
             level: "error",
           });
           return null;
         }
+        (payload as Record<string, unknown>)[f.key] = num;
+        continue;
+      }
+      const num = Number(raw);
+      if (raw === "" || !Number.isFinite(num)) {
+        notify({ title: "欄位錯誤", body: `${f.label} 必須為數字`, level: "error" });
+        return null;
       }
       (payload as Record<string, unknown>)[f.key] = num;
     }
@@ -481,9 +493,12 @@ defineExpose({
             type="text"
             disabled
             :value="displayValueMap[f.key]"
-            :placeholder="defaults === null ? '預設值載入失敗' : '使用預設值'"
+            :placeholder="defaults === null ? '預設值載入失敗' : (f.key === 'maxCompletionTokens' ? '不設上限（由模型供應商決定）' : '使用預設值')"
           />
         </template>
+        <p v-if="f.key === 'maxCompletionTokens'" class="field-note">
+          留空表示不設上限，由模型供應商決定。
+        </p>
       </div>
 
       <div class="actions">
@@ -565,6 +580,14 @@ defineExpose({
 .field-hint {
   color: var(--text-italic, #888);
   font-size: 0.8rem;
+}
+
+.field-note {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  color: var(--text-italic, #888);
+  font-size: 0.8rem;
+  font-style: italic;
 }
 
 .field-input {

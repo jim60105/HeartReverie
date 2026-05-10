@@ -40,34 +40,34 @@ function numEnv(key: string, fallback: number): number {
 }
 
 /**
- * Parse a positive-integer env var. Empty/unset → `fallback` silently.
- * Accepts only `^[1-9]\d*$` (no leading zeros, no whitespace, no scientific
- * notation, no decimals) AND must be a `Number.isSafeInteger`. Anything else
- * (e.g., `"4096abc"`, `"1e3"`, `"01024"`, `"0"`, `"-5"`, `"1.5"`) falls back
- * to `fallback` and emits a `warn`-level log naming the variable and the
- * unrecognized value.
+ * Parse a positive-integer-or-null env var. Empty/unset/whitespace → `null`
+ * silently. Accepts only `^[1-9]\d*$` (no leading zeros, no whitespace, no
+ * scientific notation, no decimals) AND must be a `Number.isSafeInteger`.
+ * Anything else (e.g., `"4096abc"`, `"1e3"`, `"01024"`, `"0"`, `"-5"`,
+ * `"1.5"`) falls back to `null` and emits a `warn`-level log naming the
+ * variable and the unrecognized value. Used for fields where "not set" is
+ * a meaningful state (i.e. "no application-level limit; let the upstream
+ * provider decide").
  */
-function posIntEnv(key: string, fallback: number): number {
+function posIntOrNullEnv(key: string): number | null {
   const raw = Deno.env.get(key);
-  if (raw === undefined) return fallback;
+  if (raw === undefined) return null;
   const trimmed = raw.trim();
-  if (trimmed === "") return fallback;
+  if (trimmed === "") return null;
   if (!/^[1-9]\d*$/.test(trimmed)) {
-    log.warn("Unrecognized positive-integer env value; falling back to default", {
+    log.warn("Unrecognized positive-integer env value; falling back to null (no limit)", {
       variable: key,
       value: raw,
-      fallback,
     });
-    return fallback;
+    return null;
   }
   const parsed = Number(trimmed);
   if (!Number.isSafeInteger(parsed)) {
-    log.warn("Positive-integer env value exceeds safe integer range; falling back to default", {
+    log.warn("Positive-integer env value exceeds safe integer range; falling back to null (no limit)", {
       variable: key,
       value: raw,
-      fallback,
     });
-    return fallback;
+    return null;
   }
   return parsed;
 }
@@ -127,7 +127,7 @@ const LLM_TOP_A: number = numEnv("LLM_TOP_A", 1);
 const LLM_REASONING_ENABLED: boolean = boolEnv("LLM_REASONING_ENABLED", true);
 const LLM_REASONING_EFFORT: ReasoningEffort = effortEnv("LLM_REASONING_EFFORT", "xhigh");
 const LLM_REASONING_OMIT: boolean = boolEnv("LLM_REASONING_OMIT", false);
-const LLM_MAX_COMPLETION_TOKENS: number = posIntEnv("LLM_MAX_COMPLETION_TOKENS", 4096);
+const LLM_MAX_COMPLETION_TOKENS: number | null = posIntOrNullEnv("LLM_MAX_COMPLETION_TOKENS");
 const THEME_DIR: string = (() => {
   const raw = Deno.env.get("THEME_DIR");
   if (!raw) return "./themes/";

@@ -130,7 +130,7 @@ Deno.test("config.ts – defaults when no env vars set", async () => {
   assertEquals(values.LLM_REASONING_ENABLED, true);
   assertEquals(values.LLM_REASONING_EFFORT, "xhigh");
   assertEquals(values.LLM_REASONING_OMIT, false);
-  assertEquals(values.LLM_MAX_COMPLETION_TOKENS, 4096);
+  assertEquals(values.LLM_MAX_COMPLETION_TOKENS, null);
   assertEquals(values.THEME_DIR, "./themes/");
   assertEquals(values.LOG_LEVEL, "info");
   assertEquals(values.LOG_FILE, null);
@@ -186,16 +186,16 @@ Deno.test("config.ts – numEnv accepts negative finite numbers verbatim", async
   assertEquals(values.LLM_FREQUENCY_PENALTY, -0.5);
 });
 
-Deno.test("config.ts – posIntEnv covers every rejection branch with warn", async () => {
-  // Each invalid input triggers a different rejection path inside posIntEnv.
+Deno.test("config.ts – posIntOrNullEnv covers every rejection branch with warn", async () => {
+  // Each invalid input triggers a different rejection path inside posIntOrNullEnv.
   for (const bad of ["0", "-5", "1.5", "1e3", "01024", "4096abc", "abc"]) {
     const { values, stderr } = await evalAll({
       LLM_MAX_COMPLETION_TOKENS: bad,
     });
     assertEquals(
       values.LLM_MAX_COMPLETION_TOKENS,
-      4096,
-      `expected fallback for ${bad}`,
+      null,
+      `expected null fallback for ${bad}`,
     );
     assert(
       stderr.includes("LLM_MAX_COMPLETION_TOKENS"),
@@ -204,12 +204,12 @@ Deno.test("config.ts – posIntEnv covers every rejection branch with warn", asy
   }
 });
 
-Deno.test("config.ts – posIntEnv whitespace-only and empty fall back silently", async () => {
-  // Whitespace-only trims to empty string → silent fallback (line 54).
+Deno.test("config.ts – posIntOrNullEnv whitespace-only and empty fall back silently", async () => {
+  // Whitespace-only trims to empty string → silent null fallback.
   const { values: v1, stderr: e1 } = await evalAll({
     LLM_MAX_COMPLETION_TOKENS: "   ",
   });
-  assertEquals(v1.LLM_MAX_COMPLETION_TOKENS, 4096);
+  assertEquals(v1.LLM_MAX_COMPLETION_TOKENS, null);
   assert(
     !e1.includes("LLM_MAX_COMPLETION_TOKENS"),
     `expected silent fallback, got: ${e1}`,
@@ -218,22 +218,38 @@ Deno.test("config.ts – posIntEnv whitespace-only and empty fall back silently"
   const { values: v2, stderr: e2 } = await evalAll({
     LLM_MAX_COMPLETION_TOKENS: "",
   });
-  assertEquals(v2.LLM_MAX_COMPLETION_TOKENS, 4096);
+  assertEquals(v2.LLM_MAX_COMPLETION_TOKENS, null);
   assert(
     !e2.includes("LLM_MAX_COMPLETION_TOKENS"),
     `expected silent fallback for empty, got: ${e2}`,
   );
 });
 
-Deno.test("config.ts – posIntEnv unsafe integer warns and falls back", async () => {
+Deno.test("config.ts – posIntOrNullEnv unsafe integer warns and falls back to null", async () => {
   const { values, stderr } = await evalAll({
     LLM_MAX_COMPLETION_TOKENS: String(Number.MAX_SAFE_INTEGER + 2), // 9007199254740993
   });
-  assertEquals(values.LLM_MAX_COMPLETION_TOKENS, 4096);
+  assertEquals(values.LLM_MAX_COMPLETION_TOKENS, null);
   assert(
     stderr.includes("safe integer") ||
       stderr.includes("LLM_MAX_COMPLETION_TOKENS"),
   );
+});
+
+Deno.test("config.ts – posIntOrNullEnv accepts valid positive integers verbatim", async () => {
+  const { values, stderr } = await evalAll({
+    LLM_MAX_COMPLETION_TOKENS: "8192",
+  });
+  assertEquals(values.LLM_MAX_COMPLETION_TOKENS, 8192);
+  assert(
+    !stderr.includes("LLM_MAX_COMPLETION_TOKENS"),
+    `expected no warn for valid integer, got: ${stderr}`,
+  );
+});
+
+Deno.test("config.ts – LLM_MAX_COMPLETION_TOKENS unset defaults to null", async () => {
+  const { values } = await evalAll({});
+  assertEquals(values.LLM_MAX_COMPLETION_TOKENS, null);
 });
 
 Deno.test("config.ts – boolEnv covers every TRUE / FALSE / unknown / empty branch", async () => {
