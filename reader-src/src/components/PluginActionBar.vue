@@ -68,7 +68,7 @@ function isPending(pluginName: string, id: string): boolean {
 }
 
 .plugin-action-btn:hover:not(:disabled) {
-  background: var(--panel-bg-hover, rgba(255, 255, 255, 0.08));
+  background: var(--btn-hover-bg, rgba(255, 255, 255, 0.08));
 }
 
 .plugin-action-btn:disabled {

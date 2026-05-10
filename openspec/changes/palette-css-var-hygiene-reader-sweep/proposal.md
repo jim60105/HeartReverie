@@ -6,7 +6,7 @@ Following the just-archived `palette-css-var-hygiene-plugin-settings` change (wh
 |---|---|---|---|
 | `PluginSettingsPage.vue` | 771 | `background: var(--bg-secondary, #2a2a2a)` | `.dropdown-options` panel |
 | `PluginSettingsPage.vue` | 786 | `background: var(--bg-hover, #3a3a3a)` | `.dropdown-option:hover` |
-| `PluginSettingsPage.vue` | 790 | `background: var(--bg-hover, #3a3a3a)` | `.dropdown-option--selected` |
+| `PluginSettingsPage.vue` | 790 | `background: var(--bg-hover, #3a3a3a)` | `.dropdown-option.highlighted` |
 | `PromptPreview.vue` | 165 | `background: var(--bg-secondary, transparent)` | `.message-card` |
 | `PromptPreview.vue` | 196 | `background: var(--bg-tertiary, rgba(127,127,127,0.15))` | `.role-badge` neutral pill |
 | `PluginActionBar.vue` | 71 | `background: var(--panel-bg-hover, rgba(255,255,255,0.08))` | `.plugin-action-btn:hover` |

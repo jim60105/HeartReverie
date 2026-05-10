@@ -162,7 +162,7 @@ async function fetchPreview() {
   border: 1px solid var(--border-color);
   border-left-width: 4px;
   border-radius: 6px;
-  background: var(--bg-secondary, transparent);
+  background: var(--item-bg, transparent);
   display: flex;
   flex-direction: column;
 }
@@ -193,7 +193,7 @@ async function fetchPreview() {
   border-radius: 999px;
   font-size: 0.85em;
   font-weight: 600;
-  background: var(--bg-tertiary, rgba(127, 127, 127, 0.15));
+  background: rgba(127, 127, 127, 0.15);
 }
 
 .role-badge--system { color: #888; }

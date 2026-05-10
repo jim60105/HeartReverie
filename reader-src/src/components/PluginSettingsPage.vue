@@ -768,7 +768,7 @@ watch(pluginName, async () => {
   z-index: 100;
   max-height: 200px;
   overflow-y: auto;
-  background: var(--bg-secondary, #2a2a2a);
+  background: var(--item-bg, #2a2a2a);
   border: 1px solid var(--border-color, #444);
   border-radius: 4px;
   margin-top: 2px;
@@ -783,11 +783,11 @@ watch(pluginName, async () => {
 }
 
 .dropdown-option:hover {
-  background: var(--bg-hover, #3a3a3a);
+  background: var(--btn-hover-bg, #3a3a3a);
 }
 
 .dropdown-option.highlighted {
-  background: var(--bg-hover, #3a3a3a);
+  background: var(--btn-hover-bg, #3a3a3a);
 }
 
 .dropdown-option.dimmed {

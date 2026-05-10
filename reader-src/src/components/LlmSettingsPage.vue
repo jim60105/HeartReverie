@@ -520,7 +520,7 @@ defineExpose({
 
 .page-hint {
   margin: 0;
-  color: var(--muted-color, #888);
+  color: var(--text-italic, #888);
   font-size: 0.9rem;
 }
 
@@ -563,14 +563,14 @@ defineExpose({
 }
 
 .field-hint {
-  color: var(--muted-color, #888);
+  color: var(--text-italic, #888);
   font-size: 0.8rem;
 }
 
 .field-input {
   padding: 6px 8px;
   border: 1px solid var(--border-color, #ccc);
-  background: var(--input-bg, transparent);
+  background: var(--item-bg, transparent);
   color: inherit;
   border-radius: 4px;
 }
@@ -582,7 +582,7 @@ defineExpose({
 
 .muted {
   opacity: 0.5;
-  border-color: var(--muted-color, #888);
+  border-color: var(--text-italic, #888);
 }
 
 .actions {
@@ -602,7 +602,7 @@ defineExpose({
 }
 
 .btn.primary {
-  background: var(--accent-color, #4a90e2);
+  background: var(--accent-solid, #4a90e2);
   color: white;
   border-color: transparent;
 }
@@ -613,17 +613,17 @@ defineExpose({
 }
 
 .status {
-  color: var(--muted-color, #888);
+  color: var(--text-italic, #888);
   font-size: 0.9rem;
 }
 
 .status.error {
-  color: var(--error-color, #c0392b);
+  color: #c0392b;
 }
 
 .status.warn,
 .status.warning {
-  color: var(--warn-color, #b07d2b);
+  color: #b07d2b;
 }
 
 @media (max-width: 640px) {
