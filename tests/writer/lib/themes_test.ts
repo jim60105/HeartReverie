@@ -13,8 +13,13 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assertExists } from "@std/assert";
-import { loadThemes, getTheme, listThemes } from "../../../writer/lib/themes.ts";
+import { assertEquals, assertExists, assertRejects } from "@std/assert";
+import {
+  loadThemes,
+  getTheme,
+  listThemes,
+  refreshThemes,
+} from "../../../writer/lib/themes.ts";
 
 const VALID_TOML = `
 id = "test-theme"
@@ -226,6 +231,108 @@ text-main = "#000"
       { id: "mid", label: "Mid" },
       { id: "zebra", label: "Zebra" },
     ]);
+  });
+});
+
+Deno.test("themes: rejects missing/non-string id", async () => {
+  await withTmpDir(async (dir) => {
+    await Deno.writeTextFile(
+      `${dir}/no-id.toml`,
+      `label = "No ID"\n[palette]\ntext-main = "#000"\n`,
+    );
+    const result = await loadThemes(dir);
+    assertEquals(result.loaded, 0);
+    assertEquals(result.skipped, 1);
+  });
+});
+
+Deno.test("themes: rejects non-kebab-case id", async () => {
+  await withTmpDir(async (dir) => {
+    await Deno.writeTextFile(
+      `${dir}/Bad_ID.toml`,
+      `id = "Bad_ID"\nlabel = "Bad"\n[palette]\ntext-main = "#000"\n`,
+    );
+    const result = await loadThemes(dir);
+    assertEquals(result.loaded, 0);
+    assertEquals(result.skipped, 1);
+  });
+});
+
+Deno.test("themes: rejects missing label", async () => {
+  await withTmpDir(async (dir) => {
+    await Deno.writeTextFile(
+      `${dir}/no-label.toml`,
+      `id = "no-label"\n[palette]\ntext-main = "#000"\n`,
+    );
+    const result = await loadThemes(dir);
+    assertEquals(result.loaded, 0);
+    assertEquals(result.skipped, 1);
+  });
+});
+
+Deno.test("themes: rejects empty label string", async () => {
+  await withTmpDir(async (dir) => {
+    await Deno.writeTextFile(
+      `${dir}/empty-label.toml`,
+      `id = "empty-label"\nlabel = ""\n[palette]\ntext-main = "#000"\n`,
+    );
+    const result = await loadThemes(dir);
+    assertEquals(result.loaded, 0);
+    assertEquals(result.skipped, 1);
+  });
+});
+
+Deno.test("themes: rejects invalid colorScheme value", async () => {
+  await withTmpDir(async (dir) => {
+    await Deno.writeTextFile(
+      `${dir}/bad-cs.toml`,
+      `id = "bad-cs"\nlabel = "Bad CS"\ncolorScheme = "neon"\n[palette]\ntext-main = "#000"\n`,
+    );
+    const result = await loadThemes(dir);
+    assertEquals(result.loaded, 0);
+    assertEquals(result.skipped, 1);
+  });
+});
+
+Deno.test("themes: rejects palette declared as array", async () => {
+  await withTmpDir(async (dir) => {
+    await Deno.writeTextFile(
+      `${dir}/bad-palette.toml`,
+      `id = "bad-palette"\nlabel = "Bad Palette"\npalette = ["a", "b"]\n`,
+    );
+    const result = await loadThemes(dir);
+    assertEquals(result.loaded, 0);
+    assertEquals(result.skipped, 1);
+  });
+});
+
+Deno.test("themes: rejects palette value that is not a string", async () => {
+  await withTmpDir(async (dir) => {
+    await Deno.writeTextFile(
+      `${dir}/bad-val.toml`,
+      `id = "bad-val"\nlabel = "Bad Val"\n[palette]\ntext-main = 42\n`,
+    );
+    const result = await loadThemes(dir);
+    assertEquals(result.loaded, 0);
+    assertEquals(result.skipped, 1);
+  });
+});
+
+Deno.test("themes: loadThemes rethrows non-NotFound directory errors", async () => {
+  await withTmpDir(async (dir) => {
+    // Create a file at the path so readDir fails with NotADirectory, not NotFound
+    const filePath = `${dir}/not-a-dir`;
+    await Deno.writeTextFile(filePath, "");
+    await assertRejects(() => loadThemes(filePath));
+  });
+});
+
+Deno.test("themes: refreshThemes delegates to loadThemes", async () => {
+  await withTmpDir(async (dir) => {
+    await Deno.writeTextFile(`${dir}/refresh-me.toml`, VALID_TOML.replace(/test-theme/g, "refresh-me"));
+    const result = await refreshThemes(dir);
+    assertEquals(result.loaded, 1);
+    assertExists(getTheme("refresh-me"));
   });
 });
 
