@@ -194,17 +194,19 @@ The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JS
 
 The server SHALL resolve the effective LLM configuration for each chat request by merging an env-derived `llmDefaults` object with the target story's validated `_config.json` overrides using `Object.assign({}, llmDefaults, storyOverrides)`. Merging SHALL happen per request so that edits to a story's `_config.json` take effect on the next chat without a server restart.
 
-The `llmDefaults` object SHALL be built from the following environment variables (applied when the variable is unset or fails parsing, the field SHALL use the stated default): `LLM_MODEL` (default `deepseek/deepseek-v4-pro`), `LLM_TEMPERATURE` (default `0.1`), `LLM_FREQUENCY_PENALTY` (default `0.13`), `LLM_PRESENCE_PENALTY` (default `0.52`), `LLM_TOP_K` (default `10`), `LLM_TOP_P` (default `0`), `LLM_REPETITION_PENALTY` (default `1.2`), `LLM_MIN_P` (default `0`), `LLM_TOP_A` (default `1`), `LLM_REASONING_ENABLED` (default `true`), `LLM_REASONING_EFFORT` (default `"xhigh"`), `LLM_MAX_COMPLETION_TOKENS` (default `4096`).
+The `llmDefaults` object SHALL be built from the following environment variables (applied when the variable is unset or fails parsing, the field SHALL use the stated default): `LLM_MODEL` (default `deepseek/deepseek-v4-pro`), `LLM_TEMPERATURE` (default `0.1`), `LLM_FREQUENCY_PENALTY` (default `0.13`), `LLM_PRESENCE_PENALTY` (default `0.52`), `LLM_TOP_K` (default `10`), `LLM_TOP_P` (default `0`), `LLM_REPETITION_PENALTY` (default `1.2`), `LLM_MIN_P` (default `0`), `LLM_TOP_A` (default `1`), `LLM_REASONING_ENABLED` (default `true`), `LLM_REASONING_EFFORT` (default `"xhigh"`), `LLM_MAX_COMPLETION_TOKENS` (**default `null`** — meaning "no application-level limit; let the provider decide").
 
-`LLM_MAX_COMPLETION_TOKENS` SHALL be parsed by a dedicated positive-safe-integer parser with the rule: trim the raw string, require a full-string decimal-integer match against `^[1-9]\d*$` (no leading zeros, no sign, no decimal point, no exponent), then `Number(...)` the matched string and validate `Number.isSafeInteger(parsed) && parsed > 0`. Empty / unset / whitespace-only → fallback to `4096` with no warning. Any non-empty value that fails the regex or the safe-integer check (including `"abc"`, `"4096abc"`, `"1e3"`, `"0"`, `"-100"`, `"3.14"`, `"01024"`, and any decimal string ≥ `2^53`) SHALL fall back to `4096` AND the server SHALL emit a warning to the operational log naming the variable and the offending value.
+`LLM_MAX_COMPLETION_TOKENS` SHALL be parsed by a dedicated positive-safe-integer-or-null parser. The rule SHALL be: trim the raw string; if the trimmed value is empty (i.e. unset / empty / whitespace-only), the parsed result SHALL be `null` with no warning. Otherwise, the trimmed string SHALL be required to fully match `^[1-9]\d*$` (no leading zeros, no sign, no decimal point, no exponent), and `Number(...)` of the matched string SHALL satisfy `Number.isSafeInteger(parsed) && parsed > 0`; on success the parsed result SHALL be that positive safe integer. On *any* validation failure for a non-empty value (including `"abc"`, `"4096abc"`, `"1e3"`, `"0"`, `"-100"`, `"3.14"`, `"01024"`, and any decimal string ≥ `2^53`) the parsed result SHALL fall back to `null` AND the server SHALL emit a warning to the operational log naming the variable and the offending value. The resulting `llmDefaults.maxCompletionTokens` field SHALL therefore be of type `number | null`, with `null` meaning "no application-level limit".
 
 The server SHALL also read a separate, non-merged env var `LLM_REASONING_OMIT` (default `false`, parsed as a boolean per the rules below). When `LLM_REASONING_OMIT` resolves to `true`, the server SHALL omit the entire `reasoning` block from the upstream chat/completions request body, regardless of the merged `reasoningEnabled` / `reasoningEffort` values. This env var SHALL NOT be exposed in `_config.json`; it is a deployment-level switch only.
 
 `LLM_REASONING_ENABLED` and `LLM_REASONING_OMIT` SHALL be parsed by a shared boolean parser with the rule: `"true" | "1" | "yes" | "on"` (case-insensitive, trimmed) → `true`; `"false" | "0" | "no" | "off"` (case-insensitive, trimmed) → `false`; the empty string or unset → the documented default; **any other non-empty string** SHALL fall back to the default AND the server SHALL emit a warning to the operational log naming the variable and the unrecognized value. `LLM_REASONING_EFFORT` SHALL be validated against the exact set `{"none", "minimal", "low", "medium", "high", "xhigh"}` (case-sensitive); any other value SHALL fall back to the default `"xhigh"` and the server SHALL emit a warning log on startup.
 
-`storyOverrides` SHALL be the validated partial subset of those same fields read from `playground/<series>/<story>/_config.json` (absent file ⇒ empty overrides). Only the whitelisted keys `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort`, `maxCompletionTokens` SHALL be honoured; unknown keys SHALL be ignored. Values whose type does not match the whitelist SHALL cause the request to fail with an RFC 9457 Problem Details error.
+`storyOverrides` SHALL be the validated partial subset of those same fields read from `playground/<series>/<story>/_config.json` (absent file ⇒ empty overrides). Only the whitelisted keys `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort`, `maxCompletionTokens` SHALL be honoured; unknown keys SHALL be ignored. Values whose type does not match the whitelist SHALL cause the request to fail with an RFC 9457 Problem Details error. For `maxCompletionTokens` specifically the validator SHALL accept `null` as a valid value carrying the explicit meaning "no application-level limit"; non-null values SHALL still be required to be a positive finite safe integer.
 
-The merged configuration SHALL be used to populate the upstream request body (mapping camelCase fields to their OpenAI-compatible snake_case equivalents: `frequencyPenalty` → `frequency_penalty`, `presencePenalty` → `presence_penalty`, `topK` → `top_k`, `topP` → `top_p`, `repetitionPenalty` → `repetition_penalty`, `minP` → `min_p`, `topA` → `top_a`, `maxCompletionTokens` → `max_completion_tokens`). The `max_completion_tokens` field SHALL appear in every upstream chat/completions request body (no opt-out switch).
+The merged configuration SHALL be used to populate the upstream request body (mapping camelCase fields to their OpenAI-compatible snake_case equivalents: `frequencyPenalty` → `frequency_penalty`, `presencePenalty` → `presence_penalty`, `topK` → `top_k`, `topP` → `top_p`, `repetitionPenalty` → `repetition_penalty`, `minP` → `min_p`, `topA` → `top_a`, `maxCompletionTokens` → `max_completion_tokens`). The `max_completion_tokens` field SHALL appear in the upstream chat/completions request body **only when the merged `maxCompletionTokens` is a positive safe integer**; when the merged value is `null`, the `max_completion_tokens` key SHALL be omitted entirely from the request body so that the upstream provider applies its own default.
+
+For `maxCompletionTokens` only, the merge step SHALL treat `null` in `storyOverrides` as an *explicit* override that replaces any non-null env default with `null`, in contrast to the default `Object.assign(...)` semantics where a `null` override would normally fall through to the env default. All other fields keep the existing fall-through-on-null merge semantics.
 
 Additionally, the upstream request body SHALL include a `reasoning` object on every chat/completions request **except** when `LLM_REASONING_OMIT` is `true`, populated as follows:
 - When the merged `reasoningEnabled` is `true`: `reasoning: { enabled: true, effort: <reasoningEffort> }`.
@@ -227,7 +229,7 @@ The server SHALL parse the SSE response by reading `data:` lines from the respon
 
 In addition to `delta.content`, the SSE parser SHALL inspect each parsed chunk for upstream reasoning text via `choices[0].delta.reasoning` (preferred) and `choices[0].delta.reasoning_details[].text` (fallback), and SHALL stream that reasoning text into the chapter file framed by `<think>` and `</think>` tags placed between the `<user_message>` block and the model content. Reasoning text SHALL NOT be appended to the `aiContent` accumulator returned in the HTTP response body's `content` field, and SHALL NOT be passed through the `response-stream` plugin hook. The chapter file on disk SHALL therefore contain a superset of the response envelope's `content` field for any turn that emitted reasoning. See the `reasoning-think-block` capability for the complete state-machine and field-extraction contract.
 
-The operational debug log entry and the LLM interaction log entry produced for each chat request SHALL include the resolved values of `reasoningEnabled`, `reasoningEffort`, and `maxCompletionTokens` alongside the existing sampler parameters. The LLM interaction log entry SHALL additionally carry an optional `reasoningLength` field whose value is the total character count of reasoning text streamed during the turn (success, abort, and mid-stream-error log entries alike), per the `reasoning-think-block` capability.
+The operational debug log entry and the LLM interaction log entry produced for each chat request SHALL include the resolved values of `reasoningEnabled`, `reasoningEffort`, and `maxCompletionTokens` alongside the existing sampler parameters. The `maxCompletionTokens` value SHALL be either a positive safe integer or the JSON literal `null` (matching the merged `LlmConfig` field type). The LLM interaction log entry SHALL additionally carry an optional `reasoningLength` field whose value is the total character count of reasoning text streamed during the turn (success, abort, and mid-stream-error log entries alike), per the `reasoning-think-block` capability.
 
 #### Scenario: Successful streaming chat completion
 
@@ -366,11 +368,11 @@ The operational debug log entry and the LLM interaction log entry produced for e
 - **WHEN** a chat request targets that story
 - **THEN** the upstream chat completion request body SHALL contain `model: "deepseek/deepseek-v4-pro"`
 
-#### Scenario: Default max_completion_tokens is 4096 when LLM_MAX_COMPLETION_TOKENS is unset
+#### Scenario: Default max_completion_tokens is omitted when LLM_MAX_COMPLETION_TOKENS is unset
 
 - **GIVEN** `LLM_MAX_COMPLETION_TOKENS` is unset in the environment and the target story has no `_config.json` (or its `_config.json` does not override `maxCompletionTokens`)
 - **WHEN** a chat request targets that story
-- **THEN** the upstream chat completion request body SHALL contain `max_completion_tokens: 4096`
+- **THEN** the merged `maxCompletionTokens` SHALL be `null` AND the upstream chat completion request body SHALL NOT contain a `max_completion_tokens` key at all
 
 #### Scenario: Custom env LLM_MAX_COMPLETION_TOKENS applies as default
 
@@ -380,30 +382,43 @@ The operational debug log entry and the LLM interaction log entry produced for e
 
 #### Scenario: Per-story maxCompletionTokens override replaces env default
 
-- **GIVEN** env default `maxCompletionTokens=4096` (or any value) and the target story's `_config.json` contains `{ "maxCompletionTokens": 16384 }`
+- **GIVEN** env default `maxCompletionTokens=null` (or any value) and the target story's `_config.json` contains `{ "maxCompletionTokens": 16384 }`
 - **WHEN** a chat request targets that story
 - **THEN** the upstream chat completion request body SHALL contain `max_completion_tokens: 16384`
 
-#### Scenario: Invalid LLM_MAX_COMPLETION_TOKENS falls back with warning
+#### Scenario: Per-story maxCompletionTokens=null overrides a non-null env default
+
+- **GIVEN** env default `LLM_MAX_COMPLETION_TOKENS=8192` (so `llmDefaults.maxCompletionTokens` is `8192`) and the target story's `_config.json` contains `{ "maxCompletionTokens": null }`
+- **WHEN** a chat request targets that story
+- **THEN** the merged `maxCompletionTokens` SHALL be `null` (the explicit per-story `null` overrides the env default rather than falling through) AND the upstream chat completion request body SHALL NOT contain a `max_completion_tokens` key
+
+#### Scenario: Invalid LLM_MAX_COMPLETION_TOKENS falls back to null with warning
 
 - **WHEN** `LLM_MAX_COMPLETION_TOKENS` is set to a value that fails the positive-safe-integer regex/predicate, including `"abc"`, `"4096abc"`, `"1e3"`, `"0"`, `"-100"`, `"3.14"`, `"01024"` (leading zero), or any decimal string whose numeric value is `≥ 2^53`
-- **THEN** the env-derived `maxCompletionTokens` default SHALL fall back to `4096`, AND the server SHALL emit a warning log on startup naming the variable and the unrecognized value
+- **THEN** the env-derived `maxCompletionTokens` default SHALL fall back to `null`, AND the server SHALL emit a warning log on startup naming the variable and the unrecognized value
 
-#### Scenario: Empty or whitespace-only LLM_MAX_COMPLETION_TOKENS falls back silently
+#### Scenario: Empty or whitespace-only LLM_MAX_COMPLETION_TOKENS resolves to null silently
 
 - **WHEN** `LLM_MAX_COMPLETION_TOKENS` is unset, empty, or contains only whitespace
-- **THEN** the env-derived `maxCompletionTokens` default SHALL be `4096` AND no warning log SHALL be emitted (matching the silent-fallback behaviour of the other `numEnv` fields)
+- **THEN** the env-derived `maxCompletionTokens` default SHALL be `null` AND no warning log SHALL be emitted
 
-#### Scenario: max_completion_tokens always present in upstream body
+#### Scenario: max_completion_tokens omitted when merged value is null
 
-- **GIVEN** any valid combination of env vars and `_config.json` overrides
+- **GIVEN** any combination of env vars and `_config.json` overrides that result in a merged `maxCompletionTokens` of `null`
 - **WHEN** any chat request is dispatched upstream
-- **THEN** the upstream request body SHALL contain a `max_completion_tokens` key whose value is the merged `maxCompletionTokens` integer (no opt-out switch)
+- **THEN** the upstream request body SHALL NOT contain a `max_completion_tokens` key at all
+
+#### Scenario: max_completion_tokens present when merged value is a positive integer
+
+- **GIVEN** any combination of env vars and `_config.json` overrides that result in a merged `maxCompletionTokens` of a positive safe integer N
+- **WHEN** any chat request is dispatched upstream
+- **THEN** the upstream request body SHALL contain `max_completion_tokens: N` exactly once
 
 #### Scenario: Operational and interaction logs include maxCompletionTokens
 
 - **WHEN** the server dispatches a chat request
-- **THEN** both the operational debug log entry (`LLM request payload`) and the LLM interaction log entry (`LLM request`, with the value nested under `parameters`) SHALL include the resolved `maxCompletionTokens` integer alongside the existing sampler parameters
+- **THEN** both the operational debug log entry (`LLM request payload`) and the LLM interaction log entry (`LLM request`, with the value nested under `parameters`) SHALL include the resolved `maxCompletionTokens` value alongside the existing sampler parameters
+- **AND** that value SHALL be either a positive safe integer or the JSON literal `null`, matching the merged `LlmConfig` field type
 
 #### Scenario: Upstream provider rejection surfaces the response body
 

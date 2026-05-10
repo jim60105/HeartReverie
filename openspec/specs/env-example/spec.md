@@ -28,9 +28,11 @@ The project SHALL provide a `.env.example` file at the repository root that docu
 - **WHEN** a contributor inspects the `.env.example` file
 - **THEN** the `LLM_MODEL` entry SHALL document the default value as `deepseek/deepseek-v4-pro`
 
-#### Scenario: LLM_MAX_COMPLETION_TOKENS documented
+#### Scenario: LLM_MAX_COMPLETION_TOKENS documented as optional with no default
 - **WHEN** a contributor inspects the `.env.example` file
-- **THEN** the `LLM_MAX_COMPLETION_TOKENS` entry SHALL describe it as the upper bound (positive integer) on tokens generated per chat turn (mapped to the upstream `max_completion_tokens` request body field), with the default value `4096` shown as a comment
+- **THEN** the `LLM_MAX_COMPLETION_TOKENS` entry SHALL describe it as an OPTIONAL upper bound (positive integer) on tokens generated per chat turn (mapped to the upstream `max_completion_tokens` request body field), AND SHALL state explicitly that when unset / empty / whitespace-only the application sends NO `max_completion_tokens` field upstream and lets the provider apply its own default (i.e. there is no application-level limit)
+- **AND** the file SHALL contain a present, commented-out example line of the exact form `# LLM_MAX_COMPLETION_TOKENS=` (or `# LLM_MAX_COMPLETION_TOKENS=8192` shown as a sample cap), so the variable is discoverable yet copying `.env.example` to `.env` without edits results in the "no limit" behaviour
+- **AND** the entry SHALL NOT show `4096` (or any other number) as "the default value" — any numeric value mentioned in the comment SHALL be presented as an example of a possible cap, not as the default
 
 #### Scenario: LLM_REASONING_EFFORT default reflects xhigh
 - **WHEN** a contributor inspects the `.env.example` file
