@@ -7,14 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Removed
-
-- TLS support has been removed from the application container and Helm chart. The server now only listens on plain HTTP (default port `8080`, previously `8443`). The `entrypoint.sh` script has been deleted; `scripts/serve.sh` and the `Containerfile` start `deno run` directly. The `HTTP_ONLY`, `CERT_FILE`, and `KEY_FILE` environment variables are no longer recognized. The Helm chart's top-level `tls.*` values, the `/certs` volume mount, and self-signed certificate generation have all been removed. **Operators are now responsible for terminating TLS at an upstream reverse proxy or Kubernetes Ingress controller.**
-- File System Access API reader mode and IndexedDB directory-handle persistence have been removed. The reader now exclusively loads stories from the writer backend over HTTP/WebSocket.
+## [0.6.0] - 2026-05-10
 
 ### Added
 
-- No other unreleased changes yet.
+- Helm chart for Kubernetes deployment under `helm/heart-reverie/`, with values for ingress, persistence, and resource limits.
+- TOML-based theme system: themes ship as `themes/*.toml`, load through a FOUC-prevention bootstrap, and expose CSS custom properties (palette, page background, dialogue highlight) consumed across reader, writer, prompt-editor cards, and the plugin settings page; the bundled dark and light themes were redesigned (grayscale dark, yellow + grayscale light) and the writer's theme dropdown is sorted by priority.
+- SPA tools menu in the reader with **Quick-Add** and **SillyTavern character-card import**, including required-field indicators, validation feedback, parser fixes, series-scope lore handling, and disabled-state styling for themed buttons.
+- `sd-webui-image-gen` built-in plugin: image generation backed by sd-webui / Forge with manifest-driven settings, served images, x-action buttons, and a new dynamic `sd_webui_connected` Vento flag that gates `{{ create_image }}` injection so the prompt fragment is only added when the endpoint is actually reachable (2 s probe, 60 s TTL cache).
+- Plugin settings API with combobox and multi-tag inputs, custom-route registration, image serving, x-actions support, and a dedicated plugin settings page that surfaces extended hook contexts.
+- Writer chapter-action modes: **continue-last-chapter** and **polish-last-chapter** (with replace mode), plus a bundled `polish` plugin.
+- Action-button hook lifecycle: plugin manifests can declare `actionButtons` and run them via `runPluginPrompt` with optional append-into-chapter behaviour.
+- Context-compaction settings UI: `recentChapters` and `enabled` are now exposed and editable from the plugin settings page.
+- Diagnostic logging and explicit error handling: previously swallowed `catch {}` blocks now capture error context across initialization, external API calls, and format conversion.
+- Multi-message Vento prompt template with role-aware `{{ message "role" }}…{{ /message }}` blocks; `system.md` sections are wrapped in named XML tags for downstream tooling.
+- LLM reasoning configuration env vars (`LLM_REASONING_ENABLED`, `LLM_REASONING_EFFORT`, `LLM_REASONING_OMIT`) and per-story overrides; reasoning content streams into a chapter `<think>` block.
+- `LLM_MAX_COMPLETION_TOKENS` env var and per-story `maxCompletionTokens` override forwarded as `max_completion_tokens` on every upstream request.
+- `GET /api/llm-defaults` exposes the resolved server-side LLM defaults so unset overrides display the value that will actually apply.
+- OpenRouter app-attribution headers (`HTTP-Referer`, `X-OpenRouter-Title`, `X-OpenRouter-Categories`) sent on every chat request so HeartReverie appears in OpenRouter rankings.
+- Bind-mounted plugin directory support in the dev container script for editing plugin sources without rebuilding the image.
+- Forgejo cross-repo CI trigger: publishing the `latest` image dispatches a downstream Forgejo workflow to rebuild the plugins image; `FORGEJO_API_TOKEN` scope (`write:repository`) is documented in `docs/ci-cross-repo-trigger.md`.
+- Branch-copy-images: branching a story now copies images and per-story config alongside chapters.
+- Reserved platform system directory names so writer-created stories cannot collide with engine-internal paths.
+- Sidebar is hidden during LLM streaming to eliminate flicker; sidebar panels are preserved across non-content rerenders.
+
+### Changed
+
+- `LLM_MAX_COMPLETION_TOKENS` is now optional with a `null` sentinel that means "do not send `max_completion_tokens`"; the prior implicit default has been removed.
+- Prompt flow and intent tags clarified across `system.md`; the default theme is renamed to **浮心夜夢**.
+- Build and dev scripts derive `PROJECT_DIR` and `PLUGINS_DIR` from the script location, and `scripts/podman-build-run.sh` is now executable by default.
+
+### Removed
+
+- **TLS support has been removed from the application container and Helm chart.** The server now only listens on plain HTTP (default port `8080`, previously `8443`). The `entrypoint.sh` script has been deleted; `scripts/serve.sh` and the `Containerfile` start `deno run` directly. The `HTTP_ONLY`, `CERT_FILE`, and `KEY_FILE` environment variables are no longer recognized. The Helm chart's top-level `tls.*` values, the `/certs` volume mount, and self-signed certificate generation have all been removed. **Operators are now responsible for terminating TLS at an upstream reverse proxy or Kubernetes Ingress controller.**
+- **File System Access API reader mode and IndexedDB directory-handle persistence have been removed.** The reader now exclusively loads stories from the writer backend over HTTP / WebSocket.
+- Dead `☰` hamburger button and the unused `mobileMenuOpen` ref removed from the reader header.
+
+### Fixed
+
+- Hardcoded accent colors replaced with CSS custom properties across the reader, writer, plugin settings page, prompt-editor message cards, and dialogue highlight; the palette CSS-variable hygiene sweep covers reader and plugin settings.
+- Summary fragment renders chapter number through Vento with the canonical value (no more raw template artifacts).
+- Sidebar watcher now uses text-only content comparison to prevent the panel-loss race triggered by reactive non-content updates.
+- CSP allows `blob:` URLs in the `img-src` directive so generated previews load; the container is started with `--allow-ffi` so Sharp's native libvips bindings initialise instead of failing silently.
+- Logger disables ANSI escape sequences when `stdout` is not a TTY.
+- Container frontend build dependencies are aligned so reader/writer assets ship in the production image.
+- Story-selector dropdown reliably populates the story list after reloading on a `/settings/*` page and navigating back to the reading layout.
+- Prompt-editor toolbar action cluster wraps onto multiple right-aligned rows at narrow viewports instead of clipping the rightmost button past the viewport edge.
 
 ## [0.5.0] - 2026-05-02
 
@@ -161,9 +199,11 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 - TLS certificate generation added to container final stage via OpenSSL
 - Various frontend rendering issues: sidebar clearing on story switch, prompt editor persistence, favicon restoration, DOMPurify ordering
 
+
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jim60105/HeartReverie/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jim60105/HeartReverie/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jim60105/HeartReverie/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jim60105/HeartReverie/compare/v0.2.0...v0.3.0

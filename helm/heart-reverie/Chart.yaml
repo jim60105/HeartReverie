@@ -12,8 +12,8 @@ maintainers:
 kubeVersion: ">=1.27.0-0"
 # This is the chart version. Increment each time the chart or its templates change.
 # Versions follow Semantic Versioning (https://semver.org/).
-version: 0.1.0
+version: 0.2.0
 # This is the version number of the application being deployed. It tracks the
 # HeartReverie release captured in CHANGELOG.md and is used as the default
 # image tag's reference value (the actual default tag is `latest`).
-appVersion: '0.5.0'
+appVersion: '0.6.0'
