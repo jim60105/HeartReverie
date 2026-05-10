@@ -750,14 +750,14 @@ watch(pluginName, async () => {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-secondary, #888);
+  color: var(--text-italic, #888);
   font-size: 0.75rem;
   padding: 0.25rem;
   line-height: 1;
 }
 
 .chevron-btn:hover {
-  color: var(--text-primary, #fff);
+  color: var(--text-main, #fff);
 }
 
 .dropdown-panel {
@@ -797,7 +797,7 @@ watch(pluginName, async () => {
 
 .dropdown-empty {
   padding: 0.5rem 0.75rem;
-  color: var(--text-secondary, #888);
+  color: var(--text-italic, #888);
   font-size: 0.85rem;
   font-style: italic;
 }
