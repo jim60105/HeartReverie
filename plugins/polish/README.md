@@ -22,3 +22,9 @@ Branch the story before running Polish if you want to keep the original draft al
 ## Template variable
 
 The `draft` Vento variable is injected server-side with plugin strip-tags applied, ensuring the model sees only the relevant chapter content.
+
+## Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `true` | When disabled, the **✨ 潤飾** action button is hidden and stale clicks become a no-op. |

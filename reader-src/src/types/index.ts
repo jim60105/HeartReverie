@@ -41,6 +41,8 @@ export interface PluginDescriptor {
   displayStripTags?: string[];
   frontendStyles?: string[];
   actionButtons?: ActionButtonDescriptor[];
+  hasSettings?: boolean;
+  settings?: Record<string, unknown>;
 }
 
 // ── Plugin Action Buttons ──
@@ -217,6 +219,7 @@ export interface UsePluginsReturn {
   pluginsSettled: Ref<boolean>;
   initPlugins: () => Promise<void>;
   applyDisplayStrip: (text: string) => string;
+  getPluginSettingsSync: (name: string) => Record<string, unknown>;
 }
 
 export interface UseStorySelectorReturn {

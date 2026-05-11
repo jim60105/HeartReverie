@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRoute } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import { useNotification } from "@/composables/useNotification";
+import { emitEvent } from "@/lib/event-bus";
 
 const route = useRoute();
 const { getAuthHeaders } = useAuth();
@@ -152,6 +153,10 @@ async function save(): Promise<void> {
     });
     if (res.ok) {
       notify({ title: "設定已儲存", body: `${pluginName.value} 設定更新成功`, level: "success" });
+      emitEvent("plugin-settings:changed", {
+        name: pluginName.value,
+        settings: { ...settings.value },
+      });
     } else {
       const body = await res.json().catch(() => null);
       error.value = body?.detail || `儲存失敗 (${res.status})`;

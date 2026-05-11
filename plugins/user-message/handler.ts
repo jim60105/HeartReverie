@@ -19,11 +19,17 @@ import type { Logger } from "../../writer/lib/logger.ts";
 /**
  * Register the pre-write hook that wraps user messages in <user_message> tags.
  */
-export function register({ hooks, logger }: PluginRegisterContext): void {
+export function register({ hooks, logger, getSettings }: PluginRegisterContext): void {
   logger.info("Registering user-message plugin");
 
   hooks.register("pre-write", async (context) => {
     const log = (context.logger as Logger | undefined) ?? logger;
+    const settings = getSettings ? await getSettings() : {};
+    if (settings.enabled === false) {
+      context.preContent = "";
+      log.debug("Skipping user message wrapping: plugin disabled");
+      return;
+    }
     const message = context.message as string;
     if (typeof message === "string" && message.length > 0) {
       context.preContent = `<user_message>\n${message}\n</user_message>\n\n`;

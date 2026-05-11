@@ -354,9 +354,17 @@ The schema MUST be `type: "object"` with a `properties` record (other shapes are
 }
 ```
 
-Backend handlers read settings via the `getSettings()` helper inside `registerRoutes(context)`; mutations go through `saveSettings(...)` (it validates against the schema before writing).
+Backend handlers read settings via the `getSettings()` helper inside `registerRoutes(context)` or `register(context)`; mutations go through `saveSettings(...)` (it validates against the schema before writing).
 
-Hooks running outside `registerRoutes` (e.g. `post-response`) can fetch settings through the same `PluginManager` API the routes use — typically by calling a small helper your plugin exposes, or by reading the JSON file directly under `<rootDir>/playground/_plugins/<name>/config.json`.
+### Universal `enabled` checklist
+
+When a plugin exposes settings, add an `enabled` boolean with `default: true` unless there is a strong reason not to. Then verify:
+
+- Frontend hooks call `hooks.getSettings?.()` (or `context.getSettings?.()`) at each invocation and return early when `enabled === false`.
+- Backend hooks call `getSettings?.()` at execution time and no-op when disabled.
+- Prompt fragments may rely on the engine to suppress `promptFragments[]` when disabled. If a setting changes fragment text (not just enable/disable), implement `getDynamicVariables()` instead of a static fragment.
+- Action buttons are filtered by the engine, but click handlers should still check `enabled` as a stale-cache safety net.
+- Do **not** rely on `enabled` to suppress `promptStripTags` or `displayStripTags`; strip-tag declarations intentionally remain active for historical content.
 
 ## Step 9: Generate README.md
 

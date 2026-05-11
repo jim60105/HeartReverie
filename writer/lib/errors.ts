@@ -61,6 +61,9 @@ export const pluginActionProblems = {
   noChapter(detail = "Story directory contains no chapter file"): ProblemDetail {
     return { type: "plugin-action:no-chapter", title: "Bad Request", status: 400, detail };
   },
+  pluginDisabled(detail = "Plugin is currently disabled in settings"): ProblemDetail {
+    return { type: "plugin-action:plugin-disabled", title: "Conflict", status: 409, detail };
+  },
 } as const;
 
 export function buildVentoError(err: Error, templatePath: string, knownVariables: { variables?: Record<string, string> }, extraKnownVars?: string[]): VentoError {

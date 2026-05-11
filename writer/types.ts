@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import type { Context, Next, Hono } from "@hono/hono";
+import type { Context, Hono, Next } from "@hono/hono";
 import type { PluginManager } from "./lib/plugin-manager.ts";
 import type { HookDispatcher } from "./lib/hooks.ts";
 import type { Logger } from "./lib/logger.ts";
@@ -99,7 +99,10 @@ export interface AppConfig {
 export type SafePathFn = (...segments: string[]) => string | null;
 
 /** Hono middleware handler signature. */
-export type MiddlewareHandler = (c: Context, next: Next) => Promise<Response | void>;
+export type MiddlewareHandler = (
+  c: Context,
+  next: Next,
+) => Promise<Response | void>;
 
 /** Function signature for buildPromptFromStory. */
 export type BuildPromptFn = (
@@ -269,6 +272,8 @@ export interface DynamicVariableContext {
   readonly isFirstRound: boolean;
   /** Total number of `NNN.md` chapter files on disk, including empty trailing files. */
   readonly chapterCount: number;
+  /** Return this plugin's resolved settings (schema defaults merged with saved values). */
+  readonly getSettings?: () => Promise<Record<string, unknown>>;
 }
 
 /** Hook registration interface exposed to plugins (subset of HookDispatcher). */
@@ -280,13 +285,16 @@ export interface PluginHooks {
 export interface PluginRegisterContext {
   readonly hooks: PluginHooks;
   readonly logger: Logger;
+  readonly getSettings?: () => Promise<Record<string, unknown>>;
 }
 
 /** Interface for dynamically imported plugin backend modules. */
 export interface PluginModule {
   register?: (context: PluginRegisterContext) => void | Promise<void>;
   default?: (context: PluginRegisterContext) => void | Promise<void>;
-  getDynamicVariables?: (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>;
+  getDynamicVariables?: (
+    context: DynamicVariableContext,
+  ) => Promise<Record<string, unknown>> | Record<string, unknown>;
   registerRoutes?: (context: PluginRouteContext) => void | Promise<void>;
 }
 
@@ -301,7 +309,12 @@ export interface PluginRouteContext {
 }
 
 /** Valid hook lifecycle stages. */
-export type HookStage = "prompt-assembly" | "response-stream" | "pre-write" | "post-response" | "strip-tags";
+export type HookStage =
+  | "prompt-assembly"
+  | "response-stream"
+  | "pre-write"
+  | "post-response"
+  | "strip-tags";
 
 /**
  * Context payload dispatched for the `response-stream` hook stage.
@@ -353,7 +366,7 @@ export interface TemplateEngine {
   renderSystemPrompt: (
     series: string,
     story?: string,
-    options?: RenderOptions
+    options?: RenderOptions,
   ) => Promise<RenderResult>;
   validateTemplate: (templateStr: string) => string[];
   ventoEnv: import("ventojs/core/environment").Environment;
@@ -480,7 +493,10 @@ export interface StoryExportJson {
   readonly series: string;
   readonly name: string;
   readonly exportedAt: string;
-  readonly chapters: readonly { readonly number: number; readonly content: string }[];
+  readonly chapters: readonly {
+    readonly number: number;
+    readonly content: string;
+  }[];
 }
 
 /**

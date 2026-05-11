@@ -26,3 +26,9 @@ plugins/start-hints/
 ├── start-hints.md     # 首輪開場引導提示詞片段
 └── README.md
 ```
+
+## 設定項目
+
+| 設定 | 預設 | 說明 |
+|------|------|------|
+| `enabled` | `true` | 關閉後首輪章節不再注入 `start-hints.md` 的開場創作指引。 |

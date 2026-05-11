@@ -17,15 +17,23 @@
 
 export function register(hooks) {
   hooks.register('notification', (context) => {
+    const settings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+    if (settings.enabled === false) return;
     if (context.event !== 'chat:done') return;
     if (typeof context.notify !== 'function') return;
 
-    const channel = document.visibilityState === 'hidden' ? 'auto' : 'in-app';
+    const notifyWhenVisible = settings.notifyWhenVisible === true;
+    if (!notifyWhenVisible && document.visibilityState !== 'hidden') return;
+
+    const title = typeof settings.notifyTitle === 'string' ? settings.notifyTitle : '故事生成完成';
+    const body = typeof settings.notifyBody === 'string' ? settings.notifyBody : '新的章節已經寫入完成';
+    const level = typeof settings.notifyLevel === 'string' ? settings.notifyLevel : 'success';
+
     context.notify({
-      title: '故事生成完成',
-      body: '新的章節已經寫入完成',
-      level: 'success',
-      channel,
+      title,
+      body,
+      level,
+      channel: 'auto',
     });
   }, 100);
 }

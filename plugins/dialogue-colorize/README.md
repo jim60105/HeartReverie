@@ -51,3 +51,15 @@ plugins/dialogue-colorize/
 ├── styles.css     # ::highlight() CSS 規則
 └── README.md
 ```
+
+## 設定項目
+
+| 設定 | 預設 | 說明 |
+|------|------|------|
+| `enabled` | `true` | 關閉後會清除所有目前的 CSS Custom Highlight，不再對引號段落上色。 |
+| `dialogueColor` | `""` | 自訂 CSS 顏色字串，例如 `#aa5500` 或 `royalblue`。空字串代表沿用目前主題。 |
+| `enabledQuoteStyles` | 全部六種 | 控制哪些引號樣式會被加入 highlight。未勾選的樣式不會上色。 |
+
+`dialogueColor` 會在瀏覽器端以 `CSS.supports("color", value)` 驗證。無效或空白時，外掛會移除 `#plugin-dialogue-color-override`，讓主題的 `#theme-highlight-override` 繼續生效。
+
+優先序為：核心樣式 → 主題 `#theme-highlight-override` → 外掛 `#plugin-dialogue-color-override`。外掛覆寫會插在主題覆寫之後，不使用 `!important`。

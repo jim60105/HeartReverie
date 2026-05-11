@@ -8,7 +8,7 @@
 - `notifyTitle` (string, default reproducing today's hard-coded zh-TW title).
 - `notifyBody` (string, default reproducing today's hard-coded zh-TW body).
 - `notifyWhenVisible` (boolean, default `false`) — when `false` (today's behaviour) the plugin only fires when the document is hidden.
-- `notifyLevel` (enum `"info" | "success" | "warning"`, default `"info"`).
+- `notifyLevel` (enum `"info" | "success" | "warning"`, default `"success"` — preserves today's hard-coded toast level).
 
 #### Scenario: Manifest renders five controls
 

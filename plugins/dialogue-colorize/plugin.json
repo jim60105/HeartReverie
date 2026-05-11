@@ -4,5 +4,48 @@
   "description": "Colourise dialogue runs (matched quote pairs) via the CSS Custom Highlight API without modifying the DOM",
   "type": "frontend-only",
   "frontendModule": "./frontend.js",
-  "frontendStyles": ["./styles.css"]
+  "frontendStyles": [
+    "./styles.css"
+  ],
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "title": "啟用對話上色",
+        "description": "關閉後不再對任何引號段落套用 CSS Custom Highlight 著色。"
+      },
+      "dialogueColor": {
+        "type": "string",
+        "default": "",
+        "title": "對話顏色",
+        "description": "套用至所有對話引號段落的 CSS 顏色值（例如 #aa5500 或 royalblue）。留空時使用佈景主題的 --text-name 顏色。"
+      },
+      "enabledQuoteStyles": {
+        "type": "array",
+        "default": [
+          "straight",
+          "curly",
+          "guillemet",
+          "corner",
+          "corner-half",
+          "book"
+        ],
+        "title": "啟用的引號樣式",
+        "description": "選擇要上色的引號類型。取消勾選後，對應引號段落將不著色。",
+        "items": {
+          "type": "string",
+          "enum": [
+            "straight",
+            "curly",
+            "guillemet",
+            "corner",
+            "corner-half",
+            "book"
+          ]
+        }
+      }
+    }
+  }
 }

@@ -83,9 +83,10 @@ function shouldSkipText(node, container) {
   return false;
 }
 
-function collectMatchesInText(text) {
+function collectMatchesInText(text, enabledStylesSet = null) {
   const matches = [];
   for (const { regex, suffix } of PAIR_REGEXES) {
+    if (enabledStylesSet && !enabledStylesSet.has(suffix)) continue;
     regex.lastIndex = 0;
     let m;
     while ((m = regex.exec(text)) !== null) {
@@ -110,6 +111,12 @@ function collectMatchesInText(text) {
   return kept;
 }
 
+function clearAllHighlights() {
+  for (const h of highlightBySuffix.values()) {
+    h.clear();
+  }
+}
+
 function clearPriorRanges(container) {
   const prior = rangesByContainer.get(container);
   if (!prior) return;
@@ -120,7 +127,7 @@ function clearPriorRanges(container) {
   rangesByContainer.delete(container);
 }
 
-function colorize(container) {
+function colorize(container, enabledStylesSet = null) {
   clearPriorRanges(container);
 
   const text = container.textContent ?? '';
@@ -138,7 +145,7 @@ function colorize(container) {
   while (node) {
     const data = node.nodeValue ?? '';
     if (data.length > 0 && containsAnyOpener(data)) {
-      const matches = collectMatchesInText(data);
+      const matches = collectMatchesInText(data, enabledStylesSet);
       for (const { start, end, suffix } of matches) {
         const range = document.createRange();
         range.setStart(node, start);
@@ -152,6 +159,28 @@ function colorize(container) {
 
   if (newRanges.length > 0) {
     rangesByContainer.set(container, newRanges);
+  }
+}
+
+function applyPluginColorOverride(color) {
+  const existing = document.getElementById('plugin-dialogue-color-override');
+  if (!color || !CSS.supports('color', color)) {
+    if (existing) existing.remove();
+    return;
+  }
+  const el = existing ?? document.createElement('style');
+  el.id = 'plugin-dialogue-color-override';
+  const suffixes = ['straight', 'curly', 'guillemet', 'corner', 'corner-half', 'book'];
+  el.textContent = suffixes
+    .map((suffix) => `::highlight(dialogue-quote-${suffix}) { color: ${color}; }`)
+    .join('\n');
+  if (!existing) {
+    const themeOverride = document.getElementById('theme-highlight-override');
+    if (themeOverride && themeOverride.nextSibling) {
+      document.head.insertBefore(el, themeOverride.nextSibling);
+    } else {
+      document.head.appendChild(el);
+    }
   }
 }
 
@@ -179,13 +208,27 @@ export function register(hooks, context) {
     return;
   }
 
+  const initialSettings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+  applyPluginColorOverride(typeof initialSettings.dialogueColor === 'string' ? initialSettings.dialogueColor : '');
+
   hooks.register(
     'chapter:dom:ready',
     (ctx) => {
+      const settings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+      const enabled = settings.enabled !== false;
+      if (!enabled) {
+        clearAllHighlights();
+        applyPluginColorOverride('');
+        return;
+      }
+      const enabledStyles = Array.isArray(settings.enabledQuoteStyles)
+        ? new Set(settings.enabledQuoteStyles)
+        : null;
+      applyPluginColorOverride(typeof settings.dialogueColor === 'string' ? settings.dialogueColor : '');
       const container = ctx && ctx.container;
       if (!(container instanceof HTMLElement)) return;
       try {
-        colorize(container);
+        colorize(container, enabledStyles);
       } catch (err) {
         logger.info(
           'dialogue-colorize handler error:',
@@ -199,10 +242,15 @@ export function register(hooks, context) {
   hooks.register(
     'chapter:dom:dispose',
     (ctx) => {
+      const settings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
       const container = ctx && ctx.container;
       if (!(container instanceof HTMLElement)) return;
       try {
-        clearPriorRanges(container);
+        if (settings.enabled === false) {
+          clearAllHighlights();
+        } else {
+          clearPriorRanges(container);
+        }
       } catch (err) {
         logger.info(
           'dialogue-colorize dispose error:',
@@ -222,6 +270,8 @@ export const __test__ = {
   collectMatchesInText,
   colorize,
   clearPriorRanges,
+  clearAllHighlights,
+  applyPluginColorOverride,
   highlightBySuffix,
   rangesByContainer,
   isHighlightApiAvailable,

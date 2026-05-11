@@ -1,17 +1,85 @@
 import { ref } from "vue";
-import type { UsePluginsReturn, PluginDescriptor, HookStage, HookHandler } from "@/types";
+import type {
+  HookHandler,
+  HookStage,
+  PluginDescriptor,
+  UsePluginsReturn,
+} from "@/types";
 import { FrontendHookDispatcher, frontendHooks } from "@/lib/plugin-hooks";
 import { useAuth } from "@/composables/useAuth";
 import { useNotification } from "@/composables/useNotification";
 import { renderDebug } from "@/lib/render-debug";
+import { onEvent } from "@/lib/event-bus";
 
 const plugins = ref<PluginDescriptor[]>([]);
 const pluginsReady = ref(false);
 const pluginsSettled = ref(false);
+export const pluginSettingsStore = new Map<string, Record<string, unknown>>();
+export const settingsRevision = ref(0);
 
 let initPromise: Promise<void> | null = null;
 
 let displayStripRegex: RegExp | null = null;
+let settingsChangeSubscribed = false;
+let reRenderTimer: ReturnType<typeof setTimeout> | null = null;
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value as Record<string, unknown>)) {
+      deepFreeze(child);
+    }
+  }
+  return value;
+}
+
+function cloneSettings(
+  settings: Record<string, unknown>,
+): Record<string, unknown> {
+  return structuredClone(settings) as Record<string, unknown>;
+}
+
+export function updatePluginSettings(
+  name: string,
+  settings: Record<string, unknown>,
+): void {
+  pluginSettingsStore.set(name, cloneSettings(settings));
+  settingsRevision.value++;
+}
+
+export function getPluginSettingsSync(name: string): Record<string, unknown> {
+  const stored = pluginSettingsStore.get(name);
+  return deepFreeze(stored ? cloneSettings(stored) : {});
+}
+
+function subscribeSettingsChanged(): void {
+  if (settingsChangeSubscribed) return;
+  settingsChangeSubscribed = true;
+  onEvent("plugin-settings:changed", ({ name, settings }) => {
+    updatePluginSettings(name, settings);
+
+    const plugin = plugins.value.find((p) => p.name === name);
+    const hasRenderContrib = plugin
+      ? (plugin.hasFrontendModule || (plugin.displayStripTags?.length ?? 0) > 0)
+      : true;
+
+    if (hasRenderContrib) {
+      if (reRenderTimer !== null) clearTimeout(reRenderTimer);
+      reRenderTimer = window.setTimeout(() => {
+        reRenderTimer = null;
+        void import("@/composables/useChapterNav").then(({ useChapterNav }) => {
+          const { bumpRenderEpoch } = useChapterNav();
+          bumpRenderEpoch();
+        }).catch((err: unknown) => {
+          console.warn(
+            "Failed to re-render after plugin settings change:",
+            err instanceof Error ? err.message : String(err),
+          );
+        });
+      }, 50);
+    }
+  });
+}
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -75,7 +143,9 @@ function injectPluginStyles(pluginList: PluginDescriptor[]): void {
     for (const href of p.frontendStyles) {
       if (typeof href !== "string" || href.length === 0) continue;
       // Deduplicate by comparing href attribute directly (avoids querySelector injection)
-      const existing = Array.from(document.head.querySelectorAll("link[rel=\"stylesheet\"]"));
+      const existing = Array.from(
+        document.head.querySelectorAll('link[rel="stylesheet"]'),
+      );
       if (existing.some((el) => el.getAttribute("href") === href)) continue;
 
       const link = document.createElement("link");
@@ -96,6 +166,29 @@ async function doInit(): Promise<void> {
     throw new Error(`Failed to fetch /api/plugins: HTTP ${res.status}`);
   }
   const pluginList: PluginDescriptor[] = await res.json();
+  for (const plugin of pluginList) {
+    if (plugin.settings && typeof plugin.settings === "object") {
+      updatePluginSettings(plugin.name, plugin.settings);
+    } else if (plugin.hasSettings) {
+      try {
+        const settingsRes = await fetch(
+          `/api/plugins/${plugin.name}/settings`,
+          {
+            headers: { ...getAuthHeaders() },
+          },
+        );
+        if (settingsRes.ok) {
+          updatePluginSettings(plugin.name, await settingsRes.json());
+        }
+      } catch (err: unknown) {
+        console.warn(
+          `Failed to hydrate plugin settings for ${plugin.name}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+  }
+  subscribeSettingsChanged();
 
   compileDisplayStripPatterns(pluginList);
   injectPluginStyles(pluginList);
@@ -116,6 +209,10 @@ async function doInit(): Promise<void> {
             priority?: number,
           ) => target.register(stage, handler, priority, originPluginName);
         }
+        if (prop === "getSettings") {
+          return (otherName?: string) =>
+            getPluginSettingsSync(otherName ?? originPluginName);
+        }
         return Reflect.get(target, prop, receiver);
       },
     });
@@ -131,7 +228,11 @@ async function doInit(): Promise<void> {
       if (typeof mod.register === "function") {
         // Honor async register() functions so plugins that load resources
         // before registering handlers complete before pluginsReady flips.
-        await Promise.resolve(mod.register(makePluginHooksProxy(p.name)));
+        const getSettings = (otherName?: string) =>
+          getPluginSettingsSync(otherName ?? p.name);
+        await Promise.resolve(
+          mod.register(makePluginHooksProxy(p.name), { getSettings }),
+        );
       }
     }),
   );
@@ -201,5 +302,6 @@ export function usePlugins(): UsePluginsReturn {
     pluginsSettled,
     initPlugins,
     applyDisplayStrip,
+    getPluginSettingsSync,
   };
 }

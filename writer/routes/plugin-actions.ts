@@ -195,6 +195,25 @@ export async function runPluginActionWithDeps(
   if (!pluginManager.hasPlugin(pluginName)) {
     return { ok: false, aborted: false, problem: pluginActionProblems.unknownPlugin(), status: 404 };
   }
+  // Refuse to run actions when the plugin is disabled in settings.
+  // Frontend filters action buttons but a stale tab or direct API call could
+  // still reach this endpoint.
+  try {
+    const resolved = await pluginManager.getPluginSettings(pluginName);
+    if (resolved && (resolved as { enabled?: unknown }).enabled === false) {
+      return {
+        ok: false,
+        aborted: false,
+        problem: pluginActionProblems.pluginDisabled(),
+        status: 409,
+      };
+    }
+  } catch (err: unknown) {
+    // Settings read failure is non-fatal: log and continue (defence-in-depth
+    // shouldn't block the action when settings happen to be unreadable).
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[plugin-actions] Failed to read settings for ${pluginName}: ${message}`);
+  }
   const pluginDir = pluginManager.getPluginDir(pluginName);
   if (!pluginDir) {
     return { ok: false, aborted: false, problem: pluginActionProblems.unknownPlugin(), status: 404 };
