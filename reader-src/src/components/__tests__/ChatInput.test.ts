@@ -266,4 +266,147 @@ describe("ChatInput", () => {
       setItemSpy.mockRestore();
     });
   });
+
+  describe("auto-resize", () => {
+    function flushFrame() {
+      return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+
+    function attachScrollHeight(ta: HTMLTextAreaElement, getter: () => number) {
+      Object.defineProperty(ta, "scrollHeight", {
+        configurable: true,
+        get: getter,
+      });
+    }
+
+    it("grows past the floor when a long persisted draft is restored on mount", async () => {
+      sessionStorage.setItem(
+        "heartreverie:chat-input:test-series:test-story",
+        Array.from({ length: 20 }).map((_, i) => `line ${i}`).join("\n"),
+      );
+      // Spy on every textarea constructed during this test so we can force
+      // scrollHeight before the on-mount recompute reads it.
+      const realScrollHeight = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "scrollHeight",
+      );
+      Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+        configurable: true,
+        get() {
+          return 600;
+        },
+      });
+      const wrapper = mount(ChatInput, { attachTo: document.body });
+      const ta = wrapper.find("textarea").element as HTMLTextAreaElement;
+      await wrapper.vm.$nextTick();
+      await flushFrame();
+      // Floor for an empty textarea is small (~3 lines); a 20-line draft must
+      // grow past it. We assert the height tracks the forced scrollHeight
+      // (border-box: scrollHeight + ~2px of borders).
+      const h = parseFloat(ta.style.height);
+      expect(h).toBeGreaterThanOrEqual(600);
+      wrapper.unmount();
+      if (realScrollHeight) {
+        Object.defineProperty(
+          HTMLTextAreaElement.prototype,
+          "scrollHeight",
+          realScrollHeight,
+        );
+      }
+    });
+
+    it("recomputes once when both paste and input(insertFromPaste) fire in the same frame", async () => {
+      const wrapper = mount(ChatInput, { attachTo: document.body });
+      const ta = wrapper.find("textarea").element as HTMLTextAreaElement;
+      let sh = 30;
+      attachScrollHeight(ta, () => sh);
+      await flushFrame();
+
+      // Spy on style.height writes from this point onward.
+      let writes = 0;
+      const realDescriptor = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(ta.style),
+        "height",
+      );
+      Object.defineProperty(ta.style, "height", {
+        configurable: true,
+        set(v: string) {
+          writes += 1;
+          realDescriptor?.set?.call(ta.style, v);
+        },
+        get() {
+          return realDescriptor?.get?.call(ta.style) ?? "";
+        },
+      });
+
+      sh = 500;
+      // Simulate a paste by dispatching both events synchronously.
+      ta.dispatchEvent(new Event("paste"));
+      const ev = new Event("input") as Event & { inputType?: string };
+      Object.defineProperty(ev, "inputType", { value: "insertFromPaste" });
+      ta.dispatchEvent(ev);
+      await flushFrame();
+      // Expect "height: auto" + "height: <px>" pair == 2 writes for one recompute.
+      expect(writes).toBe(2);
+      // And the final height should track the simulated scrollHeight (border-box).
+      expect(parseFloat(ta.style.height)).toBeGreaterThanOrEqual(500);
+      wrapper.unmount();
+    });
+
+    it("a single physical line that wraps to many visual lines grows the textarea", async () => {
+      // Soft-wrap regression: paste a single long line (no newlines). The
+      // textarea wraps it to many visual lines; scrollHeight reports the
+      // wrapped height and the composable must follow.
+      const wrapper = mount(ChatInput, { attachTo: document.body });
+      const ta = wrapper.find("textarea").element as HTMLTextAreaElement;
+      let sh = 30;
+      attachScrollHeight(ta, () => sh);
+      await flushFrame();
+      const before = parseFloat(ta.style.height);
+      // Simulate the wrapped paste: scrollHeight reflects the wrapped lines.
+      ta.value = "a".repeat(1500);
+      sh = 320;
+      ta.dispatchEvent(new Event("paste"));
+      await flushFrame();
+      expect(parseFloat(ta.style.height)).toBeGreaterThan(before);
+      expect(parseFloat(ta.style.height)).toBeGreaterThanOrEqual(320);
+      wrapper.unmount();
+    });
+
+    it("typing a single character does NOT change the textarea height", async () => {
+      const wrapper = mount(ChatInput, { attachTo: document.body });
+      const ta = wrapper.find("textarea").element as HTMLTextAreaElement;
+      let sh = 30;
+      attachScrollHeight(ta, () => sh);
+      await flushFrame();
+      const initial = ta.style.height;
+
+      // Simulate typing one character (inputType is undefined / "insertText").
+      sh = 200;
+      const ev = new Event("input") as Event & { inputType?: string };
+      Object.defineProperty(ev, "inputType", { value: "insertText" });
+      ta.dispatchEvent(ev);
+      await flushFrame();
+      expect(ta.style.height).toBe(initial);
+      wrapper.unmount();
+    });
+
+    it("appendText() triggers a recompute", async () => {
+      const wrapper = mount(ChatInput, { attachTo: document.body });
+      const ta = wrapper.find("textarea").element as HTMLTextAreaElement;
+      let sh = 30;
+      attachScrollHeight(ta, () => sh);
+      await flushFrame();
+      const before = parseFloat(ta.style.height);
+
+      sh = 500;
+      (wrapper.vm as unknown as { appendText: (t: string) => void }).appendText(
+        Array.from({ length: 15 }).map((_, i) => `L${i}`).join("\n"),
+      );
+      await wrapper.vm.$nextTick();
+      await flushFrame();
+      expect(parseFloat(ta.style.height)).toBeGreaterThan(before);
+      wrapper.unmount();
+    });
+  });
 });

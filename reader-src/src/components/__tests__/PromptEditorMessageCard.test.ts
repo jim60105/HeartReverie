@@ -116,4 +116,86 @@ describe("PromptEditorMessageCard", () => {
     await w.find("button.card-helper-btn").trigger("click");
     expect(w.text()).toContain("（目前沒有可用的變數）");
   });
+
+  describe("auto-resize", () => {
+    function flushFrame() {
+      return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+
+    it("grows the textarea past the three-line floor when the body is long", async () => {
+      const w = mount(PromptEditorMessageCard, {
+        props: { card: makeCard({ body: "hi" }), isFirst: false, isLast: false },
+        attachTo: document.body,
+      });
+      const ta = w.find("textarea.card-body").element as HTMLTextAreaElement;
+      // Force scrollHeight (happy-dom does not lay text out).
+      let scrollH = 30;
+      Object.defineProperty(ta, "scrollHeight", {
+        configurable: true,
+        get: () => scrollH,
+      });
+      await flushFrame();
+      const floor = parseFloat(ta.style.height);
+      expect(floor).toBeGreaterThan(0);
+
+      // Now grow the body and assert the textarea grows past the floor.
+      scrollH = 800;
+      await w.setProps({ card: makeCard({ body: "x".repeat(400) }) });
+      await w.vm.$nextTick();
+      await flushFrame();
+      expect(parseFloat(ta.style.height)).toBeGreaterThan(floor);
+      w.unmount();
+    });
+
+    it("shrinks back to the floor when a long body is replaced with a short one", async () => {
+      // Force a known scrollHeight + line metrics so we can assert the exact floor.
+      const realScrollHeight = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "scrollHeight",
+      );
+      let sh = 800;
+      Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+        configurable: true,
+        get() {
+          return sh;
+        },
+      });
+      const w = mount(PromptEditorMessageCard, {
+        props: {
+          card: makeCard({ body: "L".repeat(800) }),
+          isFirst: false,
+          isLast: false,
+        },
+        attachTo: document.body,
+      });
+      const ta = w.find("textarea.card-body").element as HTMLTextAreaElement;
+      // Force computed line metrics to known values so the floor is predictable.
+      ta.style.lineHeight = "20px";
+      ta.style.paddingTop = "0px";
+      ta.style.paddingBottom = "0px";
+      ta.style.borderTopWidth = "0px";
+      ta.style.borderBottomWidth = "0px";
+      ta.style.borderTopStyle = "solid";
+      ta.style.borderBottomStyle = "solid";
+      ta.style.boxSizing = "border-box";
+      await flushFrame();
+      const tall = parseFloat(ta.style.height);
+      expect(tall).toBeGreaterThanOrEqual(800);
+
+      sh = 10;
+      await w.setProps({ card: makeCard({ body: "hi" }) });
+      await w.vm.$nextTick();
+      await flushFrame();
+      // 3-line floor with 20px line-height = 60px; ±1px tolerance.
+      expect(parseFloat(ta.style.height)).toBe(60);
+      w.unmount();
+      if (realScrollHeight) {
+        Object.defineProperty(
+          HTMLTextAreaElement.prototype,
+          "scrollHeight",
+          realScrollHeight,
+        );
+      }
+    });
+  });
 });

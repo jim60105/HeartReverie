@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import type { ChatInputProps } from "@/types";
 import { useChatApi } from "@/composables/useChatApi";
 import { useChapterNav } from "@/composables/useChapterNav";
+import { useAutoresize } from "@/composables/useAutoresize";
 
 const props = withDefaults(defineProps<ChatInputProps>(), {
   disabled: false,
@@ -44,6 +45,27 @@ function persistText(text: string): void {
 
 const inputText = ref(loadPersistedText());
 const isResending = ref(false);
+const chatTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const { recompute: recomputeChatHeight } = useAutoresize(chatTextareaRef, { minLines: 3 });
+
+onMounted(() => {
+  // After the persisted draft is restored on initial mount, fit the textarea.
+  recomputeChatHeight();
+});
+
+function onPaste() {
+  // Pasted text is inserted by the browser default action; the RAF batching
+  // inside useAutoresize ensures measurement happens after the insertion.
+  recomputeChatHeight();
+}
+
+function onInput(event: Event) {
+  // Defence-in-depth: some browsers may surface paste only via input events.
+  const inputType = (event as InputEvent).inputType;
+  if (inputType === "insertFromPaste") {
+    recomputeChatHeight();
+  }
+}
 
 function handleSend() {
   const message = inputText.value.trim();
@@ -98,6 +120,8 @@ function handleContinue() {
 function appendText(text: string) {
   const current = inputText.value;
   inputText.value = current ? `${current}\n${text}` : text;
+  // Wait for v-model to flush the new value into the DOM before measuring.
+  void nextTick().then(() => recomputeChatHeight());
 }
 
 defineExpose({ appendText });
@@ -107,12 +131,15 @@ defineExpose({ appendText });
   <div class="chat-input-area">
     <div class="chat-input-card">
       <textarea
+        ref="chatTextareaRef"
         v-model="inputText"
         rows="3"
         placeholder="輸入故事指令…"
         class="chat-textarea"
         :disabled="disabled || isLoading"
         @keydown="handleKeydown"
+        @paste="onPaste"
+        @input="onInput"
       ></textarea>
       <div class="chat-actions">
         <slot name="tools" />

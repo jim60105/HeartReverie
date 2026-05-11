@@ -17,6 +17,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { MessageCard, ParameterPill } from "@/types";
+import { useAutoresize } from "@/composables/useAutoresize";
 
 interface Props {
   card: MessageCard;
@@ -46,6 +47,8 @@ const ROLE_OPTIONS: Array<{ value: MessageCard["role"]; label: string }> = [
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const showVariableMenu = ref(false);
 const showDeleteConfirm = ref(false);
+
+useAutoresize(textareaRef, { minLines: 3, watch: () => props.card.body });
 
 function onRoleChange(event: Event) {
   const next = (event.target as HTMLSelectElement).value as MessageCard["role"];
@@ -416,8 +419,7 @@ function confirmDelete() {
   background: var(--item-bg);
   padding: 8px;
   width: 100%;
-  min-height: 96px;
-  resize: vertical;
+  resize: none;
   color: var(--text-main);
   font-size: 0.85em;
   line-height: 1.5;
