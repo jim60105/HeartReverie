@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Plugin settings exposure for the remaining built-in plugins.** `dialogue-colorize`, `polish`, `response-notify`, `start-hints`, `thinking`, and `user-message` now ship with a `settingsSchema` block in their manifest (joining `context-compaction`, which already had one), exposing safe-to-tune knobs and a universal `enabled` toggle on the reader's plugin-settings page. The engine centrally gates prompt fragments, dynamic variables, and action-button visibility/clicks against resolved settings; frontend plugins read `hooks.getSettings()` / `context.getSettings()` and no-op their own hook handlers when disabled. A successful `PUT /api/plugins/:name/settings` broadcasts a `plugin-settings:changed` event so the reader re-runs `frontend-render`, `display-strip-tags`, and `notification` hooks without a page reload. Strip-tag rules (`promptStripTags` / `displayStripTags`) are intentionally NOT gated by `enabled` so historical content keeps rendering correctly.
+
+### Changed
+
+- Prompt Editor message-card body textareas now auto-grow to fit their content on every edit with a 3-line minimum (no fixed upper bound) and the manual resize handle has been removed. The reader chat input starts at the same 3-line floor and auto-fits on paste, draft restore, and `appendText`; regular keystrokes do not trigger an auto-fit and `resize: vertical` is preserved so users can still drag the height manually. Implementation lives in a reusable `useAutoresize` composable that is box-sizing aware and only reacts to width changes from `ResizeObserver` so manual height drags are not overwritten.
+
 ## [0.6.0] - 2026-05-10
 
 ### Added
