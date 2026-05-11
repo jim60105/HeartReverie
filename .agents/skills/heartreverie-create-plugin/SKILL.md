@@ -146,7 +146,7 @@ Usually `promptStripTags` and `displayStripTags` use the same patterns. They dif
 
 ## Step 6: Create Backend Module (if applicable)
 
-For plugins with `backendModule`, create the handler file. Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger }` — a `PluginHooks` wrapper and a scoped `Logger`.
+For plugins with `backendModule`, create the handler file. Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger, getSettings }` — a `PluginHooks` wrapper, a scoped `Logger`, and a curried `getSettings(name?)`. The same `getSettings` is also present on the `registerRoutes(context)` and `getDynamicVariables(context)` contexts.
 
 **JavaScript (`handler.js`):**
 
@@ -184,63 +184,68 @@ The same module MAY additionally export `registerRoutes(context)` (sync or async
 
 ## Step 7: Create Frontend Module (if applicable)
 
-For plugins with `frontendModule`, create the module using the Extract → Placeholder → Reinsert pattern:
+For plugins with `frontendModule`, create the module. The `register` function receives **two** arguments — a per-plugin `hooks` proxy and a `context` object:
 
 ```javascript
-export function register(hooks) {
-  hooks.register('frontend-render', (context) => {
+import { escapeHtml } from '../_shared/utils.js';
+
+export function register(hooks, context) {
+  hooks.register('frontend-render', (ctx) => {
+    const settings = hooks.getSettings();
+    if (settings.enabled === false) return;
+
     let index = 0;
-    context.text = context.text.replace(
+    ctx.text = ctx.text.replace(
       /<mytag>([\s\S]*?)<\/mytag>/gi,
       (_match, inner) => {
         const placeholder = `<!--MYTAG_BLOCK_${index++}-->`;
-        const html = renderMyTag(inner);
-        context.placeholderMap.set(placeholder, html);
+        ctx.placeholderMap.set(placeholder, `<div class="my-component">${escapeHtml(inner)}</div>`);
         return placeholder;
       }
     );
   }, 100);
 }
-
-function renderMyTag(content) {
-  return `<div class="my-component">${escapeHtml(content)}</div>`;
-}
 ```
 
 Key points:
-- Frontend handlers are **synchronous** (no `async`)
-- Use unique placeholder names (include plugin name prefix)
-- Import `escapeHtml` from `'/js/utils.js'` for safe rendering
-- Frontend code style: ESM, **single quotes**, no build step, no framework
+
+- `register(hooks, context)` — both args are provided. Older plugins that only declare `register(hooks)` keep working.
+- `hooks.getSettings(name?)` and `context.getSettings(name?)` both return the live settings snapshot for `name` (defaults to the calling plugin). The reader hydrates settings on boot and, after a ~50 ms debounce on `plugin-settings:changed`, bumps the chapter render epoch — that re-runs render-pipeline hooks (`frontend-render`, `chapter:render:after`, `chapter:dom:ready`) and re-applies `displayStripTags`. The `notification` hook is NOT re-dispatched on settings change.
+- `register` MAY be `async` (the loader awaits it before flipping `pluginsReady`).
+- `hooks.register(stage, handler, priority?)` — the `originPluginName` is auto-curried by the loader proxy; do NOT pass it manually.
+- Frontend handlers are **synchronous** for most stages; `action-button:click` is the exception (async dispatch).
+- Use unique placeholder names that include the plugin name to avoid collisions.
+- Shared utilities live under `/plugins/_shared/`. Import them via relative paths (e.g. `import { escapeHtml } from '../_shared/utils.js';`); the server only serves files under `_shared/` and each plugin's declared `frontendModule` / `frontendStyles`.
+- Frontend code style: ESM, **single quotes**, no build step, no framework — plugins ship as raw JS even though the reader itself is a Vue 3 + Vite SPA.
+
+### Frontend Hook Stages (quick reference)
+
+| Stage | Mode | When |
+|-------|------|------|
+| `frontend-render` | sync | Custom XML extraction → placeholder map (Markdown not yet parsed) |
+| `chapter:render:after` | sync | Post-process the marked-it token array; new/edited `html` tokens are re-sanitized by DOMPurify. Context: `{ tokens, rawMarkdown, options }` — story metadata lives in `ctx.options.series` / `ctx.options.story` / `ctx.options.chapterNumber`. |
+| `chapter:dom:ready` | sync | After Vue commits the rendered chapter to the live DOM. Receives `{ container, tokens, rawMarkdown, chapterIndex, series?, story?, chapterNumber? }`. Fires once on mount and again on every `[tokens, renderEpoch, isEditing]` change — handlers MUST be idempotent (clear prior per-container state at the top). Skipped while the chapter editor is open. |
+| `chapter:dom:dispose` | sync | Only fires when the previous chapter container is unmounted. NOT one-to-one with `chapter:dom:ready` (no dispose between successive ready events on the same container). Use for final unmount cleanup of long-lived references (Highlight ranges, observers). |
+| `chat:send:before` | sync (pipeline) | Before a user message is sent. Context: `{ message, series, story, mode }`. Return a `string` to replace `ctx.message`; return empty string to drop. `ctx.mode` is `'send'` or `'resend'`. |
+| `notification` | sync | Lifecycle events (`chat:done`, `chat:error`). Receives `{ event, data, notify }`. |
+| `story:switch` / `chapter:change` | sync (informational) | Navigation events; cannot cancel. |
+| `action-button:click` | **async** | Triggered by `PluginActionBar`; dispatcher only invokes handlers owned by the button's plugin. |
+
+For the full context-parameter table, settings-aware patterns, and DOMPurify re-sanitization rules, read [`references/hook-api.md`](./references/hook-api.md#frontend-hooks).
 
 ### Notification Hook
 
-Frontend modules can also register a `notification` hook, dispatched by the system on events such as `chat:done`. The context is `{ event, data, notify }`:
-
-- `event` (string): Event name (e.g., `'chat:done'`)
-- `data` (object): Event-specific data
-- `notify` (function): Call to show a notification — accepts `{ title, body?, level?, position?, channel?, duration? }`
-
-Example (from the `response-notify` plugin):
+Frontend modules can register a `notification` hook, dispatched on events like `chat:done`. Context: `{ event, data, notify }`. `notify({ title, body?, level?, position?, channel?, duration? })` shows a toast.
 
 ```javascript
 export function register(hooks) {
-  hooks.register('notification', (context) => {
-    if (context.event !== 'chat:done') return;
-    if (typeof context.notify !== 'function') return;
-
+  hooks.register('notification', (ctx) => {
+    if (ctx.event !== 'chat:done') return;
     const channel = document.visibilityState === 'hidden' ? 'auto' : 'in-app';
-    context.notify({
-      title: '故事生成完成',
-      body: '新的章節已經寫入完成',
-      level: 'success',
-      channel,
-    });
+    ctx.notify({ title: '故事生成完成', level: 'success', channel });
   }, 100);
 }
 ```
-
-For the full frontend hook API, read `references/hook-api.md`.
 
 ## Step 8: Add an Action Button (optional)
 
@@ -278,24 +283,26 @@ The button id must be unique within the plugin; duplicates are dropped by the lo
 
 ### 8b. Click handler in `frontend.js`
 
-Extend the plugin's `register(hooks)` with an `action-button:click` handler. Always filter by `buttonId` so the handler only runs for its own button — even though the dispatcher already filters by plugin, an explicit guard keeps the code safe if the plugin later adds a second button:
+Extend the plugin's `register(hooks, context)` with an `action-button:click` handler. The dispatcher already filters handlers by owning plugin, but always guard on `buttonId` so a future second button doesn't trigger the wrong handler:
 
 ```javascript
-hooks.register('action-button:click', async (context) => {
-  if (context.buttonId !== '<button-id>') return;
+hooks.register('action-button:click', async (ctx) => {
+  if (ctx.buttonId !== '<button-id>') return;
+
+  // Optional: stale-cache safety net for the universal `enabled` setting.
+  if (hooks.getSettings?.().enabled === false) return;
 
   try {
-    await context.runPluginPrompt('<prompt-file>.md', {
+    await ctx.runPluginPrompt('<prompt-file>.md', {
       append: true,
       appendTag: '<AppendTag>',
+      // OR: replace: true,                              // mutually exclusive with append
+      // OR: extraVariables: { mode: 'fast', count: 3 }, // scalar values only
     });
-    context.reload();
-    context.notify({
-      title: '<完成標題>',
-      level: 'info',
-    });
+    await ctx.reload();
+    ctx.notify({ title: '<完成標題>', level: 'info' });
   } catch (err) {
-    context.notify({
+    ctx.notify({
       title: '<失敗標題>',
       body: err?.message ?? String(err),
       level: 'error',
@@ -304,11 +311,30 @@ hooks.register('action-button:click', async (context) => {
 }, 100);
 ```
 
+Action-button click context (`ctx`):
+
+| Field | Description |
+|-------|-------------|
+| `buttonId`, `pluginName` | The clicked button's id and owning plugin |
+| `series`, `name` | Active story identifiers (always present in backend mode) |
+| `storyDir` | Frontend story identifier formatted as `"${series}/${name}"` — relative path-like string, NOT a filesystem path |
+| `lastChapterIndex` | 0-based index of the latest chapter (= `chapters.length - 1`), or `null` if no chapters yet |
+| `runPluginPrompt(file, opts?)` | Auto-curried with this plugin's name. Returns `{ content, usage, chapterUpdated, chapterReplaced, appendedTag }`. |
+| `notify(opts)` | Same shape as the `notification` hook's `notify` |
+| `reload()` | Calls `useChapterNav.reloadToLast()` |
+
+`runPluginPrompt` write modes:
+
+- `{ append: true, appendTag }` — atomic append into the highest-numbered chapter, wrapped as `<appendTag>…</appendTag>`. Result `chapterUpdated: true`, `appendedTag` echoes the tag.
+- `{ replace: true }` — atomic overwrite of the highest-numbered chapter (byte-for-byte rollback on abort/error). Result `chapterReplaced: true`. The chapter's pre-write content is exposed to the prompt as the reserved Vento variable `{{ draft }}`. `replace` is mutually exclusive with `append` and rejects when `appendTag` is also set.
+- Neither flag — runs the LLM and returns the raw content; the chapter file is untouched.
+
 Notes:
 
-- The `pluginName` for `runPluginPrompt` is auto-curried into `context`; the handler MUST NOT pass it.
-- `context` does **not** expose `appendToLastChapter`. To write to the chapter file, use `runPluginPrompt({ append: true, appendTag })` and let the backend handle the atomic append + `post-response` dispatch.
-- Frontend handlers for this stage are **async** — feel free to `await` inside.
+- `pluginName` for `runPluginPrompt` is auto-curried — the handler MUST NOT pass it.
+- Action buttons are also gated by the universal `enabled` setting at the API level (`/api/plugins/action-buttons` filters out disabled plugins) and the click path re-checks settings to no-op stale clicks. The explicit `getSettings().enabled === false` check above is still recommended as a safety net.
+- `extraVariables` accepts only scalar values (string / number / boolean) and MUST NOT clash with reserved names (`previousContext`, any `lore_*`, `status_data`, `draft`).
+- For the full append/replace lifecycle (WS envelope, `post-response` dispatch, rate limit, concurrency lock), see [`docs/plugin-system.md`](../../../docs/plugin-system.md#動作按鈕action-buttons).
 
 ### 8c. Stub prompt file
 
@@ -354,7 +380,9 @@ The schema MUST be `type: "object"` with a `properties` record (other shapes are
 }
 ```
 
-Backend handlers read settings via the `getSettings()` helper inside `registerRoutes(context)` or `register(context)`; mutations go through `saveSettings(...)` (it validates against the schema before writing).
+Backend handlers read settings via the `getSettings()` helper present on every backend register context: `register(context)`, `registerRoutes(context)`, and `getDynamicVariables(context)` all receive it. Mutations go through `saveSettings(...)` (it validates against the schema before writing). Avoid reading `playground/_plugins/<name>/config.json` directly — only fall back to it as a last-resort legacy path.
+
+Frontend modules read live settings synchronously via `hooks.getSettings(name?)` or `context.getSettings(name?)` (see [Step 7](#step-7-create-frontend-module-if-applicable)). A successful `PUT /api/plugins/:name/settings` broadcasts `plugin-settings:changed`; after a ~50 ms debounce the reader bumps the chapter render epoch, re-running `frontend-render`, `chapter:render:after`, and `chapter:dom:ready` and re-applying `displayStripTags`. `notification` is not re-dispatched on settings change.
 
 ### Universal `enabled` checklist
 

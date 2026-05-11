@@ -11,9 +11,15 @@
   - [Plugin Logger](#plugin-logger)
   - [`registerRoutes` Export](#registerroutes-export)
 - [Frontend Hooks](#frontend-hooks)
+  - [Frontend Hook Stages](#frontend-hook-stages)
   - [Frontend Registration Pattern](#frontend-registration-pattern)
+  - [`chat:send:before` Pipeline Contract](#chatsendbefore-pipeline-contract)
+  - [`chapter:render:after` Post-Processing + Re-Sanitization](#chapterrenderafter-post-processing--re-sanitization)
+  - [`chapter:dom:ready` and `chapter:dom:dispose` (DOM-Aware Hooks)](#chapterdomready-and-chapterdomdispose-dom-aware-hooks)
+  - [`story:switch` and `chapter:change` (Informational)](#storyswitch-and-chapterchange-informational)
   - [The Placeholder Pattern](#the-placeholder-pattern)
   - [Notification Hook](#notification-hook)
+  - [Action Button Click Context](#action-button-click-context)
 - [Security Notes](#security-notes)
 - [Code Style](#code-style)
 
@@ -21,12 +27,12 @@
 
 ## Backend Hooks
 
-Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger }` — a `PluginHooks` interface for hook registration and a pre-scoped `Logger` for structured logging.
+Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger, getSettings }` — a `PluginHooks` interface for hook registration, a pre-scoped `Logger` for structured logging, and a curried `getSettings(name?)` that returns the live settings snapshot for `name` (defaults to the calling plugin).
 
 In addition to `register`, a backend module MAY export:
 
-- `getDynamicVariables(context)` — supplies values for variables declared in `parameters`. See `manifest-schema.md`.
-- `registerRoutes(context)` — mounts custom HTTP endpoints for the plugin under `/api/plugins/<name>/*`. See [`registerRoutes` Export](#registerroutes-export).
+- `getDynamicVariables(context)` — supplies values for variables declared in `parameters`. The `context` here ALSO carries `getSettings`. See `manifest-schema.md`.
+- `registerRoutes(context)` — mounts custom HTTP endpoints for the plugin under `/api/plugins/<name>/*`. The `context` here ALSO carries `getSettings`. See [`registerRoutes` Export](#registerroutes-export).
 
 ### Hook Stages
 
@@ -213,34 +219,52 @@ Frontend modules are ES modules loaded by the browser. They register synchronous
 
 ### Frontend Hook Stages
 
-| Stage | Purpose | Context Parameters |
-|-------|---------|-------------------|
-| `frontend-render` | Custom tag extraction and rendering | `{ text, placeholderMap, options, series?, story?, chapterNumber? }` |
-| `notification` | Browser notification when events occur (e.g., `chat:done`) | `{ event, data, notify }` |
-| `chat:send:before` | Transform the user message just before it is sent (pipeline) | `{ message, mode }` — `mode` is `'send'` or `'resend'`. If a handler returns a `string`, it replaces `context.message` for subsequent handlers. |
-| `chapter:render:after` | Post-process the token array after Markdown + initial DOMPurify pass | `{ tokens, rawMarkdown, options, series?, story?, chapterNumber? }` — mutate `tokens` freely; the system re-sanitizes any newly added or `.content`-mutated `html` tokens after dispatch. |
-| `story:switch` | Informational: fires when the active series/story changes | `{ series, story, previousSeries, previousStory }` — `previousSeries`/`previousStory` are `null` on first load; `series`/`story` are always non-null strings. |
-| `chapter:change` | Informational: fires when the displayed chapter changes | `{ chapter, index, previousIndex, series, story }` — `chapter` matches `ChapterData.number`; `previousIndex` is `null` on first load. |
+| Stage | Mode | Purpose | Context Parameters |
+|-------|------|---------|-------------------|
+| `frontend-render` | sync | Custom tag extraction → placeholder map (BEFORE Markdown parsing) | `{ text, placeholderMap, options, series?, story?, chapterNumber? }` |
+| `chapter:render:after` | sync | Post-process the marked-it token array AFTER Markdown + initial DOMPurify | `{ tokens, rawMarkdown, options }` — story metadata is nested as `ctx.options.series` / `ctx.options.story` / `ctx.options.chapterNumber` |
+| `chapter:dom:ready` | sync | After Vue commits the rendered chapter to the live DOM (DOM nodes available). Fires once on mount and again on every render-epoch change for the same container — handlers must be idempotent | `{ container, tokens, rawMarkdown, chapterIndex, series?, story?, chapterNumber? }` |
+| `chapter:dom:dispose` | sync | Before the chapter container is unmounted. Only fires on actual unmount (chapter switch / story switch / app teardown), NOT between repeated `chapter:dom:ready` events on the same container | `{ container, chapterIndex }` |
+| `chat:send:before` | sync (pipeline) | Transform the user message just before it is sent | `{ message, series, story, mode }` — `mode` is `'send'` or `'resend'`. If a handler returns a `string`, it replaces `ctx.message` for subsequent handlers. |
+| `notification` | sync | Browser/in-app notifications on lifecycle events | `{ event, data, notify }` — `event` is e.g. `'chat:done'` or `'chat:error'` |
+| `story:switch` | sync (informational) | Active series/story changed | `{ series, story, previousSeries, previousStory }` — `previous*` are `null` on first load |
+| `chapter:change` | sync (informational) | Displayed chapter changed | `{ chapter, index, previousIndex, series, story }` — `previousIndex` is `null` on first load |
+| `action-button:click` | **async** | User clicked a `PluginActionBar` button owned by this plugin | See [Action Button Click Context](#action-button-click-context) below |
 
-- `text` (`string`): The raw LLM output text before Markdown parsing
-- `placeholderMap` (`Map<string, string>`): Map of placeholder strings → rendered HTML
-- `options` (`object`): Render options (e.g., `{ isLastChapter }`); for `frontend-render` and `chapter:render:after` it also carries the same optional `series` / `story` / `chapterNumber` fields when known
-- `series` / `story` (`string`, optional): Active series and story slugs — present when the chapter is rendered in the context of an open story (i.e. not in the bare reader homepage)
-- `chapterNumber` (`number`, optional): 1-based chapter number — present alongside `series`/`story`
+- `text` (`string`): Raw LLM output BEFORE Markdown parsing
+- `placeholderMap` (`Map<string, string>`): Map of placeholder → rendered HTML
+- `options` (`object`): `{ isLastChapter, series?, story?, chapterNumber? }`
+- `tokens`: marked-it token array; mutate freely — the dispatcher re-sanitizes any new or `.content`-mutated `html` token via DOMPurify
+- `container` (`HTMLElement`): The live DOM node holding the rendered chapter (DOM-mutating plugins should clean up via `chapter:dom:dispose` to prevent memory leaks)
+- `chapterIndex` (`number`): 0-based index of the chapter in the loaded chapter list
+
+The runtime validates stage names against an allow-list — invalid stage names are dropped with a `console.warn`.
 
 ### Frontend Registration Pattern
 
 ```javascript
-export function register(hooks) {
-  hooks.register('frontend-render', (context) => {
-    // 1. Extract custom XML blocks from context.text
+import { escapeHtml } from '../_shared/utils.js';
+
+export function register(hooks, context) {
+  // hooks.getSettings(name?) and context.getSettings(name?) both return a
+  // frozen snapshot of resolved settings (defaults ∪ saved). Omit `name` to
+  // read this plugin's own settings.
+  hooks.register('frontend-render', (ctx) => {
+    const settings = hooks.getSettings();
+    if (settings.enabled === false) return;
+    // 1. Extract custom XML blocks from ctx.text
     // 2. Replace with placeholder comments
-    // 3. Add placeholder → HTML mappings to context.placeholderMap
+    // 3. ctx.placeholderMap.set(placeholder, escapedHtml)
   }, 100);
 }
 ```
 
-**Important:** Frontend handlers are **synchronous** (no `async`).
+**Notes:**
+
+- `register` MAY be `async`. The loader awaits all plugins via `Promise.allSettled` before flipping `pluginsReady` to true.
+- `hooks.register(stage, handler, priority?)` — `originPluginName` is auto-curried by the per-plugin proxy; do NOT pass it manually.
+- Most stages are synchronous; `action-button:click` is the lone async stage.
+- Shared utilities live under `/plugins/_shared/`. Import via relative paths: `import { escapeHtml } from '../_shared/utils.js';`. The server only serves files under `_shared/` plus each plugin's declared `frontendModule` and `frontendStyles`.
 
 ### `chat:send:before` Pipeline Contract
 
@@ -263,6 +287,30 @@ hooks.register('chapter:render:after', (ctx) => {
     if (tok.type !== 'html') continue;
     tok.content += '<footer class="note">generated</footer>';
   }
+}, 100);
+```
+
+### `chapter:dom:ready` and `chapter:dom:dispose` (DOM-Aware Hooks)
+
+`chapter:dom:ready` fires after Vue commits the rendered chapter to the live DOM (a `flush: "post"` watcher in `ChapterContent.vue` plus a one-shot `onMounted` belt-and-suspenders dispatch). It re-fires on every `[tokens, renderEpoch, isEditing]` change for the **same** container — handlers MUST be idempotent: clear any prior per-container state (Range registrations, Highlight ranges, observers) at the top of the handler before re-installing it. Use this stage when you need real DOM nodes — CSS Custom Highlight API, `Range`, `IntersectionObserver`, DOM mutation. The `frontend-render` and `chapter:render:after` stages run BEFORE the DOM exists.
+
+`chapter:dom:dispose` fires from `onBeforeUnmount` when the chapter container actually unmounts (chapter switch, story switch, app teardown) — it is NOT paired one-to-one with `chapter:dom:ready` and will NOT fire between repeated ready events on the same container. Use it for final cleanup of references that would otherwise pin the dropped DOM in memory.
+
+Both stages are skipped while the chapter editor textarea is shown (the DOM holds editor input, not rendered content).
+
+```javascript
+const rangesByContainer = new WeakMap();
+
+hooks.register('chapter:dom:ready', (ctx) => {
+  // ctx.container is the live HTMLElement for the rendered chapter.
+  const ranges = computeHighlightRanges(ctx.container);
+  rangesByContainer.set(ctx.container, ranges);
+  CSS.highlights.set('my-highlight', new Highlight(...ranges));
+}, 100);
+
+hooks.register('chapter:dom:dispose', (ctx) => {
+  rangesByContainer.delete(ctx.container);
+  // Clear named Highlight if no other container still owns ranges.
 }, 100);
 ```
 
@@ -318,7 +366,7 @@ function renderMyTag(content) {
 
 **Key points:**
 - Always use unique placeholder names (include plugin name to avoid collisions)
-- Use `escapeHtml()` from `/js/utils.js` for any user content in rendered HTML
+- Use `escapeHtml()` from `../_shared/utils.js` (relative import — the plugin loader serves `_shared/` via `/plugins/_shared/utils.js`) for any user content in rendered HTML
 - Priority controls rendering order — lower priorities extract first
 
 ### Notification Hook
@@ -358,9 +406,58 @@ export function register(hooks) {
 }
 ```
 
----
+### Action Button Click Context
 
-## Security Notes
+`action-button:click` is the only **async** frontend hook stage. The dispatcher only invokes handlers whose `originPluginName` matches the clicked button's owning plugin, then awaits each handler in priority order. While the dispatch promise is pending, the button is held in a `pendingKey = ${pluginName}:${buttonId}` set and rendered disabled to prevent double-clicks. If a handler throws and does NOT call `notify` itself, the dispatcher emits a default error toast — the dispatch always resolves (no unhandled rejections).
+
+Context (`ctx`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `buttonId` | `string` | The clicked button's id |
+| `pluginName` | `string` | The owning plugin's name |
+| `series`, `name` | `string` | Active series/story (always present in backend mode) |
+| `storyDir` | `string` | Frontend story identifier `"${series}/${name}"` — a relative path-like string, NOT a filesystem path. Use `series` + `name` for backend API calls. |
+| `lastChapterIndex` | `number \| null` | 0-based index of the latest chapter (= `chapters.length - 1`), or `null` if no chapters yet |
+| `runPluginPrompt` | `function` | Auto-curried with this plugin's name. See below. |
+| `notify` | `function` | Same shape as the `notification` hook's `notify` |
+| `reload` | `function` | Triggers `useChapterNav.reloadToLast()` |
+
+`runPluginPrompt(promptFile, opts?)` signature:
+
+```typescript
+runPluginPrompt(
+  promptFile: string,                                 // relative path under the plugin dir; must end in .md
+  opts?: {
+    append?: boolean;                                 // default false
+    appendTag?: string;                               // required when append=true; matches /^[a-zA-Z][a-zA-Z0-9_-]{0,30}$/
+    replace?: boolean;                                // default false; mutually exclusive with append
+    extraVariables?: Record<string, string | number | boolean>;
+  }
+): Promise<{
+  content: string;                                    // append + replace: full chapter content AFTER write; discard mode (no append/replace): raw LLM response
+  usage: TokenUsageRecord | null;
+  chapterUpdated: boolean;                            // true when append succeeded
+  chapterReplaced: boolean;                           // true when replace succeeded
+  appendedTag: string | null;                         // mirrors appendTag when append=true; null otherwise
+}>
+```
+
+Behaviour:
+
+- The dispatcher ALWAYS emits a default error toast (title `"外掛操作失敗"`, body `"${pluginName}:${buttonId} — ${message}"`) when a handler throws. If you call `notify()` and then re-throw, the user sees both toasts. Either notify-and-return-normally, or throw-without-notifying.
+- Shares the global `isLoading` / `streamingContent` / `errorMessage` / `abortCurrentRequest` with normal chat — the user's "⏹ Stop" button can interrupt a plugin action mid-stream.
+- Rejects when another generation (chat or plugin action) holds the per-story lock (HTTP 409).
+- WebSocket path streams progress via `streamingContent`; HTTP fallback returns the final JSON only.
+- `replace: true` injects the pre-write chapter content as the reserved Vento variable `{{ draft }}` (after `promptStripTags` cleanup). `extraVariables` MUST NOT clash with `previousContext`, any `lore_*`, `status_data`, `draft`, or other reserved names.
+- The prompt template MUST emit at least one `{{ message "user" }}…{{ /message }}` block — `user_input` defaults to `""` for plugin actions but the engine still requires a user-role message (returns HTTP 422 `multi-message:no-user-message` otherwise).
+- Per-route rate limit: 30/min/client (shared with normal chat); global 300/min still applies.
+
+Action buttons are **also** centrally gated by the universal `enabled` setting: `/api/plugins/action-buttons` filters out disabled plugins, and the click path re-checks settings to no-op stale clicks. Handlers SHOULD still bail early on `getSettings().enabled === false` as a stale-cache safety net.
+
+For the WebSocket envelope (`plugin-action:run` / `:delta` / `:done` / `:error` / `:aborted`), atomic append/replace semantics, byte-for-byte rollback on abort, and `post-response` dispatch payload, see [`docs/plugin-system.md`](../../../../docs/plugin-system.md#動作按鈕action-buttons).
+
+---
 
 - **Module path containment**: `backendModule` and `frontendModule` paths must resolve within the plugin directory. Paths with `../` traversal are rejected.
 - **Frontend module serving**: Only files declared as `frontendModule` in the manifest are served via `/plugins/:name/:file`. No other files in the plugin directory are accessible from the browser.
@@ -378,10 +475,10 @@ export function register(hooks) {
 - JSDoc comments on functions
 - TypeScript (`.ts`) or JavaScript (`.js`) — both supported
 
-### Frontend (reader/js/)
+### Frontend (plugin frontend modules)
 
-- ESM modules, no build step, no bundler, no framework
+- ESM modules served raw to the browser — no build step, no bundler. The reader app is Vue 3 + Vite, but plugin frontend code is loaded directly via `<script type="module">`.
 - **Single quotes** for strings
 - Semicolons always used
 - JSDoc `@param`/`@returns` on exported functions
-- Import from absolute paths (e.g., `'/js/utils.js'`)
+- Import shared utilities relatively: `import { escapeHtml } from '../_shared/utils.js';`
