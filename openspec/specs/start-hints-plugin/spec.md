@@ -28,3 +28,20 @@ A `prompt-only` plugin named `start-hints` SHALL exist at `plugins/start-hints/`
 ### Requirement: Start hints prompt fragment content
 
 The prompt fragment markdown file SHALL contain the `<start_hints>` block with the introductory line (`請參考這段指示創作出一個好的起始章節:`) followed by 7 numbered guidelines covering: hook/suspense, world-building, character introduction, story direction, foreshadowing, impactful opening, and tone-setting. The content SHALL end with a closing line (`起始章節完成以上任務，吸引讀者繼續閱讀。`). The `<start_hints>` XML tags SHALL be included in the fragment content.
+
+#### Scenario: Fragment file contains required structure
+
+- **WHEN** the plugin's prompt fragment file is read
+- **THEN** it SHALL contain an opening `<start_hints>` tag, exactly 7 numbered guidelines in Traditional Chinese, and a closing `</start_hints>` tag
+
+### Requirement: `start-hints` exposes an `enabled` toggle
+
+`plugins/start-hints/plugin.json` SHALL declare a `settingsSchema` block with a single `enabled` boolean (default `true`) so users on stories whose lore already covers genre direction can disable the plugin without removing its directory.
+
+When `enabled === false`, the engine prerequisite that gates `promptFragments[]` by resolved settings SHALL cause the plugin's `start-hints.md` content to be omitted from the assembled system prompt.
+
+#### Scenario: Disabling start-hints removes its fragment
+
+- **WHEN** the operator disables `start-hints` via the settings page
+- **AND** the engine assembles a system prompt for a new chapter
+- **THEN** none of the seven creative-direction bullets from `start-hints.md` appear in the prompt

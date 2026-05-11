@@ -8,7 +8,7 @@
 
 ### 提示詞指令
 
-透過 `promptFragments` 注入 `think_before_reply` 模板變數，指示 LLM 在正式回覆前先進行思考推理（chain-of-thought）。
+後端模組 `handler.ts` 透過 `getDynamicVariables()` 動態提供 `think_before_reply` 模板變數，指示 LLM 在正式回覆前先進行思考推理（chain-of-thought）。當 `injectInstruction` 設為 `false` 時，回傳空字串以省略注入。
 
 ### 前端渲染
 
@@ -19,6 +19,7 @@
 ```
 plugins/thinking/
 ├── plugin.json            # 外掛 manifest
+├── handler.ts             # 後端動態變數模組（getDynamicVariables）
 ├── think-before-reply.md  # 回覆前思考提示詞片段
 ├── frontend.js            # 前端渲染模組
 └── README.md
