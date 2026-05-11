@@ -20,7 +20,7 @@
         "type": "boolean",
         "default": true,
         "title": "啟用文學潤飾",
-        "description": "關閉後潤飾按鈕不再顯示，也不會執行任何 LLM 改寫動作。"
+        "description": "關閉後本外掛將停用，等同未安裝外掛。"
       }
     }
   }

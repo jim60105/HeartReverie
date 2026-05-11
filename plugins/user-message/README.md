@@ -30,4 +30,4 @@ plugins/user-message/
 
 | 設定 | 預設 | 說明 |
 |------|------|------|
-| `enabled` | `true` | 關閉後 `pre-write` hook 不再將使用者輸入包裹成 `<user_message>` 區塊。既有章節中的標籤仍會依 `promptStripTags` / `displayStripTags` 清除。 |
+| `enabled` | `true` | 關閉後本外掛將停用，等同未安裝外掛。 |

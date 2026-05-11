@@ -31,4 +31,4 @@ plugins/start-hints/
 
 | 設定 | 預設 | 說明 |
 |------|------|------|
-| `enabled` | `true` | 關閉後首輪章節不再注入 `start-hints.md` 的開場創作指引。 |
+| `enabled` | `true` | 關閉後本外掛將停用，等同未安裝外掛。 |

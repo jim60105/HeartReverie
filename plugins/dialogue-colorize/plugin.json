@@ -14,7 +14,7 @@
         "type": "boolean",
         "default": true,
         "title": "啟用對話上色",
-        "description": "關閉後不再對任何引號段落套用 CSS Custom Highlight 著色。"
+        "description": "關閉後本外掛將停用，等同未安裝外掛。"
       },
       "dialogueColor": {
         "type": "string",
