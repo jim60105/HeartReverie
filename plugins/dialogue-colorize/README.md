@@ -56,7 +56,7 @@ plugins/dialogue-colorize/
 
 | 設定 | 預設 | 說明 |
 |------|------|------|
-| `enabled` | `true` | 關閉後會清除所有目前的 CSS Custom Highlight，不再對引號段落上色。 |
+| `enabled` | `true` | 關閉後本外掛將停用，等同未安裝外掛。 |
 | `dialogueColor` | `""` | 自訂 CSS 顏色字串，例如 `#aa5500` 或 `royalblue`。空字串代表沿用目前主題。 |
 | `enabledQuoteStyles` | 全部六種 | 控制哪些引號樣式會被加入 highlight。未勾選的樣式不會上色。 |
 

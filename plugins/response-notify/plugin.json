@@ -11,7 +11,7 @@
         "type": "boolean",
         "default": true,
         "title": "啟用回應通知",
-        "description": "關閉後 LLM 生成完成時不再發出任何通知。"
+        "description": "關閉後本外掛將停用，等同未安裝外掛。"
       },
       "notifyTitle": {
         "type": "string",

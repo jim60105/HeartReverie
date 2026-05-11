@@ -17,7 +17,7 @@
         "type": "boolean",
         "default": true,
         "title": "啟用思考摺疊",
-        "description": "關閉後不再注入思考提示，也不再轉換 <think> / <thinking> 標籤。"
+        "description": "關閉後本外掛將停用，等同未安裝外掛。"
       },
       "injectInstruction": {
         "type": "boolean",
