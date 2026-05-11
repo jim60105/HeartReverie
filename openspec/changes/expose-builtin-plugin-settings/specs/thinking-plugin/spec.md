@@ -7,8 +7,8 @@
 - `enabled` (boolean, default `true`).
 - `injectInstruction` (boolean, default `true`) — controls whether the plugin's "think before replying" guidance is injected into the system prompt. Useful for reasoning models that already emit `<think>` blocks natively.
 - `defaultCollapsed` (boolean, default `true`) — initial collapsed state of rendered `<think>` blocks.
-- `completeSummaryLabel` (string, default reproducing today's `"💭 思考摘要"`).
-- `streamingSummaryLabel` (string, default reproducing today's `"💭 思考中…"`).
+- `completeSummaryLabel` (string, default reproducing today's `"思考過程"`).
+- `streamingSummaryLabel` (string, default reproducing today's `"思考中..."`).
 
 #### Scenario: Manifest renders five controls
 

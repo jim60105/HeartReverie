@@ -13,8 +13,14 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { join, resolve, isAbsolute, SEPARATOR } from "@std/path";
-import type { PluginManifest, DynamicVariableContext, ActionButtonDescriptor, ActionButtonVisibility } from "../types.ts";
+import { isAbsolute, join, resolve, SEPARATOR } from "@std/path";
+import type {
+  ActionButtonDescriptor,
+  ActionButtonVisibility,
+  DynamicVariableContext,
+  PluginManifest,
+  PluginRegisterContext,
+} from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { createLogger } from "./logger.ts";
 
@@ -26,7 +32,9 @@ interface PluginEntry {
   readonly source: string;
   readonly validatedStyles: string[];
   readonly validatedActionButtons: ActionButtonDescriptor[];
-  registerRoutes?: (context: import("../types.ts").PluginRouteContext) => void | Promise<void>;
+  registerRoutes?: (
+    context: import("../types.ts").PluginRouteContext,
+  ) => void | Promise<void>;
 }
 
 interface PromptVariables {
@@ -66,7 +74,12 @@ export class PluginManager {
   #hookDispatcher: HookDispatcher;
   #playgroundDir: string;
   #plugins: Map<string, PluginEntry> = new Map();
-  #dynamicVarProviders: Map<string, (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>> = new Map();
+  #dynamicVarProviders: Map<
+    string,
+    (
+      context: DynamicVariableContext,
+    ) => Promise<Record<string, unknown>> | Record<string, unknown>
+  > = new Map();
 
   /**
    * @param {string} builtinDir - Absolute path to built-in plugins (e.g. ROOT_DIR/plugins)
@@ -74,7 +87,12 @@ export class PluginManager {
    * @param {import('./hooks.ts').HookDispatcher} hookDispatcher
    * @param {string} playgroundDir - Absolute path to the playground directory
    */
-  constructor(builtinDir: string, externalDir: string | undefined, hookDispatcher: HookDispatcher, playgroundDir: string) {
+  constructor(
+    builtinDir: string,
+    externalDir: string | undefined,
+    hookDispatcher: HookDispatcher,
+    playgroundDir: string,
+  ) {
     this.#builtinDir = builtinDir;
     this.#externalDir = externalDir || null;
     this.#hookDispatcher = hookDispatcher;
@@ -86,7 +104,9 @@ export class PluginManager {
    */
   async init(): Promise<void> {
     // Ensure _plugins config directory exists
-    await Deno.mkdir(join(this.#playgroundDir, "_plugins"), { recursive: true });
+    await Deno.mkdir(join(this.#playgroundDir, "_plugins"), {
+      recursive: true,
+    });
 
     // Scan built-in plugins
     await this.#scanDir(this.#builtinDir, "built-in");
@@ -94,7 +114,10 @@ export class PluginManager {
     // Scan external plugins (override built-in on name collision)
     if (this.#externalDir) {
       if (!isAbsolute(this.#externalDir)) {
-        log.warn("PLUGIN_DIR must be an absolute path — skipping external plugins", { path: this.#externalDir });
+        log.warn(
+          "PLUGIN_DIR must be an absolute path — skipping external plugins",
+          { path: this.#externalDir },
+        );
       } else {
         await this.#scanDir(this.#externalDir, "external");
       }
@@ -107,7 +130,10 @@ export class PluginManager {
       }
     }
 
-    log.info("Plugins loaded", { count: this.#plugins.size, plugins: [...this.#plugins.keys()] });
+    log.info("Plugins loaded", {
+      count: this.#plugins.size,
+      plugins: [...this.#plugins.keys()],
+    });
   }
 
   /**
@@ -125,7 +151,10 @@ export class PluginManager {
         // Directory doesn't exist yet — that's fine
         return;
       }
-      log.warn("Failed to read plugin directory", { dir, error: err instanceof Error ? err.message : String(err) });
+      log.warn("Failed to read plugin directory", {
+        dir,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return;
     }
 
@@ -133,7 +162,10 @@ export class PluginManager {
       if (!entry.isDirectory || entry.name.startsWith(".")) continue;
 
       if (!isValidPluginName(entry.name)) {
-        log.warn("Skipping plugin with invalid name", { name: entry.name, dir });
+        log.warn("Skipping plugin with invalid name", {
+          name: entry.name,
+          dir,
+        });
         continue;
       }
 
@@ -152,35 +184,52 @@ export class PluginManager {
       try {
         const parsed: unknown = JSON.parse(raw);
         if (typeof parsed !== "object" || parsed === null) {
-          log.warn("Invalid plugin manifest: not an object", { path: manifestPath });
+          log.warn("Invalid plugin manifest: not an object", {
+            path: manifestPath,
+          });
           continue;
         }
         manifest = parsed as PluginManifest;
       } catch (err: unknown) {
-        log.warn("Invalid JSON in manifest", { path: manifestPath, error: err instanceof Error ? err.message : String(err) });
+        log.warn("Invalid JSON in manifest", {
+          path: manifestPath,
+          error: err instanceof Error ? err.message : String(err),
+        });
         continue;
       }
 
       // Validate required fields
       if (!manifest.name || typeof manifest.name !== "string") {
-        log.warn("Plugin missing required 'name' field — skipping", { dir: pluginDir });
+        log.warn("Plugin missing required 'name' field — skipping", {
+          dir: pluginDir,
+        });
         continue;
       }
 
       // Require manifest name matches directory name to prevent impersonation
       if (manifest.name !== entry.name) {
-        log.warn("Plugin manifest.name does not match directory — skipping", { dirName: entry.name, manifestName: manifest.name });
+        log.warn("Plugin manifest.name does not match directory — skipping", {
+          dirName: entry.name,
+          manifestName: manifest.name,
+        });
         continue;
       }
 
       // Log override when external plugin replaces built-in
       if (this.#plugins.has(manifest.name)) {
         const existing = this.#plugins.get(manifest.name)!;
-        log.warn("Plugin override", { plugin: manifest.name, source, overriddenDir: existing.dir });
+        log.warn("Plugin override", {
+          plugin: manifest.name,
+          source,
+          overriddenDir: existing.dir,
+        });
       }
 
       // Validate and normalize frontendStyles
-      const validatedStyles = await this.#validateFrontendStyles(manifest, pluginDir);
+      const validatedStyles = await this.#validateFrontendStyles(
+        manifest,
+        pluginDir,
+      );
 
       // Validate and normalize actionButtons
       const validatedActionButtons = this.#validateActionButtons(manifest);
@@ -193,15 +242,29 @@ export class PluginManager {
           schema === null ||
           Array.isArray(schema)
         ) {
-          log.warn("Plugin settingsSchema must be an object — ignoring", { plugin: manifest.name });
+          log.warn("Plugin settingsSchema must be an object — ignoring", {
+            plugin: manifest.name,
+          });
           (manifest as { settingsSchema?: unknown }).settingsSchema = undefined;
-        } else if (schema.type !== "object" || typeof schema.properties !== "object" || schema.properties === null || Array.isArray(schema.properties)) {
-          log.warn("Plugin settingsSchema must have type:'object' and a properties record — ignoring", { plugin: manifest.name });
+        } else if (
+          schema.type !== "object" || typeof schema.properties !== "object" ||
+          schema.properties === null || Array.isArray(schema.properties)
+        ) {
+          log.warn(
+            "Plugin settingsSchema must have type:'object' and a properties record — ignoring",
+            { plugin: manifest.name },
+          );
           (manifest as { settingsSchema?: unknown }).settingsSchema = undefined;
         }
       }
 
-      this.#plugins.set(manifest.name, { manifest, dir: pluginDir, source, validatedStyles, validatedActionButtons });
+      this.#plugins.set(manifest.name, {
+        manifest,
+        dir: pluginDir,
+        source,
+        validatedStyles,
+        validatedActionButtons,
+      });
     }
   }
 
@@ -230,29 +293,42 @@ export class PluginManager {
 
     for (const entry of raw) {
       if (!entry || typeof entry !== "object") {
-        pluginLog.warn("Plugin actionButtons entry is not an object — skipping");
+        pluginLog.warn(
+          "Plugin actionButtons entry is not an object — skipping",
+        );
         continue;
       }
       const descriptor = entry as Record<string, unknown>;
 
       const id = descriptor.id;
       if (typeof id !== "string" || !idRegex.test(id)) {
-        pluginLog.warn("Plugin actionButtons entry has invalid id — skipping", { id });
+        pluginLog.warn("Plugin actionButtons entry has invalid id — skipping", {
+          id,
+        });
         continue;
       }
       if (seenIds.has(id)) {
-        pluginLog.warn("Plugin actionButtons entry has duplicate id — skipping", { id });
+        pluginLog.warn(
+          "Plugin actionButtons entry has duplicate id — skipping",
+          { id },
+        );
         continue;
       }
 
       const labelRaw = descriptor.label;
       if (typeof labelRaw !== "string") {
-        pluginLog.warn("Plugin actionButtons entry has non-string label — skipping", { id });
+        pluginLog.warn(
+          "Plugin actionButtons entry has non-string label — skipping",
+          { id },
+        );
         continue;
       }
       const label = labelRaw.trim();
       if (label.length < 1 || label.length > 40) {
-        pluginLog.warn("Plugin actionButtons entry has out-of-range label — skipping", { id, length: label.length });
+        pluginLog.warn(
+          "Plugin actionButtons entry has out-of-range label — skipping",
+          { id, length: label.length },
+        );
         continue;
       }
 
@@ -260,7 +336,10 @@ export class PluginManager {
       let icon: string | undefined;
       if (iconRaw !== undefined) {
         if (typeof iconRaw !== "string") {
-          pluginLog.warn("Plugin actionButtons entry has non-string icon — skipping", { id });
+          pluginLog.warn(
+            "Plugin actionButtons entry has non-string icon — skipping",
+            { id },
+          );
           continue;
         }
         icon = iconRaw;
@@ -270,7 +349,10 @@ export class PluginManager {
       let tooltip: string | undefined;
       if (tooltipRaw !== undefined) {
         if (typeof tooltipRaw !== "string" || tooltipRaw.length > 200) {
-          pluginLog.warn("Plugin actionButtons entry has invalid tooltip — skipping", { id });
+          pluginLog.warn(
+            "Plugin actionButtons entry has invalid tooltip — skipping",
+            { id },
+          );
           continue;
         }
         tooltip = tooltipRaw;
@@ -280,7 +362,10 @@ export class PluginManager {
       let priority = 100;
       if (priorityRaw !== undefined) {
         if (typeof priorityRaw !== "number" || !Number.isFinite(priorityRaw)) {
-          pluginLog.warn("Plugin actionButtons entry has non-finite priority — skipping", { id, priority: priorityRaw });
+          pluginLog.warn(
+            "Plugin actionButtons entry has non-finite priority — skipping",
+            { id, priority: priorityRaw },
+          );
           continue;
         }
         priority = priorityRaw;
@@ -293,7 +378,10 @@ export class PluginManager {
           typeof visibleWhenRaw !== "string" ||
           !allowedVisibility.includes(visibleWhenRaw as ActionButtonVisibility)
         ) {
-          pluginLog.warn("Plugin actionButtons entry has unknown visibleWhen — skipping", { id, visibleWhen: visibleWhenRaw });
+          pluginLog.warn(
+            "Plugin actionButtons entry has unknown visibleWhen — skipping",
+            { id, visibleWhen: visibleWhenRaw },
+          );
           continue;
         }
         visibleWhen = visibleWhenRaw as ActionButtonVisibility;
@@ -319,11 +407,16 @@ export class PluginManager {
    * Returns an array of normalized relative paths (forward-slash, no leading "./")
    * whose resolved targets exist on disk and are contained within the plugin directory.
    */
-  async #validateFrontendStyles(manifest: PluginManifest, pluginDir: string): Promise<string[]> {
+  async #validateFrontendStyles(
+    manifest: PluginManifest,
+    pluginDir: string,
+  ): Promise<string[]> {
     const raw: unknown = manifest.frontendStyles;
     if (raw === undefined) return [];
     if (!Array.isArray(raw)) {
-      log.warn("Plugin has non-array frontendStyles — ignoring", { plugin: manifest.name });
+      log.warn("Plugin has non-array frontendStyles — ignoring", {
+        plugin: manifest.name,
+      });
       return [];
     }
 
@@ -332,26 +425,41 @@ export class PluginManager {
 
     for (const entry of raw) {
       if (typeof entry !== "string" || entry.length === 0) {
-        log.warn("Plugin has invalid frontendStyles entry (must be non-empty string) — skipping", { plugin: manifest.name });
+        log.warn(
+          "Plugin has invalid frontendStyles entry (must be non-empty string) — skipping",
+          { plugin: manifest.name },
+        );
         continue;
       }
       if (!entry.toLowerCase().endsWith(".css")) {
-        log.warn("Plugin frontendStyles entry does not end with .css — skipping", { plugin: manifest.name, entry });
+        log.warn(
+          "Plugin frontendStyles entry does not end with .css — skipping",
+          { plugin: manifest.name, entry },
+        );
         continue;
       }
       if (isAbsolute(entry)) {
-        log.warn("Plugin frontendStyles entry is an absolute path — skipping", { plugin: manifest.name, entry });
+        log.warn("Plugin frontendStyles entry is an absolute path — skipping", {
+          plugin: manifest.name,
+          entry,
+        });
         continue;
       }
       // Reject path traversal segments
       const segments = entry.split(/[\\/]/);
       if (segments.some((s) => s === "..")) {
-        log.warn("Plugin frontendStyles entry contains '..' — skipping", { plugin: manifest.name, entry });
+        log.warn("Plugin frontendStyles entry contains '..' — skipping", {
+          plugin: manifest.name,
+          entry,
+        });
         continue;
       }
       // Reject backslashes and URL-hostile characters
       if (/[\\#?%]/.test(entry)) {
-        log.warn("Plugin frontendStyles entry contains invalid characters — skipping", { plugin: manifest.name, entry });
+        log.warn(
+          "Plugin frontendStyles entry contains invalid characters — skipping",
+          { plugin: manifest.name, entry },
+        );
         continue;
       }
 
@@ -363,7 +471,10 @@ export class PluginManager {
 
       const resolved = resolve(pluginDir, normalized);
       if (!isPathContained(pluginDir, resolved)) {
-        log.warn("Plugin frontendStyles entry escapes plugin directory — skipping", { plugin: manifest.name, entry });
+        log.warn(
+          "Plugin frontendStyles entry escapes plugin directory — skipping",
+          { plugin: manifest.name, entry },
+        );
         continue;
       }
 
@@ -375,18 +486,31 @@ export class PluginManager {
       try {
         const stat = await Deno.stat(resolved);
         if (!stat.isFile) {
-          log.warn("Plugin frontendStyles entry is not a file — skipping", { plugin: manifest.name, entry });
+          log.warn("Plugin frontendStyles entry is not a file — skipping", {
+            plugin: manifest.name,
+            entry,
+          });
           continue;
         }
         // Symlink-safe: verify real path is still within plugin directory
         const realFile = await Deno.realPath(resolved);
         const realPluginDir = await Deno.realPath(pluginDir);
-        if (!realFile.startsWith(realPluginDir + SEPARATOR) && realFile !== realPluginDir) {
-          log.warn("Plugin frontendStyles entry resolves outside plugin directory — skipping", { plugin: manifest.name, entry });
+        if (
+          !realFile.startsWith(realPluginDir + SEPARATOR) &&
+          realFile !== realPluginDir
+        ) {
+          log.warn(
+            "Plugin frontendStyles entry resolves outside plugin directory — skipping",
+            { plugin: manifest.name, entry },
+          );
           continue;
         }
       } catch (err: unknown) {
-        log.warn("Plugin frontendStyles entry not found", { plugin: manifest.name, entry, error: err instanceof Error ? err.message : String(err) });
+        log.warn("Plugin frontendStyles entry not found", {
+          plugin: manifest.name,
+          entry,
+          error: err instanceof Error ? err.message : String(err),
+        });
         continue;
       }
 
@@ -402,49 +526,81 @@ export class PluginManager {
   async #loadBackendModule(name: string, entry: PluginEntry): Promise<void> {
     const modulePath: string = resolve(
       entry.dir,
-      entry.manifest.backendModule!
+      entry.manifest.backendModule!,
     );
 
     if (!isPathContained(entry.dir, modulePath)) {
-      log.warn("Plugin backendModule escapes plugin directory — skipping", { plugin: name, path: modulePath });
+      log.warn("Plugin backendModule escapes plugin directory — skipping", {
+        plugin: name,
+        path: modulePath,
+      });
       return;
     }
 
     try {
-      const mod = await import("file://" + modulePath) as Record<string, unknown>;
+      const mod = await import("file://" + modulePath) as Record<
+        string,
+        unknown
+      >;
       const registerFn = mod.register || mod.default;
       if (typeof registerFn === "function") {
-        const pluginLogger = createLogger("plugin", { baseData: { plugin: name } });
+        const pluginLogger = createLogger("plugin", {
+          baseData: { plugin: name },
+        });
         // Wrap hooks.register to auto-bind plugin name and baseLogger
         const boundHooks = {
-          register: (stage: Parameters<HookDispatcher["register"]>[0], handler: Parameters<HookDispatcher["register"]>[1], priority?: number) => {
-            this.#hookDispatcher.register(stage, handler, priority ?? 100, name, pluginLogger);
+          register: (
+            stage: Parameters<HookDispatcher["register"]>[0],
+            handler: Parameters<HookDispatcher["register"]>[1],
+            priority?: number,
+          ) => {
+            this.#hookDispatcher.register(
+              stage,
+              handler,
+              priority ?? 100,
+              name,
+              pluginLogger,
+            );
           },
         };
-        const context = { hooks: boundHooks, logger: pluginLogger };
-        await (registerFn as (ctx: typeof context) => void | Promise<void>)(context);
+        const context: PluginRegisterContext = {
+          hooks: boundHooks,
+          logger: pluginLogger,
+          getSettings: () => this.getPluginSettings(name),
+        };
+        await (registerFn as (
+          ctx: PluginRegisterContext,
+        ) => void | Promise<void>)(context);
         log.debug("Plugin registered successfully", { plugin: name });
       }
 
       const hasDynVars = typeof mod.getDynamicVariables === "function";
       if (!registerFn && !hasDynVars) {
-        log.warn("Plugin backend module has no register() or default export", { plugin: name });
+        log.warn("Plugin backend module has no register() or default export", {
+          plugin: name,
+        });
       }
 
       if (hasDynVars) {
         this.#dynamicVarProviders.set(
           name,
-          mod.getDynamicVariables as (context: DynamicVariableContext) => Promise<Record<string, unknown>> | Record<string, unknown>,
+          mod.getDynamicVariables as (
+            context: DynamicVariableContext,
+          ) => Promise<Record<string, unknown>> | Record<string, unknown>,
         );
       }
 
       // Store registerRoutes function reference if exported (task 1.2)
       if (typeof mod.registerRoutes === "function") {
-        entry.registerRoutes = mod.registerRoutes as PluginEntry["registerRoutes"];
+        entry.registerRoutes = mod
+          .registerRoutes as PluginEntry["registerRoutes"];
         log.debug("Plugin exports registerRoutes", { plugin: name });
       }
     } catch (err: unknown) {
-      log.error("Failed to load backend module", { plugin: name, error: err instanceof Error ? err.message : String(err) });
+      log.error("Failed to load backend module", {
+        plugin: name,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -466,19 +622,29 @@ export class PluginManager {
     if (tag.startsWith("/")) {
       const lastSlash = tag.lastIndexOf("/");
       if (lastSlash <= 0) {
-        log.warn("Plugin has invalid regex stripTag — skipping", { plugin: pluginName, tag });
+        log.warn("Plugin has invalid regex stripTag — skipping", {
+          plugin: pluginName,
+          tag,
+        });
         return null;
       }
       const inner = tag.slice(1, lastSlash);
       if (inner.length === 0) {
-        log.warn("Plugin has empty regex stripTag — skipping", { plugin: pluginName, tag });
+        log.warn("Plugin has empty regex stripTag — skipping", {
+          plugin: pluginName,
+          tag,
+        });
         return null;
       }
       try {
         new RegExp(inner);
         return inner;
       } catch (err: unknown) {
-        log.warn("Plugin has invalid regex in stripTag — skipping", { plugin: pluginName, tag, error: err instanceof Error ? err.message : String(err) });
+        log.warn("Plugin has invalid regex in stripTag — skipping", {
+          plugin: pluginName,
+          tag,
+          error: err instanceof Error ? err.message : String(err),
+        });
         return null;
       }
     }
@@ -557,13 +723,19 @@ export class PluginManager {
     for (const { manifest, dir } of this.#plugins.values()) {
       if (!Array.isArray(manifest.promptFragments)) continue;
 
+      const pluginSettings = await this.getPluginSettings(manifest.name);
+      if (pluginSettings.enabled === false) continue;
+
       for (const frag of manifest.promptFragments) {
         if (!frag.file) continue;
 
         const filePath = resolve(dir, frag.file);
 
         if (!isPathContained(dir, filePath)) {
-          log.warn("Plugin fragment escapes plugin directory — skipping", { plugin: manifest.name, file: frag.file });
+          log.warn("Plugin fragment escapes plugin directory — skipping", {
+            plugin: manifest.name,
+            file: frag.file,
+          });
           continue;
         }
 
@@ -571,12 +743,17 @@ export class PluginManager {
         try {
           content = await Deno.readTextFile(filePath);
         } catch (err: unknown) {
-          log.warn("Failed to read prompt fragment", { plugin: manifest.name, file: frag.file, error: err instanceof Error ? err.message : String(err) }
-          );
+          log.warn("Failed to read prompt fragment", {
+            plugin: manifest.name,
+            file: frag.file,
+            error: err instanceof Error ? err.message : String(err),
+          });
           continue;
         }
 
-        const priority = typeof frag.priority === "number" ? frag.priority : 100;
+        const priority = typeof frag.priority === "number"
+          ? frag.priority
+          : 100;
 
         if (frag.variable) {
           // Named variable — store directly
@@ -598,35 +775,56 @@ export class PluginManager {
 
   /** Core template variable names that plugins must not override. */
   static readonly #CORE_TEMPLATE_VARS = new Set([
-    "previous_context", "user_input", "isFirstRound",
-    "series_name", "story_name", "plugin_fragments",
+    "previous_context",
+    "user_input",
+    "isFirstRound",
+    "series_name",
+    "story_name",
+    "plugin_fragments",
   ]);
 
   /**
    * Collect dynamic template variables from all plugins that export getDynamicVariables().
    * Collision policy: core vars are rejected; first-loaded plugin wins for inter-plugin conflicts.
    */
-  async getDynamicVariables(context: DynamicVariableContext): Promise<Record<string, unknown>> {
+  async getDynamicVariables(
+    context: DynamicVariableContext,
+  ): Promise<Record<string, unknown>> {
     const result: Record<string, unknown> = {};
 
     for (const [pluginName, provider] of this.#dynamicVarProviders) {
       try {
-        const vars = await provider(context);
+        const pluginSettings = await this.getPluginSettings(pluginName);
+        if (pluginSettings.enabled === false) continue;
+        const extendedContext: DynamicVariableContext = {
+          ...context,
+          getSettings: () => this.getPluginSettings(pluginName),
+        };
+        const vars = await provider(extendedContext);
         if (!vars || typeof vars !== "object") continue;
 
         for (const [key, value] of Object.entries(vars)) {
           if (PluginManager.#CORE_TEMPLATE_VARS.has(key)) {
-            log.warn("Plugin attempted to set core variable — ignored", { plugin: pluginName, key });
+            log.warn("Plugin attempted to set core variable — ignored", {
+              plugin: pluginName,
+              key,
+            });
             continue;
           }
           if (key in result) {
-            log.warn("Plugin dynamic variable conflicts with earlier plugin — using first value", { plugin: pluginName, key });
+            log.warn(
+              "Plugin dynamic variable conflicts with earlier plugin — using first value",
+              { plugin: pluginName, key },
+            );
             continue;
           }
           result[key] = value;
         }
       } catch (err: unknown) {
-        log.warn("Plugin getDynamicVariables() failed", { plugin: pluginName, error: err instanceof Error ? err.message : String(err) });
+        log.warn("Plugin getDynamicVariables() failed", {
+          plugin: pluginName,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -683,12 +881,42 @@ export class PluginManager {
    */
   getParameters(): ParameterInfo[] {
     const params: ParameterInfo[] = [
-      { name: "previous_context", type: "array", description: "Array of previous chapter contents (stripped)", source: "core" },
-      { name: "user_input", type: "string", description: "Current user message", source: "core" },
-      { name: "isFirstRound", type: "boolean", description: "Whether this is the first round (no non-empty chapters)", source: "core" },
-      { name: "series_name", type: "string", description: "Display name of the current series", source: "core" },
-      { name: "story_name", type: "string", description: "Display name of the current story", source: "core" },
-      { name: "plugin_fragments", type: "array", description: "Array of plugin-contributed prompt fragments", source: "core" },
+      {
+        name: "previous_context",
+        type: "array",
+        description: "Array of previous chapter contents (stripped)",
+        source: "core",
+      },
+      {
+        name: "user_input",
+        type: "string",
+        description: "Current user message",
+        source: "core",
+      },
+      {
+        name: "isFirstRound",
+        type: "boolean",
+        description: "Whether this is the first round (no non-empty chapters)",
+        source: "core",
+      },
+      {
+        name: "series_name",
+        type: "string",
+        description: "Display name of the current series",
+        source: "core",
+      },
+      {
+        name: "story_name",
+        type: "string",
+        description: "Display name of the current story",
+        source: "core",
+      },
+      {
+        name: "plugin_fragments",
+        type: "array",
+        description: "Array of plugin-contributed prompt fragments",
+        source: "core",
+      },
     ];
 
     for (const { manifest } of this.#plugins.values()) {
@@ -711,7 +939,8 @@ export class PluginManager {
             params.push({
               name: frag.variable,
               type: "string",
-              description: `Prompt fragment from ${manifest.name} (${frag.file})`,
+              description:
+                `Prompt fragment from ${manifest.name} (${frag.file})`,
               source: manifest.name,
             });
           }
@@ -726,11 +955,27 @@ export class PluginManager {
    * Returns route registrar info for all plugins that export `registerRoutes`.
    * Called by app.ts route wiring to mount plugin-specific HTTP routes.
    */
-  getPluginRouteRegistrars(): Array<{ name: string; registerRoutes: NonNullable<PluginEntry["registerRoutes"]>; dir: string }> {
-    const registrars: Array<{ name: string; registerRoutes: NonNullable<PluginEntry["registerRoutes"]>; dir: string }> = [];
+  getPluginRouteRegistrars(): Array<
+    {
+      name: string;
+      registerRoutes: NonNullable<PluginEntry["registerRoutes"]>;
+      dir: string;
+    }
+  > {
+    const registrars: Array<
+      {
+        name: string;
+        registerRoutes: NonNullable<PluginEntry["registerRoutes"]>;
+        dir: string;
+      }
+    > = [];
     for (const [name, entry] of this.#plugins) {
       if (entry.registerRoutes) {
-        registrars.push({ name, registerRoutes: entry.registerRoutes, dir: entry.dir });
+        registrars.push({
+          name,
+          registerRoutes: entry.registerRoutes,
+          dir: entry.dir,
+        });
       }
     }
     return registrars;
@@ -763,17 +1008,27 @@ export class PluginManager {
     // Extract defaults from settingsSchema
     const defaults = this.#extractSchemaDefaults(entry.manifest.settingsSchema);
 
-    const configPath = join(this.#playgroundDir, "_plugins", name, "config.json");
+    const configPath = join(
+      this.#playgroundDir,
+      "_plugins",
+      name,
+      "config.json",
+    );
     let saved: Record<string, unknown> = {};
     try {
       const raw = await Deno.readTextFile(configPath);
       const parsed: unknown = JSON.parse(raw);
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      if (
+        typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ) {
         saved = parsed as Record<string, unknown>;
       }
     } catch (err: unknown) {
       if (!(err instanceof Deno.errors.NotFound)) {
-        log.warn("Failed to read plugin config", { plugin: name, error: err instanceof Error ? err.message : String(err) });
+        log.warn("Failed to read plugin config", {
+          plugin: name,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -784,13 +1039,19 @@ export class PluginManager {
    * Save plugin settings to `playground/_plugins/<name>/config.json`.
    * Validates against settingsSchema before writing; throws on validation failure.
    */
-  async savePluginSettings(name: string, settings: Record<string, unknown>): Promise<void> {
+  async savePluginSettings(
+    name: string,
+    settings: Record<string, unknown>,
+  ): Promise<void> {
     const entry = this.#plugins.get(name);
     if (!entry) throw new Error(`Unknown plugin: ${name}`);
 
     // Validate against schema if declared
     if (entry.manifest.settingsSchema) {
-      const errors = this.#validateAgainstSchema(settings, entry.manifest.settingsSchema);
+      const errors = this.#validateAgainstSchema(
+        settings,
+        entry.manifest.settingsSchema,
+      );
       if (errors.length > 0) {
         throw new Error(`Settings validation failed: ${errors.join("; ")}`);
       }
@@ -799,20 +1060,29 @@ export class PluginManager {
     const configDir = join(this.#playgroundDir, "_plugins", name);
     await Deno.mkdir(configDir, { recursive: true });
     const configPath = join(configDir, "config.json");
-    await Deno.writeTextFile(configPath, JSON.stringify(settings, null, 2) + "\n");
+    await Deno.writeTextFile(
+      configPath,
+      JSON.stringify(settings, null, 2) + "\n",
+    );
     log.debug("Plugin settings saved", { plugin: name });
   }
 
   /**
    * Extract default values from a JSON Schema's properties.
    */
-  #extractSchemaDefaults(schema: Record<string, unknown> | undefined): Record<string, unknown> {
+  #extractSchemaDefaults(
+    schema: Record<string, unknown> | undefined,
+  ): Record<string, unknown> {
     if (!schema || typeof schema !== "object") return {};
     const properties = schema.properties;
-    if (!properties || typeof properties !== "object" || Array.isArray(properties)) return {};
+    if (
+      !properties || typeof properties !== "object" || Array.isArray(properties)
+    ) return {};
 
     const defaults: Record<string, unknown> = {};
-    for (const [key, prop] of Object.entries(properties as Record<string, unknown>)) {
+    for (
+      const [key, prop] of Object.entries(properties as Record<string, unknown>)
+    ) {
       if (prop && typeof prop === "object" && !Array.isArray(prop)) {
         const propObj = prop as Record<string, unknown>;
         if ("default" in propObj) {
@@ -828,9 +1098,14 @@ export class PluginManager {
    * Checks required fields and basic type constraints.
    * Returns an array of error messages (empty = valid).
    */
-  #validateAgainstSchema(settings: Record<string, unknown>, schema: Record<string, unknown>): string[] {
+  #validateAgainstSchema(
+    settings: Record<string, unknown>,
+    schema: Record<string, unknown>,
+  ): string[] {
     const errors: string[] = [];
-    const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+    const properties = schema.properties as
+      | Record<string, Record<string, unknown>>
+      | undefined;
 
     // Check required fields
     if (Array.isArray(schema.required)) {
@@ -869,16 +1144,22 @@ export class PluginManager {
       case "number":
       case "integer":
         if (typeof value !== "number") return `Field '${key}' must be a number`;
-        if (expectedType === "integer" && !Number.isInteger(value)) return `Field '${key}' must be an integer`;
+        if (expectedType === "integer" && !Number.isInteger(value)) {
+          return `Field '${key}' must be an integer`;
+        }
         break;
       case "boolean":
-        if (typeof value !== "boolean") return `Field '${key}' must be a boolean`;
+        if (typeof value !== "boolean") {
+          return `Field '${key}' must be a boolean`;
+        }
         break;
       case "array":
         if (!Array.isArray(value)) return `Field '${key}' must be an array`;
         break;
       case "object":
-        if (typeof value !== "object" || value === null || Array.isArray(value)) return `Field '${key}' must be an object`;
+        if (
+          typeof value !== "object" || value === null || Array.isArray(value)
+        ) return `Field '${key}' must be an object`;
         break;
     }
     return null;

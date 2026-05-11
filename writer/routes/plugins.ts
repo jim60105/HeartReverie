@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { resolve, relative, SEPARATOR } from "@std/path";
+import { relative, resolve, SEPARATOR } from "@std/path";
 import { problemJson } from "../lib/errors.ts";
 import { resolveLoreVariables } from "../lib/lore.ts";
 import { createLogger } from "../lib/logger.ts";
@@ -22,25 +22,51 @@ import type { AppDeps } from "../types.ts";
 
 const log = createLogger("plugin");
 
-export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManager" | "config">): void {
+export function registerPluginRoutes(
+  app: Hono,
+  deps: Pick<AppDeps, "pluginManager" | "config">,
+): void {
   const { pluginManager } = deps;
 
-  app.get("/api/plugins", (c) => {
-    const plugins = pluginManager.getPlugins().map((p) => ({
-      name: p.name,
-      version: p.version,
-      description: p.description,
-      type: p.type,
-      tags: p.tags || [],
-      hasSettings: !!p.settingsSchema,
-      hasFrontendModule: !!p.frontendModule,
-      displayStripTags: p.displayStripTags || [],
-      frontendStyles: pluginManager.getPluginStyles(p.name).map(
-        (cssPath) => `/plugins/${p.name}/${cssPath}`,
-      ),
-      actionButtons: pluginManager.getPluginActionButtons(p.name),
-    }));
+  app.get("/api/plugins", async (c) => {
+    const plugins = await Promise.all(
+      pluginManager.getPlugins().map(async (p) => {
+        let settings: Record<string, unknown> = {};
+        if (p.settingsSchema) {
+          settings = await pluginManager.getPluginSettings(p.name);
+        }
+        return {
+          name: p.name,
+          version: p.version,
+          description: p.description,
+          type: p.type,
+          tags: p.tags || [],
+          hasSettings: !!p.settingsSchema,
+          settings,
+          hasFrontendModule: !!p.frontendModule,
+          displayStripTags: p.displayStripTags || [],
+          frontendStyles: pluginManager.getPluginStyles(p.name).map(
+            (cssPath) => `/plugins/${p.name}/${cssPath}`,
+          ),
+          actionButtons: pluginManager.getPluginActionButtons(p.name),
+        };
+      }),
+    );
     return c.json(plugins);
+  });
+
+  app.get("/api/plugins/action-buttons", async (c) => {
+    const buttons = [];
+    for (const plugin of pluginManager.getPlugins()) {
+      const pluginButtons = pluginManager.getPluginActionButtons(plugin.name);
+      if (pluginButtons.length === 0) continue;
+      const settings = await pluginManager.getPluginSettings(plugin.name);
+      if (settings.enabled === false) continue;
+      for (const button of pluginButtons) {
+        buttons.push({ ...button, pluginName: plugin.name });
+      }
+    }
+    return c.json(buttons);
   });
 
   app.get("/api/plugins/parameters", async (c) => {
@@ -69,8 +95,8 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
         description: key === "lore_all"
           ? "All enabled lore passages concatenated"
           : key === "lore_tags"
-            ? "Array of all lore tag names"
-            : `Lore passages tagged '${key.replace(/^lore_/, "")}'`,
+          ? "Array of all lore tag names"
+          : `Lore passages tagged '${key.replace(/^lore_/, "")}'`,
         source: "lore",
       }));
 
@@ -109,7 +135,10 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       }
       const message = err instanceof Error ? err.message : String(err);
       log.warn(`[GET /plugins/_shared] File serving error: ${message}`);
-      return c.json(problemJson("Internal Server Error", 500, "Internal server error"), 500);
+      return c.json(
+        problemJson("Internal Server Error", 500, "Internal server error"),
+        500,
+      );
     }
   });
 
@@ -121,7 +150,10 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       const modulePath = resolve(pluginDir, plugin.frontendModule);
       // Containment check: frontendModule must stay inside plugin directory
       if (!modulePath.startsWith(pluginDir + SEPARATOR)) {
-        log.warn("Plugin frontendModule escapes plugin directory — skipping", { plugin: plugin.name, path: modulePath });
+        log.warn("Plugin frontendModule escapes plugin directory — skipping", {
+          plugin: plugin.name,
+          path: modulePath,
+        });
         continue;
       }
       // Use normalized relative path for route (strip ./ prefix from manifest values)
@@ -137,8 +169,13 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
             return c.json(problemJson("Not Found", 404, "Not found"), 404);
           }
           const message = err instanceof Error ? err.message : String(err);
-          log.warn(`[GET /plugins/:plugin/module] File serving error: ${message}`);
-          return c.json(problemJson("Internal Server Error", 500, "Internal server error"), 500);
+          log.warn(
+            `[GET /plugins/:plugin/module] File serving error: ${message}`,
+          );
+          return c.json(
+            problemJson("Internal Server Error", 500, "Internal server error"),
+            500,
+          );
         }
       });
     }
@@ -155,7 +192,11 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
       const cssFilePath = resolve(pluginDir, cssPath);
       // Containment check against raw resolved path
       if (!cssFilePath.startsWith(pluginDir + SEPARATOR)) {
-        log.warn("Plugin CSS escapes plugin directory — skipping", { plugin: plugin.name, cssPath, resolved: cssFilePath });
+        log.warn("Plugin CSS escapes plugin directory — skipping", {
+          plugin: plugin.name,
+          cssPath,
+          resolved: cssFilePath,
+        });
         continue;
       }
       app.get(`/plugins/${plugin.name}/${cssPath}`, async (c) => {
@@ -176,7 +217,10 @@ export function registerPluginRoutes(app: Hono, deps: Pick<AppDeps, "pluginManag
           }
           const message = err instanceof Error ? err.message : String(err);
           log.warn(`[GET /plugins/:plugin/css] File serving error: ${message}`);
-          return c.json(problemJson("Internal Server Error", 500, "Internal server error"), 500);
+          return c.json(
+            problemJson("Internal Server Error", 500, "Internal server error"),
+            500,
+          );
         }
       });
     }

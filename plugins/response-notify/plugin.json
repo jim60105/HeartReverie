@@ -3,5 +3,45 @@
   "version": "1.0.0",
   "description": "Browser notification when LLM response generation completes",
   "type": "frontend-only",
-  "frontendModule": "./frontend.js"
+  "frontendModule": "./frontend.js",
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "title": "啟用回應通知",
+        "description": "關閉後 LLM 生成完成時不再發出任何通知。"
+      },
+      "notifyTitle": {
+        "type": "string",
+        "default": "故事生成完成",
+        "title": "通知標題",
+        "description": "系統通知的標題文字。"
+      },
+      "notifyBody": {
+        "type": "string",
+        "default": "新的章節已經寫入完成",
+        "title": "通知內文",
+        "description": "系統通知的內文文字。"
+      },
+      "notifyWhenVisible": {
+        "type": "boolean",
+        "default": false,
+        "title": "頁面可見時也通知",
+        "description": "開啟後，即使頁面目前可見也會發出系統通知。預設僅在頁面隱藏時通知。"
+      },
+      "notifyLevel": {
+        "type": "string",
+        "enum": [
+          "info",
+          "success",
+          "warning"
+        ],
+        "default": "success",
+        "title": "通知等級",
+        "description": "系統通知的視覺等級（info / success / warning）。"
+      }
+    }
+  }
 }

@@ -20,7 +20,11 @@ import type {
   PluginDescriptor,
   RunPluginPromptOptions,
 } from "@/types";
-import { usePlugins } from "@/composables/usePlugins";
+import {
+  pluginSettingsStore,
+  settingsRevision,
+  usePlugins,
+} from "@/composables/usePlugins";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useChapterEditor } from "@/composables/useChapterEditor";
 import { useChatApi } from "@/composables/useChatApi";
@@ -62,19 +66,27 @@ function descriptorMatches(
 export function usePluginActions() {
   const { plugins } = usePlugins();
   const chapterNav = useChapterNav();
-  const { isLastChapter, chapters, currentIndex, getBackendContext, reloadToLast } =
-    chapterNav;
+  const {
+    isLastChapter,
+    chapters,
+    currentIndex,
+    getBackendContext,
+    reloadToLast,
+  } = chapterNav;
 
   const actionButtons = computed<VisibleActionButton[]>(() => {
-    // Reactivity: read currentIndex so visibility recomputes on chapter change.
+    // Reactivity: read currentIndex so visibility recomputes on chapter/settings change.
     void currentIndex.value;
     void chapters.value.length;
+    void settingsRevision.value;
 
     const visible: VisibleActionButton[] = [];
     const pluginList = plugins.value as PluginDescriptor[];
 
     for (const p of pluginList) {
       if (!Array.isArray(p.actionButtons)) continue;
+      const settings = pluginSettingsStore.get(p.name) ?? {};
+      if (settings.enabled === false) continue;
       let order = 0;
       for (const desc of p.actionButtons) {
         if (
@@ -107,7 +119,10 @@ export function usePluginActions() {
     return visible;
   });
 
-  async function clickButton(buttonId: string, pluginName: string): Promise<void> {
+  async function clickButton(
+    buttonId: string,
+    pluginName: string,
+  ): Promise<void> {
     const key = `${pluginName}:${buttonId}`;
     // Spec: only block re-clicks on the EXACT pending key. Other plugins'
     // buttons (or this plugin's other buttons) remain clickable; backend
@@ -115,14 +130,26 @@ export function usePluginActions() {
     if (pendingKey.value === key) return;
     pendingKey.value = key;
     try {
+      const { getPluginSettingsSync } = usePlugins();
+      const pluginSettings = getPluginSettingsSync(pluginName);
+      if (pluginSettings.enabled === false) {
+        console.debug(
+          `[plugin-actions] action-button:click no-op: plugin '${pluginName}' is disabled`,
+        );
+        return;
+      }
       const ctx = getBackendContext();
       const lastChapterIndex = chapters.value.length > 0
         ? chapters.value.length - 1
         : null;
 
       // Gate replace-mode buttons when editor has unsaved buffer
-      const { hasUnsavedBufferForChapter, forceCloseEditor } = useChapterEditor();
-      if (buttonId === "polish" && lastChapterIndex !== null && hasUnsavedBufferForChapter(lastChapterIndex)) {
+      const { hasUnsavedBufferForChapter, forceCloseEditor } =
+        useChapterEditor();
+      if (
+        buttonId === "polish" && lastChapterIndex !== null &&
+        hasUnsavedBufferForChapter(lastChapterIndex)
+      ) {
         const { notify } = useNotification();
         notify({
           title: "潤飾暫時無法使用",
@@ -146,7 +173,10 @@ export function usePluginActions() {
         name,
         storyDir,
         lastChapterIndex,
-        runPluginPrompt: async (promptFile: string, opts?: RunPluginPromptOptions) => {
+        runPluginPrompt: async (
+          promptFile: string,
+          opts?: RunPluginPromptOptions,
+        ) => {
           const result = await chatApi.runPluginPrompt(pluginName, promptFile, {
             series,
             name,

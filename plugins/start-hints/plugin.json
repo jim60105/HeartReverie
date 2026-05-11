@@ -4,8 +4,27 @@
   "description": "First-round opening instructions for chapter start guidance",
   "type": "prompt-only",
   "promptFragments": [
-    { "file": "./start-hints.md", "variable": "start_hints", "priority": 100 }
+    {
+      "file": "./start-hints.md",
+      "variable": "start_hints",
+      "priority": 100
+    }
   ],
-  "promptStripTags": ["start_hints"],
-  "displayStripTags": ["start_hints"]
+  "promptStripTags": [
+    "start_hints"
+  ],
+  "displayStripTags": [
+    "start_hints"
+  ],
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "title": "啟用開場提示",
+        "description": "關閉後首輪章節不再注入七項開場創作指引。"
+      }
+    }
+  }
 }

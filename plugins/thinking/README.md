@@ -23,3 +23,15 @@ plugins/thinking/
 ├── frontend.js            # 前端渲染模組
 └── README.md
 ```
+
+## 設定項目
+
+| 設定 | 預設 | 說明 |
+|------|------|------|
+| `enabled` | `true` | 關閉後不再注入思考指令，也不再轉換 `<think>` / `<thinking>` 標籤。 |
+| `injectInstruction` | `true` | 控制是否將 `think-before-reply.md` 注入 `think_before_reply` 模板變數。 |
+| `defaultCollapsed` | `true` | 完整思考區塊是否預設收合；未完成串流區塊仍預設展開。 |
+| `completeSummaryLabel` | `思考過程` | 完整思考區塊的 `<summary>` 標題。 |
+| `streamingSummaryLabel` | `思考中...` | 未閉合思考區塊的 `<summary>` 標題。 |
+
+`injectInstruction` 由 `handler.ts` 的 `getDynamicVariables()` 動態提供，因此儲存設定後下一次提示詞組裝就會生效。

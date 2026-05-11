@@ -4,9 +4,45 @@
   "description": "Think-before-reply prompt instruction and collapsible thinking tag rendering",
   "type": "full-stack",
   "frontendModule": "./frontend.js",
-  "tags": ["thinking", "think"],
+  "tags": [
+    "thinking",
+    "think"
+  ],
   "displayStripTags": [],
-  "promptFragments": [
-    { "file": "./think-before-reply.md", "variable": "think_before_reply", "priority": 100 }
-  ]
+  "backendModule": "./handler.ts",
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "title": "啟用思考摺疊",
+        "description": "關閉後不再注入思考提示，也不再轉換 <think> / <thinking> 標籤。"
+      },
+      "injectInstruction": {
+        "type": "boolean",
+        "default": true,
+        "title": "注入思考指令",
+        "description": "關閉後不再在系統提示詞中要求模型回覆前先思考。"
+      },
+      "defaultCollapsed": {
+        "type": "boolean",
+        "default": true,
+        "title": "預設收合思考區塊",
+        "description": "開啟時，完整的思考區塊預設以收合狀態顯示。"
+      },
+      "completeSummaryLabel": {
+        "type": "string",
+        "default": "思考過程",
+        "title": "完整思考標題",
+        "description": "已完成思考區塊的 summary 標題文字。"
+      },
+      "streamingSummaryLabel": {
+        "type": "string",
+        "default": "思考中...",
+        "title": "串流思考標題",
+        "description": "尚未閉合的思考區塊所顯示的 summary 標題文字。"
+      }
+    }
+  }
 }
