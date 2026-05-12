@@ -27,9 +27,9 @@
       },
       "notifyWhenVisible": {
         "type": "boolean",
-        "default": false,
+        "default": true,
         "title": "頁面可見時也通知",
-        "description": "開啟後，即使頁面目前可見也會發出系統通知。預設僅在頁面隱藏時通知。"
+        "description": "預設開啟：頁面可見時以站內 toast 通知，隱藏時以系統通知通知。關閉後僅在頁面隱藏時通知。"
       },
       "notifyLevel": {
         "type": "string",
