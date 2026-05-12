@@ -30,12 +30,16 @@ const runPluginPromptMock = vi.fn().mockResolvedValue({
 });
 
 vi.mock("@/composables/usePlugins", () => ({
+  pluginSettingsStore: new Map<string, Record<string, unknown>>(),
+  settingsRevision: ref(0),
+  getPluginSettingsSync: (_name: string) => ({}),
   usePlugins: () => ({
     plugins: pluginsRef,
     pluginsReady: ref(true),
     pluginsSettled: ref(true),
     initPlugins: () => Promise.resolve(),
     applyDisplayStrip: (s: string) => s,
+    getPluginSettingsSync: (_name: string) => ({}),
   }),
 }));
 
