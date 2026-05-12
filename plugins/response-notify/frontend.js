@@ -22,8 +22,12 @@ export function register(hooks) {
     if (context.event !== 'chat:done') return;
     if (typeof context.notify !== 'function') return;
 
-    const notifyWhenVisible = settings.notifyWhenVisible === true;
-    if (!notifyWhenVisible && document.visibilityState !== 'hidden') return;
+    const isHidden = document.visibilityState === 'hidden';
+    // Default `true` preserves the plugin's original always-notify behaviour
+    // (channel switches between `in-app` and `auto` based on visibility).
+    // Setting it to `false` opts in to "hidden tabs only".
+    const notifyWhenVisible = settings.notifyWhenVisible !== false;
+    if (!isHidden && !notifyWhenVisible) return;
 
     const title = typeof settings.notifyTitle === 'string' ? settings.notifyTitle : '故事生成完成';
     const body = typeof settings.notifyBody === 'string' ? settings.notifyBody : '新的章節已經寫入完成';
@@ -33,7 +37,7 @@ export function register(hooks) {
       title,
       body,
       level,
-      channel: 'auto',
+      channel: isHidden ? 'auto' : 'in-app',
     });
   }, 100);
 }

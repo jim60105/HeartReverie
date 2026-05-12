@@ -62,7 +62,7 @@ The plugin SHALL handle notification failures gracefully:
 - `enabled` (boolean, default `true`).
 - `notifyTitle` (string, default reproducing today's hard-coded zh-TW title).
 - `notifyBody` (string, default reproducing today's hard-coded zh-TW body).
-- `notifyWhenVisible` (boolean, default `false`) — when `false` (today's behaviour) the plugin only fires when the document is hidden.
+- `notifyWhenVisible` (boolean, default `true`) — when `true` (the original behaviour) the plugin always fires on `chat:done`, switching channel by visibility. Set to `false` to only fire when the document is hidden.
 - `notifyLevel` (enum `"info" | "success" | "warning"`, default `"success"` — preserves today's hard-coded toast level).
 
 #### Scenario: Manifest renders five controls
@@ -81,8 +81,8 @@ The plugin SHALL register on the `notification` hook stage and gate its body on 
 - **THEN** the plugin's `notification` callback runs with `context.event === "chat:done"`
 - **AND** a system notification is shown using the templated `notifyTitle` / `notifyBody`
 
-#### Scenario: Notification suppressed when tab is visible
+#### Scenario: Notification suppressed when tab is visible and opt-out is set
 
 - **WHEN** the user completes a chat turn with the tab visible
 - **AND** `notifyWhenVisible === false`
-- **THEN** no system notification fires
+- **THEN** no notification fires
