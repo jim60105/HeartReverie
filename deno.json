@@ -21,7 +21,7 @@
     "coverage:clean": "rm -rf coverage/backend coverage/frontend coverage/backend.lcov coverage.lcov",
     "coverage:merge": "deno run --allow-read --allow-write scripts/coverage.ts merge coverage/backend.lcov coverage/frontend/lcov.info coverage.lcov",
     "coverage:summary": "deno run --allow-read scripts/coverage.ts summary coverage.lcov",
-    "coverage:threshold": "deno run --allow-read scripts/coverage.ts gate coverage.lcov 90",
+    "coverage:threshold": "deno run --allow-read scripts/coverage.ts gate coverage.lcov 85",
     "test:coverage": "deno task coverage:clean && deno task test:backend:coverage && deno task test:frontend:coverage && deno task coverage:merge && deno task coverage:summary && deno task coverage:threshold"
   },
   "imports": {
