@@ -27,7 +27,7 @@
 
 ## Backend Hooks
 
-Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger, getSettings }` — a `PluginHooks` interface for hook registration, a pre-scoped `Logger` for structured logging, and a curried `getSettings(name?)` that returns the live settings snapshot for `name` (defaults to the calling plugin).
+Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger, getSettings }` — a `PluginHooks` interface for hook registration, a pre-scoped `Logger` for structured logging, and a **zero-arg** `getSettings()` that returns the live settings snapshot for THIS plugin only (backend `getSettings` cannot read other plugins' settings — that is a frontend-only feature).
 
 In addition to `register`, a backend module MAY export:
 
@@ -39,10 +39,13 @@ In addition to `register`, a backend module MAY export:
 | Stage | When Fired | Context Parameters |
 |-------|-----------|-------------------|
 | `prompt-assembly` | During system prompt rendering | `{ previousContext, rawChapters, storyDir, series, name }` |
-| `pre-write` | After LLM response, before file write | `{ message, chapterPath, storyDir, series, name, preContent }` |
-| `post-response` | After LLM response complete | `{ content, storyDir, series, name, rootDir }` |
+| `response-stream` | For each delta chunk during chat / continue-last-chapter writes (NOT plugin-action append/replace) | `{ correlationId, chunk, series, name, storyDir, chapterPath, chapterNumber }` — **mutate `context.chunk`** to transform/redact the streamed text before it is written |
+| `pre-write` | Before opening/truncating a NEW chapter file (chat `write-new-chapter` only) — runs BEFORE any LLM streaming, so the LLM response is NOT yet available | `{ message, chapterPath, storyDir, series, name, preContent }` — set `context.preContent` to a string that will be written to the chapter BEFORE the streamed deltas |
+| `post-response` | After the LLM response is complete and written | `{ content, storyDir, series, name, rootDir, correlationId, chapterNumber, chapterPath, source, pluginName?, appendedTag? }` — `source` is one of `"chat"`, `"continue"`, `"plugin-action"`; `pluginName` and `appendedTag` are set only when `source === "plugin-action"` |
 
-> **Note:** The runtime also defines `response-stream` and `strip-tags` as valid stage names, but they are not currently dispatched by any code path. Plugins registered on these stages will load without error but their handlers will never fire. They exist for potential future use.
+> **Note:** `strip-tags` is a valid stage name in the dispatcher but is not currently dispatched by any code path. Plugins registered on it will load without error but their handlers will never fire.
+
+> **Plugin-action lifecycle (runPluginPrompt):** `append` and `replace` modes do NOT dispatch `pre-write` or `response-stream` (the engine streams to a buffer, then performs the atomic file mutation in one shot). Only `post-response` fires after a successful write, with `source: "plugin-action"`. Discard mode (no `append`/`replace`) dispatches NO backend hooks at all.
 
 ### Registration Pattern
 
@@ -95,15 +98,25 @@ Context is mutable — modify arrays in-place (e.g., `previousContext.length = 0
 
 #### `pre-write`
 
-Runs after the full LLM response is received but before it is written to the chapter file. Use to prepend or modify content before writing.
+Runs ONLY for chat `write-new-chapter` (i.e. starting a brand-new chapter). It fires **before** the LLM streaming begins and before the chapter file is opened — at this point the LLM response is NOT yet available. Use `context.message` (the user prompt) to compute metadata that should be written to the chapter BEFORE the streamed deltas, and assign that to `context.preContent`. The string in `preContent` is written as-is at the start of the chapter file. Use `response-stream` (per-delta) or `post-response` (after completion) when you need the model output.
 
 ```typescript
 hooks.register("pre-write", async (context) => {
   const message = context.message as string;
   if (typeof message === "string" && message.length > 0) {
-    // Prepend content before the LLM response in the chapter file
+    // Prepend metadata before the streamed LLM response in the chapter file
     context.preContent = `<my_tag>\n${message}\n</my_tag>\n\n`;
   }
+}, 100);
+```
+
+#### `response-stream`
+
+Fires once per streamed delta during chat `write-new-chapter` and `continue-last-chapter`. Mutate `context.chunk` to transform/redact text before it is written to the chapter file. NOT dispatched for `runPluginPrompt` append/replace.
+
+```typescript
+hooks.register("response-stream", async (context) => {
+  context.chunk = (context.chunk as string).replace(/badword/gi, "***");
 }, 100);
 ```
 
@@ -222,7 +235,7 @@ Frontend modules are ES modules loaded by the browser. They register synchronous
 | Stage | Mode | Purpose | Context Parameters |
 |-------|------|---------|-------------------|
 | `frontend-render` | sync | Custom tag extraction → placeholder map (BEFORE Markdown parsing) | `{ text, placeholderMap, options, series?, story?, chapterNumber? }` |
-| `chapter:render:after` | sync | Post-process the marked-it token array AFTER Markdown + initial DOMPurify | `{ tokens, rawMarkdown, options }` — story metadata is nested as `ctx.options.series` / `ctx.options.story` / `ctx.options.chapterNumber` |
+| `chapter:render:after` | sync | Post-process the rendered token array (chapter HTML chunks) AFTER Markdown + initial DOMPurify | `{ tokens, rawMarkdown, options }` — story metadata is nested as `ctx.options.series` / `ctx.options.story` / `ctx.options.chapterNumber`. See [`chapter:render:after` Post-Processing](#chapterrenderafter-post-processing--re-sanitization) below for the `RenderToken` shape. |
 | `chapter:dom:ready` | sync | After Vue commits the rendered chapter to the live DOM (DOM nodes available). Fires once on mount and again on every render-epoch change for the same container — handlers must be idempotent | `{ container, tokens, rawMarkdown, chapterIndex, series?, story?, chapterNumber? }` |
 | `chapter:dom:dispose` | sync | Before the chapter container is unmounted. Only fires on actual unmount (chapter switch / story switch / app teardown), NOT between repeated `chapter:dom:ready` events on the same container | `{ container, chapterIndex }` |
 | `chat:send:before` | sync (pipeline) | Transform the user message just before it is sent | `{ message, series, story, mode }` — `mode` is `'send'` or `'resend'`. If a handler returns a `string`, it replaces `ctx.message` for subsequent handlers. |
@@ -234,7 +247,7 @@ Frontend modules are ES modules loaded by the browser. They register synchronous
 - `text` (`string`): Raw LLM output BEFORE Markdown parsing
 - `placeholderMap` (`Map<string, string>`): Map of placeholder → rendered HTML
 - `options` (`object`): `{ isLastChapter, series?, story?, chapterNumber? }`
-- `tokens`: marked-it token array; mutate freely — the dispatcher re-sanitizes any new or `.content`-mutated `html` token via DOMPurify
+- `tokens`: rendered-HTML chunk array (`Array<{ type: 'html', content: string }>` plus rare `vento-error` tokens — see below); mutate freely — the dispatcher re-sanitizes any new or `.content`-mutated `html` token via DOMPurify
 - `container` (`HTMLElement`): The live DOM node holding the rendered chapter (DOM-mutating plugins should clean up via `chapter:dom:dispose` to prevent memory leaks)
 - `chapterIndex` (`number`): 0-based index of the chapter in the loaded chapter list
 
@@ -279,7 +292,17 @@ hooks.register('chat:send:before', (ctx) => {
 
 ### `chapter:render:after` Post-Processing + Re-Sanitization
 
-`chapter:render:after` fires after Markdown parsing and the initial DOMPurify pass. Handlers may mutate `context.tokens` (push new tokens, replace existing ones, or edit `.content`). The dispatcher then re-runs DOMPurify on every `html` token that was added or whose `.content` changed — plugins do not need to sanitize HTML themselves, and untrusted HTML will never reach the DOM even if a plugin produces it.
+`chapter:render:after` fires after Markdown parsing and the initial DOMPurify pass. The token array is **already-rendered HTML chunks**, not markdown-it AST nodes:
+
+```typescript
+type RenderToken =
+  | { type: 'html'; content: string }            // a chunk of post-render HTML
+  | { type: 'vento-error'; data: { ... } };      // an inline error card (rare)
+```
+
+There are NO `text` / `paragraph` / `paragraph_open` tokens — markdown structure has already been collapsed to HTML strings. To inspect or count visible text, run a regex/`DOMParser` over the joined `content` strings, or (preferred) work from `ctx.rawMarkdown` which is the original markdown source.
+
+Handlers may mutate `context.tokens` (push new tokens, replace existing ones, or edit `.content`). The dispatcher then re-runs DOMPurify on every `html` token that was added or whose `.content` changed — plugins do not need to sanitize HTML themselves, and untrusted HTML will never reach the DOM even if a plugin produces it.
 
 ```javascript
 hooks.register('chapter:render:after', (ctx) => {
@@ -300,17 +323,38 @@ Both stages are skipped while the chapter editor textarea is shown (the DOM hold
 
 ```javascript
 const rangesByContainer = new WeakMap();
+const HIGHLIGHT_NAME = 'my-highlight';
 
 hooks.register('chapter:dom:ready', (ctx) => {
-  // ctx.container is the live HTMLElement for the rendered chapter.
-  const ranges = computeHighlightRanges(ctx.container);
+  // ── Idempotent cleanup FIRST, BEFORE any settings/early-return check ──
+  // chapter:dom:ready re-fires on every render-epoch bump for the SAME
+  // container. If we bail early without clearing prior state, stale Range
+  // objects stay registered against the now-stale DOM.
+  const prior = rangesByContainer.get(ctx.container);
+  if (prior) {
+    const hl = CSS.highlights.get(HIGHLIGHT_NAME);
+    if (hl) for (const r of prior) hl.delete(r);
+    rangesByContainer.delete(ctx.container);
+  }
+
+  // Now safe to bail — the container is in a clean state.
+  const settings = hooks.getSettings();
+  if (settings.enabled === false) return;
+
+  const ranges = computeHighlightRanges(ctx.container, settings);
+  if (ranges.length === 0) return;
   rangesByContainer.set(ctx.container, ranges);
-  CSS.highlights.set('my-highlight', new Highlight(...ranges));
+  const existing = CSS.highlights.get(HIGHLIGHT_NAME);
+  if (existing) for (const r of ranges) existing.add(r);
+  else CSS.highlights.set(HIGHLIGHT_NAME, new Highlight(...ranges));
 }, 100);
 
 hooks.register('chapter:dom:dispose', (ctx) => {
+  const prior = rangesByContainer.get(ctx.container);
+  if (!prior) return;
+  const hl = CSS.highlights.get(HIGHLIGHT_NAME);
+  if (hl) for (const r of prior) hl.delete(r);
   rangesByContainer.delete(ctx.container);
-  // Clear named Highlight if no other container still owns ranges.
 }, 100);
 ```
 
@@ -420,7 +464,7 @@ Context (`ctx`):
 | `storyDir` | `string` | Frontend story identifier `"${series}/${name}"` — a relative path-like string, NOT a filesystem path. Use `series` + `name` for backend API calls. |
 | `lastChapterIndex` | `number \| null` | 0-based index of the latest chapter (= `chapters.length - 1`), or `null` if no chapters yet |
 | `runPluginPrompt` | `function` | Auto-curried with this plugin's name. See below. |
-| `notify` | `function` | Same shape as the `notification` hook's `notify` |
+| `notify` | `function` | Action-button-specific notify. Forwards ONLY `title`, `body`, and `level` (where `level` is `'info' \| 'warning' \| 'error'` — `'success'` is NOT supported here, unlike the notification hook's `notify`). `position`, `channel`, and `duration` are dropped. |
 | `reload` | `function` | Triggers `useChapterNav.reloadToLast()` |
 
 `runPluginPrompt(promptFile, opts?)` signature:

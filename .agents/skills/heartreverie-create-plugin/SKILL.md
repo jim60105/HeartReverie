@@ -146,7 +146,7 @@ Usually `promptStripTags` and `displayStripTags` use the same patterns. They dif
 
 ## Step 6: Create Backend Module (if applicable)
 
-For plugins with `backendModule`, create the handler file. Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger, getSettings }` — a `PluginHooks` wrapper, a scoped `Logger`, and a curried `getSettings(name?)`. The same `getSettings` is also present on the `registerRoutes(context)` and `getDynamicVariables(context)` contexts.
+For plugins with `backendModule`, create the handler file. Backend modules register handlers via a context object. The module must export a `register` function that receives `{ hooks, logger, getSettings }` — a `PluginHooks` wrapper, a scoped `Logger`, and a **zero-arg** `getSettings()` (own-plugin only). The same own-plugin `getSettings()` is also present on the `getDynamicVariables(context)` context. `registerRoutes(context)` additionally exposes `saveSettings(values)` (validates against the schema then persists). Backend `getSettings` is NOT cross-plugin — only the frontend `hooks.getSettings(name?)` / `context.getSettings(name?)` can read other plugins' settings.
 
 **JavaScript (`handler.js`):**
 
@@ -176,7 +176,7 @@ export function register({ hooks, logger }: PluginRegisterContext): void {
 }
 ```
 
-For the 3 active hook stages and their context parameters, read `references/hook-api.md`.
+For the active hook stages and their context parameters, read `references/hook-api.md`.
 
 Backend code style: ESM, **double quotes**, semicolons, `async/await`, JSDoc comments. Use `context.logger ?? logger` pattern in hook handlers for request-scoped logging.
 
@@ -223,7 +223,7 @@ Key points:
 | Stage | Mode | When |
 |-------|------|------|
 | `frontend-render` | sync | Custom XML extraction → placeholder map (Markdown not yet parsed) |
-| `chapter:render:after` | sync | Post-process the marked-it token array; new/edited `html` tokens are re-sanitized by DOMPurify. Context: `{ tokens, rawMarkdown, options }` — story metadata lives in `ctx.options.series` / `ctx.options.story` / `ctx.options.chapterNumber`. |
+| `chapter:render:after` | sync | Post-process the rendered token array (chapter HTML chunks); new/edited `html` tokens are re-sanitized by DOMPurify. Context: `{ tokens, rawMarkdown, options }` — story metadata lives in `ctx.options.series` / `ctx.options.story` / `ctx.options.chapterNumber`. **Token shape**: `RenderToken = { type: 'html', content: string } \| { type: 'vento-error', data: ... }` — there are NO markdown-it `text`/`paragraph` tokens here; markdown is already rendered to HTML chunks. To inspect plain text, parse `ctx.rawMarkdown` (the original chapter source) instead of walking tokens. |
 | `chapter:dom:ready` | sync | After Vue commits the rendered chapter to the live DOM. Receives `{ container, tokens, rawMarkdown, chapterIndex, series?, story?, chapterNumber? }`. Fires once on mount and again on every `[tokens, renderEpoch, isEditing]` change — handlers MUST be idempotent (clear prior per-container state at the top). Skipped while the chapter editor is open. |
 | `chapter:dom:dispose` | sync | Only fires when the previous chapter container is unmounted. NOT one-to-one with `chapter:dom:ready` (no dispose between successive ready events on the same container). Use for final unmount cleanup of long-lived references (Highlight ranges, observers). |
 | `chat:send:before` | sync (pipeline) | Before a user message is sent. Context: `{ message, series, story, mode }`. Return a `string` to replace `ctx.message`; return empty string to drop. `ctx.mode` is `'send'` or `'resend'`. |
@@ -255,7 +255,7 @@ Ask the user whether the plugin should expose an action button. If **no**, skip 
 
 - **Button id** (kebab-case, matching `^[a-z0-9-]+$`, unique within the plugin) — e.g. `recompute-state`
 - **Label** (1..40 chars, often emoji + zh-TW text) — e.g. `🧮 重算狀態`
-- **`visibleWhen`** — choose `"last-chapter-backend"` (only on the last chapter while in backend mode; default) or `"backend-only"` (any backend-mode chapter)
+- **`visibleWhen`** — `"last-chapter-backend"` (default; only on the last chapter while in backend mode) or `"backend-only"` (any backend-mode position where the action bar is mounted). NOTE: the action bar itself is only mounted when chat input would render — i.e. `isBackendMode && (isLastChapter || chapters.length === 0)`. So `"backend-only"` does NOT make a button appear on historical chapters; it only bypasses the per-button last-chapter filter inside that already-mounted bar.
 - **Prompt file name** (optional, but typical) — e.g. `recompute.md`. Required when the handler will call `runPluginPrompt`.
 - **`appendTag`** (optional) — XML tag name used when appending the response to the chapter (matching `^[a-zA-Z][a-zA-Z0-9_-]{0,30}$`). Required when the handler passes `{ append: true, ... }` to `runPluginPrompt`.
 
@@ -292,6 +292,14 @@ hooks.register('action-button:click', async (ctx) => {
   // Optional: stale-cache safety net for the universal `enabled` setting.
   if (hooks.getSettings?.().enabled === false) return;
 
+  // Append/replace require an existing chapter file. On a fresh story
+  // (`lastChapterIndex === null`) both modes will reject — bail with a
+  // user-visible warning instead of letting runPluginPrompt throw.
+  if (ctx.lastChapterIndex === null) {
+    ctx.notify({ title: '尚無章節可更新', level: 'warning' });
+    return;
+  }
+
   try {
     await ctx.runPluginPrompt('<prompt-file>.md', {
       append: true,
@@ -307,6 +315,8 @@ hooks.register('action-button:click', async (ctx) => {
       body: err?.message ?? String(err),
       level: 'error',
     });
+    // Do NOT re-throw — the dispatcher always emits its own default
+    // error toast on uncaught throws, which would duplicate this notice.
   }
 }, 100);
 ```
@@ -320,7 +330,7 @@ Action-button click context (`ctx`):
 | `storyDir` | Frontend story identifier formatted as `"${series}/${name}"` — relative path-like string, NOT a filesystem path |
 | `lastChapterIndex` | 0-based index of the latest chapter (= `chapters.length - 1`), or `null` if no chapters yet |
 | `runPluginPrompt(file, opts?)` | Auto-curried with this plugin's name. Returns `{ content, usage, chapterUpdated, chapterReplaced, appendedTag }`. |
-| `notify(opts)` | Same shape as the `notification` hook's `notify` |
+| `notify(opts)` | Action-button-specific notify: forwards ONLY `title`, `body`, `level`. `level` allows `'info' \| 'warning' \| 'error'` (NOT `'success'`); `position`, `channel`, and `duration` are dropped — unlike the broader `notification` hook's `notify`. |
 | `reload()` | Calls `useChapterNav.reloadToLast()` |
 
 `runPluginPrompt` write modes:
@@ -380,7 +390,7 @@ The schema MUST be `type: "object"` with a `properties` record (other shapes are
 }
 ```
 
-Backend handlers read settings via the `getSettings()` helper present on every backend register context: `register(context)`, `registerRoutes(context)`, and `getDynamicVariables(context)` all receive it. Mutations go through `saveSettings(...)` (it validates against the schema before writing). Avoid reading `playground/_plugins/<name>/config.json` directly — only fall back to it as a last-resort legacy path.
+Backend handlers read settings via the `getSettings()` helper present on every backend register context: `register({ hooks, logger, getSettings })`, `registerRoutes(context)`, and `getDynamicVariables(context)` all receive it. Backend `getSettings()` is **zero-arg, own-plugin only** — it cannot read other plugins' settings. Mutations go through `saveSettings(...)` which is exposed ONLY on `registerRoutes(context)` (it validates against the schema before writing); `register()` and `getDynamicVariables()` cannot persist settings. Avoid reading `playground/_plugins/<name>/config.json` directly — only fall back to it as a last-resort legacy path.
 
 Frontend modules read live settings synchronously via `hooks.getSettings(name?)` or `context.getSettings(name?)` (see [Step 7](#step-7-create-frontend-module-if-applicable)). A successful `PUT /api/plugins/:name/settings` broadcasts `plugin-settings:changed`; after a ~50 ms debounce the reader bumps the chapter render epoch, re-running `frontend-render`, `chapter:render:after`, and `chapter:dom:ready` and re-applying `displayStripTags`. `notification` is not re-dispatched on settings change.
 
