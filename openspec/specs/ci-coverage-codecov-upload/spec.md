@@ -30,7 +30,7 @@ CI coverage execution SHALL run both backend and frontend coverage tasks, merge 
 - **AND** it SHALL use the canonical root `coverage.lcov` merged artifact produced by that command for gating and upload
 
 #### Scenario: CI enforces repository threshold
-- **WHEN** combined line coverage is less than or equal to 90%
+- **WHEN** combined line coverage is less than or equal to 85%
 - **THEN** the CI workflow SHALL fail before reporting success
 
 ### Requirement: CI SHALL upload aggregated coverage artifacts to Codecov

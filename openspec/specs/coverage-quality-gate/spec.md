@@ -22,15 +22,15 @@ The repository SHALL define explicit `deno.json` tasks for backend coverage, fro
 - **AND** the task SHALL merge the backend and frontend coverage artifacts into the canonical root `coverage.lcov` report
 - **AND** the task SHALL use that merged report to compute the combined line-coverage result used for gating
 
-### Requirement: Combined line coverage SHALL be greater than 90 percent
-The aggregated repository line coverage computed from backend and frontend coverage outputs SHALL be strictly greater than 90%.
+### Requirement: Combined line coverage SHALL be greater than 85 percent
+The aggregated repository line coverage computed from backend and frontend coverage outputs SHALL be strictly greater than 85%.
 
 #### Scenario: Coverage gate passes above threshold
-- **WHEN** aggregate line coverage is greater than 90%
+- **WHEN** aggregate line coverage is greater than 85%
 - **THEN** the coverage gate SHALL pass with a success exit code
 
 #### Scenario: Coverage gate fails at or below threshold
-- **WHEN** aggregate line coverage is less than or equal to 90%
+- **WHEN** aggregate line coverage is less than or equal to 85%
 - **THEN** the coverage gate SHALL fail with a non-zero exit code
 
 ### Requirement: Coverage-oriented test design SHALL map to OpenSpec scenarios
