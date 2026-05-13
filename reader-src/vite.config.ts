@@ -41,7 +41,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reportsDirectory: "../coverage/frontend",
-      reporter: ["text-summary", "lcovonly"],
+      reporter: ["text-summary", "lcovonly", "json-summary"],
       exclude: ["src/__tests__/setup.ts"],
     },
   },
