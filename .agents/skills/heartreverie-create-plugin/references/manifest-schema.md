@@ -47,7 +47,7 @@
 | `displayStripTags` | `array` | Tags/regex to strip from frontend display |
 | `parameters` | `array` | Custom Vento template parameters exposed to the template editor |
 | `actionButtons` | `array` | Reader-mounted action buttons (each with `id`, `label`, optional `icon`, `tooltip`, `priority`, `visibleWhen`). Renders in `PluginActionBar` between `UsagePanel` and `ChatInput`; clicks dispatch the `action-button:click` frontend hook. See [`hook-api.md`](./hook-api.md#action-button-click-context) for the full click-context contract and [`docs/plugin-system.md`](../../../../docs/plugin-system.md#動作按鈕action-buttons) for the manifest field reference. |
-| `settingsSchema` | `object` | JSON Schema (draft-07 compatible, must be `type: "object"` with a `properties` record) describing user-configurable settings. When present, the system exposes settings endpoints and a settings page in the reader. See [Plugin Settings](#plugin-settings). |
+| `settingsSchema` | `object` | HeartReverie schema dialect describing user-configurable settings (must be `type: "object"` with `properties` AND `x-schema-version: 1`). When present, the system exposes settings endpoints and a settings page in the reader. See [Plugin Settings](#plugin-settings). |
 
 ## Prompt Fragments
 
@@ -166,32 +166,85 @@ The `parameters` array declares custom Vento template parameters that appear in 
 
 ## Plugin Settings
 
-A plugin declares user-configurable settings by adding a `settingsSchema` JSON Schema object to its manifest. The schema MUST be an object schema (`type: "object"` with a `properties` record); other shapes are rejected at load time.
+A plugin declares user-configurable settings by adding a `settingsSchema` object to its manifest. The schema MUST be an object schema (`type: "object"` with a `properties` record) AND MUST declare `x-schema-version: 1` at its root. Any other shape — or any unsupported `x-schema-version` — is rejected at load time.
 
 When `settingsSchema` is present:
 
 - `GET /api/plugins` reports `hasSettings: true` for the plugin.
-- The reader shows a settings tab at `/settings/plugins/<name>` with an auto-generated form.
-- `GET /api/plugins/<name>/settings-schema` returns the schema for the form.
-- `GET /api/plugins/<name>/settings` returns `{ ...defaults from schema, ...saved values }`.
-- `PUT /api/plugins/<name>/settings` validates the body against the schema and writes it to `playground/_plugins/<name>/config.json`. Validation failure returns 400.
+- The reader shows a settings tab at `/settings/plugins/<name>` with an auto-generated form (writer mode only; reader-only deployments respond 404).
+- `GET /api/plugins/<name>/settings-schema` returns the full schema (including every `x-*` keyword, passed through unchanged).
+- `GET /api/plugins/<name>/settings` returns `{ ...defaults from schema, ...saved values }`, with `writeOnly` fields masked to `null` and any `x-previous-names` migration applied in-memory. If the on-disk file violates the current schema, a non-blocking `x-legacy-warnings: ValidationError[]` field is included.
+- `PUT /api/plugins/<name>/settings` validates with two-phase validation (see below) and writes to `playground/_plugins/<name>/config.json`.
+- `POST /api/plugins/<name>/settings/validate` runs validation only, never writes — always 200.
+- `GET /api/plugins/<name>/settings/schema-meta` returns `{ schemaVersion, pathRoots, formats }`.
 
-### Field Type → Frontend Input Mapping
+### Supported Keywords
 
-The settings page picks an input widget per property based on the schema:
+| Category | Keywords |
+|----------|----------|
+| Type | `string`, `number`, `integer`, `boolean`, `array`, `object`, `null` |
+| Numeric | `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf` |
+| String | `minLength`, `maxLength`, `pattern` (ECMAScript regex), `format` |
+| Array | `items`, `minItems`, `maxItems`, `uniqueItems` |
+| Object | `properties`, `required`, `additionalProperties` (boolean only) |
+| Composition | `enum`, `const` |
+| Annotation | `title`, `description` (plain text, **never** Markdown), `default`, `writeOnly` |
 
-| Schema property | Rendered widget |
-|-----------------|------------------|
-| `format: "password"` or `x-input-type: "password"` | password input |
-| `type: "boolean"` | checkbox |
-| `type: "number"` / `type: "integer"` | number input |
-| `enum: [...]` | `<select>` dropdown |
-| `type: "string"` + `x-options-url` | combobox (free text + `<datalist>`) |
-| `type: "array"` + `x-options-url` | multi-combobox (tag chips + `<datalist>`) |
-| `type: "array"` (no `x-options-url`) | tags input (Enter to add, `×` to remove) |
-| any other `type: "string"` | text input |
+The `format` whitelist is exactly `path`, `color`, `url`, `email`, `uuid`. Any other `format` value is silently ignored by the validator. **Model secrets with `writeOnly: true`, NOT a `format` keyword.**
 
-`x-options-url` is a HeartReverie-specific JSON Schema extension. The frontend GETs the URL with passphrase headers and expects a JSON array of strings; on failure the field gracefully degrades to a free-text input. Plugins typically point this at a route they expose via `registerRoutes` (e.g. `/api/plugins/<name>/proxy/sd-models`) so dropdown options reflect live external state.
+### HeartReverie `x-*` Extensions
+
+| Keyword | Purpose |
+|---------|---------|
+| `x-schema-version: 1` | **Mandatory.** Schema dialect version. Phase 1 accepts only `1`. Absent = auto-migrate with a one-time warn log. Other values cause settings to degrade to schema defaults; `PUT` returns 409. |
+| `x-show-when` | Conditional visibility. Shape: `{ field: string, equals \| notEquals \| in: JSONValue \| JSONValue[] }`. `field` MUST be a sibling property in the same object. The property MUST NOT also appear in the parent's `required` array (dead config). Validator ignores this keyword; it is UI-only. |
+| `x-options-url` | `select` / `multi-select` / `combobox` widgets fetch options from this URL with passphrase headers. Response shape: `{ options: [{ value, label }] }`. Failure falls back to declared `enum`. |
+| `x-path-roots` | Narrows `format: "path"` allowlist for one field. **Subset-only** of the hard-coded set (`playground/lore/`, `playground/chapters/`, `playground/_plugins/<pluginName>/`). Empty intersection is rejected at load time. |
+| `x-previous-names: string[]` | Field rename migration. `GET` maps old key → new key in-memory; first successful `PUT` persists the new layout. Cannot collide across two properties. Cannot list the property's own current name. |
+| `x-legacy: true` | Top-level flag. Lets `config.json` keep keys not described by the current schema; they are relocated under a top-level `x-legacy` namespace on next successful PUT. The `x-legacy` namespace is never returned in any HTTP response. |
+
+`writeOnly: true` semantics: `GET` responds with `null` for masked fields; `PUT` short-circuits a `null` value to "keep existing" BEFORE any type check (so the round-trip does not require resending the secret). `""` clears the value; other values are validated and persisted.
+
+### Authoring Rules
+
+- **Always declare `x-schema-version: 1`.** Don't rely on auto-migration.
+- **Plain-text `description` only.** No Markdown, no `x-description-md` variant.
+- **Mark every credential `writeOnly: true`.** Never use `format: "password"` — it is not on the whitelist and would be silently ignored.
+- **Never combine `required` and `x-show-when`** on the same property — load-time rejection.
+- **`x-show-when.field` must be a sibling.** No dotted paths, no `$ref`.
+- **`x-path-roots` only narrows**, never widens. Empty intersection breaks the plugin at load.
+- **Use `enum` for single-choice** (`type: string`); **`type: array, items: { enum: [...] }` for multi-choice**; **`type: array, items: { type: string }` for free-form tags**.
+- **Default the plugin's own sandbox** in `x-path-roots`: `["playground/_plugins/<pluginName>/"]` rather than relying on the implicit hard-coded list.
+
+### Widget Resolution
+
+The reader's `<SchemaField>` resolves a widget per property via `WidgetRegistry`. Resolution uses priority-based matching; the highest non-zero match wins. Built-in widgets (high → low priority):
+
+| Widget | Match |
+|--------|-------|
+| `multi-select` | `type: array` + `items.enum` OR `items.x-options-url` |
+| `repeater` | `type: array` + `items.type: object` |
+| `path-picker` | `format: "path"` |
+| `range-number` | `type: number\|integer` + both `minimum` AND `maximum` |
+| `masked-secret` | `writeOnly: true` |
+| `combobox` | `type: string` + `x-options-url` (no `enum`) |
+| `select` | `type: string` + `enum` |
+| `color` | `format: "color"` |
+| `tags` | `type: array` + `items.type: string` (no `enum`, no object/array items) |
+| `object-fieldset` | `type: object` |
+| `checkbox` | `type: boolean` |
+| `number` | `type: number\|integer` |
+| `text` | fallback |
+
+**Plugins cannot register custom widgets in phase 1.** Future phases may expose a widget registry API; for now, design your schema around the built-in widget set.
+
+### Two-Phase Validation (`_changedPaths`)
+
+`PUT` body may include a top-level reserved `_changedPaths: string[]` field (stripped before persisting). The server **always** also computes a diff between the incoming body and the on-disk `config.json`. The blocking scope is the union of the actual diff paths and the provided `_changedPaths`. Errors at-or-under the blocking scope are blocking (400); other errors degrade to non-blocking warnings (200 + `warnings`). The frontend uses this to let the user save Field A even if Field B already had a pre-existing schema violation on disk.
+
+### Error Envelope
+
+Both 200 and 400 responses share the shape `{ errors: ValidationError[], warnings: ValidationError[] }`. `ValidationError` = `{ path: "items[0].name", keyword: "pattern", messageKey: "pattern", params: {...} }`. `messageKey` is for client-side i18n; the project ships a zh-TW table for every emitted key.
 
 ### Example: settings-aware plugin
 
@@ -204,16 +257,18 @@ The settings page picks an input widget per property based on the schema:
   "backendModule": "./handler.ts",
   "settingsSchema": {
     "type": "object",
+    "x-schema-version": 1,
     "properties": {
       "endpoint": {
         "type": "string",
         "title": "WebUI Endpoint",
+        "format": "url",
         "default": "http://localhost:7860"
       },
       "apiKey": {
         "type": "string",
         "title": "API Key",
-        "format": "password"
+        "writeOnly": true
       },
       "model": {
         "type": "string",
@@ -230,6 +285,12 @@ The settings page picks an input widget per property based on the schema:
         "type": "array",
         "title": "Negative Prompt Keywords",
         "items": { "type": "string" }
+      },
+      "savePath": {
+        "type": "string",
+        "title": "Save Directory",
+        "format": "path",
+        "x-path-roots": ["playground/_plugins/sd-webui-image-gen/"]
       },
       "enabled": { "type": "boolean", "default": true }
     }

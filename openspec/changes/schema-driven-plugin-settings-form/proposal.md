@@ -1,6 +1,6 @@
 ## Why
 
-Plugin authors who want a richer settings UI today have to either (a) ship their own Vue component (not possible for vanilla-ES-module plugins under our `register(hooks)` contract) or (b) accept the seven hard-coded widgets baked into `PluginSettingsPage.vue`. Meanwhile the backend `#validateAgainstSchema` only enforces top-level `required` + bare `typeof` checks: documented bounds like `state.maxDiffEntries.minimum=50` are silently ignored, and `dialogue-colorize.enabledQuoteStyles` items are not validated against their declared `items.enum`. The result is a "schema-shaped" contract that neither side honours.
+Plugin authors who want a richer settings UI today have to either (a) ship their own Vue component (not possible for vanilla-ES-module plugins under our `register(hooks)` contract) or (b) accept the seven hard-coded widgets baked into `PluginSettingsPage.vue`. Meanwhile the backend `#validateAgainstSchema` only enforces top-level `required` + bare `typeof` checks: documented bounds like `state.maxDiffEntries.minimum=50` are silently ignored, and `scene-info-sidebar.visibleFields` items are not validated against their declared `items.enum`. The result is a "schema-shaped" contract that neither side honours.
 
 This change converts the existing lightweight schema mechanism into a real schema-driven form engine: a strict-enough backend validator paired with a recursive `<SchemaField>` Vue renderer fed from a widget registry. Plugin authors gain ~10 new widgets (select, multi-select, repeater, nested fieldset, color, masked-secret, file/path picker, range-bounded number, x-show-when conditional visibility, writeOnly placeholder) without writing a single Vue component, while engine-side enforcement finally matches the schemas plugins already declare.
 
@@ -20,7 +20,7 @@ This change converts the existing lightweight schema mechanism into a real schem
 - `x-previous-names: string[]` keyword added: on GET, if the legacy key exists and the new key doesn't, value is silently migrated; subsequent PUT clears the legacy key. Dropped-field values are preserved under an `x-legacy` namespace inside the on-disk `config.json`.
 - `PluginSettingsPage.vue` UI: replace the single "儲存設定" button with `儲存 / 取消 / 重設為預設值`, an "unsaved changes" badge derived from `originalSettings` vs `settings`, and a collapsible diff panel.
 - Settings UI route (`/settings/plugins/*`) becomes **writer-mode-only**. Reader-mode hits the route → 404/redirect. The passphrase middleware on the API stays unchanged (defence-in-depth).
-- Demo migration: `dialogue-colorize.enabledQuoteStyles` switches from the `tags` widget to the new `multi-select` widget purely via registry resolution — **no `plugin.json` edits**, no schema changes.
+- Demo migration: `scene-info-sidebar.visibleFields` switches from the `tags` widget to the new `multi-select` widget purely via registry resolution — **no `plugin.json` edits**, no schema changes.
 - New author-facing doc `docs/plugin-system/settings-schema.md` (the keyword reference, `x-show-when` cookbook, allowlist semantics, `writeOnly`/`x-previous-names`/`x-legacy` lifecycle, writer-only UI exposure note).
 
 ## Capabilities
@@ -43,7 +43,7 @@ This change converts the existing lightweight schema mechanism into a real schem
 - **Backend routes (HeartReverie/writer/routes/plugin-settings.ts)**: error response reshape; two new routes; `_changedPaths` partial-strict + `writeOnly` null-unchanged logic.
 - **Frontend (HeartReverie/reader-src/src/components/)**: `PluginSettingsPage.vue` shrinks dramatically; new `components/plugin-settings/` directory with `<SchemaField>`, `WidgetRegistry`, and one Vue SFC per built-in widget kind. Reader router gains a writer-only guard for `/settings/plugins/*`.
 - **No `HeartReverie_Plugins/` changes** — out of scope.
-- **Built-in plugin manifests (HeartReverie/plugins/\*/plugin.json)**: behavior change only — `dialogue-colorize.enabledQuoteStyles` rendering swaps from `tags` to `multi-select` via registry resolution. No manifest edits. A snapshot test guards byte-identity for the other 13 manifests.
+- **Built-in plugin manifests (HeartReverie/plugins/\*/plugin.json)**: behavior change only — `scene-info-sidebar.visibleFields` rendering swaps from `tags` to `multi-select` via registry resolution. No manifest edits. A snapshot test guards byte-identity for the other 13 manifests.
 - **On-disk `playground/_plugins/<plugin>/config.json`**: format unchanged, but the file may grow an `x-legacy` namespace when fields are dropped between versions.
 - **Documentation**: new `docs/plugin-system/settings-schema.md`; release notes call out the three BREAKING items.
 - **Tests**: new `tests/writer/lib/schema_validator_test.ts`, `tests/writer/lib/schema_validator_legacy_compat_test.ts`, expansion of `tests/writer/routes/plugin_settings_test.ts`, per-widget Vitest specs under `reader-src/src/components/plugin-settings/__tests__/`, and the AGENTS-mandated podman smoke (`scripts/podman-build-run.sh` + `curl` round-trips against a `tests/fixtures/plugins/schema-driven-demo/` fixture).
