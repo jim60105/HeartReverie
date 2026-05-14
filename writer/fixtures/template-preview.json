@@ -1,0 +1,19 @@
+{
+  "series_name": "示例系列",
+  "story_name": "示例故事",
+  "user_input": "我看向窗外。",
+  "isFirstRound": false,
+  "previous_context": [
+    "在那個雨夜的盡頭，旅人推開了客棧的門。",
+    "店主端來一杯熱茶，欲言又止。"
+  ],
+  "plugin_fragments": [],
+  "lore_all": "旅人：身分不明的劍客。\n店主：年邁但精神矍鑠。\n山中客棧，秋雨綿綿。",
+  "lore_tags": ["character", "scenario"],
+  "lore_character": "旅人：身分不明的劍客。\n店主：年邁但精神矍鑠。",
+  "lore_scenario": "山中客棧，秋雨綿綿。",
+  "pluginVariables": {
+    "think_before_reply": "（此為示例 think_before_reply 內容）",
+    "start_hints": "（此為示例 start_hints 內容）"
+  }
+}

@@ -18,7 +18,7 @@ import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import {
   createSafePath,
-  verifyPassphrase,
+      verifyPassphrase,
 } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import type { Hono } from "@hono/hono";
@@ -74,7 +74,8 @@ function buildApp(playgroundDir: string): Hono {
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
     buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    verifyPassphrase,
+    templateEngine: null,
+      verifyPassphrase,
   } as AppDeps);
 }
 

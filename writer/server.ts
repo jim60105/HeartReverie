@@ -44,7 +44,8 @@ await loadThemes(config.THEME_DIR);
 
 // ── Build dependency graph ──────────────────────────────────────
 const safePath = createSafePath(config.PLAYGROUND_DIR);
-const { renderSystemPrompt } = createTemplateEngine(pluginManager);
+const templateEngine = createTemplateEngine(pluginManager);
+const { renderSystemPrompt } = templateEngine;
 const { buildPromptFromStory, buildContinuePromptFromStory } = createStoryEngine(pluginManager, safePath, renderSystemPrompt, hookDispatcher);
 
 const app = createApp({
@@ -55,6 +56,7 @@ const app = createApp({
   buildPromptFromStory,
   buildContinuePromptFromStory,
   verifyPassphrase,
+  templateEngine,
 });
 await initPluginRoutes(app);
 registerSpaFallback(app, config);

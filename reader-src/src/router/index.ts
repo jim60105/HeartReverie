@@ -5,6 +5,7 @@ const MainLayout = () => import("@/components/MainLayout.vue");
 const SettingsLayout = () => import("@/components/SettingsLayout.vue");
 const ToolsLayout = () => import("@/components/ToolsLayout.vue");
 const PromptEditorPage = () => import("@/components/PromptEditorPage.vue");
+const TemplateEditorPage = () => import("@/components/TemplateEditorPage.vue");
 const LoreCodexPage = () => import("@/components/lore/LoreCodexPage.vue");
 const LlmSettingsPage = () => import("@/components/LlmSettingsPage.vue");
 const ThemeSettingsPage = () => import("@/components/ThemeSettingsPage.vue");
@@ -22,6 +23,12 @@ export const settingsChildren: RouteRecordRaw[] = [
     name: "settings-prompt-editor",
     component: PromptEditorPage,
     meta: { title: "編排器", category: "general" },
+  },
+  {
+    path: "template-editor",
+    name: "settings-template-editor",
+    component: TemplateEditorPage,
+    meta: { title: "模板編輯器", category: "general" },
   },
   {
     path: "lore",

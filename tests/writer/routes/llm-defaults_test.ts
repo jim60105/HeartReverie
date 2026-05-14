@@ -74,7 +74,8 @@ function createTestApp(): Hono {
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
     buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    verifyPassphrase,
+    templateEngine: null,
+      verifyPassphrase,
   } as AppDeps);
 }
 
@@ -174,7 +175,8 @@ Deno.test({
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
         buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-        verifyPassphrase,
+        templateEngine: null,
+      verifyPassphrase,
       });
       const res = await app.fetch(
         new Request("http://localhost/api/llm-defaults", {

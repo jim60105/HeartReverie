@@ -564,11 +564,14 @@ Deno.test("PluginManager", async (t) => {
         const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
         await pm.init();
 
+        // BREAKING: a plugin whose fragment is unreadable during init is removed
+        // entirely (validatePluginFragments runs before backend loading).
         const pv = await pm.getPromptVariables();
         assertEquals(pv.fragments.length, 0);
+        assertEquals(pm.hasPlugin("miss-frag-plugin"), false);
         assertTrue(
-          warnStub.calls.some((c) =>
-            String(c.args[0]).includes("Failed to read prompt fragment")
+          errorStub.calls.some((c) =>
+            String(c.args[0]).includes("Plugin fragment file unreadable")
           ),
         );
       });

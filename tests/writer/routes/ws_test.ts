@@ -110,7 +110,8 @@ Deno.test({ name: "ws routes", sanitizeOps: false, sanitizeResources: false, fn:
       isFirstRound: true,
     }) as unknown as BuildPromptResult,
     buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    verifyPassphrase,
+    templateEngine: null,
+      verifyPassphrase,
   } as AppDeps);
 
   const server = Deno.serve({ port: 0, onListen: () => {} }, app.fetch);

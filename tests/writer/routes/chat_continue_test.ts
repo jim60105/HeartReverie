@@ -109,7 +109,8 @@ function makeDeps(
         chapters: [],
       })) as unknown as AppDeps["buildPromptFromStory"],
     buildContinuePromptFromStory,
-    verifyPassphrase,
+    templateEngine: null,
+      verifyPassphrase,
   } as AppDeps;
 }
 

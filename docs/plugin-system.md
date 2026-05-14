@@ -189,6 +189,27 @@ export async function getDynamicVariables({
 
 片段檔案路徑經過 `path.resolve()` 後，必須仍在 plugin 目錄內部。嘗試透過 `../` 讀取 plugin 目錄外部的檔案會被攔截並跳過。
 
+### 在 Template Editor 中為唯讀（read-only）
+
+Plugin 的 `promptFragments` 檔案在 `/settings/template-editor` 內**永遠是唯讀**。檔案樹會把這些節點標上「唯讀」徽章，編輯器不顯示存檔按鈕。
+
+後端 `PUT /api/templates` 收到 `templatePath` 以 `plugin:` 起頭時直接回 **403**，不提供「另存」或 fork-then-overlay。Plugin 作者必須在自家 plugin 的 source repository 中修改片段檔，並重新打包 plugin image 才能生效。
+
+> [!IMPORTANT]
+> **BREAKING CHANGE — Plugin 載入時的 SSTI 強制驗證。**
+>
+> `PluginManager.init()` 在**註冊任何 hook、settings、片段之前**，會對每個 plugin 的 `promptFragments[].file` source 呼叫 `validateTemplate()`。若片段內容含有 `{{ set ... }}`、`{{ /set }}`、`{{ include ... }}`，或任何 `{{> jsExpression }}` 等非白名單 token，該 plugin 會載入失敗（log 等級 `error`，不註冊 hook／settings／fragment），但**不影響**其他兄弟 plugin。
+>
+> 縱深防禦：`renderSystemPrompt()` 在每次組合 fragment 前會再 validate 一次，攔截「載入後檔案被外部編輯」或「runtime 動態組裝出 SSTI 字串」的情況；單一片段驗證失敗只會跳過該片段（log `warn`），不影響其餘片段組合。
+>
+> **遷移建議**：把片段內的 `set` / `include` 改寫為具名變數注入。
+>
+> - 若原本以 `include` 把外部 Markdown 拉進來，改為在 manifest `promptFragments` 直接宣告該檔案並指定 `variable`，模板層只剩 `{{ variable_name }}` 插值。
+> - 若原本以 `set` 暫存中間結果，改在後端 `getDynamicVariables()` 中組裝好字串後以動態變數回傳。
+> - 若需要視條件提供不同片段，仍可在 `getDynamicVariables()` 中以 JavaScript 決定變數值，再用模板的 `{{ if ... }}` 控制是否插值。
+>
+> 詳細模板層語法限制請見 [Prompt 模板系統][prompt-template]。
+
 ### 目前的 plugin 變數
 
 以下是所有內建 plugin 提供的模板變數：

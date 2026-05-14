@@ -66,7 +66,8 @@ text-main = "#333"
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
     buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    verifyPassphrase,
+    templateEngine: null,
+      verifyPassphrase,
   } as AppDeps);
 }
 
