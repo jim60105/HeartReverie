@@ -67,7 +67,8 @@ Deno.test({ name: "GET /api/auth/verify", sanitizeOps: false, sanitizeResources:
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as import("../../../writer/types.ts").BuildPromptResult,
     buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    verifyPassphrase,
+    templateEngine: null,
+      verifyPassphrase,
   } as AppDeps);
 
   await t.step("returns { ok: true }", async () => {

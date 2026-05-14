@@ -64,6 +64,7 @@
   --accent-inset: rgba(255, 100, 120, 0.1);
   --accent-subtle: rgba(180, 30, 60, 0.08);
   --accent-solid: #b41e3c;
+  --text-on-accent: #fff;
 
   /* Reading overlay */
   --reading-tint: rgba(29, 33, 40, 0.9);

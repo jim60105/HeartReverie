@@ -79,7 +79,8 @@ async function setupApp(
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
     buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    verifyPassphrase,
+    templateEngine: null,
+      verifyPassphrase,
   } as AppDeps);
 
   return { app, tmpDir };
@@ -267,6 +268,7 @@ Deno.test({ name: "export routes", sanitizeOps: false, sanitizeResources: false,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
       buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+      templateEngine: null,
       verifyPassphrase,
     } as AppDeps);
 

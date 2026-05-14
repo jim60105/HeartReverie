@@ -170,6 +170,10 @@ npx skills add https://github.com/jim60105/HeartReverie -s heartreverie-create-p
 - **快速新增**（`/tools/new-series`）：以單一表單建立新系列／故事，並可選擇性同步建立角色 lore 檔與世界篇章 lore 檔。
 - **ST 角色卡轉換工具**（`/tools/import-character-card`）：解析 SillyTavern V2/V3 PNG 角色卡，將欄位轉為可編輯表單後寫入故事的 `_lore/` 範圍。
 
+## ✏️ Template Editor
+
+`/settings/template-editor` 是瀏覽器內的 Vento 模板 lint／preview／編輯工具，可即時驗證 `system.md`、plugin `promptFragments`（唯讀）、與三層典籍篇章；CodeMirror 6 編輯器附 Vento 自動完成，並提供三種 preview fixture mode（`default` / `inline` / `current`）。寫入採 atomic write + `.bak` 備份。完整說明見 [`docs/prompt-template.md` 的 Template Editor 章節](docs/prompt-template.md#template-editor)。
+
 ## 🧪 測試
 
 ```bash

@@ -131,6 +131,14 @@ export interface AppDeps {
   readonly buildPromptFromStory: BuildPromptFn;
   readonly buildContinuePromptFromStory: BuildContinuePromptFn;
   readonly verifyPassphrase: MiddlewareHandler;
+  /**
+   * Vento template engine handle (created by `createTemplateEngine`). Exposed
+   * on `AppDeps` so the templates route can call `ventoEnv.compile()` /
+   * `runString()` directly without re-instantiating the engine. Always
+   * populated by `server.ts`; tests that mock `AppDeps` can leave it `null`
+   * when they don't exercise the templates route.
+   */
+  readonly templateEngine: TemplateEngine | null;
 }
 
 /** Plugin manifest schema parsed from plugin.json. */

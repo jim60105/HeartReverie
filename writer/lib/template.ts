@@ -189,6 +189,21 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
     const renderedPluginVariables: Record<string, string> = { ...pluginVars.variables };
     for (const [name, value] of Object.entries(renderedPluginVariables)) {
       if (typeof value !== "string" || !value.includes("{{")) continue;
+      // Depth-defense SSTI revalidation: catch fragments that became unsafe
+      // between plugin load and now (e.g. on-disk edit, hot-swap). On
+      // failure skip this fragment with a warn log, mirroring
+      // PluginManager.getPromptVariables() behaviour.
+      const sstiErrors = validateTemplate(value);
+      if (sstiErrors.length > 0) {
+        const meta = pluginVars.metadata?.[name];
+        log.warn(`Plugin fragment variable '${name}' failed SSTI revalidation, skipping render`, {
+          variable: name,
+          plugin: meta?.plugin ?? "unknown",
+          file: meta?.file ?? "unknown",
+          expressions: sstiErrors,
+        });
+        continue;
+      }
       try {
         const result = await ventoEnv.runString(value, { ...fragmentContext });
         renderedPluginVariables[name] = result.content;

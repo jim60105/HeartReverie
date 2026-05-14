@@ -80,7 +80,8 @@ Deno.test({ name: "chat routes", sanitizeOps: false, sanitizeResources: false, f
       chapters: [],
     }) as unknown as BuildPromptResult,
     buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    verifyPassphrase,
+    templateEngine: null,
+      verifyPassphrase,
   } as AppDeps);
 
   try {
@@ -186,6 +187,7 @@ Deno.test({ name: "chat routes – extended coverage", sanitizeOps: false, sanit
         chapters: [],
       }))) as AppDeps["buildPromptFromStory"],
       buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+      templateEngine: null,
       verifyPassphrase,
       ...overrides,
     } as AppDeps;

@@ -69,6 +69,7 @@ Deno.test({
         userMessageText: "",
         assistantPrefill: "",
       })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+      templateEngine: null,
       verifyPassphrase,
     } as AppDeps);
 

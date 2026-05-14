@@ -2,6 +2,10 @@
 
 本專案使用 [Vento](https://vento.js.org/) 模板引擎來組合 LLM 的系統提示詞（system prompt）。Vento 是輕量級的 JavaScript 模板引擎，語法簡潔直觀，適合用於渲染 Markdown 格式的提示詞模板。
 
+> [!WARNING]
+> **Prompt 模板不支援 Vento 的 `set` / `/set` / `include` 區塊指令，也不接受 `{{>` 起頭的 JavaScript 表達式逸脫。**
+> 所有變數必須由引擎、Plugin 或典籍系統（Lore Codex）注入。如需動態內容，請使用 plugin 後端模組的 `getDynamicVariables()`、`promptFragments`，或在主模板中使用具名變數。前述 token 會被 `validateTemplate()` 以 `vento.unsafe-expression` 攔截，無論是 PUT 儲存、Template Editor lint，或執行期渲染都會被拒絕。
+
 ## 模板架構概覽
 
 主模板位於專案根目錄的 `system.md`，由使用者自行撰寫。模板系統負責將核心變數與外掛提供的變數一併傳入 Vento 引擎進行渲染。外掛如何提供變數，參見[外掛系統文件][plugin-system]。
@@ -165,15 +169,30 @@
 
 所有錯誤皆透過 `buildVentoError()` 包裝為 RFC 9457 Problem Details，並由 Prompt Editor 的 `VentoErrorCard` 顯示對應的修正建議。
 
-### 設定區域變數與載入子模板
+### 區域變數與子模板的替代寫法
 
-使用 `set` 搭配 `include` 將子模板內容存入區域變數，並透過 `|> trim` 管道過濾器去除前後空白。`-` 符號用於消除標籤本身產生的多餘空行：
+Vento 的 `set` / `/set` 與 `include` 區塊指令在本專案中**已被 SSTI 白名單封鎖**，無法在 `system.md`、plugin `promptFragments`、或典籍篇章中使用。需要等同功能時請依下列模式改寫：
 
-```vento
-{{- set my_var |> trim -}}{{- include "./my-template.md" -}}{{- /set -}}
+- **想把一段 Markdown 抽出來重用** → 由 plugin 在 `promptFragments` 宣告該檔案，並指定 `variable` 名稱。模板中直接以 `{{ my_instructions }}` 引用即可，不必透過外部子模板載入。
+- **想根據資料動態組裝字串** → 由 plugin 後端模組匯出 `getDynamicVariables()`，把計算好的字串以具名變數回傳，模板僅做純插值。
+- **想在模板中暫存中間結果（trim、串接等）** → 改在資料來源端（plugin 變數產生時）處理；模板層僅允許 `|> trim` 之類的管道過濾器，不允許自訂中間變數。
+
+例如，過去可能在模板中以 Vento `set` + `include` 把 `./snippet.md` 讀進 `my_var` 再插值的片段，現在應改為：
+
+```jsonc
+// plugin.json
+{
+  "promptFragments": [
+    { "file": "./snippet.md", "variable": "my_var", "priority": 100 }
+  ]
+}
 ```
 
-之後可在模板中透過 `{{ my_var }}` 引用該變數的內容。
+```vento
+{{ my_var }}
+```
+
+引擎會在渲染前讀取 `snippet.md` 並以 `my_var` 注入模板，行為與原本 `set` + `include` 等價，但不再經過樣板層的執行期表達式。
 
 ## 在 Prompt Editor UI 中編輯模板
 
@@ -331,5 +350,74 @@ const result = await ventoEnv.runString(systemTemplate, {
 ### 錯誤處理
 
 若某篇篇章的 Vento 語法有誤，該篇章會回退為原始內容，不會影響其他篇章或整體模板的渲染。
+
+## Template Editor
+
+`/settings/template-editor` 是 writer 模式內的 Vento 模板 lint／preview／編輯工具，與 `/settings/prompt-editor`（編輯 chat 訊息卡片）職責互補：**Prompt Editor 編 message 卡片，Template Editor 編模板原始碼**。
+
+頁面採用三欄佈局：
+
+1. **左欄 — 檔案樹**：列出可編輯的 `system.md`、所有 plugin 的 `promptFragments[].file`、以及三層 lore 篇章（global／series／story）。Plugin fragment 節點旁顯示 **唯讀** 徽章。
+2. **中欄 — CodeMirror 6 編輯器**：內建 Vento tokenizer 與自動完成（從 `VENTO_HELPERS` const 取得 filter 列表）。`set` / `/set` / `include` / `{{> jsExpression }}` token 會被標為紅色錯誤，並顯示「使用 `{{> include }}` 是不允許的；改用主模板具名變數、plugin promptFragments 或 `getDynamicVariables()` 注入內容」提示。
+3. **右欄 — 預覽**：對主模板與 plugin 片段以 `PromptPreview.vue` 渲染最終 messages 陣列；對 lore 條目則回退為純 Markdown 區塊。
+
+### Lint diagnostics
+
+每次編輯後，前端會把當前緩衝送到 `POST /api/templates/lint`，後端走 `ventoEnv.compile()` AST 路徑收集：
+
+- `vento.unsafe-expression`：碰到 `set` / `/set` / `include` / `{{> jsExpression }}` 等被白名單拒絕的 token。
+- `vento.unknown-variable`：AST walk 發現引用了不在 catalog 內的變數名稱。
+- `vento.message-nested` / `vento.message-invalid-role`：`{{ message }}` 多訊息標籤的編譯期錯誤。
+
+### Preview 模式（三種 fixture mode）
+
+`POST /api/templates/preview` 支援三種 fixture mode：
+
+| Mode | 來源 | 用途 |
+|------|------|------|
+| `default` | `writer/fixtures/template-preview.json` 內建固定 fixture | 純函式渲染，不接 plugin pipeline、不讀 story 目錄。最快、最無副作用，適合通用迭代 |
+| `inline` | 前端傳入自訂 fixture 物件 | 想模擬特定變數值（例如 `lore_*` 內容）時使用 |
+| `current` | 真實 plugin pipeline + 指定的 series／story 目錄 | 想看「實際上會送到 LLM 的內容」時使用；會跑完整 `buildPromptFromStory()` 流程 |
+
+### 寫入流程（atomic + backup）
+
+`PUT /api/templates` 對 `system.md` 與 lore 篇章採 atomic write：
+
+1. 先呼叫 `validateTemplate()`；含非白名單 token → 回 `422`。
+2. `Deno.lstat` 拒收 symlink target；若已存在則先複製到 `<target>.bak`（若 `.bak` 也存在則改用 `.bak.<timestamp>`）。
+3. 寫入暫存檔 `<parent>/.<basename>.tmp.<uuid>`。
+4. `Deno.rename` 至最終路徑（同 device 內 atomic）。
+
+任何環節失敗都會在 `try/finally` 中清掉暫存檔，原始檔案不會被破壞。
+
+### Plugin fragment 為何 read-only？
+
+Plugin 的 `promptFragments` 一律 read-only，須於 plugin 的 source repository 編輯。`PUT /api/templates` 收到 `templatePath` 以 `plugin:` 起頭時直接回 `403`，且不提供「另存」或 fork-then-overlay。這是為了避免使用者編輯後與 plugin image 內容漂移、引起難以追蹤的行為差異。Plugin 作者應在自家 repo 中修改片段原始檔，並重新打包 plugin image。
+
+## Lore 篇章可在 Template Editor 中編輯
+
+典籍篇章（`.md` 檔，位於 `playground/_lore/`、`playground/<series>/_lore/`、或 `playground/<series>/<story>/_lore/`）可在 Template Editor 中編輯。檔案樹會依 scope 分組列出三類條目，內部路徑形式如下：
+
+| 路徑格式 | Scope | 實際檔案位置 |
+|----------|-------|--------------|
+| `lore:global:<rel>` | 全域 | `${PLAYGROUND_DIR}/_lore/<rel>` |
+| `lore:series:<series>:<rel>` | 系列 | `${PLAYGROUND_DIR}/<series>/_lore/<rel>` |
+| `lore:story:<series>:<story>:<rel>` | 故事 | `${PLAYGROUND_DIR}/<series>/<story>/_lore/<rel>` |
+
+所有路徑解析後都會經過 `realpath` 與目錄包含檢查，並拒收 symlink 與不合法的 `<series>`／`<story>` 段。
+
+### 受限的變數 catalog
+
+Lore 篇章在引擎中**早於** plugin fragment 渲染，因此 lint catalog 只包含「第一輪 snapshot」變數：
+
+- 所有 `lore_*` 變數（`lore_all`、`lore_<tag>`、`lore_tags`）
+- `series_name`
+- `story_name`
+
+**不包含** plugin 提供的任何變數（無論是 `promptFragments` 具名變數或 `getDynamicVariables()` 動態變數），也不包含 `user_input`、`previous_context`、`plugin_fragments`、`isFirstRound`。在 lore 篇章中引用 plugin 變數會被標為 `vento.unknown-variable`。
+
+### Preview 模式
+
+對 lore 條目，`POST /api/templates/preview` 回傳 `kind: "markdown"` 與渲染後的字串，**不會**回傳 `messages[]` 陣列——lore 篇章本身不參與多訊息組裝，僅作為被注入到 `lore_*` 變數中的純文字內容。
 
 [plugin-system]: ./plugin-system.md

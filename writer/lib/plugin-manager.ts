@@ -14,6 +14,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { isAbsolute, join, resolve, SEPARATOR } from "@std/path";
+import { isPathContained } from "./path-safety.ts";
+import { validateTemplate } from "./template.ts";
 import type {
   ActionButtonDescriptor,
   ActionButtonVisibility,
@@ -61,10 +63,7 @@ export function isValidPluginName(name: unknown): name is string {
   );
 }
 
-// Verify resolved path stays within a base directory
-function isPathContained(base: string, resolved: string): boolean {
-  return resolved === base || resolved.startsWith(base + SEPARATOR);
-}
+// Verify resolved path stays within a base directory (re-exported from path-safety.ts).
 
 // Escape special regex characters in a string
 function escapeRegex(str: string): string {
@@ -148,6 +147,13 @@ export class PluginManager {
       }
     }
 
+    // BREAKING: Validate every promptFragment file source against the SSTI
+    // whitelist BEFORE registering any hooks or loading any backend module.
+    // A plugin with an unsafe fragment is removed from #plugins entirely so
+    // it leaves no observable side effects (no hooks, no settings, no
+    // fragment variables, no introspection entries).
+    await this.validatePluginFragments();
+
     // Load backend modules for all registered plugins
     for (const [name, entry] of this.#plugins) {
       if (entry.manifest.backendModule) {
@@ -159,6 +165,64 @@ export class PluginManager {
       count: this.#plugins.size,
       plugins: [...this.#plugins.keys()],
     });
+  }
+
+  /**
+   * Validate every plugin's `promptFragments[].file` source against the SSTI
+   * whitelist (`validateTemplate()`). Plugins whose fragments contain
+   * forbidden tokens (e.g. `{{ set }}`, `{{ include }}`, `{{> jsExpr }}`)
+   * are removed from `#plugins` so they leave no observable side effects.
+   *
+   * MUST be invoked before hook registration / backend module loading.
+   * Idempotent — safe to call again after `#plugins` mutates.
+   */
+  async validatePluginFragments(): Promise<void> {
+    const toRemove: string[] = [];
+    for (const [name, entry] of this.#plugins) {
+      const manifest = entry.manifest;
+      if (!Array.isArray(manifest.promptFragments)) continue;
+
+      for (const frag of manifest.promptFragments) {
+        if (!frag.file) continue;
+        const filePath = resolve(entry.dir, frag.file);
+        if (!isPathContained(entry.dir, filePath)) {
+          log.error("Plugin fragment path escapes plugin directory — removing plugin", {
+            plugin: name,
+            file: frag.file,
+          });
+          toRemove.push(name);
+          break;
+        }
+
+        let source: string;
+        try {
+          source = await Deno.readTextFile(filePath);
+        } catch (err: unknown) {
+          log.error("Plugin fragment file unreadable during SSTI validation — removing plugin", {
+            plugin: name,
+            file: frag.file,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          toRemove.push(name);
+          break;
+        }
+
+        const errors = validateTemplate(source);
+        if (errors.length > 0) {
+          log.error("Plugin fragment failed SSTI validation — removing plugin", {
+            plugin: name,
+            file: frag.file,
+            expressions: errors,
+          });
+          toRemove.push(name);
+          break;
+        }
+      }
+    }
+
+    for (const name of toRemove) {
+      this.#plugins.delete(name);
+    }
   }
 
   /**
@@ -992,6 +1056,20 @@ export class PluginManager {
           continue;
         }
 
+        // Depth-defense: revalidate fragment source against SSTI whitelist
+        // every read (catches on-disk edits between plugin load and current
+        // call). On failure, skip this fragment with a warn log; the plugin
+        // remains active for its other fragments.
+        const ssti = validateTemplate(content);
+        if (ssti.length > 0) {
+          log.warn("Plugin fragment failed SSTI revalidation — skipping fragment", {
+            plugin: manifest.name,
+            file: frag.file,
+            expressions: ssti,
+          });
+          continue;
+        }
+
         const priority = typeof frag.priority === "number"
           ? frag.priority
           : 100;
@@ -1031,7 +1109,24 @@ export class PluginManager {
   async getDynamicVariables(
     context: DynamicVariableContext,
   ): Promise<Record<string, unknown>> {
+    const { variables } = await this.getDynamicVariablesWithWarnings(context);
+    return variables;
+  }
+
+  /**
+   * Like {@link getDynamicVariables} but also returns per-plugin warnings for
+   * any plugin whose `getDynamicVariables()` throws. Used by the template
+   * editor's variable catalog so the UI can surface a named warning per
+   * failing plugin without aborting the whole catalog.
+   */
+  async getDynamicVariablesWithWarnings(
+    context: DynamicVariableContext,
+  ): Promise<{
+    variables: Record<string, unknown>;
+    warnings: Array<{ pluginName: string; message: string }>;
+  }> {
     const result: Record<string, unknown> = {};
+    const warnings: Array<{ pluginName: string; message: string }> = [];
 
     for (const [pluginName, provider] of this.#dynamicVarProviders) {
       try {
@@ -1062,14 +1157,49 @@ export class PluginManager {
           result[key] = value;
         }
       } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         log.warn("Plugin getDynamicVariables() failed", {
           plugin: pluginName,
-          error: err instanceof Error ? err.message : String(err),
+          error: message,
         });
+        warnings.push({ pluginName, message });
       }
     }
 
-    return result;
+    return { variables: result, warnings };
+  }
+
+  /**
+   * Enumerate every plugin promptFragment as inspectable references (no file
+   * contents read) — used by the template editor listing endpoint to surface
+   * both named (`variable`) and unnamed fragments. Disabled plugins are
+   * skipped.
+   */
+  enumerateFragmentRefs(): Array<{
+    plugin: string;
+    file: string;
+    variable?: string;
+    priority?: number;
+  }> {
+    const refs: Array<{
+      plugin: string;
+      file: string;
+      variable?: string;
+      priority?: number;
+    }> = [];
+    for (const { manifest } of this.#plugins.values()) {
+      if (!Array.isArray(manifest.promptFragments)) continue;
+      for (const frag of manifest.promptFragments) {
+        if (!frag.file) continue;
+        refs.push({
+          plugin: manifest.name,
+          file: frag.file,
+          variable: frag.variable,
+          priority: typeof frag.priority === "number" ? frag.priority : undefined,
+        });
+      }
+    }
+    return refs;
   }
 
   /**

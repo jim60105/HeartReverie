@@ -3,9 +3,7 @@
 ## Purpose
 
 Frontend system prompt template editor (編排器) for directly editing the Vento template text with variable insertion pills and live preview integration.
-
 ## Requirements
-
 ### Requirement: Editor UI
 
 The frontend SHALL provide a `PromptEditor.vue` Single File Component as the main editor widget for editing the system prompt template. The `PromptEditor.vue` component SHALL be rendered within a `PromptEditorPage.vue` routed component that fills the settings content area of `SettingsLayout`. The editor SHALL operate in two mutually-exclusive modes:
@@ -324,3 +322,19 @@ The page itself (the `PromptEditorPage.vue` route component and its ancestors up
 - **WHEN** test code mutates the textarea's `scrollTop` programmatically (raw-text fallback) or any card body's `scrollTop` (cards mode)
 - **THEN** `.preview-content`'s `scrollTop` SHALL remain at its prior value (proving no JS scroll-sync handler exists)
 - **AND** the converse SHALL also hold: mutating `.preview-content`'s `scrollTop` SHALL NOT change either the textarea's or any card body's `scrollTop`
+
+### Requirement: Template editor and prompt editor have distinct responsibilities
+
+The writer-mode UI SHALL ship two distinct settings pages: `/settings/prompt-editor` (existing) for editing chat-history message cards and the engine system prompt with the existing card UI, and `/settings/template-editor` (new) for editing template source code (Vento) with lint and preview. The two routes SHALL be reachable from the SettingsLayout sidebar as independent entries. Plugin promptFragments and lore passages SHALL be edited only via the new template-editor; they SHALL NOT appear in the prompt-editor's tree.
+
+#### Scenario: Both routes appear in sidebar
+
+- **WHEN** the user opens `/settings`
+- **THEN** the sidebar shows both "Prompt Editor" and "Template Editor" entries
+
+#### Scenario: Plugin fragments not listed in prompt-editor
+
+- **WHEN** the user opens `/settings/prompt-editor`
+- **THEN** the listed templates contain only `system.md` (and overrides)
+- **AND** plugin fragments and lore passages are absent
+

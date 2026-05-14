@@ -3,9 +3,7 @@
 ## Purpose
 
 Defines the custom Vento `{{ message }}` block tag that allows `system.md` templates to emit one or more role-tagged chat messages (`system` / `user` / `assistant`) which the server assembles into the full upstream `messages` array. This capability covers tag registration, role validation, nested-tag rejection, post-render assembly via per-render sentinels, the at-least-one-user-message rule, per-render nonce isolation, the SSTI whitelist additions for user-supplied templates, and plugin-fragment compatibility.
-
 ## Requirements
-
 ### Requirement: `{{ message }}` custom Vento tag
 
 The server SHALL register a Vento plugin (installed on the shared `Environment` via `ventoEnv.use(...)`) that introduces a block-style custom tag pair `{{ message <role-expression> }} … {{ /message }}`. The opening tag MAY take either a double-quoted string literal whose value is one of `"system"`, `"user"`, `"assistant"`, or a bare identifier whose runtime value SHALL be one of those three role strings. The tag's inner content SHALL be compiled by Vento exactly like any other block body — variable interpolation, `{{ if }}`, `{{ for }}`, pipe filters, plugin-injected fragments, and lore variables SHALL all work inside the body.
@@ -167,3 +165,24 @@ The `{{ message }}` tag SHALL compose with the existing plugin contract without 
 #### Scenario: Fragment-embedded message tag is rendered literally
 - **WHEN** a plugin's `prompt-assembly` handler returns a fragment whose content is `"{{ message \"user\" }}few-shot question{{ /message }}"` and the template renders it as `{{ fragment }}`
 - **THEN** the rendered output SHALL contain the literal characters `{{ message "user" }}…{{ /message }}` (NOT a `user` chat message); the `messages` assembly SHALL NOT include a `user` entry derived from the fragment
+
+### Requirement: Parse-time multi-message errors map to vento.message-* lint diagnostics
+
+The lint pipeline SHALL translate parse-time `SourceError` instances tagged with `multi-message:nested` and `multi-message:invalid-role` into lint diagnostics with rule IDs `vento.message-nested` and `vento.message-invalid-role` respectively. Runtime-only message-tag errors (`multi-message:no-user-message`, `multi-message:empty-message`) SHALL NOT be surfaced by the lint endpoint; they appear only when the preview endpoint actually renders the template.
+
+#### Scenario: Nested message blocks become vento.message-nested
+
+- **WHEN** the lint pipeline parses a source containing nested `{{ message }}` blocks
+- **THEN** the response `diagnostics[]` contains a diagnostic with `ruleId === "vento.message-nested"`
+
+#### Scenario: Invalid role becomes vento.message-invalid-role
+
+- **WHEN** the lint pipeline parses a source containing `{{ message "bogus" }}...{{ /message }}`
+- **THEN** the response `diagnostics[]` contains a diagnostic with `ruleId === "vento.message-invalid-role"`
+
+#### Scenario: Runtime-only errors do not appear at lint time
+
+- **WHEN** the lint pipeline parses a source that has no `{{ message "user" }}` block
+- **THEN** the response `diagnostics[]` does NOT contain a `vento.no-user-message` diagnostic
+- **AND** the diagnostic only appears on `POST /api/templates/preview` actual render
+

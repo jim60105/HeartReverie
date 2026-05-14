@@ -107,6 +107,7 @@ Deno.test({
         userMessageText: "",
         assistantPrefill: "",
       })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+      templateEngine: null,
       verifyPassphrase,
     } as AppDeps);
 
@@ -164,7 +165,8 @@ Deno.test({
             userMessageText: "",
             assistantPrefill: "",
           })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-          verifyPassphrase,
+          templateEngine: null,
+      verifyPassphrase,
         } as AppDeps);
 
         const res = await makeRequest(
@@ -231,7 +233,8 @@ Deno.test({
             userMessageText: "",
             assistantPrefill: "",
           })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-          verifyPassphrase,
+          templateEngine: null,
+      verifyPassphrase,
         } as AppDeps);
 
         const res = await makeRequest(app, "GET", "/api/plugins");
@@ -280,7 +283,8 @@ Deno.test({
             userMessageText: "",
             assistantPrefill: "",
           })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-          verifyPassphrase,
+          templateEngine: null,
+      verifyPassphrase,
         } as AppDeps);
 
         const res = await app.fetch(
@@ -338,7 +342,8 @@ Deno.test({
             userMessageText: "",
             assistantPrefill: "",
           })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-          verifyPassphrase,
+          templateEngine: null,
+      verifyPassphrase,
         } as AppDeps);
 
         const res = await makeRequest(
@@ -390,7 +395,8 @@ Deno.test({
           userMessageText: "",
           assistantPrefill: "",
         })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-        verifyPassphrase,
+        templateEngine: null,
+      verifyPassphrase,
       } as AppDeps);
 
       // The route should not be registered at all, so any request to it returns 404
@@ -451,7 +457,8 @@ Deno.test({
           userMessageText: "",
           assistantPrefill: "",
         })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-        verifyPassphrase,
+        templateEngine: null,
+      verifyPassphrase,
       } as AppDeps);
     }
 
@@ -570,6 +577,7 @@ Deno.test({
         userMessageText: "",
         assistantPrefill: "",
       })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+      templateEngine: null,
       verifyPassphrase,
     } as AppDeps);
 
@@ -690,7 +698,8 @@ Deno.test({
           userMessageText: "",
           assistantPrefill: "",
         })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-        verifyPassphrase,
+        templateEngine: null,
+      verifyPassphrase,
       } as AppDeps);
     }
 

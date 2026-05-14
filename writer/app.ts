@@ -31,6 +31,7 @@ import { registerPluginSettingsRoutes } from "./routes/plugin-settings.ts";
 import { registerPluginActionRoutes } from "./routes/plugin-actions.ts";
 import { registerImageRoutes } from "./routes/images.ts";
 import { registerPromptRoutes } from "./routes/prompt.ts";
+import { registerTemplateRoutes } from "./routes/templates.ts";
 import { registerThemeRoutes } from "./routes/themes.ts";
 import { registerStoryConfigRoutes } from "./routes/story-config.ts";
 import { registerLlmDefaultsRoutes } from "./routes/llm-defaults.ts";
@@ -156,6 +157,7 @@ export function createApp(deps: AppDeps): Hono {
   registerPluginSettingsRoutes(app, deps);
   registerPluginActionRoutes(app, deps);
   registerPromptRoutes(app, deps);
+  registerTemplateRoutes(app, deps);
   registerUsageRoutes(app, deps);
   registerImageRoutes(app, deps);
 

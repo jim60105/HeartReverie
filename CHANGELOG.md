@@ -9,11 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Template Editor (`/settings/template-editor`)**: writer-mode 內的 Vento 模板 lint + preview 工具，覆蓋 `system.md`、plugin `promptFragments`（唯讀）、以及三層典籍篇章（`lore:global` / `lore:series` / `lore:story`）。CodeMirror 6 編輯器內建 Vento tokenizer 與 `VENTO_HELPERS` 自動完成；三種 preview fixture mode（`default` 純函式渲染、`inline` 自訂 fixture、`current` 真實 plugin pipeline）。對 `system.md` 與 lore 篇章採 atomic write + `.bak` 備份，並拒收 symlink。詳見 [`docs/prompt-template.md`](docs/prompt-template.md#template-editor)。
+- 新增後端 endpoints：`GET /api/templates`、`GET /api/templates/variables`、`POST /api/templates/lint`、`POST /api/templates/preview`、`PUT /api/templates`。
+- CI helper drift 檢查（`scripts/check-vento-helpers.ts`）：比對 `reader-src/src/lib/template.ts` 的 `VENTO_HELPERS` const 與 `ventojs` 實際 filter 集合，差集非空即失敗。
 - **Plugin settings exposure for the remaining built-in plugins.** `dialogue-colorize`, `polish`, `response-notify`, `start-hints`, `thinking`, and `user-message` now ship with a `settingsSchema` block in their manifest (joining `context-compaction`, which already had one), exposing safe-to-tune knobs and a universal `enabled` toggle on the reader's plugin-settings page. The engine centrally gates prompt fragments, dynamic variables, and action-button visibility/clicks against resolved settings; frontend plugins read `hooks.getSettings()` / `context.getSettings()` and no-op their own hook handlers when disabled. A successful `PUT /api/plugins/:name/settings` broadcasts a `plugin-settings:changed` event so the reader re-runs `frontend-render`, `display-strip-tags`, and `notification` hooks without a page reload. Strip-tag rules (`promptStripTags` / `displayStripTags`) are intentionally NOT gated by `enabled` so historical content keeps rendering correctly.
 
 ### Changed
 
+- `validateTemplate()` SSTI 白名單維持嚴格：`{{ set ... }}`、`{{ /set }}`、`{{ include ... }}`、以及任何 `{{> jsExpression }}` 都會被歸類為 `vento.unsafe-expression` 錯誤，於 PUT 儲存、Template Editor lint、以及執行期渲染三處同步攔截。
+- Lint pipeline 改採 `ventoEnv.compile()` AST 路徑，不再以 `runString` dry-run 蒐集診斷；變數 AST walk 與未來新增的 lint rule 都共用同一份 AST。
+- `writer/vendor/ventojs.d.ts` 暴露 `Environment.compile()` ambient 簽名，並以 `tests/writer/vendor/ventojs_compile_test.ts` 把行為釘住。
 - Prompt Editor message-card body textareas now auto-grow to fit their content on every edit with a 3-line minimum (no fixed upper bound) and the manual resize handle has been removed. The reader chat input starts at the same 3-line floor and auto-fits on paste, draft restore, and `appendText`; regular keystrokes do not trigger an auto-fit and `resize: vertical` is preserved so users can still drag the height manually. Implementation lives in a reusable `useAutoresize` composable that is box-sizing aware and only reacts to width changes from `ResizeObserver` so manual height drags are not overwritten.
+
+### BREAKING CHANGES
+
+- **Plugin `promptFragments` runtime SSTI 強制驗證**：`PluginManager.init()` 在註冊任何 hook、settings、片段之前，會對每個 plugin 的 `promptFragments[].file` source 呼叫 `validateTemplate()`。若片段含有被禁止的 token（`set` / `/set` / `include` / `{{> jsExpression }}`），整個 plugin 載入失敗（log `error`，hook／settings／片段皆未註冊），但兄弟 plugin 不受影響。`renderSystemPrompt()` 在組合每個片段前會再驗一次，攔截「載入後檔案被外部編輯」或「runtime 動態組裝出 SSTI 字串」的情況。
+
+  **遷移**：編輯該 plugin 的片段檔，移除 `set` / `/set` / `include` 區塊；改以 plugin 後端 `getDynamicVariables()` 或 `promptFragments` 的具名變數注入內容。詳細遷移模式見 [`docs/plugin-system.md`](docs/plugin-system.md#在-template-editor-中為唯讀read-only)。
+
+- **Plugin fragment 在 Template Editor 中嚴格唯讀**：`PUT /api/templates` 收到 `templatePath` 以 `plugin:` 起頭時直接回 `403`，不提供「另存」或 fork-then-overlay。Plugin 作者必須在自家 plugin 的 source repository 中編輯片段檔。
+
+- **`docs/prompt-template.md` 移除所有 `set` / `include` 範例**：原本示範用 Vento `set` 搭配 `include` 載入子模板的段落已刪除，改寫為以具名變數、`promptFragments`、或 `getDynamicVariables()` 注入的等價寫法。任何外部資料／教學引用了舊範例都需要同步更新。
 
 ## [0.6.0] - 2026-05-10
 
