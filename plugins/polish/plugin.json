@@ -5,7 +5,9 @@
   "type": "full-stack",
   "frontendModule": "./frontend.js",
   "hooks": [
-    { "stage": "action-button:click" }
+    {
+      "stage": "action-button:click"
+    }
   ],
   "actionButtons": [
     {
@@ -18,6 +20,7 @@
   ],
   "settingsSchema": {
     "type": "object",
+    "x-schema-version": 1,
     "properties": {
       "enabled": {
         "type": "boolean",
