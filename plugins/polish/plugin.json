@@ -4,6 +4,9 @@
   "description": "One-click literary polish for the last chapter — atomic rewrite via replace mode",
   "type": "full-stack",
   "frontendModule": "./frontend.js",
+  "hooks": [
+    { "stage": "action-button:click" }
+  ],
   "actionButtons": [
     {
       "id": "polish",

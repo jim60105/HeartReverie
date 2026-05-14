@@ -62,6 +62,7 @@ Plugin 與伺服器的互動分為六個層面，分別對應 manifest 中的不
 | `actionButtons` | `array` | ❌ | 動作按鈕宣告，見「[動作按鈕（Action Buttons）](#動作按鈕action-buttons)」章節 |
 | `settingsSchema` | `object` | ❌ | JSON Schema（draft-07）描述 plugin 可設定項目，見「[Plugin Settings](#plugin-settings)」章節 |
 | `parameters` | `array` | ❌ | 自訂 Vento 模板參數宣告 |
+| `hooks` | `array` | ❌ | Plugin 註冊的 hook 階段宣告（用於 Hook Inspector 與啟動期一致性驗證），見「[Hook Inspector](#hook-inspector)」章節 |
 
 ### Plugin 類型
 
@@ -1097,6 +1098,65 @@ export function register(hooks) {
 
 > [!NOTE]
 > 內建 plugin 的提示詞內容必須維持 SFW（Safe For Work）。禁止包含 NSFW 內容、越獄指令（jailbreak）或年齡相關指示。使用者如有此類需求，應透過外部 plugin（`PLUGIN_DIR`）自行提供。
+
+## Hook Inspector
+
+Hook Inspector 是一套**啟動期一致性檢查 + 執行期觀測**機制，協助 plugin 作者及部署者快速確認後端／前端 hook 是否如預期註冊，並偵測多 plugin 之間可能的衝突。
+
+### Manifest 欄位：`hooks`
+
+`plugin.json` 可宣告 plugin 預期註冊的 hook 階段陣列：
+
+```json
+{
+  "name": "my-plugin",
+  "hooks": [
+    { "stage": "post-response", "reads": ["content"], "writes": ["content"] },
+    { "stage": "frontend-render" }
+  ]
+}
+```
+
+- `stage`（必填）：hook 階段名稱（後端或前端皆可）。
+- `reads` / `writes`（選填）：宣告該 handler 會讀取／寫入的 pipeline 欄位，供衝突偵測使用。
+
+**嚴格宣告／註冊一致性**：當 `hooks` 欄位存在（即使為空陣列）時，系統會於 plugin 載入後比對「宣告 vs 實際 `hooks.register()` 呼叫」。若有差異，plugin 載入會被回滾並寫入 `declaredOnly`／`registeredOnly` 的錯誤訊息。**省略 `hooks` 欄位**則進入 legacy 模式（不檢查），用於相容尚未遷移的外部 plugin。
+
+新撰寫的 plugin **必須**宣告 `hooks`，建議將 `register()` 內每個 `hooks.register(stage, ...)` 對應地寫入 manifest。
+
+### Hook Inspector 頁面
+
+瀏覽器內進入「設定 → 開發者工具 → Hook Inspector」（路由 `/settings/hook-inspector`），需通過通行碼驗證。頁面以 stage → handler 樹狀結構顯示：
+
+- 後端／前端各階段已註冊的 handler（plugin 名稱、priority、`errorCount`「自上次重啟以來」累計）。
+- 衝突告警（C1：兩個 plugin 對同一欄位都宣告 `writes`；C2：讀取了沒人寫入的欄位；C3：同一 `(plugin, stage)` 重複註冊；C4：宣告與註冊不符）。
+- Strip-tag 宣告（哪個 plugin 管理哪些標籤）。
+- 啟動期 mismatch 摘要（若有）。
+
+頁面右上角的「重新整理」按鈕重新拉取 `/api/plugin-introspection/hooks`。每次成功取得資料後，前端會以 `frontendHooks.dispatch("hook-inspector:report", payload)` 派發 [`hook-inspector:report`](#typed-events) 事件，方便其他 plugin（例如告警 logger）訂閱。
+
+### CLI：`deno task introspect:hooks`
+
+容器內可執行：
+
+```bash
+podman exec heartreverie deno task introspect:hooks
+```
+
+輸出為單一 JSON 物件，欄位包含 `backend`、`frontend`、`manifestDeclarations`、`stripTags`、`pipelineFields`、`generatedAt`，供 CI 或第三方工具消費。stderr 會輸出 plugin 載入 log，stdout 維持純 JSON。
+
+### Typed event：`hook-inspector:report`
+
+Plugin 可在前端訂閱：
+
+```javascript
+window.HeartReverie.hooks.register("hook-inspector:report", (report) => {
+  console.log("conflicts:", report.conflicts);
+  console.log("backend handlers:", report.backend);
+});
+```
+
+`payload` 型別與 Hook Inspector 頁面顯示的資料一致。companion plugin `hook-inspector-logger`（位於 `HeartReverie_Plugins/`）展示了一個最小訂閱者實作。
 
 [prompt-template]: ./prompt-template.md
 [lore-codex]: ./lore-codex.md

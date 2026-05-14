@@ -4,6 +4,10 @@
   "description": "Colourise dialogue runs (matched quote pairs) via the CSS Custom Highlight API without modifying the DOM",
   "type": "frontend-only",
   "frontendModule": "./frontend.js",
+  "hooks": [
+    { "stage": "chapter:dom:ready" },
+    { "stage": "chapter:dom:dispose" }
+  ],
   "frontendStyles": [
     "./styles.css"
   ],

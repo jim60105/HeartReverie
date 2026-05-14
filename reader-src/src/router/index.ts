@@ -13,37 +13,45 @@ const ImportCharacterCardPage = () =>
   import("@/components/ImportCharacterCardPage.vue");
 const PluginSettingsPage = () =>
   import("@/components/PluginSettingsPage.vue");
+const HookInspectorPage = () =>
+  import("@/components/HookInspectorPage.vue");
 
 export const settingsChildren: RouteRecordRaw[] = [
   {
     path: "prompt-editor",
     name: "settings-prompt-editor",
     component: PromptEditorPage,
-    meta: { title: "編排器" },
+    meta: { title: "編排器", category: "general" },
   },
   {
     path: "lore",
     name: "settings-lore",
     component: LoreCodexPage,
-    meta: { title: "典籍" },
+    meta: { title: "典籍", category: "general" },
   },
   {
     path: "llm",
     name: "settings-llm",
     component: LlmSettingsPage,
-    meta: { title: "LLM 設定" },
+    meta: { title: "LLM 設定", category: "general" },
   },
   {
     path: "theme",
     name: "settings-theme",
     component: ThemeSettingsPage,
-    meta: { title: "主題" },
+    meta: { title: "主題", category: "general" },
   },
   {
     path: "plugins/:pluginName",
     name: "settings-plugin",
     component: PluginSettingsPage,
     props: true,
+  },
+  {
+    path: "hook-inspector",
+    name: "settings-hook-inspector",
+    component: HookInspectorPage,
+    meta: { title: "Hook 檢視", category: "developer-tools" },
   },
 ];
 

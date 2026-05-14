@@ -75,7 +75,10 @@ Then add type-appropriate optional fields per the patterns below.
   "frontendModule": "./frontend.js",
   "tags": ["mytag"],
   "promptStripTags": ["mytag"],
-  "displayStripTags": ["mytag"]
+  "displayStripTags": ["mytag"],
+  "hooks": [
+    { "stage": "frontend-render", "reads": ["text"], "writes": ["text", "placeholderMap"] }
+  ]
 }
 ```
 
@@ -90,7 +93,11 @@ Then add type-appropriate optional fields per the patterns below.
   "backendModule": "./handler.js",
   "frontendModule": "./frontend.js",
   "tags": ["mytag"],
-  "promptStripTags": ["mytag"]
+  "promptStripTags": ["mytag"],
+  "hooks": [
+    { "stage": "post-response", "writes": ["content"] },
+    { "stage": "frontend-render" }
+  ]
 }
 ```
 
@@ -102,11 +109,16 @@ Then add type-appropriate optional fields per the patterns below.
   "version": "1.0.0",
   "description": "My backend hook plugin",
   "type": "hook-only",
-  "backendModule": "./handler.js"
+  "backendModule": "./handler.js",
+  "hooks": [
+    { "stage": "post-response", "writes": ["content"] }
+  ]
 }
 ```
 
 **Critical**: The `name` field must match the directory name exactly.
+
+**`hooks` is mandatory for new plugins.** Enumerate every `hooks.register("<stage>", ...)` call in `register()` here. The loader compares manifest vs runtime registration on startup and **rolls back the plugin load with a `declaredOnly`/`registeredOnly` error** on mismatch. The check also powers the Hook Inspector page (`/settings/hook-inspector`) and the `deno task introspect:hooks` CLI. Use `reads`/`writes` to participate in conflict detection (C1: two plugins writing the same field; C2: read with no writer). Omitting `hooks` entirely puts the plugin in legacy mode (no validation) — only use this for unmaintained third-party plugins during migration.
 
 For all fields and detailed examples, read `references/manifest-schema.md`.
 
@@ -213,7 +225,17 @@ Key points:
 - `hooks.getSettings(name?)` and `context.getSettings(name?)` both return the live settings snapshot for `name` (defaults to the calling plugin). The reader hydrates settings on boot and, after a ~50 ms debounce on `plugin-settings:changed`, bumps the chapter render epoch — that re-runs render-pipeline hooks (`frontend-render`, `chapter:render:after`, `chapter:dom:ready`) and re-applies `displayStripTags`. The `notification` hook is NOT re-dispatched on settings change.
 - `register` MAY be `async` (the loader awaits it before flipping `pluginsReady`).
 - `hooks.register(stage, handler, priority?)` — the `originPluginName` is auto-curried by the loader proxy; do NOT pass it manually.
-- Frontend handlers are **synchronous** for most stages; `action-button:click` is the exception (async dispatch).
+- Frontend handlers are **synchronous** for most stages; `action-button:click` is the exception (async dispatch). Async handlers on synchronous stages are **rejected** by the dispatcher and surface a startup mismatch in Hook Inspector. If you must `await` something inside a sync stage, fire-and-forget via an IIFE:
+
+  ```javascript
+  hooks.register('frontend-render', (ctx) => {
+    // Sync work that affects ctx must happen here, synchronously.
+    queueMicrotask(async () => {
+      // Side-effects that don't block the render pipeline.
+      await refreshCacheElsewhere();
+    });
+  });
+  ```
 - Use unique placeholder names that include the plugin name to avoid collisions.
 - Shared utilities live under `/plugins/_shared/`. Import them via relative paths (e.g. `import { escapeHtml } from '../_shared/utils.js';`); the server only serves files under `_shared/` and each plugin's declared `frontendModule` / `frontendStyles`.
 - Frontend code style: ESM, **single quotes**, no build step, no framework — plugins ship as raw JS even though the reader itself is a Vue 3 + Vite SPA.

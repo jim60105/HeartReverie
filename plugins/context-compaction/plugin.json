@@ -17,6 +17,9 @@
     "chapter_summary"
   ],
   "backendModule": "./handler.ts",
+  "hooks": [
+    { "stage": "prompt-assembly", "writes": ["previousContext"] }
+  ],
   "settingsSchema": {
     "type": "object",
     "properties": {

@@ -4,6 +4,9 @@
   "description": "Browser notification when LLM response generation completes",
   "type": "frontend-only",
   "frontendModule": "./frontend.js",
+  "hooks": [
+    { "stage": "notification" }
+  ],
   "settingsSchema": {
     "type": "object",
     "properties": {

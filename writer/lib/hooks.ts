@@ -24,15 +24,35 @@ interface HandlerEntry {
   readonly priority: number;
   readonly plugin?: string;
   readonly baseLogger?: Logger;
+  errorCount: number;
 }
 
-const VALID_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
+/**
+ * Backend hook stages registered via `HookDispatcher.register()`.
+ * Note: `strip-tags` is intentionally NOT in this set — it is a declarative
+ * manifest field (`promptStripTags` / `displayStripTags`), not a runtime hook.
+ */
+export const KNOWN_BACKEND_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
+  "prompt-assembly",
+  "response-stream",
+  "pre-write",
+  "post-response",
+]);
+
+export const VALID_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
   "prompt-assembly",
   "response-stream",
   "pre-write",
   "post-response",
   "strip-tags",
 ]);
+
+/** Per-stage handler info returned by `HookDispatcher.introspect()`. */
+export interface HandlerIntrospection {
+  readonly plugin: string | undefined;
+  readonly priority: number;
+  readonly errorCount: number;
+}
 
 export class HookDispatcher {
   #handlers: Map<HookStage, HandlerEntry[]> = new Map();
@@ -57,8 +77,27 @@ export class HookDispatcher {
 
     if (!this.#handlers.has(stage)) this.#handlers.set(stage, []);
     const list = this.#handlers.get(stage)!;
-    list.push({ handler, priority, plugin, baseLogger });
+    list.push({ handler, priority, plugin, baseLogger, errorCount: 0 });
     list.sort((a, b) => a.priority - b.priority);
+  }
+
+  /**
+   * Return a deep-detached snapshot of all currently registered handlers,
+   * keyed by stage. Handlers are sorted by priority ascending (matching
+   * dispatch order). Callers mutating the returned arrays/objects do NOT
+   * affect dispatcher state. The `errorCount` field is the in-memory tally
+   * of caught exceptions since process start.
+   */
+  introspect(): Record<HookStage, HandlerIntrospection[]> {
+    const out = {} as Record<HookStage, HandlerIntrospection[]>;
+    for (const [stage, list] of this.#handlers) {
+      out[stage] = list.map((e) => ({
+        plugin: e.plugin,
+        priority: e.priority,
+        errorCount: e.errorCount,
+      }));
+    }
+    return out;
   }
 
   /**
@@ -76,7 +115,8 @@ export class HookDispatcher {
     const handlers = this.#handlers.get(stage) || [];
     const correlationId = typeof context.correlationId === "string" ? context.correlationId : undefined;
     const startTime = performance.now();
-    for (const { handler, plugin, baseLogger } of handlers) {
+    for (const entry of handlers) {
+      const { handler, plugin, baseLogger } = entry;
       try {
         // Always inject context.logger for each handler
         if (baseLogger) {
@@ -91,6 +131,7 @@ export class HookDispatcher {
         }
         await handler(context);
       } catch (err: unknown) {
+        entry.errorCount++;
         log.error(`Hook error in stage '${stage}'`, {
           stage,
           plugin,

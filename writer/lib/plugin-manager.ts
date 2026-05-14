@@ -18,10 +18,13 @@ import type {
   ActionButtonDescriptor,
   ActionButtonVisibility,
   DynamicVariableContext,
+  HookHandler,
+  HookStage,
+  PluginHookDeclaration,
   PluginManifest,
   PluginRegisterContext,
 } from "../types.ts";
-import type { HookDispatcher } from "./hooks.ts";
+import { HookDispatcher, KNOWN_BACKEND_STAGES, VALID_STAGES } from "./hooks.ts";
 import { createLogger } from "./logger.ts";
 
 const log = createLogger("plugin");
@@ -67,6 +70,28 @@ function isPathContained(base: string, resolved: string): boolean {
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+/**
+ * Frontend hook stages. Kept in sync with `VALID_STAGES` in
+ * `reader-src/src/lib/plugin-hooks.ts`. Used by the manifest validator to
+ * accept declarations for stages the backend itself cannot register.
+ */
+const KNOWN_FRONTEND_STAGES: ReadonlySet<string> = new Set<string>([
+  "frontend-render",
+  "notification",
+  "chat:send:before",
+  "chapter:render:after",
+  "chapter:dom:ready",
+  "chapter:dom:dispose",
+  "story:switch",
+  "chapter:change",
+  "action-button:click",
+  "hook-inspector:report",
+]);
+
+/** Backend stages eligible for the strict declare-vs-register cross-check. */
+const STRICT_BACKEND_STAGES: ReadonlySet<string> = KNOWN_BACKEND_STAGES;
+
 
 export class PluginManager {
   #builtinDir: string;
@@ -258,6 +283,12 @@ export class PluginManager {
         }
       }
 
+      // Validate hooks declarations (hook-inspector change)
+      if (!this.#validateHookDeclarations(manifest)) {
+        // Invalid hooks declarations — skip this plugin entirely
+        continue;
+      }
+
       this.#plugins.set(manifest.name, {
         manifest,
         dir: pluginDir,
@@ -266,6 +297,96 @@ export class PluginManager {
         validatedActionButtons,
       });
     }
+  }
+
+  /**
+   * Validate the optional `hooks` declarations on a plugin manifest. Returns
+   * `true` when validation passes (or when `hooks` is absent — legacy mode),
+   * `false` when the manifest must be skipped entirely.
+   *
+   * Constraints enforced:
+   * - `hooks` must be an array when present
+   * - each entry must be an object with a string `stage` field
+   * - `stage === "strip-tags"` is rejected (use `promptStripTags` /
+   *   `displayStripTags` instead)
+   * - duplicate `stage` values within the same array are rejected
+   * - unknown stages (not in backend ∪ frontend known sets) log a warn but
+   *   do not block load
+   * - `note` longer than 200 chars is rejected
+   * - non-string entries in `reads` / `writes` are rejected
+   */
+  #validateHookDeclarations(manifest: PluginManifest): boolean {
+    if (manifest.hooks === undefined) return true;
+    const pluginLog = log.withContext({ baseData: { plugin: manifest.name } });
+    if (!Array.isArray(manifest.hooks)) {
+      pluginLog.error("Plugin manifest 'hooks' must be an array — skipping plugin");
+      return false;
+    }
+    const seen = new Set<string>();
+    for (const entry of manifest.hooks) {
+      if (typeof entry !== "object" || entry === null) {
+        pluginLog.error("Plugin manifest 'hooks' entry must be an object — skipping plugin");
+        return false;
+      }
+      const decl = entry as PluginHookDeclaration;
+      if (typeof decl.stage !== "string" || decl.stage.length === 0) {
+        pluginLog.error(
+          "Plugin manifest 'hooks' entry missing 'stage' string — skipping plugin",
+        );
+        return false;
+      }
+      if (decl.stage === "strip-tags") {
+        pluginLog.error(
+          "Plugin manifest 'hooks' may not declare 'strip-tags' — use promptStripTags / displayStripTags instead — skipping plugin",
+          { stage: decl.stage },
+        );
+        return false;
+      }
+      if (seen.has(decl.stage)) {
+        pluginLog.error(
+          "Plugin manifest 'hooks' has duplicate stage entry — skipping plugin",
+          { stage: decl.stage },
+        );
+        return false;
+      }
+      seen.add(decl.stage);
+      if (
+        !STRICT_BACKEND_STAGES.has(decl.stage) &&
+        !KNOWN_FRONTEND_STAGES.has(decl.stage)
+      ) {
+        pluginLog.warn("Plugin manifest 'hooks' declares unknown stage", {
+          stage: decl.stage,
+        });
+      }
+      if (decl.note !== undefined) {
+        if (typeof decl.note !== "string" || decl.note.length > 200) {
+          pluginLog.error(
+            "Plugin manifest 'hooks' entry 'note' must be a string ≤200 chars — skipping plugin",
+            { stage: decl.stage },
+          );
+          return false;
+        }
+      }
+      for (const field of ["reads", "writes"] as const) {
+        const arr = decl[field];
+        if (arr === undefined) continue;
+        if (!Array.isArray(arr) || arr.some((x) => typeof x !== "string")) {
+          pluginLog.error(
+            `Plugin manifest 'hooks' entry '${field}' must be a string[] — skipping plugin`,
+            { stage: decl.stage },
+          );
+          return false;
+        }
+      }
+      if (decl.priority !== undefined && typeof decl.priority !== "number") {
+        pluginLog.error(
+          "Plugin manifest 'hooks' entry 'priority' must be a number — skipping plugin",
+          { stage: decl.stage },
+        );
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -534,8 +655,21 @@ export class PluginManager {
         plugin: name,
         path: modulePath,
       });
+      this.#plugins.delete(name);
       return;
     }
+
+    // Transactional registration: stage register() calls into a per-plugin
+    // map, validate against manifest declarations, then commit to the live
+    // dispatcher only on success. On any failure, discard staged entries
+    // and remove the plugin from #plugins entirely.
+    interface StagedEntry {
+      readonly stage: HookStage;
+      readonly handler: HookHandler;
+      readonly priority: number;
+    }
+    const staged: StagedEntry[] = [];
+    const stagedStages = new Set<HookStage>();
 
     try {
       const mod = await import("file://" + modulePath) as Record<
@@ -543,34 +677,81 @@ export class PluginManager {
         unknown
       >;
       const registerFn = mod.register || mod.default;
+
       if (typeof registerFn === "function") {
         const pluginLogger = createLogger("plugin", {
           baseData: { plugin: name },
         });
-        // Wrap hooks.register to auto-bind plugin name and baseLogger
-        const boundHooks = {
+        const stagingHooks = {
           register: (
-            stage: Parameters<HookDispatcher["register"]>[0],
-            handler: Parameters<HookDispatcher["register"]>[1],
+            stage: HookStage,
+            handler: HookHandler,
             priority?: number,
           ) => {
-            this.#hookDispatcher.register(
-              stage,
-              handler,
-              priority ?? 100,
-              name,
-              pluginLogger,
-            );
+            // Mirror HookDispatcher.register validations up-front so a failing
+            // stage/handler aborts the plugin before any partial commit can
+            // happen. Without this, an invalid second register call would
+            // throw during commit-replay while earlier handlers are already
+            // live in the dispatcher.
+            if (!VALID_STAGES.has(stage)) {
+              throw new Error(
+                `Invalid hook stage '${stage}'. Valid stages: ${[...VALID_STAGES].join(", ")}`,
+              );
+            }
+            if (typeof handler !== "function") {
+              throw new Error("Hook handler must be a function");
+            }
+            // Multiple handlers per (plugin, stage) are permitted on the
+            // backend (different priorities = different responsibilities).
+            // `stagedStages` is still tracked as a Set for declare-vs-register
+            // cross-check below (presence-only, not count).
+            stagedStages.add(stage);
+            staged.push({ stage, handler, priority: priority ?? 100 });
           },
         };
         const context: PluginRegisterContext = {
-          hooks: boundHooks,
+          hooks: stagingHooks,
           logger: pluginLogger,
           getSettings: () => this.getPluginSettings(name),
         };
         await (registerFn as (
           ctx: PluginRegisterContext,
         ) => void | Promise<void>)(context);
+
+        // Strict declare-vs-register cross-check (only when the manifest
+        // explicitly declares a hooks field — absent field = legacy / undeclared).
+        if (Array.isArray(entry.manifest.hooks)) {
+          const declaredBackend = new Set(
+            entry.manifest.hooks
+              .map((h) => h.stage)
+              .filter((s) => STRICT_BACKEND_STAGES.has(s)),
+          );
+          const registeredBackend = new Set(
+            [...stagedStages].filter((s) => STRICT_BACKEND_STAGES.has(s)),
+          );
+          const declaredOnly = [...declaredBackend].filter(
+            (s) => !registeredBackend.has(s),
+          );
+          const registeredOnly = [...registeredBackend].filter(
+            (s) => !declaredBackend.has(s),
+          );
+          if (declaredOnly.length > 0 || registeredOnly.length > 0) {
+            throw new Error(
+              `Plugin '${name}' hook declarations do not match registration — declaredOnly: [${declaredOnly.join(", ")}], registeredOnly: [${registeredOnly.join(", ")}]`,
+            );
+          }
+        }
+
+        // Commit: replay staged registrations into the live dispatcher.
+        for (const s of staged) {
+          this.#hookDispatcher.register(
+            s.stage,
+            s.handler,
+            s.priority,
+            name,
+            pluginLogger,
+          );
+        }
         log.debug("Plugin registered successfully", { plugin: name });
       }
 
@@ -601,6 +782,11 @@ export class PluginManager {
         plugin: name,
         error: err instanceof Error ? err.message : String(err),
       });
+      // Discard staged entries and unregister the plugin entirely. This
+      // ensures #plugins, the route registrar map, dynamic var providers,
+      // and the live HookDispatcher remain consistent.
+      this.#plugins.delete(name);
+      this.#dynamicVarProviders.delete(name);
     }
   }
 
@@ -609,6 +795,61 @@ export class PluginManager {
    */
   getPlugins(): PluginManifest[] {
     return [...this.#plugins.values()].map((e) => e.manifest);
+  }
+
+  /**
+   * Strip-tag declarations derived from `promptStripTags` and
+   * `displayStripTags` across all loaded plugins. Used by the hook-inspector
+   * route to surface declarative tag-removal contracts as a distinct
+   * category from runtime hook handlers.
+   */
+  getStripTagDeclarations(): Array<{
+    plugin: string;
+    tags: string[];
+    scope: "prompt+display" | "prompt" | "display";
+  }> {
+    const out: Array<{
+      plugin: string;
+      tags: string[];
+      scope: "prompt+display" | "prompt" | "display";
+    }> = [];
+    for (const { manifest } of this.#plugins.values()) {
+      const promptTags = Array.isArray(manifest.promptStripTags)
+        ? manifest.promptStripTags.filter((t): t is string => typeof t === "string")
+        : [];
+      const displayTags = Array.isArray(manifest.displayStripTags)
+        ? manifest.displayStripTags.filter((t): t is string => typeof t === "string")
+        : [];
+      if (promptTags.length === 0 && displayTags.length === 0) continue;
+
+      const allTags = Array.from(new Set([...promptTags, ...displayTags]));
+      const inBoth = promptTags.length > 0 && displayTags.length > 0;
+      const scope: "prompt+display" | "prompt" | "display" = inBoth
+        ? "prompt+display"
+        : (promptTags.length > 0 ? "prompt" : "display");
+      out.push({ plugin: manifest.name, tags: allTags, scope });
+    }
+    return out;
+  }
+
+  /**
+   * Returns the manifest hook declarations for every loaded plugin that has
+   * an explicit `hooks` field in `plugin.json`. Plugins without a `hooks`
+   * field (legacy mode) are OMITTED so callers (notably the frontend
+   * `finalizeBoot()` check) can distinguish "explicitly declared no hooks"
+   * from "did not declare at all". The returned array is the manifest source
+   * of truth, NOT runtime registration facts.
+   */
+  getPluginHookDeclarations(): Array<{
+    plugin: string;
+    hooks: readonly PluginHookDeclaration[];
+  }> {
+    return [...this.#plugins.values()]
+      .filter(({ manifest }) => Array.isArray(manifest.hooks))
+      .map(({ manifest }) => ({
+        plugin: manifest.name,
+        hooks: manifest.hooks as readonly PluginHookDeclaration[],
+      }));
   }
 
   /**

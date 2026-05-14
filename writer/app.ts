@@ -26,6 +26,7 @@ import { registerChapterRoutes } from "./routes/chapters.ts";
 import { registerBranchRoutes } from "./routes/branch.ts";
 import { registerChatRoutes } from "./routes/chat.ts";
 import { registerPluginRoutes } from "./routes/plugins.ts";
+import { registerPluginIntrospectRoutes } from "./routes/plugin-introspect.ts";
 import { registerPluginSettingsRoutes } from "./routes/plugin-settings.ts";
 import { registerPluginActionRoutes } from "./routes/plugin-actions.ts";
 import { registerImageRoutes } from "./routes/images.ts";
@@ -151,6 +152,7 @@ export function createApp(deps: AppDeps): Hono {
   registerStoryConfigRoutes(app, deps);
   registerLlmDefaultsRoutes(app, deps);
   registerPluginRoutes(app, deps);
+  registerPluginIntrospectRoutes(app, deps);
   registerPluginSettingsRoutes(app, deps);
   registerPluginActionRoutes(app, deps);
   registerPromptRoutes(app, deps);

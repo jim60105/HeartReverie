@@ -230,8 +230,9 @@ async function doInit(): Promise<void> {
         // before registering handlers complete before pluginsReady flips.
         const getSettings = (otherName?: string) =>
           getPluginSettingsSync(otherName ?? p.name);
+        const { notify } = useNotification();
         await Promise.resolve(
-          mod.register(makePluginHooksProxy(p.name), { getSettings }),
+          mod.register(makePluginHooksProxy(p.name), { getSettings, notify }),
         );
       }
     }),
@@ -254,6 +255,24 @@ async function doInit(): Promise<void> {
   if (failures.length > 0) {
     const names = failures.map((f) => f.name).join(", ");
     throw new Error(`Frontend plugin initialization failed: ${names}`);
+  }
+
+  // After every plugin has finished register(), run the declare-vs-register
+  // cross-check for frontend stages. Non-fatal: mismatches are surfaced via
+  // a notification banner and retained on the dispatcher for the inspector.
+  try {
+    const declarations = pluginList
+      .filter((p) => Array.isArray(p.hooks))
+      .map((p) => ({
+        plugin: p.name,
+        hooks: (p.hooks ?? []).map((h) => ({ stage: h.stage })),
+      }));
+    frontendHooks.finalizeBoot(declarations);
+  } catch (err) {
+    console.warn(
+      "FrontendHookDispatcher.finalizeBoot() threw unexpectedly:",
+      err instanceof Error ? err.message : err,
+    );
   }
 }
 

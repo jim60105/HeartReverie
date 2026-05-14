@@ -9,13 +9,22 @@ const router = useRouter();
 const { lastReadingRoute } = useLastReadingRoute();
 const { getAuthHeaders } = useAuth();
 
-const tabs = computed(() =>
+const generalTabs = computed(() =>
   settingsChildren
-    .filter((r) => r.name && r.meta?.title)
+    .filter((r) => r.name && r.meta?.title && (r.meta?.category ?? "general") === "general")
     .map((r) => ({
       name: r.name as string,
       title: r.meta!.title as string,
-    })),
+    }))
+);
+
+const developerToolsTabs = computed(() =>
+  settingsChildren
+    .filter((r) => r.name && r.meta?.title && r.meta?.category === "developer-tools")
+    .map((r) => ({
+      name: r.name as string,
+      title: r.meta!.title as string,
+    }))
 );
 
 interface PluginTab {
@@ -58,7 +67,7 @@ function goBack() {
       <button class="back-btn themed-btn" @click="goBack">← 返回閱讀</button>
       <nav class="sidebar-nav">
         <router-link
-          v-for="tab in tabs"
+          v-for="tab in generalTabs"
           :key="tab.name"
           :to="{ name: tab.name }"
           class="sidebar-link"
@@ -76,6 +85,18 @@ function goBack() {
             active-class="sidebar-link--active"
           >
             {{ pt.label }}
+          </router-link>
+        </template>
+        <template v-if="developerToolsTabs.length">
+          <span class="sidebar-divider">開發者工具</span>
+          <router-link
+            v-for="tab in developerToolsTabs"
+            :key="tab.name"
+            :to="{ name: tab.name }"
+            class="sidebar-link"
+            active-class="sidebar-link--active"
+          >
+            {{ tab.title }}
           </router-link>
         </template>
       </nav>

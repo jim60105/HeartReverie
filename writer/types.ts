@@ -167,6 +167,51 @@ export interface PluginManifest {
    * Used by the settings I/O helpers to validate payloads and extract defaults.
    */
   readonly settingsSchema?: Record<string, unknown>;
+  /**
+   * Optional declarative hook subscriptions used by the engine to cross-check
+   * which stages the plugin actually registers at load time. Each entry names
+   * a stage (backend or frontend) plus optional metadata (`reads`, `writes`,
+   * `priority`, `note`) consumed by the hook-inspector developer tool.
+   *
+   * Constraints (enforced by `PluginManager.#validateManifest`):
+   * - `stage === "strip-tags"` is REJECTED. Use `promptStripTags` /
+   *   `displayStripTags` instead.
+   * - Duplicate `stage` values within the same array are REJECTED. The
+   *   engine guarantees at most one handler per `(plugin, stage)` pair.
+   * - Unknown stages (not in `KNOWN_BACKEND_STAGES ∪ KNOWN_FRONTEND_STAGES`)
+   *   log a warn but do NOT block load; they are excluded from the strict
+   *   declare-vs-register cross-check.
+   *
+   * When the field is absent, the plugin is treated as "undeclared" and the
+   * strict cross-check is skipped (legacy behaviour). An empty array (`[]`)
+   * is treated as "explicitly declares no hooks" and the cross-check still
+   * runs (any register call from such a plugin is a load error).
+   */
+  readonly hooks?: readonly PluginHookDeclaration[];
+}
+
+/**
+ * Declarative hook subscription entry in `PluginManifest.hooks`.
+ *
+ * @property stage     Hook stage name. Backend and frontend stages share the
+ *                     same namespace; the engine validates each entry against
+ *                     `KNOWN_BACKEND_STAGES ∪ KNOWN_FRONTEND_STAGES`.
+ * @property priority  Optional render order (lower runs first). Engine
+ *                     defaults to 100 when the plugin's `register()` call
+ *                     omits the priority.
+ * @property reads     Optional list of context fields the handler reads.
+ *                     Used by the hook-inspector C2 stale-read heuristic.
+ * @property writes    Optional list of context fields the handler writes.
+ *                     Used by the hook-inspector C1 multi-write heuristic.
+ * @property note      Optional free-form note (≤ 200 chars) surfaced in the
+ *                     inspector UI.
+ */
+export interface PluginHookDeclaration {
+  readonly stage: string;
+  readonly priority?: number;
+  readonly reads?: readonly string[];
+  readonly writes?: readonly string[];
+  readonly note?: string;
 }
 
 /**

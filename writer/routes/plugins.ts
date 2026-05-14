@@ -49,6 +49,7 @@ export function registerPluginRoutes(
             (cssPath) => `/plugins/${p.name}/${cssPath}`,
           ),
           actionButtons: pluginManager.getPluginActionButtons(p.name),
+          hooks: Array.isArray(p.hooks) ? p.hooks : [],
         };
       }),
     );

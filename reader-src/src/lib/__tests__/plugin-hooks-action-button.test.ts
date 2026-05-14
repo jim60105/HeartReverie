@@ -60,36 +60,12 @@ describe("FrontendHookDispatcher — action-button:click", () => {
     expect(result).toBeInstanceOf(Promise);
   });
 
-  it("awaits handlers in priority order", async () => {
+  it("rejects a duplicate (plugin, stage) registration", () => {
     const d = new FrontendHookDispatcher();
-    const order: string[] = [];
-    d.register(
-      "action-button:click",
-      async () => {
-        await new Promise((r) => setTimeout(r, 5));
-        order.push("low");
-      },
-      10,
-      "plugin-a",
-    );
-    d.register(
-      "action-button:click",
-      async () => {
-        order.push("high");
-      },
-      200,
-      "plugin-a",
-    );
-    d.register(
-      "action-button:click",
-      async () => {
-        order.push("mid");
-      },
-      100,
-      "plugin-a",
-    );
-    await d.dispatch("action-button:click", makeClickCtx());
-    expect(order).toEqual(["low", "mid", "high"]);
+    d.register("action-button:click", () => {}, 10, "plugin-a");
+    expect(() => {
+      d.register("action-button:click", () => {}, 200, "plugin-a");
+    }).toThrow(/duplicate handler/);
   });
 
   it("origin filtering: only invokes handlers whose origin matches context.pluginName", async () => {

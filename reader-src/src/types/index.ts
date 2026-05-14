@@ -43,6 +43,19 @@ export interface PluginDescriptor {
   actionButtons?: ActionButtonDescriptor[];
   hasSettings?: boolean;
   settings?: Record<string, unknown>;
+  /**
+   * Manifest hook declarations. Always present (defaulted to `[]` by the
+   * backend) in the `/api/plugins` response. Used at boot time by
+   * `FrontendHookDispatcher.finalizeBoot()` to detect declare-vs-register
+   * mismatches.
+   */
+  hooks?: Array<{
+    stage: string;
+    priority?: number;
+    reads?: string[];
+    writes?: string[];
+    note?: string;
+  }>;
 }
 
 // ── Plugin Action Buttons ──
@@ -334,7 +347,8 @@ export type HookStage =
   | "chapter:dom:dispose"
   | "story:switch"
   | "chapter:change"
-  | "action-button:click";
+  | "action-button:click"
+  | "hook-inspector:report";
 
 export interface HookHandler<T = Record<string, unknown>> {
   (context: T): void;
@@ -921,3 +935,17 @@ export interface UseChapterActionsReturn {
     newName?: string,
   ) => Promise<BranchResponse>;
 }
+
+// Hook Inspector types (re-export)
+export type {
+  HandlerInfo,
+  PipelineFieldRef,
+  ManifestHookDeclaration,
+  ManifestDeclarations,
+  StripTagDeclaration,
+  ConflictKind,
+  ConflictReport,
+  HookInspectorReport,
+  BootMismatch,
+} from "./hook-inspector";
+

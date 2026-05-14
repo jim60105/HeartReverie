@@ -4,6 +4,9 @@
   "description": "User message lifecycle: wrap input in tags, strip from context and display",
   "type": "full-stack",
   "backendModule": "./handler.ts",
+  "hooks": [
+    { "stage": "pre-write", "writes": ["preContent"] }
+  ],
   "displayStripTags": [
     "user_message"
   ],
