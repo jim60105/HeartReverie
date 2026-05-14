@@ -72,7 +72,9 @@ const inputId = computed(() => `f-${props.path || "root"}`);
   display: inline-flex;
   gap: 0.25rem;
   padding: 0.15rem 0.5rem;
-  background: var(--bg-tag, #eee);
+  background: var(--pill-bg);
+  border: 1px solid var(--item-border);
+  color: var(--text-label);
   border-radius: 999px;
   font-size: 0.85rem;
 }
