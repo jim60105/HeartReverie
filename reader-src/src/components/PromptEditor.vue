@@ -15,10 +15,13 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { usePromptEditor } from "@/composables/usePromptEditor";
+import { useStorySelector } from "@/composables/useStorySelector";
 import PromptEditorMessageCard from "./PromptEditorMessageCard.vue";
 import type { MessageCard } from "@/types";
+import type { VariableEntry } from "@/lib/template-api";
+import { getVariables } from "@/lib/template-api";
 
 const emit = defineEmits<{ preview: []; saved: [] }>();
 
@@ -44,10 +47,39 @@ const {
   dismissParseError,
 } = usePromptEditor();
 
+const { selectedSeries, selectedStory } = useStorySelector();
+
 const rawTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const catalogVariables = ref<VariableEntry[]>([]);
+let catalogSeq = 0;
+
+async function loadCatalog(): Promise<void> {
+  // Per spec: fetch once per page (and re-fetch when series/story change),
+  // share across all message cards to bound the API burst when many cards
+  // mount at once. A monotonically increasing seq guards against an older
+  // request resolving after a newer one when series/story change rapidly.
+  const seq = ++catalogSeq;
+  try {
+    const res = await getVariables({
+      kind: "prompt-message-body",
+      series: selectedSeries.value || undefined,
+      story: selectedStory.value || undefined,
+    });
+    if (seq !== catalogSeq) return;
+    catalogVariables.value = res.variables;
+  } catch (err) {
+    if (seq !== catalogSeq) return;
+    console.warn("[PromptEditor] catalog fetch failed", err);
+  }
+}
 
 onMounted(async () => {
   await loadTemplate();
+  await loadCatalog();
+});
+
+watch([selectedSeries, selectedStory], () => {
+  void loadCatalog();
 });
 
 async function handleSave() {
@@ -212,6 +244,9 @@ function insertVariableInRaw(varName: string) {
         :is-first="idx === 0"
         :is-last="idx === cards.length - 1"
         :available-variables="parameters"
+        :catalog-variables="catalogVariables"
+        :series="selectedSeries || undefined"
+        :story="selectedStory || undefined"
         @update:role="(role: MessageCard['role']) => onCardRoleUpdate(card, role)"
         @update:body="(body: string) => onCardBodyUpdate(card, body)"
         @move-up="moveCardUp(card.id)"

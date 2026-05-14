@@ -1,19 +1,10 @@
 // Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-//
-// You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { mount } from "@vue/test-utils";
+import { VentoCodeEditorStub } from "./_vento-editor-stub";
+
+vi.mock("@/components/VentoCodeEditor.vue", () => ({ default: VentoCodeEditorStub }));
+
 import PromptEditorMessageCard from "@/components/PromptEditorMessageCard.vue";
 import type { MessageCard } from "@/types";
 
@@ -22,7 +13,7 @@ function makeCard(overrides: Partial<MessageCard> = {}): MessageCard {
 }
 
 describe("PromptEditorMessageCard", () => {
-  it("renders zh-TW role labels and reflects role/body via select + textarea", async () => {
+  it("renders zh-TW role labels and reflects role/body via select + editor", async () => {
     const w = mount(PromptEditorMessageCard, {
       props: { card: makeCard(), isFirst: false, isLast: false },
     });
@@ -31,7 +22,7 @@ describe("PromptEditorMessageCard", () => {
     const optionTexts = select.findAll("option").map((o) => o.text());
     expect(optionTexts).toEqual(["系統", "使用者", "助理"]);
     expect((select.element as HTMLSelectElement).value).toBe("user");
-    const ta = w.find("textarea.card-body");
+    const ta = w.find("textarea.mock-vento-editor");
     expect((ta.element as HTMLTextAreaElement).value).toBe("hello");
     await select.setValue("assistant");
     expect(w.emitted("update:role")?.[0]).toEqual(["assistant"]);
@@ -87,13 +78,13 @@ describe("PromptEditorMessageCard", () => {
         card: makeCard({ body: "ABCD" }),
         isFirst: false,
         isLast: false,
-        availableVariables: [
+        catalogVariables: [
           { name: "user_input", source: "core", type: "string" },
         ],
       },
       attachTo: document.body,
     });
-    const ta = w.find("textarea.card-body").element as HTMLTextAreaElement;
+    const ta = w.find("textarea.mock-vento-editor").element as HTMLTextAreaElement;
     ta.focus();
     ta.selectionStart = 2;
     ta.selectionEnd = 2;
@@ -110,92 +101,10 @@ describe("PromptEditorMessageCard", () => {
         card: makeCard(),
         isFirst: false,
         isLast: false,
-        availableVariables: [],
+        catalogVariables: [],
       },
     });
     await w.find("button.card-helper-btn").trigger("click");
     expect(w.text()).toContain("（目前沒有可用的變數）");
-  });
-
-  describe("auto-resize", () => {
-    function flushFrame() {
-      return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    }
-
-    it("grows the textarea past the three-line floor when the body is long", async () => {
-      const w = mount(PromptEditorMessageCard, {
-        props: { card: makeCard({ body: "hi" }), isFirst: false, isLast: false },
-        attachTo: document.body,
-      });
-      const ta = w.find("textarea.card-body").element as HTMLTextAreaElement;
-      // Force scrollHeight (happy-dom does not lay text out).
-      let scrollH = 30;
-      Object.defineProperty(ta, "scrollHeight", {
-        configurable: true,
-        get: () => scrollH,
-      });
-      await flushFrame();
-      const floor = parseFloat(ta.style.height);
-      expect(floor).toBeGreaterThan(0);
-
-      // Now grow the body and assert the textarea grows past the floor.
-      scrollH = 800;
-      await w.setProps({ card: makeCard({ body: "x".repeat(400) }) });
-      await w.vm.$nextTick();
-      await flushFrame();
-      expect(parseFloat(ta.style.height)).toBeGreaterThan(floor);
-      w.unmount();
-    });
-
-    it("shrinks back to the floor when a long body is replaced with a short one", async () => {
-      // Force a known scrollHeight + line metrics so we can assert the exact floor.
-      const realScrollHeight = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "scrollHeight",
-      );
-      let sh = 800;
-      Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
-        configurable: true,
-        get() {
-          return sh;
-        },
-      });
-      const w = mount(PromptEditorMessageCard, {
-        props: {
-          card: makeCard({ body: "L".repeat(800) }),
-          isFirst: false,
-          isLast: false,
-        },
-        attachTo: document.body,
-      });
-      const ta = w.find("textarea.card-body").element as HTMLTextAreaElement;
-      // Force computed line metrics to known values so the floor is predictable.
-      ta.style.lineHeight = "20px";
-      ta.style.paddingTop = "0px";
-      ta.style.paddingBottom = "0px";
-      ta.style.borderTopWidth = "0px";
-      ta.style.borderBottomWidth = "0px";
-      ta.style.borderTopStyle = "solid";
-      ta.style.borderBottomStyle = "solid";
-      ta.style.boxSizing = "border-box";
-      await flushFrame();
-      const tall = parseFloat(ta.style.height);
-      expect(tall).toBeGreaterThanOrEqual(800);
-
-      sh = 10;
-      await w.setProps({ card: makeCard({ body: "hi" }) });
-      await w.vm.$nextTick();
-      await flushFrame();
-      // 3-line floor with 20px line-height = 60px; ±1px tolerance.
-      expect(parseFloat(ta.style.height)).toBe(60);
-      w.unmount();
-      if (realScrollHeight) {
-        Object.defineProperty(
-          HTMLTextAreaElement.prototype,
-          "scrollHeight",
-          realScrollHeight,
-        );
-      }
-    });
   });
 });

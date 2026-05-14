@@ -245,6 +245,61 @@ Deno.test({ name: "templates routes", sanitizeOps: false, sanitizeResources: fal
       });
       assertEquals(res.status, 400);
     });
+
+    await t.step("GET /api/templates/variables honors kind=lore", async () => {
+      const res = await makeRequest(app, "GET", "/api/templates/variables?kind=lore");
+      assertEquals(res.status, 200);
+      const vars = res.body.variables as Array<{ name: string }>;
+      // lore catalog excludes engine runtime vars like user_input
+      assert(!vars.some((v) => v.name === "user_input"));
+    });
+
+    await t.step("GET /api/templates/variables rejects invalid kind", async () => {
+      const res = await makeRequest(app, "GET", "/api/templates/variables?kind=bogus");
+      assertEquals(res.status, 400);
+    });
+
+    await t.step("POST /api/templates/lint source-form prompt-message-body", async () => {
+      // body lints clean
+      const ok = await makeRequest(app, "POST", "/api/templates/lint", {
+        kind: "prompt-message-body",
+        role: "user",
+        source: "{{ user_input }}",
+      });
+      assertEquals(ok.status, 200);
+      assertEquals((ok.body.diagnostics as unknown[]).length, 0);
+
+      // nested message produces vento.message-nested at user-line 1
+      const nested = await makeRequest(app, "POST", "/api/templates/lint", {
+        kind: "prompt-message-body",
+        role: "user",
+        source: `{{ message "user" }}hi{{ /message }}`,
+      });
+      assertEquals(nested.status, 200);
+      const ndiags = nested.body.diagnostics as Array<{ ruleId: string; line: number }>;
+      assert(ndiags.some((d) => d.ruleId === "vento.message-nested"));
+      // diagnostic must point to user-source line (>=1), not the synthetic wrapper line 0
+      assert(ndiags.every((d) => d.line >= 1));
+    });
+
+    await t.step("POST /api/templates/lint source-form prompt-message-body missing role", async () => {
+      const res = await makeRequest(app, "POST", "/api/templates/lint", {
+        kind: "prompt-message-body",
+        source: "hi",
+      });
+      assertEquals(res.status, 400);
+    });
+
+    await t.step("POST /api/templates/lint source-form kind=lore", async () => {
+      const res = await makeRequest(app, "POST", "/api/templates/lint", {
+        kind: "lore",
+        source: "{{ user_input }}",
+      });
+      assertEquals(res.status, 200);
+      // user_input is NOT in lore catalog → unknown-variable warning expected
+      const diags = res.body.diagnostics as Array<{ ruleId: string }>;
+      assert(diags.some((d) => d.ruleId === "vento.unknown-variable"));
+    });
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }

@@ -3,12 +3,12 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick } from "vue";
 
 // Stub heavy CodeMirror module — its imports break in happy-dom.
-vi.mock("@/components/TemplateEditor.vue", () => ({
+vi.mock("@/components/VentoCodeEditor.vue", () => ({
   default: defineComponent({
-    props: ["source", "templatePath", "variables", "readOnly", "series", "story"],
+    props: ["source", "templatePath", "variables", "readOnly", "series", "story", "enableSaveShortcut"],
     emits: ["update:source", "lint", "save-request"],
     setup(_props, { expose }) {
-      expose({ jumpTo: vi.fn() });
+      expose({ jumpTo: vi.fn(), focus: vi.fn(), insertAtCursor: vi.fn() });
       return () => h("div", { class: "mock-template-editor" });
     },
   }),

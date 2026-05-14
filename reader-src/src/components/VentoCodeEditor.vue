@@ -14,8 +14,24 @@
   You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+<!--
+  VentoCodeEditor — CodeMirror 6 host for Vento template authoring.
+
+  Used in three places:
+    • Template Editor page (`templatePath` form — real on-disk file)
+    • Prompt Editor message cards (`kind: prompt-message-body` + role)
+    • Lore Editor passage textarea (`kind: lore` + scope)
+
+  The host page owns the variable catalog (fetched once per page).
+  Lint is debounced to ~300ms and skipped entirely when `disableLint`
+  is set (e.g. unsaved lore drafts) or while `lazyLint` is true and the
+  user has not yet focused/edited the editor.
+
+  Save shortcut (Mod-s → save-request) is opt-in via `enableSaveShortcut`
+  so we don't hijack Ctrl/Cmd-S on pages that do not implement save.
+-->
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { EditorState, Compartment } from "@codemirror/state";
 import {
   EditorView,
@@ -35,17 +51,46 @@ import { lintKeymap, forceLinting } from "@codemirror/lint";
 import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { ventoLanguage, ventoLinter, ventoHighlightStyle } from "@/lib/cm-vento";
 import { ventoCompletions } from "@/lib/cm-vento-complete";
-import type { Diagnostic, VariableEntry } from "@/lib/template-api";
+import type { Diagnostic, LintBody, LoreScope, TemplateKind, VariableEntry } from "@/lib/template-api";
 import { lintTemplate } from "@/lib/template-api";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   source: string;
-  templatePath: string;
   variables: VariableEntry[];
-  readOnly?: boolean;
+  /** Template path for on-disk files (Template Editor page). When absent, lint uses source-form. */
+  templatePath?: string;
+  /** Source-form lint kind. Required when `templatePath` is not provided. */
+  kind?: TemplateKind;
+  /** Required for `kind: "prompt-message-body"` — backend wraps source in `{{ message "<role>" }} … {{ /message }}`. */
+  role?: "system" | "user" | "assistant";
+  /** Optional lore scope hint for source-form lint. */
+  scope?: LoreScope;
+  /** Optional plugin scoping for `kind: "plugin-fragment"`. */
+  pluginName?: string;
+  /** Optional series/story context for catalog resolution. */
   series?: string;
   story?: string;
-}>();
+  readOnly?: boolean;
+  /** When true, Mod-s emits `save-request`. Defaults to off. */
+  enableSaveShortcut?: boolean;
+  /** When true, line numbers gutter is rendered. Defaults to true. */
+  enableLineNumbers?: boolean;
+  /** Skip lint entirely (e.g. unsaved lore drafts). */
+  disableLint?: boolean;
+  /** Defer the first lint until the editor receives focus or an edit. */
+  lazyLint?: boolean;
+  /** Minimum visible lines (translated to min-height CSS). */
+  minLines?: number;
+  /** Maximum visible lines before vertical scroll (translated to max-height CSS). */
+  maxLines?: number;
+}>(), {
+  enableSaveShortcut: false,
+  enableLineNumbers: true,
+  disableLint: false,
+  lazyLint: false,
+  minLines: 3,
+  maxLines: 30,
+});
 
 const emit = defineEmits<{
   "update:source": [value: string];
@@ -58,9 +103,20 @@ const view = shallowRef<EditorView | null>(null);
 const readOnlyComp = new Compartment();
 const variablesRef = shallowRef<VariableEntry[]>(props.variables);
 const diagnostics = shallowRef<Diagnostic[]>([]);
+const userHasInteracted = ref(false);
 
 let lintTimer: ReturnType<typeof setTimeout> | null = null;
 let lastLintedSource: string | null = null;
+let lintSeq = 0;
+
+const sizeStyle = computed(() => {
+  // ~1.5em per line at the editor's font-size. Empirically matches the
+  // default CodeMirror line-height; min/max are advisory caps.
+  return {
+    "--vc-min-lines": String(props.minLines),
+    "--vc-max-lines": String(props.maxLines),
+  } as Record<string, string>;
+});
 
 function getVariables(): VariableEntry[] {
   return variablesRef.value;
@@ -70,24 +126,58 @@ function getDiagnostics(): Diagnostic[] {
   return diagnostics.value;
 }
 
-async function runLint(): Promise<void> {
-  const v = view.value;
-  if (!v) return;
-  const source = v.state.doc.toString();
-  if (source === lastLintedSource) return;
-  lastLintedSource = source;
-  try {
-    const res = await lintTemplate({
+function buildLintBody(source: string): LintBody | null {
+  if (props.templatePath) {
+    return {
       templatePath: props.templatePath,
       source,
       series: props.series,
       story: props.story,
-    });
+    };
+  }
+  if (!props.kind) return null;
+  if (props.kind === "prompt-message-body" && !props.role) return null;
+  return {
+    kind: props.kind,
+    source,
+    role: props.role,
+    scope: props.scope,
+    series: props.series,
+    story: props.story,
+    pluginName: props.pluginName,
+  };
+}
+
+async function runLint(): Promise<void> {
+  const v = view.value;
+  if (!v) return;
+  if (props.disableLint) {
+    diagnostics.value = [];
+    emit("lint", []);
+    forceLinting(v);
+    return;
+  }
+  if (props.lazyLint && !userHasInteracted.value) return;
+  const source = v.state.doc.toString();
+  if (source === lastLintedSource) return;
+  lastLintedSource = source;
+  const body = buildLintBody(source);
+  if (!body) {
+    diagnostics.value = [];
+    emit("lint", []);
+    forceLinting(v);
+    return;
+  }
+  const seq = ++lintSeq;
+  try {
+    const res = await lintTemplate(body);
+    // Discard responses that arrived out of order. Newer lint runs win.
+    if (seq !== lintSeq) return;
     diagnostics.value = res.diagnostics;
     emit("lint", res.diagnostics);
     if (view.value) forceLinting(view.value);
   } catch (err) {
-    // Network/HTTP error — surface as a synthetic diagnostic.
+    if (seq !== lintSeq) return;
     const d: Diagnostic[] = [{
       ruleId: "lint.network-error",
       severity: "warning",
@@ -109,8 +199,26 @@ function scheduleLint(): void {
 }
 
 function buildExtensions() {
+  const gutters = props.enableLineNumbers ? [lineNumbers()] : [];
+  const keymapEntries = [
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...historyKeymap,
+    ...completionKeymap,
+    ...lintKeymap,
+  ];
+  if (props.enableSaveShortcut) {
+    keymapEntries.push({
+      key: "Mod-s",
+      preventDefault: true,
+      run: () => {
+        if (!props.readOnly) emit("save-request");
+        return true;
+      },
+    });
+  }
   return [
-    lineNumbers(),
+    ...gutters,
     highlightActiveLine(),
     highlightActiveLineGutter(),
     history(),
@@ -123,26 +231,17 @@ function buildExtensions() {
     ventoCompletions(getVariables),
     ventoLinter(getDiagnostics),
     EditorView.lineWrapping,
-    keymap.of([
-      ...closeBracketsKeymap,
-      ...defaultKeymap,
-      ...historyKeymap,
-      ...completionKeymap,
-      ...lintKeymap,
-      {
-        key: "Mod-s",
-        preventDefault: true,
-        run: () => {
-          if (!props.readOnly) emit("save-request");
-          return true;
-        },
-      },
-    ]),
+    keymap.of(keymapEntries),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
+        userHasInteracted.value = true;
         const text = update.state.doc.toString();
         emit("update:source", text);
         scheduleLint();
+      }
+      if (update.focusChanged && update.view.hasFocus) {
+        userHasInteracted.value = true;
+        if (props.lazyLint && lastLintedSource === null) scheduleLint();
       }
     }),
     readOnlyComp.of(EditorState.readOnly.of(!!props.readOnly)),
@@ -156,7 +255,7 @@ onMounted(() => {
     extensions: buildExtensions(),
   });
   view.value = new EditorView({ state, parent: hostRef.value });
-  scheduleLint();
+  if (!props.lazyLint) scheduleLint();
 });
 
 onBeforeUnmount(() => {
@@ -165,7 +264,6 @@ onBeforeUnmount(() => {
   view.value = null;
 });
 
-// Sync source prop → editor (when switching templates).
 watch(() => props.source, (next) => {
   const v = view.value;
   if (!v) return;
@@ -192,10 +290,57 @@ watch(() => props.templatePath, () => {
   scheduleLint();
 });
 
+watch(() => props.kind, () => {
+  lastLintedSource = null;
+  scheduleLint();
+});
+
+watch(
+  () => [props.role, props.scope, props.series, props.story, props.pluginName],
+  () => {
+    lastLintedSource = null;
+    scheduleLint();
+  },
+);
+
+watch(() => props.disableLint, (next) => {
+  const v = view.value;
+  if (!v) return;
+  if (next) {
+    // Clear immediately so stale diagnostics don't linger.
+    lintSeq++; // Invalidate any in-flight request.
+    diagnostics.value = [];
+    emit("lint", []);
+    forceLinting(v);
+  } else {
+    lastLintedSource = null;
+    scheduleLint();
+  }
+});
+
 defineExpose({
   focus(): void {
     view.value?.focus();
   },
+  /**
+   * Insert text at the current selection/cursor. Used by "Insert Variable"
+   * helpers in host pages.
+   */
+  insertAtCursor(text: string): void {
+    const v = view.value;
+    if (!v) return;
+    const { from, to } = v.state.selection.main;
+    v.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: from + text.length },
+    });
+    v.focus();
+  },
+  /**
+   * Scroll-to + focus a specific line/column. Used by diagnostic panels
+   * (Template Editor page) to jump to a lint hit. The host gets a 1-based
+   * line/column and the editor clamps to valid positions.
+   */
   jumpTo(line: number, column: number): void {
     const v = view.value;
     if (!v) return;
@@ -205,12 +350,11 @@ defineExpose({
     v.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
     v.focus();
   },
-  getDiagnostics,
 });
 </script>
 
 <template>
-  <div ref="hostRef" class="cm-vento-host" :class="{ 'is-readonly': readOnly }"></div>
+  <div ref="hostRef" class="cm-vento-host" :class="{ 'is-readonly': readOnly }" :style="sizeStyle"></div>
 </template>
 
 <style scoped>
@@ -218,7 +362,8 @@ defineExpose({
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0;
+  min-height: calc(var(--vc-min-lines, 3) * 1.5em + 1em);
+  max-height: calc(var(--vc-max-lines, 30) * 1.5em + 1em);
   min-width: 0;
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -235,10 +380,9 @@ defineExpose({
 
 .cm-vento-host :deep(.cm-scroller) {
   font-family: inherit;
+  overflow-y: auto;
 }
 
-/* Gutter (line numbers + fold markers) — theme-tokenised so it follows
- * default/light/dark palettes loaded from `themes/*.toml`. */
 .cm-vento-host :deep(.cm-gutters) {
   background: var(--section-head-bg);
   color: var(--text-italic);

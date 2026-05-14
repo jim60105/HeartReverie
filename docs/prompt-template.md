@@ -369,6 +369,27 @@ const result = await ventoEnv.runString(systemTemplate, {
 - `vento.unknown-variable`：AST walk 發現引用了不在 catalog 內的變數名稱。
 - `vento.message-nested` / `vento.message-invalid-role`：`{{ message }}` 多訊息標籤的編譯期錯誤。
 
+`POST /api/templates/lint` 支援兩種請求型態：
+
+1. **Path-form**（Template Editor 頁面用）：`{ templatePath, source, series?, story? }`。後端透過 `parseTemplatePath()` 推導 `kind`、catalog 範圍與 lore scope。
+2. **Source-form**（Prompt Editor 卡片、Lore Editor 草稿等虛擬位置用）：`{ kind, source, role?, scope?, series?, story?, pluginName? }`。
+   - `kind` 必填，可為 `system` / `plugin-fragment` / `lore` / `prompt-message-body`。
+   - `kind: "prompt-message-body"` 必須帶 `role ∈ {system, user, assistant}`。後端會在 lint 前把 source 包進 `{{ message "<role>" }} … {{ /message }}`，讓 nested-message 之類的錯誤能在卡片本體被即時揪出；診斷的 line 會自動翻譯回使用者輸入的座標。
+   - `kind: "plugin-fragment"` 必須帶 `pluginName`，用來收斂 catalog 至該 plugin 自己宣告的 `promptFragments[].variables`。
+   - `kind: "lore"` 的草稿（尚未存檔）建議由前端跳過 lint 請求；存檔後再啟動 lint。
+
+`GET /api/templates/variables` 同樣支援 `kind` query param（預設為 `system`），讓 Prompt Editor / Lore Editor 各自獲得正確範圍的變數 catalog。每個 host page 只需要在 mount 時抓一次 catalog 並轉發到所有編輯器實例，避免多卡片同時打 API。
+
+### `VentoCodeEditor` — 共用編輯器元件
+
+CodeMirror 6 + Vento 編輯器以 `VentoCodeEditor.vue`（路徑 `reader-src/src/components/`）形式釋出，在三處被消費：
+
+- Template Editor 頁面（`TemplateEditorPage.vue`）— 帶 `templatePath`，啟用 `enableSaveShortcut`（Mod-s → 觸發儲存）。
+- Prompt Editor 訊息卡片（`PromptEditorMessageCard.vue`）— `kind: "prompt-message-body"` + `role`，`lazy-lint` 在使用者第一次 focus／edit 之前不發 lint 請求。
+- Lore Editor 內文（`lore/LoreEditor.vue`）— `kind: "lore"` + `scope`，新建草稿時設 `disable-lint` 跳過 lint。
+
+公開 props 包含 `source, variables, templatePath?, kind?, role?, scope?, pluginName?, series?, story?, readOnly?, enableSaveShortcut?, enableLineNumbers?, disableLint?, lazyLint?, minLines?, maxLines?`。發射事件 `update:source`、`lint` 與 `save-request`。`defineExpose` 對外暴露 `{ focus, insertAtCursor, jumpTo }`，host 不應直接觸碰 CodeMirror `EditorView`。
+
 ### Preview 模式（三種 fixture mode）
 
 `POST /api/templates/preview` 支援三種 fixture mode：

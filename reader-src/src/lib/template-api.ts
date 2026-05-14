@@ -20,7 +20,7 @@
 
 import { useAuth } from "@/composables/useAuth";
 
-export type TemplateKind = "system" | "plugin-fragment" | "lore";
+export type TemplateKind = "system" | "plugin-fragment" | "lore" | "prompt-message-body";
 export type LoreScope = "global" | "series" | "story";
 
 export interface TemplateRef {
@@ -78,12 +78,30 @@ export interface LintResponse {
   diagnostics: Diagnostic[];
 }
 
-export interface LintBody {
+export interface LintBodyPath {
   templatePath: string;
   source: string;
   series?: string;
   story?: string;
 }
+
+/**
+ * Source-form lint body for virtual editors (prompt-editor message cards,
+ * lore drafts). Backend distinguishes by absence of `templatePath`.
+ * `kind: "prompt-message-body"` requires `role`; backend wraps source in
+ * `{{ message "<role>" }} … {{ /message }}` before parsing.
+ */
+export interface LintBodySource {
+  kind: TemplateKind;
+  source: string;
+  role?: "system" | "user" | "assistant";
+  scope?: LoreScope;
+  series?: string;
+  story?: string;
+  pluginName?: string;
+}
+
+export type LintBody = LintBodyPath | LintBodySource;
 
 export type PreviewFixture = "default" | "current" | Record<string, unknown>;
 
@@ -203,11 +221,13 @@ export async function listTemplates(
 }
 
 export async function getVariables(
-  opts: { series?: string; story?: string } = {},
+  opts: { kind?: TemplateKind; series?: string; story?: string; pluginName?: string } = {},
 ): Promise<GetVariablesResponse> {
   const params = new URLSearchParams();
+  if (opts.kind) params.set("kind", opts.kind);
   if (opts.series) params.set("series", opts.series);
   if (opts.story) params.set("story", opts.story);
+  if (opts.pluginName) params.set("pluginName", opts.pluginName);
   const qs = params.toString();
   const url = qs ? `/api/templates/variables?${qs}` : "/api/templates/variables";
   const res = await fetch(url, { headers: jsonHeaders() });

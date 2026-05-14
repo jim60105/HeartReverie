@@ -1,19 +1,10 @@
 // Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-//
-// You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { mount } from "@vue/test-utils";
+import { VentoCodeEditorStub } from "./_vento-editor-stub";
+
+vi.mock("@/components/VentoCodeEditor.vue", () => ({ default: VentoCodeEditorStub }));
+
 import PromptEditorMessageCard from "@/components/PromptEditorMessageCard.vue";
 import type { MessageCard } from "@/types";
 
@@ -28,7 +19,7 @@ describe("PromptEditorMessageCard — extra coverage", () => {
         card: makeCard(),
         isFirst: false,
         isLast: false,
-        availableVariables: [{ name: "foo", source: "core", type: "string" }],
+        catalogVariables: [{ name: "foo", source: "core", type: "string" }],
       },
     });
     expect(w.find(".card-variable-menu").exists()).toBe(false);
@@ -44,7 +35,7 @@ describe("PromptEditorMessageCard — extra coverage", () => {
         card: makeCard({ body: "" }),
         isFirst: false,
         isLast: false,
-        availableVariables: [{
+        catalogVariables: [{
           name: "lore_all",
           source: "lore",
           type: "string",
@@ -60,43 +51,13 @@ describe("PromptEditorMessageCard — extra coverage", () => {
     w.unmount();
   });
 
-  it("uses fallback insertion path when setRangeText is unavailable", async () => {
-    const w = mount(PromptEditorMessageCard, {
-      props: {
-        card: makeCard({ body: "ABCD" }),
-        isFirst: false,
-        isLast: false,
-        availableVariables: [{
-          name: "scene",
-          source: "plugin",
-          type: "string",
-        }],
-      },
-      attachTo: document.body,
-    });
-    const ta = w.find("textarea.card-body").element as HTMLTextAreaElement;
-    // Simulate an environment without setRangeText (e.g., older jsdom).
-    Object.defineProperty(ta, "setRangeText", {
-      configurable: true,
-      value: undefined,
-    });
-    ta.focus();
-    ta.selectionStart = 1;
-    ta.selectionEnd = 3;
-    await w.find("button.card-helper-btn").trigger("click");
-    await w.find("button.card-variable-item").trigger("click");
-    const last = w.emitted("update:body")?.slice(-1)[0]?.[0];
-    expect(last).toBe("A{{ scene }}D");
-    w.unmount();
-  });
-
   it("renders pill-plugin / pill-core / pill-lore classes per source", async () => {
     const w = mount(PromptEditorMessageCard, {
       props: {
         card: makeCard(),
         isFirst: false,
         isLast: false,
-        availableVariables: [
+        catalogVariables: [
           { name: "core_var", source: "core", type: "string" },
           { name: "lore_var", source: "lore", type: "string" },
           { name: "plug_var", source: "thinking", type: "string" },

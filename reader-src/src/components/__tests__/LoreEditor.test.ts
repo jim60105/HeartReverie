@@ -1,5 +1,15 @@
 import { ref } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
+import { VentoCodeEditorStub } from "./_vento-editor-stub";
+
+vi.mock("@/components/VentoCodeEditor.vue", () => ({ default: VentoCodeEditorStub }));
+
+// LoreEditor calls getVariables() on mount; stub the network so the test
+// doesn't hit a real fetch.
+vi.mock("@/lib/template-api", () => ({
+  getVariables: vi.fn().mockResolvedValue({ variables: [], warnings: [] }),
+}));
+
 import LoreEditor from "@/components/lore/LoreEditor.vue";
 
 const allTagsRef = ref<string[]>(["角色", "世界觀", "設定"]);
@@ -33,7 +43,7 @@ describe("LoreEditor", () => {
 
     expect(mockReadPassage).toHaveBeenCalledWith("story", "a.md", "s", "t");
     expect((wrapper.find('input[placeholder="example.md"]').element as HTMLInputElement).value).toBe("a.md");
-    expect((wrapper.find('textarea[placeholder="Markdown 內容..."]').element as HTMLTextAreaElement).value).toBe("內文");
+    expect((wrapper.find('textarea.mock-vento-editor').element as HTMLTextAreaElement).value).toBe("內文");
     expect(wrapper.text()).toContain("停用");
   });
 
@@ -58,7 +68,7 @@ describe("LoreEditor", () => {
 
     await wrapper.find('input[placeholder="example.md"]').setValue("new.md");
     await wrapper.find('input[placeholder="角色, 世界觀, 設定"]').setValue("角色, 設定");
-    await wrapper.find('textarea[placeholder="Markdown 內容..."]').setValue("lore text");
+    await wrapper.find('textarea.mock-vento-editor').setValue("lore text");
     await wrapper.find(".toolbar-btn--save").trigger("click");
     await flushPromises();
 

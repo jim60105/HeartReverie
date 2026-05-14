@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { useLoreApi } from "@/composables/useLoreApi";
+import VentoCodeEditor from "@/components/VentoCodeEditor.vue";
+import { getVariables } from "@/lib/template-api";
+import type { VariableEntry } from "@/lib/template-api";
 
 const props = defineProps<{
   scope: "global" | "series" | "story";
@@ -30,6 +33,24 @@ const tagInputFocused = ref(false);
 const tagInputEl = ref<HTMLInputElement | null>(null);
 
 const isNew = computed(() => !props.path);
+const catalogVariables = ref<VariableEntry[]>([]);
+let catalogSeq = 0;
+
+async function loadCatalog(): Promise<void> {
+  const seq = ++catalogSeq;
+  try {
+    const res = await getVariables({
+      kind: "lore",
+      series: props.series,
+      story: props.story,
+    });
+    if (seq !== catalogSeq) return;
+    catalogVariables.value = res.variables;
+  } catch (err) {
+    if (seq !== catalogSeq) return;
+    console.warn("[LoreEditor] catalog fetch failed", err);
+  }
+}
 
 const currentTagQuery = computed(() => {
   const parts = tagsInput.value.split(",");
@@ -72,6 +93,7 @@ onMounted(async () => {
       errorMsg.value = e instanceof Error ? e.message : "載入失敗";
     }
   }
+  await loadCatalog();
 });
 
 function parseTags(): string[] {
@@ -199,12 +221,21 @@ async function handleDelete() {
 
       <label class="field-label field-label--grow">
         內容
-        <textarea
-          v-model="content"
-          class="field-textarea"
-          placeholder="Markdown 內容..."
-          spellcheck="false"
-        ></textarea>
+        <VentoCodeEditor
+          class="lore-content-editor"
+          :source="content"
+          :variables="catalogVariables"
+          kind="lore"
+          :scope="props.scope"
+          :series="props.series"
+          :story="props.story"
+          :disable-lint="!!filenameError"
+          :lazy-lint="true"
+          :min-lines="6"
+          :max-lines="40"
+          :enable-line-numbers="false"
+          @update:source="(v: string) => content = v"
+        />
       </label>
     </div>
 

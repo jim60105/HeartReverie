@@ -17,17 +17,24 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { MessageCard, ParameterPill } from "@/types";
-import { useAutoresize } from "@/composables/useAutoresize";
+import type { VariableEntry } from "@/lib/template-api";
+import VentoCodeEditor from "./VentoCodeEditor.vue";
 
 interface Props {
   card: MessageCard;
   isFirst: boolean;
   isLast: boolean;
   availableVariables?: ParameterPill[];
+  /** Variable catalog for lint/autocomplete (kind: prompt-message-body). */
+  catalogVariables?: VariableEntry[];
+  /** Series / story context for lint catalog resolution. */
+  series?: string;
+  story?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   availableVariables: () => [],
+  catalogVariables: () => [],
 });
 
 const emit = defineEmits<{
@@ -44,42 +51,21 @@ const ROLE_OPTIONS: Array<{ value: MessageCard["role"]; label: string }> = [
   { value: "assistant", label: "助理" },
 ];
 
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const editorRef = ref<InstanceType<typeof VentoCodeEditor> | null>(null);
 const showVariableMenu = ref(false);
 const showDeleteConfirm = ref(false);
-
-useAutoresize(textareaRef, { minLines: 3, watch: () => props.card.body });
 
 function onRoleChange(event: Event) {
   const next = (event.target as HTMLSelectElement).value as MessageCard["role"];
   emit("update:role", next);
 }
 
-function onBodyInput(event: Event) {
-  emit("update:body", (event.target as HTMLTextAreaElement).value);
+function onBodyUpdate(value: string) {
+  emit("update:body", value);
 }
 
-function insertAtCursor(varName: string) {
-  const ta = textareaRef.value;
-  if (!ta) return;
-  ta.focus();
-  const insertion = `{{ ${varName} }}`;
-  if (typeof ta.setRangeText === "function") {
-    const start = ta.selectionStart ?? ta.value.length;
-    const end = ta.selectionEnd ?? ta.value.length;
-    ta.setRangeText(insertion, start, end, "end");
-    emit("update:body", ta.value);
-  } else {
-    // Fallback for environments without setRangeText.
-    const start = ta.selectionStart ?? ta.value.length;
-    const end = ta.selectionEnd ?? ta.value.length;
-    const before = ta.value.slice(0, start);
-    const after = ta.value.slice(end);
-    const next = before + insertion + after;
-    ta.value = next;
-    ta.selectionStart = ta.selectionEnd = start + insertion.length;
-    emit("update:body", next);
-  }
+function insertVariable(varName: string) {
+  editorRef.value?.insertAtCursor(`{{ ${varName} }}`);
   showVariableMenu.value = false;
 }
 
@@ -181,7 +167,7 @@ function confirmDelete() {
         </button>
         <div v-if="showVariableMenu" class="card-variable-menu">
           <button
-            v-for="p in props.availableVariables"
+            v-for="p in props.catalogVariables"
             :key="p.name"
             type="button"
             class="card-variable-item"
@@ -190,13 +176,13 @@ function confirmDelete() {
               'pill-lore': p.source === 'lore',
               'pill-plugin': p.source !== 'core' && p.source !== 'lore',
             }"
-            :title="`${p.source}: ${p.type}`"
-            @click="insertAtCursor(p.name)"
+            :title="`${p.source}${p.type ? `: ${p.type}` : ''}`"
+            @click="insertVariable(p.name)"
           >
             {{ p.name }}
           </button>
           <p
-            v-if="!props.availableVariables.length"
+            v-if="!props.catalogVariables.length"
             class="card-variable-empty"
           >
             （目前沒有可用的變數）
@@ -204,14 +190,21 @@ function confirmDelete() {
         </div>
       </div>
 
-      <textarea
-        ref="textareaRef"
-        class="card-body"
-        spellcheck="false"
-        :value="props.card.body"
-        placeholder="（訊息內容）"
-        @input="onBodyInput"
-      ></textarea>
+      <VentoCodeEditor
+        ref="editorRef"
+        class="card-body-editor"
+        :source="props.card.body"
+        :variables="props.catalogVariables"
+        kind="prompt-message-body"
+        :role="props.card.role"
+        :series="props.series"
+        :story="props.story"
+        :min-lines="3"
+        :max-lines="20"
+        :enable-line-numbers="false"
+        :lazy-lint="true"
+        @update:source="onBodyUpdate"
+      />
     </div>
   </div>
 </template>
@@ -411,6 +404,10 @@ function confirmDelete() {
   margin: 0;
   color: var(--text-label);
   font-size: 0.75em;
+}
+
+.card-body-editor {
+  display: flex;
 }
 
 .card-body {

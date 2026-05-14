@@ -50,7 +50,7 @@ export interface VariableRef {
   readonly description?: string;
 }
 
-export type TemplateKind = "system" | "plugin-fragment" | "lore";
+export type TemplateKind = "system" | "plugin-fragment" | "lore" | "prompt-message-body";
 
 const CORE_VARIABLES: ReadonlyArray<VariableRef> = [
   { name: "previous_context", type: "array", source: "core", description: "Array of previous chapter contents (stripped)" },

@@ -18,7 +18,7 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { createPatch } from "diff";
 import TemplateFileTree from "./TemplateFileTree.vue";
-import TemplateEditor from "./TemplateEditor.vue";
+import TemplateEditor from "./VentoCodeEditor.vue";
 import { useNotification } from "@/composables/useNotification";
 import { useStorySelector } from "@/composables/useStorySelector";
 import {
@@ -432,6 +432,7 @@ watch([series, story], async () => {
           :read-only="isReadOnly"
           :series="series || undefined"
           :story="story || undefined"
+          :enable-save-shortcut="true"
           @update:source="onSourceUpdate"
           @lint="onLint"
           @save-request="onSaveRequest"

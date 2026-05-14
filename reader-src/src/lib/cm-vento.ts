@@ -151,7 +151,7 @@ export const ventoHighlightStyle = HighlightStyle.define([
   { tag: t.brace, color: "var(--text-title)", fontWeight: "600" },
   { tag: t.comment, color: "var(--text-italic)", fontStyle: "italic" },
   // `tagName.error` is emitted for `{{> include }}` bodies. The host
-  // component (`TemplateEditor.vue`) overlays underline-wavy styling on
+  // component (`VentoCodeEditor.vue`) overlays underline-wavy styling on
   // `.cm-tagName-error` via a scoped rule; the color here is the
   // fallback used by CodeMirror's syntax-highlighting layer.
   { tag: t.tagName, color: "var(--accent-solid)", fontWeight: "600" },
