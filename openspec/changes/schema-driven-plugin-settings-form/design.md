@@ -2,7 +2,7 @@
 
 The current plugin settings stack ships with two intentional limitations that have now become friction points for the next generation of in-tree plugins:
 
-1. **`PluginManager.#validateAgainstSchema`** (`writer/lib/plugin-manager.ts` L1101-1166) only honours top-level `required` plus a typeof check on each property. Every other JSON-Schema keyword — `enum`, `minimum`, `maximum`, `pattern`, `items`, `items.enum`, nested `properties`, `format`, `additionalProperties` — is silently dropped. Plugins (`state.maxDiffEntries.minimum=50`, `dialogue-colorize.enabledQuoteStyles.items.enum`) therefore declare constraints the engine never enforces. The disk-resident `playground/_plugins/<name>/config.json` may already contain values that violate the *declared* schema.
+1. **`PluginManager.#validateAgainstSchema`** (`writer/lib/plugin-manager.ts` L1101-1166) only honours top-level `required` plus a typeof check on each property. Every other JSON-Schema keyword — `enum`, `minimum`, `maximum`, `pattern`, `items`, `items.enum`, nested `properties`, `format`, `additionalProperties` — is silently dropped. Plugins (`state.maxDiffEntries.minimum=50`, `scene-info-sidebar.visibleFields.items.enum`) therefore declare constraints the engine never enforces. The disk-resident `playground/_plugins/<name>/config.json` may already contain values that violate the *declared* schema.
 2. **`PluginSettingsPage.vue`** (L171-186, L380-556) dispatches on schema shape via a hand-written `v-if/v-else-if` chain across seven widgets. Adding any widget requires editing this file; plugin authors cannot supply their own components (vanilla-ES-module plugins under `register(hooks)` cannot ship compiled Vue SFCs without breaking the existing module model and CSP). Schema-shaped UX is therefore capped at what the core file enumerates.
 
 The combined effect: plugin authors write JSON Schema, but the engine treats most of it as documentation. The proposal converts this into a real schema-driven form engine.
@@ -20,7 +20,7 @@ Hard constraints inherited from `AGENTS.md`:
 
 - Make every JSON-Schema keyword the proposal lists genuinely enforce on the server, with structured, i18n-ready error reporting on the wire.
 - Preserve the user experience for the 14 in-tree plugins whose `settingsSchema` files are not edited by this change — they continue to render and persist byte-identically.
-- Let `dialogue-colorize.enabledQuoteStyles` upgrade from `tags` to `multi-select` via *registry resolution alone* — no manifest edits — proving that schema-shape-driven widget routing actually works.
+- Let `scene-info-sidebar.visibleFields` upgrade from `tags` to `multi-select` via *registry resolution alone* — no manifest edits — proving that schema-shape-driven widget routing actually works.
 - Bound the blast radius of stricter validation: users with legacy out-of-range disk values can still load settings, can still edit unrelated fields, and only see blocking errors on fields they personally touch.
 - Provide a forward-compatible escape hatch (`x-schema-version`) for any future major change that *will* be destructive.
 - Keep the validator in-house and pure-function so the unit suite can exhaustively cover every keyword without spinning up a server or plugin manager.
@@ -108,9 +108,9 @@ The widget registry is populated only by `createDefaultWidgetRegistry()` in phas
 
 Rationale: introducing a plugin-supplied widget API requires defining a vanilla-DOM widget adapter (plugins cannot ship Vue SFCs). That contract is non-trivial (mount/update/unmount lifecycle, CSP-safe stylesheet injection, error containment) and is best deferred to phase 2 where it gets its own `plugin-core` delta and its own design review.
 
-### D11 — Demo migration is `dialogue-colorize` only and touches no manifest
+### D11 — Demo migration is `scene-info-sidebar` only and touches no manifest
 
-`dialogue-colorize.enabledQuoteStyles` already declares `type: "array", items: { type: "string", enum: [...] }`. Phase 1 changes nothing in the manifest; the new widget registry simply *resolves* the multi-select widget instead of the tags widget for that schema shape. A snapshot test confirms the other 13 in-tree manifests render byte-identically.
+`scene-info-sidebar.visibleFields` already declares `type: "array", items: { type: "string", enum: [...] }`. Phase 1 changes nothing in the manifest; the new widget registry simply *resolves* the multi-select widget instead of the tags widget for that schema shape. A snapshot test confirms the other 13 in-tree manifests render byte-identically.
 
 Rationale: the smallest possible demonstration of the registry's value, while explicitly avoiding scope creep into multi-plugin manifest editing.
 
@@ -132,7 +132,7 @@ Rationale: the smallest possible demonstration of the registry's value, while ex
 3. Flip the `PUT` error envelope to the structured shape. Update the frontend in the same PR to consume `errors[]`. Land the `POST /settings/validate` and `GET /settings/schema-meta` endpoints simultaneously.
 4. Land the frontend `<SchemaField>` + `WidgetRegistry` + the 12 built-in widget SFCs. Keep `PluginSettingsPage.vue` rendering using the old switch as a feature flag (a boolean checked at setup time) until step 6 to allow rollback.
 5. Land the `x-schema-version` audit + `x-path-roots` validation + `x-show-when` ↔ `required` reject in `PluginManager.loadPlugin`. Container smoke test confirms the 14 in-tree manifests load cleanly with one expected warn each.
-6. Remove the feature flag; `PluginSettingsPage.vue` exclusively uses `<SchemaField>`. The `dialogue-colorize` upgrade goes live via registry resolution. Snapshot test asserts the other 13 plugins render unchanged.
+6. Remove the feature flag; `PluginSettingsPage.vue` exclusively uses `<SchemaField>`. The `scene-info-sidebar` upgrade goes live via registry resolution. Snapshot test asserts the other 13 plugins render unchanged.
 7. Add the writer-mode-only route guard. Reader-mode hits `/settings/plugins/*` → 404/redirect.
 8. Author docs (`docs/plugin-system/settings-schema.md`) and release notes. Note the three BREAKING items.
 

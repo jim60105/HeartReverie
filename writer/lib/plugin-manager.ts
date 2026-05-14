@@ -13,9 +13,18 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { isAbsolute, join, resolve, SEPARATOR } from "@std/path";
+import { dirname, isAbsolute, join, resolve, SEPARATOR } from "@std/path";
 import { isPathContained } from "./path-safety.ts";
 import { validateTemplate } from "./template.ts";
+import {
+  getHardcodedPathRoots,
+  intersectXPathRoots,
+  resolveDisplayRoots,
+} from "./path-allowlist.ts";
+import {
+  type ValidationError,
+  validate as validateSchema,
+} from "./schema-validator.ts";
 import type {
   ActionButtonDescriptor,
   ActionButtonVisibility,
@@ -40,6 +49,25 @@ interface PluginEntry {
   registerRoutes?: (
     context: import("../types.ts").PluginRouteContext,
   ) => void | Promise<void>;
+}
+
+/**
+ * Settings-schema audit metadata captured at load time.
+ *  - `versionMismatch=true` means the manifest declared an unsupported
+ *    `x-schema-version`; the plugin still loads but the settings API
+ *    degrades to defaults (`GET`) and `409` (`PUT`).
+ *  - `previousNames` is the union of `x-previous-names` entries → current
+ *    property name. Used by GET to migrate legacy keys in-memory.
+ *  - `writeOnlyPaths` is the set of dotted property paths (top-level only in
+ *    phase 1, since `writeOnly` is documented at top-level schema properties)
+ *    whose values SHALL be masked as `null` in the GET response.
+ *  - `topLevelLegacy` toggles `x-legacy` relocation at PUT time.
+ */
+interface SettingsAudit {
+  readonly versionMismatch: boolean;
+  readonly previousNames: Map<string, string>;
+  readonly writeOnlyKeys: Set<string>;
+  readonly topLevelLegacy: boolean;
 }
 
 interface PromptVariables {
@@ -98,6 +126,8 @@ export class PluginManager {
   #hookDispatcher: HookDispatcher;
   #playgroundDir: string;
   #plugins: Map<string, PluginEntry> = new Map();
+  #settingsAudit: Map<string, SettingsAudit> = new Map();
+  #schemaVersionWarned: Set<string> = new Set();
   #dynamicVarProviders: Map<
     string,
     (
@@ -325,25 +355,12 @@ export class PluginManager {
 
       // Validate settingsSchema if present (task 1.1)
       if (manifest.settingsSchema !== undefined) {
-        const schema = manifest.settingsSchema;
-        if (
-          typeof schema !== "object" ||
-          schema === null ||
-          Array.isArray(schema)
-        ) {
-          log.warn("Plugin settingsSchema must be an object — ignoring", {
-            plugin: manifest.name,
-          });
+        const audit = this.#auditSettingsSchema(manifest);
+        if (audit === null) {
+          // Audit rejected schema — strip it.
           (manifest as { settingsSchema?: unknown }).settingsSchema = undefined;
-        } else if (
-          schema.type !== "object" || typeof schema.properties !== "object" ||
-          schema.properties === null || Array.isArray(schema.properties)
-        ) {
-          log.warn(
-            "Plugin settingsSchema must have type:'object' and a properties record — ignoring",
-            { plugin: manifest.name },
-          );
-          (manifest as { settingsSchema?: unknown }).settingsSchema = undefined;
+        } else {
+          this.#settingsAudit.set(manifest.name, audit);
         }
       }
 
@@ -1370,29 +1387,387 @@ export class PluginManager {
 
   /**
    * Read plugin settings from `playground/_plugins/<name>/config.json`.
-   * Returns merged result of schema defaults + saved values.
+   * Returns merged result of schema defaults + saved values, with
+   * `x-previous-names` rename migration applied IN-MEMORY (the on-disk file
+   * is not touched here). Used both by internal plugin code (via
+   * `getSettings`) and as the basis of the HTTP GET response.
+   *
+   * NOTE: This method does NOT apply `writeOnly` masking. For HTTP response
+   * shaping (mask + legacy warnings) use `getPluginSettingsForResponse`.
    */
   async getPluginSettings(name: string): Promise<Record<string, unknown>> {
     const entry = this.#plugins.get(name);
     if (!entry) throw new Error(`Unknown plugin: ${name}`);
 
-    // Extract defaults from settingsSchema
-    const defaults = this.#extractSchemaDefaults(entry.manifest.settingsSchema);
+    const schema = entry.manifest.settingsSchema as
+      | Record<string, unknown>
+      | undefined;
+    const audit = this.#settingsAudit.get(name);
 
+    // If schema version mismatched, return schema defaults only.
+    if (audit?.versionMismatch) {
+      return this.#extractSchemaDefaults(schema);
+    }
+
+    const defaults = this.#extractSchemaDefaults(schema);
+
+    const saved = await this.#readDiskConfig(name);
+    // Strip x-legacy from the in-memory view immediately — it must never
+    // leak past this method.
+    delete (saved as Record<string, unknown>)["x-legacy"];
+
+    const renamed = this.#applyPreviousNamesMigration(saved, audit);
+
+    return { ...defaults, ...renamed };
+  }
+
+  /**
+   * GET-response shape: applies `x-previous-names` rename, masks `writeOnly`
+   * fields with `null`, and computes `x-legacy-warnings` by validating the
+   * in-memory (post-rename) value against the schema.
+   *
+   * Never modifies the on-disk file.
+   */
+  async getPluginSettingsForResponse(
+    name: string,
+  ): Promise<{
+    settings: Record<string, unknown>;
+    legacyWarnings: ValidationError[];
+    schemaVersionMismatch: boolean;
+  }> {
+    const entry = this.#plugins.get(name);
+    if (!entry) throw new Error(`Unknown plugin: ${name}`);
+    const audit = this.#settingsAudit.get(name);
+    const schema = entry.manifest.settingsSchema as
+      | Record<string, unknown>
+      | undefined;
+
+    if (audit?.versionMismatch) {
+      return {
+        settings: this.#extractSchemaDefaults(schema),
+        legacyWarnings: [],
+        schemaVersionMismatch: true,
+      };
+    }
+
+    const merged = await this.getPluginSettings(name);
+
+    // Validate the post-rename payload to produce legacy warnings.
+    let legacyWarnings: ValidationError[] = [];
+    if (schema) {
+      const roots = this.#getEffectivePathRootsForPlugin(name);
+      const opts = roots
+        ? {
+          projectRoot: this.#projectRoot(),
+          hardcodedPathRoots: roots.display,
+          absolutePathRoots: roots.absolute,
+        }
+        : {};
+      const { errors } = await validateSchema(schema, merged, opts);
+      legacyWarnings = errors;
+    }
+
+    // Apply writeOnly masking AFTER validation.
+    if (audit) {
+      for (const k of audit.writeOnlyKeys) {
+        if (k in merged) merged[k] = null;
+      }
+    }
+
+    return { settings: merged, legacyWarnings, schemaVersionMismatch: false };
+  }
+
+  /**
+   * Save plugin settings to `playground/_plugins/<name>/config.json` after
+   * running two-phase validation.
+   *
+   * The legacy substring contract (`"Settings validation failed: ..."`) is
+   * preserved on `throw` so existing call sites that catch by substring keep
+   * working until they migrate to the new structured envelope.
+   */
+  async savePluginSettings(
+    name: string,
+    settings: Record<string, unknown>,
+  ): Promise<void> {
+    const result = await this.validateAndPreparePluginSettings(name, settings);
+    if (result.errors.length > 0) {
+      throw new Error(
+        "Settings validation failed: " +
+          result.errors.map((e) => `${e.path} ${e.keyword}`).join("; "),
+      );
+    }
+    await this.commitPluginSettings(name, result.finalSettings);
+  }
+
+  /**
+   * Two-phase validation + writeOnly short-circuit. Does not write to disk.
+   * Returns a structured envelope:
+   *   - `errors`: blocking errors (path ⊆ blocking scope)
+   *   - `warnings`: non-blocking errors (path outside scope)
+   *   - `finalSettings`: the value that SHOULD be passed to
+   *     `commitPluginSettings` if `errors.length === 0`. Has `_changedPaths`
+   *     stripped and `writeOnly` null short-circuits resolved.
+   *   - `changedPaths`: the union scope used to classify blocking vs warning.
+   *   - `durationMs`: validator wall-clock duration (for audit logging).
+   *   - `malformedChangedPaths`: true when caller-supplied `_changedPaths`
+   *     was non-array; the only error returned is the malformed marker.
+   *   - `schemaVersionMismatch`: true when this plugin's schema version is
+   *     unsupported; routes SHALL respond `409` in that case.
+   */
+  async validateAndPreparePluginSettings(
+    name: string,
+    body: Record<string, unknown>,
+  ): Promise<{
+    errors: ValidationError[];
+    warnings: ValidationError[];
+    finalSettings: Record<string, unknown>;
+    changedPaths: string[];
+    durationMs: number;
+    malformedChangedPaths: boolean;
+    schemaVersionMismatch: boolean;
+  }> {
+    const start = performance.now();
+    const entry = this.#plugins.get(name);
+    if (!entry) throw new Error(`Unknown plugin: ${name}`);
+    const audit = this.#settingsAudit.get(name);
+    const schema = entry.manifest.settingsSchema as
+      | Record<string, unknown>
+      | undefined;
+
+    if (audit?.versionMismatch) {
+      return {
+        errors: [{
+          path: "",
+          keyword: "schema_version_mismatch",
+          messageKey: "schema_version_mismatch",
+          params: { plugin: name },
+        }],
+        warnings: [],
+        finalSettings: {},
+        changedPaths: [],
+        durationMs: performance.now() - start,
+        malformedChangedPaths: false,
+        schemaVersionMismatch: true,
+      };
+    }
+
+    // Extract + validate caller-supplied _changedPaths.
+    const rawChanged = (body as Record<string, unknown>)["_changedPaths"];
+    let providedChangedPaths: string[] | null = null;
+    let malformed = false;
+    if (rawChanged !== undefined) {
+      if (
+        !Array.isArray(rawChanged) ||
+        !rawChanged.every((s) => typeof s === "string")
+      ) {
+        malformed = true;
+      } else {
+        providedChangedPaths = rawChanged.slice();
+      }
+    }
+
+    if (malformed) {
+      return {
+        errors: [{
+          path: "_changedPaths",
+          keyword: "type",
+          messageKey: "type",
+          params: { expected: "array<string>" },
+        }],
+        warnings: [],
+        finalSettings: {},
+        changedPaths: [],
+        durationMs: performance.now() - start,
+        malformedChangedPaths: true,
+        schemaVersionMismatch: false,
+      };
+    }
+
+    // Strip _changedPaths from the body that will be persisted.
+    const stripped: Record<string, unknown> = { ...body };
+    delete stripped["_changedPaths"];
+
+    // Resolve writeOnly short-circuits BEFORE validation. `null` ⇒ keep
+    // existing; `""` ⇒ clear; other ⇒ set+validate. Existing value may live
+    // under the current key OR an `x-previous-names` entry.
+    const onDisk = await this.#readDiskConfig(name);
+    const diskNoLegacy: Record<string, unknown> = { ...onDisk };
+    const xLegacyExisting = diskNoLegacy["x-legacy"];
+    delete diskNoLegacy["x-legacy"];
+
+    if (audit) {
+      for (const k of audit.writeOnlyKeys) {
+        if (!(k in stripped)) continue;
+        const v = stripped[k];
+        if (v === null) {
+          // Keep existing: look at the current key first, then any
+          // x-previous-names alias.
+          if (k in diskNoLegacy) {
+            stripped[k] = diskNoLegacy[k];
+          } else {
+            // find a previous-name alias that maps to k
+            for (const [prev, current] of audit.previousNames.entries()) {
+              if (current === k && prev in diskNoLegacy) {
+                stripped[k] = diskNoLegacy[prev];
+                break;
+              }
+            }
+            if (stripped[k] === null) {
+              // Nothing on disk to keep — treat as "absent" by removing.
+              delete stripped[k];
+            }
+          }
+        } else if (v === "") {
+          // Explicit clear: remove key from saved settings.
+          delete stripped[k];
+        }
+      }
+    }
+
+    // Compute the diff between stripped body and on-disk (post-rename for
+    // disk side, so we don't mark renames as diffs).
+    const diskPostRename = this.#applyPreviousNamesMigration(diskNoLegacy, audit);
+    let actualDiffPaths = computeDeepDiff(diskPostRename, stripped);
+
+    // Spec: a field whose x-show-when evaluates false on the submitted body
+    // is hidden in the UI; pre-existing or transiently-invalid values at
+    // hidden paths must NOT be blocking (see conditional-field-visibility
+    // spec L61). The frontend strips these from _changedPaths, but the
+    // server's independent diff would otherwise re-enter the blocking
+    // scope. Exclude hidden paths from the diff contribution.
+    if (schema) {
+      const hidden = computeHiddenPaths(schema, stripped);
+      if (hidden.length > 0) {
+        actualDiffPaths = excludeHiddenFromDiff(actualDiffPaths, hidden);
+      }
+    }
+
+    const scope = unionPaths(providedChangedPaths ?? [], actualDiffPaths);
+
+    // Run validation.
+    let allErrors: ValidationError[] = [];
+    if (schema) {
+      const roots = this.#getEffectivePathRootsForPlugin(name);
+      const opts = roots
+        ? {
+          projectRoot: this.#projectRoot(),
+          hardcodedPathRoots: roots.display,
+          absolutePathRoots: roots.absolute,
+        }
+        : {};
+      const { errors } = await validateSchema(schema, stripped, opts);
+      allErrors = errors;
+    }
+
+    const blocking: ValidationError[] = [];
+    const warnings: ValidationError[] = [];
+    for (const e of allErrors) {
+      if (isPathInScope(e.path, scope)) blocking.push(e);
+      else warnings.push(e);
+    }
+
+    // If we are about to succeed, build finalSettings including the
+    // x-legacy namespace handling.
+    let finalSettings = stripped;
+    if (blocking.length === 0) {
+      finalSettings = this.#mergeXLegacy(
+        name,
+        stripped,
+        diskNoLegacy,
+        xLegacyExisting,
+      );
+    }
+
+    return {
+      errors: blocking,
+      warnings,
+      finalSettings,
+      changedPaths: scope,
+      durationMs: performance.now() - start,
+      malformedChangedPaths: false,
+      schemaVersionMismatch: false,
+    };
+  }
+
+  /**
+   * Persist a validated settings object to disk. Caller is responsible for
+   * having invoked `validateAndPreparePluginSettings` first.
+   */
+  async commitPluginSettings(
+    name: string,
+    finalSettings: Record<string, unknown>,
+  ): Promise<void> {
+    const entry = this.#plugins.get(name);
+    if (!entry) throw new Error(`Unknown plugin: ${name}`);
+
+    const configDir = join(this.#playgroundDir, "_plugins", name);
+    await Deno.mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, "config.json");
+    await Deno.writeTextFile(
+      configPath,
+      JSON.stringify(finalSettings, null, 2) + "\n",
+    );
+    log.debug("Plugin settings saved", { plugin: name });
+  }
+
+  /**
+   * Returns the effective display + absolute path-root lists for a plugin
+   * (used for `format: "path"` validation and the `schema-meta` endpoint).
+   * Returns `null` for plugins without a `settingsSchema`.
+   */
+  getEffectivePathRoots(
+    name: string,
+  ): { display: string[]; absolute: string[] } | null {
+    return this.#getEffectivePathRootsForPlugin(name);
+  }
+
+  /**
+   * Returns the schema version (always `1` after auto-migration), `null` if
+   * the plugin has no settingsSchema, or a special sentinel `-1` when the
+   * version is mismatched (routes SHALL respond 409 in that case).
+   */
+  getSchemaVersion(name: string): number | null {
+    const entry = this.#plugins.get(name);
+    if (!entry?.manifest.settingsSchema) return null;
+    const audit = this.#settingsAudit.get(name);
+    if (audit?.versionMismatch) return -1;
+    return 1;
+  }
+
+  /** Returns true if the plugin's `x-schema-version` is unsupported. */
+  isSchemaVersionMismatch(name: string): boolean {
+    return this.#settingsAudit.get(name)?.versionMismatch === true;
+  }
+
+  /** Returns the project root used for `format: "path"` resolution. */
+  #projectRoot(): string {
+    return dirname(this.#playgroundDir);
+  }
+
+  #getEffectivePathRootsForPlugin(
+    name: string,
+  ): { display: string[]; absolute: string[] } | null {
+    const entry = this.#plugins.get(name);
+    if (!entry?.manifest.settingsSchema) return null;
+    const display = getHardcodedPathRoots(name);
+    const absolute = resolveDisplayRoots(display, this.#projectRoot());
+    return { display, absolute };
+  }
+
+  async #readDiskConfig(name: string): Promise<Record<string, unknown>> {
     const configPath = join(
       this.#playgroundDir,
       "_plugins",
       name,
       "config.json",
     );
-    let saved: Record<string, unknown> = {};
     try {
       const raw = await Deno.readTextFile(configPath);
       const parsed: unknown = JSON.parse(raw);
       if (
         typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
       ) {
-        saved = parsed as Record<string, unknown>;
+        return parsed as Record<string, unknown>;
       }
     } catch (err: unknown) {
       if (!(err instanceof Deno.errors.NotFound)) {
@@ -1402,40 +1777,275 @@ export class PluginManager {
         });
       }
     }
-
-    return { ...defaults, ...saved };
+    return {};
   }
 
   /**
-   * Save plugin settings to `playground/_plugins/<name>/config.json`.
-   * Validates against settingsSchema before writing; throws on validation failure.
+   * Apply `x-previous-names`: for each (prev → current) mapping, if `prev`
+   * exists in `raw` AND `current` does NOT, copy the value over to `current`
+   * and drop `prev`. Returns a shallow-cloned object.
    */
-  async savePluginSettings(
-    name: string,
-    settings: Record<string, unknown>,
-  ): Promise<void> {
-    const entry = this.#plugins.get(name);
-    if (!entry) throw new Error(`Unknown plugin: ${name}`);
-
-    // Validate against schema if declared
-    if (entry.manifest.settingsSchema) {
-      const errors = this.#validateAgainstSchema(
-        settings,
-        entry.manifest.settingsSchema,
-      );
-      if (errors.length > 0) {
-        throw new Error(`Settings validation failed: ${errors.join("; ")}`);
+  #applyPreviousNamesMigration(
+    raw: Record<string, unknown>,
+    audit: SettingsAudit | undefined,
+  ): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...raw };
+    if (!audit) return out;
+    for (const [prev, current] of audit.previousNames.entries()) {
+      if (prev in out && !(current in out)) {
+        out[current] = out[prev];
       }
+      // Drop the legacy key from the in-memory view regardless: GET response
+      // SHALL NOT echo the legacy key.
+      delete out[prev];
+    }
+    return out;
+  }
+
+  /**
+   * Merge orphan keys into the on-disk `x-legacy` namespace if the schema
+   * opted into legacy preservation. Orphans = keys present in the prior
+   * on-disk config that are NOT in `stripped` and NOT in the schema's
+   * declared properties NOR an `x-previous-names` source.
+   */
+  #mergeXLegacy(
+    name: string,
+    stripped: Record<string, unknown>,
+    priorDisk: Record<string, unknown>,
+    priorXLegacy: unknown,
+  ): Record<string, unknown> {
+    const entry = this.#plugins.get(name)!;
+    const audit = this.#settingsAudit.get(name);
+    const schema = entry.manifest.settingsSchema as
+      | Record<string, unknown>
+      | undefined;
+    if (!schema || !audit?.topLevelLegacy) return stripped;
+
+    const props = schema.properties as Record<string, unknown> | undefined;
+    const known = new Set(props ? Object.keys(props) : []);
+    const previousNamesSources = new Set(audit.previousNames.keys());
+
+    const carriedXLegacy: Record<string, unknown> =
+      priorXLegacy && typeof priorXLegacy === "object" &&
+        !Array.isArray(priorXLegacy)
+        ? { ...(priorXLegacy as Record<string, unknown>) }
+        : {};
+
+    for (const [k, v] of Object.entries(priorDisk)) {
+      if (k === "x-legacy") continue;
+      if (known.has(k)) continue;
+      if (previousNamesSources.has(k)) continue;
+      if (k in stripped) continue;
+      carriedXLegacy[k] = v;
     }
 
-    const configDir = join(this.#playgroundDir, "_plugins", name);
-    await Deno.mkdir(configDir, { recursive: true });
-    const configPath = join(configDir, "config.json");
-    await Deno.writeTextFile(
-      configPath,
-      JSON.stringify(settings, null, 2) + "\n",
-    );
-    log.debug("Plugin settings saved", { plugin: name });
+    if (Object.keys(carriedXLegacy).length === 0) return stripped;
+    return { ...stripped, "x-legacy": carriedXLegacy };
+  }
+
+  /**
+   * Audit a manifest's `settingsSchema` at load time. Returns:
+   *   - `null` if the schema is structurally invalid and SHALL be stripped.
+   *   - `SettingsAudit` otherwise (with `versionMismatch` set when
+   *     `x-schema-version` is declared but != 1).
+   */
+  #auditSettingsSchema(manifest: PluginManifest): SettingsAudit | null {
+    const pluginName = manifest.name;
+    const schema = manifest.settingsSchema;
+    if (
+      typeof schema !== "object" || schema === null || Array.isArray(schema)
+    ) {
+      log.warn("Plugin settingsSchema must be an object — ignoring", {
+        plugin: pluginName,
+      });
+      return null;
+    }
+    if (
+      schema.type !== "object" || typeof schema.properties !== "object" ||
+      schema.properties === null || Array.isArray(schema.properties)
+    ) {
+      log.warn(
+        "Plugin settingsSchema must have type:'object' and a properties record — ignoring",
+        { plugin: pluginName },
+      );
+      return null;
+    }
+
+    // x-schema-version
+    let versionMismatch = false;
+    const rawVer = (schema as Record<string, unknown>)["x-schema-version"];
+    if (rawVer === undefined) {
+      if (!this.#schemaVersionWarned.has(pluginName)) {
+        this.#schemaVersionWarned.add(pluginName);
+        log.warn(
+          "Plugin settingsSchema missing x-schema-version — auto-migrating to 1",
+          { plugin: pluginName },
+        );
+      }
+    } else if (rawVer !== 1) {
+      versionMismatch = true;
+      log.warn(
+        "Plugin settingsSchema declares unsupported x-schema-version — settings degraded",
+        { plugin: pluginName, declared: rawVer },
+      );
+    }
+
+    // Walk schema; collect per-property metadata, reject on hard rules.
+    const previousNames = new Map<string, string>();
+    const previousNamesSeen = new Map<string, string>(); // string → owning property
+    const writeOnlyKeys = new Set<string>();
+    const topLevelLegacy =
+      (schema as Record<string, unknown>)["x-legacy"] === true;
+
+    const failures: string[] = [];
+
+    const walkObject = (
+      objSchema: Record<string, unknown>,
+      path: string,
+      isTopLevel: boolean,
+    ): void => {
+      const props = objSchema.properties as Record<string, unknown> | undefined;
+      if (!props) return;
+      const requiredArr = Array.isArray(objSchema.required)
+        ? objSchema.required.filter((s): s is string => typeof s === "string")
+        : [];
+      const requiredSet = new Set(requiredArr);
+
+      const siblingNames = new Set(Object.keys(props));
+
+      for (const [pname, raw] of Object.entries(props)) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const prop = raw as Record<string, unknown>;
+        const pPath = path ? `${path}.${pname}` : pname;
+
+        // Reserved top-level property names (would leak the internal
+        // legacy namespace via GET defaults if allowed).
+        if (
+          isTopLevel &&
+          (pname === "x-legacy" || pname === "x-legacy-warnings" ||
+            pname === "_changedPaths")
+        ) {
+          failures.push(
+            `${pPath}: property name is reserved by HeartReverie`,
+          );
+        }
+
+        // x-show-when
+        const sw = prop["x-show-when"];
+        if (sw !== undefined) {
+          if (typeof sw !== "object" || sw === null || Array.isArray(sw)) {
+            failures.push(`${pPath}: x-show-when must be an object`);
+          } else {
+            const swObj = sw as Record<string, unknown>;
+            const field = swObj.field;
+            if (typeof field !== "string") {
+              failures.push(`${pPath}: x-show-when.field must be a string`);
+            } else if (!siblingNames.has(field)) {
+              failures.push(
+                `${pPath}: x-show-when.field '${field}' is not a sibling property`,
+              );
+            }
+            const ops = ["equals", "notEquals", "in"].filter((k) => k in swObj);
+            if (ops.length !== 1) {
+              failures.push(
+                `${pPath}: x-show-when must declare exactly one of equals/notEquals/in (found: ${ops.length})`,
+              );
+            }
+            if (requiredSet.has(pname)) {
+              failures.push(
+                `${pPath}: declared in 'required' AND uses x-show-when (dead config)`,
+              );
+            }
+          }
+        }
+
+        // x-previous-names
+        const xpn = prop["x-previous-names"];
+        if (xpn !== undefined) {
+          if (
+            !Array.isArray(xpn) ||
+            !xpn.every((s) => typeof s === "string")
+          ) {
+            failures.push(
+              `${pPath}: x-previous-names must be an array of strings`,
+            );
+          } else {
+            for (const prev of xpn as string[]) {
+              if (prev === pname) {
+                failures.push(
+                  `${pPath}: x-previous-names cannot include the property's own current name`,
+                );
+              }
+              if (isTopLevel) {
+                const owner = previousNamesSeen.get(prev);
+                if (owner && owner !== pname) {
+                  failures.push(
+                    `x-previous-names string '${prev}' is declared by both ${owner} and ${pname}`,
+                  );
+                } else {
+                  previousNamesSeen.set(prev, pname);
+                  previousNames.set(prev, pname);
+                }
+              }
+            }
+          }
+        }
+
+        // x-path-roots
+        const xpr = prop["x-path-roots"];
+        if (xpr !== undefined) {
+          if (
+            !Array.isArray(xpr) ||
+            !xpr.every((s) => typeof s === "string")
+          ) {
+            failures.push(
+              `${pPath}: x-path-roots must be an array of strings`,
+            );
+          } else {
+            const hardcoded = getHardcodedPathRoots(pluginName);
+            const isect = intersectXPathRoots(hardcoded, xpr as string[]);
+            if (isect.length === 0) {
+              failures.push(
+                `${pPath}: x-path-roots has empty intersection with the hard-coded allowlist`,
+              );
+            }
+          }
+        }
+
+        // writeOnly (top-level only in phase 1)
+        if (isTopLevel && prop.writeOnly === true) {
+          writeOnlyKeys.add(pname);
+        }
+
+        // Recurse into nested object schemas.
+        if (
+          prop.type === "object" && prop.properties &&
+          typeof prop.properties === "object" && !Array.isArray(prop.properties)
+        ) {
+          walkObject(prop, pPath, false);
+        }
+        // Recurse into array items if object-shaped.
+        if (
+          prop.type === "array" && prop.items &&
+          typeof prop.items === "object" && !Array.isArray(prop.items) &&
+          (prop.items as Record<string, unknown>).type === "object"
+        ) {
+          walkObject(prop.items as Record<string, unknown>, `${pPath}[]`, false);
+        }
+      }
+    };
+
+    walkObject(schema as Record<string, unknown>, "", true);
+
+    if (failures.length > 0) {
+      log.warn("Plugin settingsSchema rejected — load-time audit failed", {
+        plugin: pluginName,
+        failures,
+      });
+      return null;
+    }
+
+    return { versionMismatch, previousNames, writeOnlyKeys, topLevelLegacy };
   }
 
   /**
@@ -1463,76 +2073,171 @@ export class PluginManager {
     }
     return defaults;
   }
+}
 
-  /**
-   * Validate a settings payload against a JSON Schema (lightweight validation).
-   * Checks required fields and basic type constraints.
-   * Returns an array of error messages (empty = valid).
-   */
-  #validateAgainstSchema(
-    settings: Record<string, unknown>,
-    schema: Record<string, unknown>,
-  ): string[] {
-    const errors: string[] = [];
-    const properties = schema.properties as
-      | Record<string, Record<string, unknown>>
-      | undefined;
+// ── Module-private path/diff helpers (kept outside the class to be testable
+// in isolation, and to avoid leaking onto the public surface) ───────────
 
-    // Check required fields
-    if (Array.isArray(schema.required)) {
-      for (const field of schema.required) {
-        if (typeof field === "string" && !(field in settings)) {
-          errors.push(`Missing required field: ${field}`);
+/**
+ * Compute a deep diff between two JSON-shaped values and return the list of
+ * JSON-Pointer-ish paths at which they differ. Paths use `.` for object key
+ * descent and `[i]` for array index descent (e.g. `items[0].name`).
+ *
+ * Strategy: emit the deepest diverging path. When two arrays differ in
+ * length, the parent path is emitted; otherwise per-index diffs. When a key
+ * is present in only one side, the path of that key is emitted.
+ */
+export function computeDeepDiff(
+  a: unknown,
+  b: unknown,
+  prefix: string = "",
+): string[] {
+  if (Object.is(a, b)) return [];
+  const out: string[] = [];
+
+  const isObj = (v: unknown): v is Record<string, unknown> =>
+    v !== null && typeof v === "object" && !Array.isArray(v);
+
+  if (isObj(a) && isObj(b)) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const k of keys) {
+      const childPath = prefix ? `${prefix}.${k}` : k;
+      if (!(k in a) || !(k in b)) {
+        out.push(childPath);
+        continue;
+      }
+      out.push(...computeDeepDiff(a[k], b[k], childPath));
+    }
+    return out;
+  }
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) {
+      out.push(prefix || "[]");
+      return out;
+    }
+    for (let i = 0; i < a.length; i++) {
+      out.push(...computeDeepDiff(a[i], b[i], `${prefix}[${i}]`));
+    }
+    return out;
+  }
+
+  // Primitive or type mismatch.
+  if (!deepValueEqual(a, b)) {
+    out.push(prefix || "");
+  }
+  return out;
+}
+
+function deepValueEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (a === null || b === null) return false;
+  if (typeof a !== typeof b) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepValueEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (typeof a === "object" && typeof b === "object") {
+    const ao = a as Record<string, unknown>;
+    const bo = b as Record<string, unknown>;
+    const ak = Object.keys(ao);
+    if (ak.length !== Object.keys(bo).length) return false;
+    for (const k of ak) {
+      if (!(k in bo)) return false;
+      if (!deepValueEqual(ao[k], bo[k])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+export function unionPaths(a: string[], b: string[]): string[] {
+  const set = new Set<string>([...a, ...b]);
+  return [...set];
+}
+
+/**
+ * Walk an object schema and collect property paths whose `x-show-when`
+ * evaluates `false` against the supplied value. Only top-level + nested
+ * object-property paths are inspected (mirrors the frontend semantics).
+ * Returns paths in dotted form (e.g. `details`, `nested.detail`).
+ */
+export function computeHiddenPaths(
+  schema: unknown,
+  value: unknown,
+  prefix = "",
+): string[] {
+  if (
+    !schema || typeof schema !== "object" || Array.isArray(schema) ||
+    !value || typeof value !== "object" || Array.isArray(value)
+  ) {
+    return [];
+  }
+  const sch = schema as Record<string, unknown>;
+  if (sch["type"] !== "object") return [];
+  const props = sch["properties"];
+  if (!props || typeof props !== "object") return [];
+  const obj = value as Record<string, unknown>;
+  const out: string[] = [];
+  for (const [key, propSchema] of Object.entries(props as Record<string, unknown>)) {
+    if (!propSchema || typeof propSchema !== "object") continue;
+    const p = propSchema as Record<string, unknown>;
+    const path = prefix ? `${prefix}.${key}` : key;
+    const sw = p["x-show-when"];
+    if (sw && typeof sw === "object" && !Array.isArray(sw)) {
+      const cond = sw as Record<string, unknown>;
+      const field = cond["field"];
+      if (typeof field === "string") {
+        const sibling = obj[field];
+        let visible = true;
+        if ("equals" in cond) visible = deepValueEqual(sibling, cond["equals"]);
+        else if ("notEquals" in cond) {
+          visible = !deepValueEqual(sibling, cond["notEquals"]);
+        } else if ("in" in cond && Array.isArray(cond["in"])) {
+          visible = (cond["in"] as unknown[]).some((v) =>
+            deepValueEqual(sibling, v)
+          );
+        }
+        if (!visible) {
+          out.push(path);
+          continue;
         }
       }
     }
-
-    // Type-check each property that is present
-    if (properties) {
-      for (const [key, value] of Object.entries(settings)) {
-        const propSchema = properties[key];
-        if (!propSchema) continue; // additionalProperties not enforced
-
-        const expectedType = propSchema.type;
-        if (typeof expectedType !== "string") continue;
-
-        const typeError = this.#checkType(key, value, expectedType);
-        if (typeError) errors.push(typeError);
-      }
+    // Recurse into nested object schemas.
+    if (p["type"] === "object" && key in obj) {
+      out.push(...computeHiddenPaths(p, obj[key], path));
     }
-
-    return errors;
   }
+  return out;
+}
 
-  /**
-   * Check a single value against an expected JSON Schema type.
-   */
-  #checkType(key: string, value: unknown, expectedType: string): string | null {
-    switch (expectedType) {
-      case "string":
-        if (typeof value !== "string") return `Field '${key}' must be a string`;
-        break;
-      case "number":
-      case "integer":
-        if (typeof value !== "number") return `Field '${key}' must be a number`;
-        if (expectedType === "integer" && !Number.isInteger(value)) {
-          return `Field '${key}' must be an integer`;
-        }
-        break;
-      case "boolean":
-        if (typeof value !== "boolean") {
-          return `Field '${key}' must be a boolean`;
-        }
-        break;
-      case "array":
-        if (!Array.isArray(value)) return `Field '${key}' must be an array`;
-        break;
-      case "object":
-        if (
-          typeof value !== "object" || value === null || Array.isArray(value)
-        ) return `Field '${key}' must be an object`;
-        break;
-    }
-    return null;
+/**
+ * Filter out paths that are at or under any of the `hidden` paths.
+ */
+export function excludeHiddenFromDiff(
+  diffPaths: string[],
+  hidden: readonly string[],
+): string[] {
+  if (hidden.length === 0) return diffPaths;
+  return diffPaths.filter((p) => !isPathInScope(p, hidden));
+}
+
+/**
+ * Returns `true` when `errPath` is at or under any of the `scope` paths.
+ * "Under" means: `errPath === scope` OR `errPath` starts with `scope` followed
+ * by `.` or `[`.
+ */
+export function isPathInScope(errPath: string, scope: readonly string[]): boolean {
+  for (const s of scope) {
+    if (errPath === s) return true;
+    if (
+      errPath.length > s.length && errPath.startsWith(s) &&
+      (errPath[s.length] === "." || errPath[s.length] === "[")
+    ) return true;
   }
+  return false;
 }

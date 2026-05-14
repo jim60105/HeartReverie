@@ -756,7 +756,7 @@ Plugin 可透過在 manifest 中宣告 `settingsSchema` 取得一組由系統提
 
 ### 宣告 `settingsSchema`
 
-`settingsSchema` 為 JSON Schema（draft-07 相容），且必須是物件型 schema（`type: "object"` 且帶 `properties`）。Plugin 載入時 PluginManager 會驗證頂層結構；不符規格者會被忽略並記錄警告。
+`settingsSchema` 為 JSON Schema 子集（HeartReverie 自有方言；hand-rolled validator）。它必須是物件型 schema（`type: "object"`、帶 `properties`）且**必須宣告 `x-schema-version: 1`**。Plugin 載入時 PluginManager 會驗證頂層結構與 `x-*` 擴充欄位的硬性規則；不符規格者會被拒絕並記錄錯誤。
 
 ```json
 {
@@ -767,16 +767,18 @@ Plugin 可透過在 manifest 中宣告 `settingsSchema` 取得一組由系統提
   "backendModule": "./handler.ts",
   "settingsSchema": {
     "type": "object",
+    "x-schema-version": 1,
     "properties": {
       "endpoint": {
         "type": "string",
         "title": "WebUI Endpoint",
+        "format": "url",
         "default": "http://localhost:7860"
       },
       "apiKey": {
         "type": "string",
         "title": "API Key",
-        "format": "password"
+        "writeOnly": true
       },
       "model": {
         "type": "string",
@@ -789,10 +791,11 @@ Plugin 可透過在 manifest 中宣告 `settingsSchema` 取得一組由系統提
         "items": { "type": "string" },
         "x-options-url": "/api/plugins/sd-webui-image-gen/proxy/samplers"
       },
-      "negativePromptKeywords": {
-        "type": "array",
-        "title": "Negative Prompt Keywords",
-        "items": { "type": "string" }
+      "savePath": {
+        "type": "string",
+        "title": "Save Directory",
+        "format": "path",
+        "x-path-roots": ["playground/_plugins/sd-webui-image-gen/"]
       },
       "enabled": { "type": "boolean", "default": true }
     }
@@ -800,32 +803,88 @@ Plugin 可透過在 manifest 中宣告 `settingsSchema` 取得一組由系統提
 }
 ```
 
+#### 支援的關鍵字
+
+| 類別 | 關鍵字 |
+|------|------|
+| Type | `string`、`number`、`integer`、`boolean`、`array`、`object`、`null` |
+| Numeric | `minimum`、`maximum`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf` |
+| String | `minLength`、`maxLength`、`pattern`（ECMAScript regex）、`format` |
+| Array | `items`、`minItems`、`maxItems`、`uniqueItems` |
+| Object | `properties`、`required`、`additionalProperties`（僅 boolean） |
+| Composition | `enum`、`const` |
+| Annotation | `title`、`description`（純文字）、`default`、`writeOnly` |
+
+`format` 白名單僅含 `path`、`color`、`url`、`email`、`uuid`。其他值不會觸發驗證錯誤（silent ignore）。**機密欄位應使用 `writeOnly: true`，不要透過 `format` 表達**。
+
+#### `x-*` 擴充欄位
+
+| 關鍵字 | 用途 |
+|------|------|
+| `x-schema-version: 1` | **必填**。Schema 方言版本；未來主版本升級時的硬性圍籬 |
+| `x-show-when` | 條件可見性。形式 `{ field, equals \| notEquals \| in }`；`field` 必須是同層 sibling property，且該 property 不能同時出現在 `required` 中 |
+| `x-options-url` | `select` / `multi-select` / `combobox` widget 從這個 URL 抓取選項。回應 shape：`{ options: [{ value, label }] }` |
+| `x-path-roots` | 限縮 `format: "path"` 欄位的允許根目錄。**只能縮小**硬編碼集合（`playground/lore/`、`playground/chapters/`、`playground/_plugins/<pluginName>/`），不能擴張。空交集會在載入時被拒絕 |
+| `x-previous-names` | 欄位重新命名遷移；`GET` 時以記憶體內方式把舊鍵值搬到新名稱，後續成功 `PUT` 才落盤 |
+| `x-legacy: true` | 頂層旗標。允許 `config.json` 內保留 schema 未描述的舊鍵，落盤時會被搬到頂層 `x-legacy: {...}` 命名空間。`x-legacy` 命名空間永不外洩給前端 |
+
+`writeOnly: true` 的欄位：`GET` 回應遮蔽為 `null`；`PUT` 收到 `null` 表示「保留現值」（短路在型別檢查之前），`""` 表示「清空」，其他值正常驗證後寫入。
+
 ### Settings 端點
 
 | 端點 | 說明 |
 |------|------|
-| `GET /api/plugins/:name/settings-schema` | 回傳 plugin 宣告的 JSON Schema，供前端動態產生表單。Plugin 未宣告時回 404 |
-| `GET /api/plugins/:name/settings` | 回傳 schema 的預設值與 `config.json` 已存值合併後的物件。Plugin 未宣告 settings 時回 404 |
-| `PUT /api/plugins/:name/settings` | 以 `settingsSchema` 驗證 request body，通過後寫入 `config.json` 並回 `{ ok: true }`；驗證失敗回 400 並附帶錯誤訊息 |
+| `GET /api/plugins/:name/settings-schema` | 回傳完整 JSON Schema（含所有 `x-*` 關鍵字）。未宣告時 404 |
+| `GET /api/plugins/:name/settings` | 預設值 + `config.json` 合併。`writeOnly` 欄位遮蔽為 `null`；`x-previous-names` 在記憶體內遷移；若 disk 有違反目前 schema 的舊值，會附帶 `x-legacy-warnings: ValidationError[]` 不阻擋 GET |
+| `PUT /api/plugins/:name/settings` | 結構化驗證；接收選填的頂層 `_changedPaths: string[]` 欄位做兩階段驗證 |
+| `POST /api/plugins/:name/settings/validate` | 純驗證，永不落盤；永遠回 200 + envelope |
+| `GET /api/plugins/:name/settings/schema-meta` | 回傳 `{ schemaVersion, pathRoots, formats }` |
 
-`config.json` 所在目錄會在第一次 `PUT` 時遞迴建立。`GET /api/plugins` 的回應中對應 plugin 會帶 `hasSettings: true` 與已解析的 `settings` 物件，供前端啟動時建立同步設定快取。成功的 `PUT` 會在 reader 端發出 `plugin-settings:changed` 事件，payload 為 `{ name, settings }`；非 2xx 回應不會發出事件。
+所有端點皆受 passphrase middleware 保護；reader-only 部署（`HEARTREVERIE_READER_ONLY=1`）時全部回 404。
 
-### 設定頁與輸入欄位種類
+#### 結構化錯誤封套
 
-閱讀器側欄會自動列出所有 `hasSettings: true` 的 plugin，路由為 `/settings/plugins/:name`。`PluginSettingsPage` 元件根據每個欄位的 schema 屬性決定渲染方式：
+`PUT` 的成功與失敗回應**都**含 `{ errors: ValidationError[], warnings: ValidationError[] }`。`ValidationError` shape：
 
-| 條件 | 元件 |
+```
+{ "path": "items[0].name", "keyword": "pattern", "messageKey": "pattern", "params": { "pattern": "^[a-z]+$" } }
+```
+
+`messageKey` 用於前端 i18n 查表；前端找不到時 fallback 為 `keyword` + `params` 的通用訊息。
+
+#### 兩階段驗證（`_changedPaths`）
+
+`PUT` body 頂層可加上 `_changedPaths: string[]`（不會被持久化）。Server 永遠額外計算 `incoming ⊝ disk` 的實際 diff。**阻擋範圍** = `actualDiff ∪ _changedPaths`。錯誤的 `path` 落在阻擋範圍之內 → 400 阻擋；之外 → 200 + 列為 `warnings`。
+
+效果：使用者只修了 A 欄位，但 disk 內 B 欄位有舊有違規 → 仍可存檔（B 變 warning）；但若使用者誤把 `_changedPaths` 設成空陣列又動到了 A 的無效值 → server 仍會偵測到實際 diff 並阻擋。`_changedPaths` 是給前端做 UX 用，不是 trust boundary。
+
+`writeOnly: true` + `null` 短路機制讓「未修改密碼」的 round-trip 不需要把明文送回 server。
+
+### 設定頁與 widget registry
+
+閱讀器在 `/settings/plugins/:name` 路由顯示自動產生的表單。`PluginSettingsPage` 透過 `<SchemaField>` 遞迴渲染，每個欄位由 `WidgetRegistry` 依 schema 比對解析出最高優先序的 widget。
+
+Phase 1 內建 widget 集合（priority 高 → 低）：
+
+| Widget | match 條件 |
 |------|------|
-| `format: "password"` 或 `x-input-type: "password"` | 密碼輸入欄 |
-| `type: "boolean"` | checkbox |
-| `type: "number"` 或 `type: "integer"` | number input |
-| `enum` 列舉 | `<select>` 下拉清單 |
-| `x-options-url` + `type: "string"` | **combobox**（自由文字 + datalist 候選） |
-| `x-options-url` + `type: "array"` | **multi-combobox**（tag 列表 + datalist 候選） |
-| `type: "array"`（無 `x-options-url`） | **tags**（按 Enter 新增、`×` 移除） |
-| 其餘 `type: "string"` | 純文字 input |
+| `multi-select` | `type: array` 且 `items.enum` 或 `items.x-options-url` |
+| `repeater` | `type: array` 且 `items.type: object` |
+| `path-picker` | `format: "path"` |
+| `range-number` | `type: number\|integer` 且同時有 `minimum` 與 `maximum` |
+| `masked-secret` | `writeOnly: true` |
+| `combobox` | `type: string` 且 `x-options-url`（無 `enum`） |
+| `select` | `enum` 在 `type: string` 上 |
+| `color` | `format: "color"` |
+| `tags` | `type: array` 且 `items.type: string`（無 `enum`、無 object/array items） |
+| `object-fieldset` | `type: object` |
+| `checkbox` | `type: boolean` |
+| `number` | `type: number\|integer` |
+| `text` | fallback |
 
-`x-options-url` 為 HeartReverie 自有的 JSON Schema 擴充屬性。前端會在載入 schema 後對該 URL 發出 GET（帶上 passphrase 標頭），預期回應為字串陣列；失敗時欄位優雅降級為自由文字輸入。常見用法是讓 plugin 在自家 `registerRoutes` 提供的代理路由（如 `/api/plugins/<name>/proxy/sd-models`）上回傳即時可用的選項清單。
+**Phase 1 不允許 plugin 註冊自訂 widget**；前端 `register(context)` 不會新增 widget API。`x-options-url` 維持原樣，由 `select` / `multi-select` / `combobox` 在掛載時抓取選項（passphrase 標頭一併送出），失敗時降級到 `enum` 並顯示 inline 錯誤。
+
+`x-show-when` 在前端評估：條件為 false 時欄位以 `v-if` 從 DOM 移除；模型值仍保留在 form 狀態中，重新顯示時恢復。隱藏欄位的 path 會從 `_changedPaths` 中排除，使其違規不會阻擋存檔。
 
 ### Plugin 端取用設定
 
