@@ -14,7 +14,7 @@ Within a single `dispatch(stage, ctx)` call:
 
 **Track B default-on (BREAKING behaviour)**: A `hooks[]` entry that explicitly declares `readOnly: true` without explicitly declaring `parallel` SHALL be treated as `parallel: true`. A plugin author MAY opt out by writing `parallel: false` alongside `readOnly: true`. A plugin that does NOT declare a `hooks[]` array at all SHALL have all of its handlers treated as `parallel: false`, regardless of their actual behaviour — this preserves byte-identical behaviour for every plugin shipped before this change.
 
-**Scope (v1)**: This requirement governs the **backend** `HookDispatcher` only. The `FrontendHookDispatcher` (`reader-src/src/lib/plugin-hooks.ts`) and every frontend hook stage (`frontend-render`, `notification`, `chapter:render:after`, `chapter:dom:ready`, `chapter:dom:dispose`, `story:switch`, `chapter:change`, `chat:send:before`, `action-button:click`) SHALL be unchanged in v1. Manifest schema SHALL reject any frontend stage name appearing in `hooks[]` entries.
+**Scope (v1)**: This requirement governs the **backend** `HookDispatcher` only. The `FrontendHookDispatcher` (`reader-src/src/lib/plugin-hooks.ts`) and every frontend hook stage (`frontend-render`, `notification`, `chapter:render:after`, `chapter:dom:ready`, `chapter:dom:dispose`, `story:switch`, `chapter:change`, `chat:send:before`, `action-button:click`) SHALL be unchanged in v1. Frontend stage names MAY appear in `hooks[]` entries for introspection annotations (reads/writes/note for hook-inspector conflict detection), but their `parallel`, `readOnly`, `concurrency`, and `dependsOn` fields SHALL have no effect on dispatch — the frontend dispatcher ignores them.
 
 #### Scenario: Serial-first ordering — mixed bucket
 
@@ -166,7 +166,7 @@ Within a single `dispatch(stage, ctx)` call:
 - **GIVEN** a plugin registers a frontend handler (e.g. `frontend-render`, `notification`, `chapter:dom:ready`, `action-button:click`)
 - **WHEN** the corresponding frontend dispatch occurs
 - **THEN** the dispatcher SHALL behave exactly as it does today (synchronous for-loop or existing async sequential pattern)
-- **AND** the manifest schema SHALL reject any frontend stage name appearing in a backend `hooks[]` entry
+- **AND** frontend `hooks[]` entries SHALL be accepted for introspection purposes but their parallel-dispatch fields (`parallel`, `readOnly`, `concurrency`, `dependsOn`) SHALL have no effect on dispatch
 
 ## MODIFIED Requirements
 

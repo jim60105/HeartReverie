@@ -84,7 +84,7 @@ For every handler in the serial bucket, `HookDispatcher` SHALL pass the **shared
 
 The dispatcher SHALL define a hard-coded allowlist `PARALLEL_ALLOWED = {"prompt-assembly", "post-response", "response-stream"}`. Any manifest `hooks[]` entry declaring `parallel: true` for a stage outside this allowlist SHALL be coerced to `parallel: false` at manifest load time with a `log.warn` identifying the plugin, the stage, and the allowlist. The dispatcher itself SHALL never start a parallel pass for a non-allowed stage, even if a corrupted internal entry indicates otherwise.
 
-`pre-write` and `strip-tags` SHALL NEVER be eligible for parallel dispatch. Any frontend stage name (e.g. `chapter:dom:ready`, `notification`, `action-button:click`) SHALL NEVER appear in a backend manifest's `hooks[]` entry — schema validation rejects them before this check applies.
+`pre-write` and `strip-tags` SHALL NEVER be eligible for parallel dispatch. Frontend stage names (e.g. `chapter:dom:ready`, `notification`, `action-button:click`) MAY appear in `hooks[]` entries for introspection annotations (reads/writes/note for hook-inspector conflict detection), but `parallel: true` on such entries SHALL be coerced to `false` by the validator since they are not in PARALLEL_ALLOWED.
 
 #### Scenario: pre-write parallel:true declaration is coerced to serial
 

@@ -4,18 +4,20 @@
 
 Each plugin SHALL have a `plugin.json` (or `plugin.yaml`) manifest file in its root directory. The manifest SHALL contain the following fields: `name` (string, unique identifier), `version` (semver string), `description` (string), `type` (one of `full-stack`, `prompt-only`, `frontend-only`, `hook-only`), `prompts` (array of relative paths to prompt files to contribute), `frontend` (array of relative paths to frontend ES module scripts), `frontendStyles` (array of relative paths to CSS files to inject into the frontend), `hooks` (array of declarative hook entries — see below), and `dependencies` (array of plugin names this plugin depends on). The `name` and `version` fields SHALL be required; all other fields SHALL be optional with sensible defaults (empty arrays/objects).
 
-The `hooks` field, when present, SHALL be an array of declarative entries with the following shape. **The `hooks[]` array is EXCLUSIVELY a backend parallel-dispatch declaration channel**: only stages in `PARALLEL_ALLOWED = {"prompt-assembly", "post-response", "response-stream"}` MAY appear; any other stage name (including frontend stages, `pre-write`, `strip-tags`, and unknown future stages) SHALL be rejected at manifest-validation time. Frontend hook subscriptions are not declared in `hooks[]` — they are enforced at SPA boot by `FrontendHookDispatcher.finalizeBoot()` (see the `plugin-hooks` capability).
+The `hooks` field, when present, SHALL be an array of declarative entries with the following shape. **The `hooks[]` array serves dual purposes**: (1) for ALL stages, it declares `reads`/`writes`/`note` annotations for the hook-inspector's conflict detection (C1 multi-write, C2 stale-read); (2) for stages in `PARALLEL_ALLOWED = {"prompt-assembly", "post-response", "response-stream"}`, it additionally declares `parallel`/`readOnly`/`concurrency`/`dependsOn` for the backend parallel-dispatch system. Any valid hook stage name MAY appear in `hooks[]`. Frontend hook subscriptions are enforced at SPA boot by `FrontendHookDispatcher.finalizeBoot()` (see the `plugin-hooks` capability).
 
 ```ts
 interface PluginHookDeclaration {
-  // stage MUST be one of PARALLEL_ALLOWED — enforced by the JSON schema enum below.
-  readonly stage: "prompt-assembly" | "post-response" | "response-stream";
+  // stage can be any valid hook stage name.
+  // Parallel-dispatch fields (parallel, readOnly, concurrency, dependsOn) are only meaningful
+  // for stages in PARALLEL_ALLOWED; on other stages parallel:true is coerced to false.
+  readonly stage: string;
   readonly priority?: number;              // suggested priority; runtime priority is set in register()
   readonly reads?: readonly string[];      // fields the handler reads (for stale-read detection)
   readonly writes?: readonly string[];     // fields the handler writes (for multi-write detection)
   readonly note?: string;                  // free-form note shown in the hook inspector tooltip
 
-  // v1 additions — backend parallel dispatch declarations.
+  // v1 additions — backend parallel dispatch declarations (only effective on PARALLEL_ALLOWED stages).
   readonly parallel?: boolean;             // opt in to parallel dispatch (default false)
   readonly readOnly?: boolean;             // self-declared read-only-by-contract for parallel
   readonly concurrency?: number;           // integer >= 1; min across stage's entries caps fan-out
@@ -23,18 +25,17 @@ interface PluginHookDeclaration {
 }
 ```
 
-The `hooks` field MAY be omitted (the plugin is treated as "undeclared" for conflict analysis and for parallel dispatch — see the `plugin-hooks` capability's "Parallel hook dispatch" requirement) OR supplied as `[]`. When present and non-empty, every entry's `stage` MUST be a member of `PARALLEL_ALLOWED`; the plugin's manifest declaration set MUST match the subset of its actual `register()` calls that target PARALLEL_ALLOWED stages (see the "Hook declaration consistency check at plugin load" requirement). The previous schema describing `hooks` as `object mapping hook stage names to handler file paths` is removed; that shape was never implemented and is replaced by the imperative `register()` + declarative-metadata pattern described here.
+The `hooks` field MAY be omitted (the plugin is treated as "undeclared" for conflict analysis and for parallel dispatch — see the `plugin-hooks` capability's "Parallel hook dispatch" requirement) OR supplied as `[]`. When present and non-empty, entries MAY target any valid hook stage; the plugin's manifest declaration set for PARALLEL_ALLOWED stages MUST match the subset of its actual `register()` calls that target PARALLEL_ALLOWED stages (see the "Hook declaration consistency check at plugin load" requirement). Non-PARALLEL_ALLOWED entries in `hooks[]` are informational (for hook-inspector annotations) and are not subject to the consistency cross-check. The previous schema describing `hooks` as `object mapping hook stage names to handler file paths` is removed; that shape was never implemented and is replaced by the imperative `register()` + declarative-metadata pattern described here.
 
 The manifest validator SHALL reject `hooks[]` entries that:
 
 - Lack a `stage` field, OR
-- Specify a `stage` value NOT in `PARALLEL_ALLOWED` (emit `log.error` naming the plugin, the offending stage, and the allowed set; the entry SHALL be dropped from the parsed manifest), OR
 - Specify a `note` longer than 200 characters, OR
 - Specify a `reads` / `writes` entry that is not a non-empty string.
 
 The manifest validator SHALL also reject any `hooks[]` array that contains two or more entries with the same `stage` value (one declaration per `(plugin, stage)` pair). This keeps the one-handler-per-`(plugin, stage)` invariant the conflict-detector relies on.
 
-**Parallel-dispatch field constraints (v1)**: full normative semantics live in the `hook-parallel-dispatch` capability. Because `stage` is already constrained to `PARALLEL_ALLOWED` at schema level, the v1 constraints simplify to:
+**Parallel-dispatch field constraints (v1)**: full normative semantics live in the `hook-parallel-dispatch` capability. Parallel-dispatch fields (`parallel`, `readOnly`, `concurrency`, `dependsOn`) are only meaningful for entries whose `stage` is in `PARALLEL_ALLOWED`. On entries with a non-PARALLEL_ALLOWED stage, `parallel: true` SHALL be coerced to `false` with `log.warn` containing `parallel:true is only allowed for stages in PARALLEL_ALLOWED`. Track B auto-promotion (`readOnly:true` without `parallel` → `parallel:true`) SHALL only apply to PARALLEL_ALLOWED stages. The v1 constraints for PARALLEL_ALLOWED entries:
 
 - `parallel: true` SHALL require `readOnly: true` on the same entry. For `prompt-assembly` and `post-response`, missing `readOnly` with `parallel: true` SHALL coerce `parallel` to `false` with `log.warn`. For `response-stream`, missing `readOnly` with `parallel: true` SHALL be **rejected** (`log.error`) and the entry's `parallel` SHALL be set to `false` (the plugin SHALL still load).
 - `readOnly: true` with `parallel` undefined SHALL be treated as `parallel: true` (Track B default-on; `log.debug`, not warn).
@@ -42,7 +43,7 @@ The manifest validator SHALL also reject any `hooks[]` array that contains two o
 - `concurrency` SHALL be an integer `>= 1`; non-integer or `<1` values SHALL be coerced to `undefined` with `log.warn`.
 - `dependsOn` SHALL be an array of plugin names. After all plugins have completed loading, the manager SHALL build a per-stage `(stage, plugin)` DAG; cycles or any unknown plugin name on a given stage SHALL cause **every** `dependsOn` declaration on that stage to be ignored (`log.error`), with that stage's parallel bucket falling back to priority-only ordering (stage-wide conservative fallback).
 
-The JSON schema fragment used by the plugin manager for the `hooks[]` array SHALL enforce the field shape, including the `stage` enum:
+The JSON schema fragment used by the plugin manager for the `hooks[]` array SHALL enforce the field shape (the `stage` field accepts any string, not an enum):
 
 ```json
 {
@@ -53,7 +54,7 @@ The JSON schema fragment used by the plugin manager for the `hooks[]` array SHAL
     "properties": {
       "stage": {
         "type": "string",
-        "enum": ["prompt-assembly", "post-response", "response-stream"]
+        "minLength": 1
       },
       "priority": { "type": "integer", "minimum": 0, "maximum": 1000 },
       "reads": { "type": "array", "items": { "type": "string", "minLength": 1 } },
@@ -68,7 +69,7 @@ The JSON schema fragment used by the plugin manager for the `hooks[]` array SHAL
 }
 ```
 
-A manifest carrying any `hooks[]` entry whose `stage` fails the enum SHALL be reported via `log.error` and that entry SHALL be dropped; remaining well-formed entries SHALL still be processed (a single malformed entry SHALL NOT abort the plugin load by itself, but failing the consistency check downstream still can).
+A manifest carrying any `hooks[]` entry whose `stage` is empty or missing SHALL be reported via `log.error` and that entry SHALL be dropped; remaining well-formed entries SHALL still be processed (a single malformed entry SHALL NOT abort the plugin load by itself, but failing the consistency check downstream still can).
 
 #### Scenario: Valid full-stack plugin manifest
 
@@ -110,12 +111,13 @@ A manifest carrying any `hooks[]` entry whose `stage` fails the enum SHALL be re
 - **WHEN** a plugin manifest contains `"hooks": [{"priority": 50, "writes": ["foo"]}]`
 - **THEN** the manifest validator SHALL reject the manifest and log an error identifying the missing `stage` field
 
-#### Scenario: hooks entry with non-PARALLEL_ALLOWED stage is rejected
+#### Scenario: hooks entry with non-PARALLEL_ALLOWED stage and parallel:true is coerced
 
-- **WHEN** a plugin manifest contains `"hooks": [{"stage": "future-experimental-stage"}]` or `"hooks": [{"stage": "chapter:dom:ready"}]` or `"hooks": [{"stage": "pre-write"}]` or `"hooks": [{"stage": "strip-tags"}]`
-- **THEN** the manifest validator SHALL `log.error` identifying the plugin, the offending stage, and the allowed enum `{"prompt-assembly", "post-response", "response-stream"}`
-- **AND** the offending entry SHALL be dropped from the parsed manifest (i.e. SHALL NOT appear in `GET /api/plugins`'s `hooks` array or in any downstream consistency check)
-- **AND** the plugin SHALL still proceed to load (other well-formed entries are unaffected); whether overall plugin load succeeds depends on the subsequent "Hook declaration consistency check at plugin load" requirement
+- **WHEN** a plugin manifest contains `"hooks": [{"stage": "pre-write", "parallel": true, "readOnly": true}]` or `"hooks": [{"stage": "chapter:dom:ready", "parallel": true}]`
+- **THEN** the manifest validator SHALL accept the entry (it is valid for introspection annotations)
+- **AND** the validator SHALL coerce `parallel` to `false` with `log.warn` containing `parallel:true is only allowed for stages in PARALLEL_ALLOWED`
+- **AND** the entry SHALL appear in `GET /api/plugins`'s `hooks` array and in the hook-inspector's `manifestDeclarations`
+- **AND** the plugin SHALL proceed to load normally
 
 #### Scenario: Plugin with settingsSchema is discovered
 
@@ -137,12 +139,17 @@ A manifest carrying any `hooks[]` entry whose `stage` fails the enum SHALL be re
 - **WHEN** a client requests `GET /api/plugins` and a plugin's manifest contains a non-empty `hooks` array
 - **THEN** that plugin's entry in the response SHALL include the `hooks` array verbatim (including the v1-added `parallel`, `readOnly`, `concurrency`, and `dependsOn` fields when present) so the frontend can correlate manifest declarations with `frontendHooks.introspect()` results
 
-#### Scenario: parallel:true on a non-allowed stage is rejected by schema
+#### Scenario: `HandlerIntrospection` includes `parallel` field
+
+- **WHEN** a client calls `HookDispatcher.introspect()` on a stage with registered handlers
+- **THEN** each `HandlerIntrospection` entry SHALL include a `parallel: boolean` field indicating whether the handler runs in the parallel bucket (`true`) or the serial bucket (`false`)
+
+#### Scenario: parallel:true on a non-allowed stage is coerced
 
 - **WHEN** a manifest declares `hooks: [{ stage: "pre-write", parallel: true, readOnly: true }]`
-- **THEN** the JSON schema `stage` enum SHALL reject the entry at parse time
-- **AND** the validator SHALL `log.error` identifying the plugin and the disallowed stage
-- **AND** the entry SHALL be dropped (no `parallel`/`serial` registration occurs for it)
+- **THEN** the validator SHALL coerce `parallel` to `false` with `log.warn` containing `parallel:true is only allowed for stages in PARALLEL_ALLOWED`
+- **AND** the entry SHALL be accepted for introspection annotations (reads/writes/note are preserved)
+- **AND** no parallel dispatch SHALL occur for that stage
 
 #### Scenario: parallel:true without readOnly:true is coerced on prompt-assembly and post-response
 
@@ -190,21 +197,22 @@ A manifest carrying any `hooks[]` entry whose `stage` fails the enum SHALL be re
 - **AND** **every** `dependsOn` declaration for that stage (including `c → b`) SHALL be ignored
 - **AND** all affected entries SHALL retain `parallel` / `readOnly`; the stage's parallel bucket SHALL run in priority-asc order only
 
-#### Scenario: Frontend stage name in hooks[] is rejected by schema (regardless of parallel)
+#### Scenario: Frontend stage name in hooks[] is accepted for introspection
 
-- **WHEN** a manifest declares `hooks: [{ stage: "chapter:dom:ready", parallel: true, readOnly: true }]` or `hooks: [{ stage: "chapter:dom:ready" }]` (no parallel field at all)
-- **THEN** the JSON schema's `stage` enum SHALL reject the entry because `chapter:dom:ready` is not in `{"prompt-assembly", "post-response", "response-stream"}`
-- **AND** the manifest validator SHALL `log.error` and drop the entry; the plugin's frontend hook subscription (if any) is unaffected because frontend hooks are NOT declared via `hooks[]` — they are enforced at SPA boot by `FrontendHookDispatcher.finalizeBoot()`
+- **WHEN** a manifest declares `hooks: [{ stage: "chapter:dom:ready", reads: ["container"], note: "Annotates DOM nodes" }]` or `hooks: [{ stage: "chapter:dom:ready", parallel: true, readOnly: true }]`
+- **THEN** the manifest validator SHALL accept the entry for introspection annotations (reads/writes/note are available to the hook-inspector)
+- **AND** if `parallel: true` is present, it SHALL be coerced to `false` with `log.warn` (since `chapter:dom:ready` is not in PARALLEL_ALLOWED)
+- **AND** the plugin's frontend hook subscription (if any) continues to be enforced at SPA boot by `FrontendHookDispatcher.finalizeBoot()`
 
 ### Requirement: Hook declaration consistency check at plugin load
 
 When a plugin manifest contains a non-empty `hooks` array, the `PluginManager` SHALL compare the manifest's `hooks[]` entries against the subset of stages on which the plugin actually registers backend handlers during its `register(ctx)` execution that lie in `PARALLEL_ALLOWED = {"prompt-assembly", "post-response", "response-stream"}`. The comparison rules:
 
-1. `declared = manifest.hooks.map(h => h.stage)` — every entry in this list is already guaranteed by manifest schema validation to be a member of `PARALLEL_ALLOWED` (entries with disallowed stages were dropped with `log.error` before this check; see "Plugin manifest format").
+1. `declaredParallelAllowed = manifest.hooks.filter(h => PARALLEL_ALLOWED.has(h.stage)).map(h => h.stage)` — only PARALLEL_ALLOWED entries participate in this check. Non-PARALLEL_ALLOWED entries in `hooks[]` are informational (for hook-inspector annotations) and are excluded.
 2. `registeredParallelAllowed = stages in PARALLEL_ALLOWED on which ctx.hooks.register(stage, …) was called during register(ctx)`
-3. Mismatch if `symmetricDifference(declared, registeredParallelAllowed)` is non-empty.
+3. Mismatch if `symmetricDifference(declaredParallelAllowed, registeredParallelAllowed)` is non-empty.
 
-Backend stages outside `PARALLEL_ALLOWED` (e.g. `pre-write`, the declarative `strip-tags` channel) and ALL frontend stages SHALL be excluded from this check entirely — they cannot be declared in `hooks[]` (the manifest validator rejects them), and the consistency check ignores them on the `register()` side. The declarative `strip-tags` stage SHALL NOT be declared in `manifest.hooks[]` — strip-tag intent is conveyed via the existing `promptStripTags` / `displayStripTags` fields. Frontend `register()` cross-checking continues to be performed at SPA boot by `FrontendHookDispatcher.finalizeBoot()` and is specified in the `plugin-hooks` capability.
+Backend stages outside `PARALLEL_ALLOWED` (e.g. `pre-write`, the declarative `strip-tags` channel) and ALL frontend stages MAY appear in `hooks[]` for introspection annotations but SHALL be excluded from this consistency check entirely. The declarative `strip-tags` stage SHALL NOT be declared in `manifest.hooks[]` — strip-tag intent is conveyed via the existing `promptStripTags` / `displayStripTags` fields. Frontend `register()` cross-checking continues to be performed at SPA boot by `FrontendHookDispatcher.finalizeBoot()` and is specified in the `plugin-hooks` capability. Frontend `finalizeBoot` SHALL only flag `registeredOnly` mismatches when the plugin declares at least one frontend stage in `hooks[]` (no false alarms when `hooks[]` has only backend stages).
 
 On mismatch, plugin loading SHALL fail with a thrown error whose message:
 
@@ -217,7 +225,7 @@ To make the load transactional, `PluginManager` SHALL collect `ctx.hooks.registe
 
 Plugins whose manifest omits the `hooks` field entirely (or supplies `hooks: []`) SHALL be exempt from this check — they are treated as "undeclared" and load without cross-checking.
 
-This is a **breaking change**: any built-in or community plugin that (a) declares `hooks[]` but registers a different set of PARALLEL_ALLOWED backend stages, OR (b) previously relied on declaring a frontend / non-PARALLEL_ALLOWED stage in `hooks[]`, SHALL be repaired before its image is deployed against the new engine. Built-in plugins shipped in the engine repository (`HeartReverie/plugins/context-compaction`, `dialogue-colorize`, `polish`, `response-notify`, `start-hints`, `thinking`, `user-message`) SHALL be updated in the same change that introduces this rule.
+This is a **breaking change**: parallel handlers now run after all serial handlers regardless of priority — any plugin relying on a low-priority parallel handler preempting a high-priority serial handler SHALL be updated. The `hooks[]` stage restriction is NOT a breaking change because all stages are now accepted. Built-in plugins shipped in the engine repository (`HeartReverie/plugins/context-compaction`, `dialogue-colorize`, `polish`, `response-notify`, `start-hints`, `thinking`, `user-message`) SHALL be updated in the same change that introduces this rule.
 
 #### Scenario: Manifest declares hooks matching registrations
 - **WHEN** a plugin's manifest declares `hooks: [{stage: "prompt-assembly"}, {stage: "post-response"}]` and its backend `register(ctx)` calls `ctx.hooks.register("prompt-assembly", ...)` and `ctx.hooks.register("post-response", ...)`
@@ -238,23 +246,26 @@ This is a **breaking change**: any built-in or community plugin that (a) declare
 #### Scenario: Full-stack plugin registering non-PARALLEL_ALLOWED backend stage is unaffected
 - **WHEN** a plugin's manifest declares `hooks: [{stage: "prompt-assembly"}]` and its backend `register(ctx)` calls `ctx.hooks.register("prompt-assembly", ...)` AND `ctx.hooks.register("pre-write", ...)` (where `pre-write` is a known backend stage NOT in PARALLEL_ALLOWED)
 - **THEN** the consistency check SHALL ignore the `pre-write` registration (it is outside PARALLEL_ALLOWED)
-- **AND** the check SHALL pass because `declared = ["prompt-assembly"]` matches `registeredParallelAllowed = ["prompt-assembly"]`
+- **AND** the check SHALL pass because `declaredParallelAllowed = ["prompt-assembly"]` matches `registeredParallelAllowed = ["prompt-assembly"]`
 - **AND** the plugin SHALL load successfully with both handlers committed to `HookDispatcher.introspect()`
 
-#### Scenario: Manifest attempts to declare frontend stage is rejected before consistency check
-- **WHEN** a plugin's manifest declares `hooks: [{stage: "prompt-assembly"}, {stage: "chapter:dom:ready"}]` and its frontend ES module subscribes to `chapter:dom:ready`
-- **THEN** the manifest validator SHALL drop the `chapter:dom:ready` entry with `log.error` BEFORE the consistency check (per "Plugin manifest format")
-- **AND** the consistency check then SHALL operate only on `declared = ["prompt-assembly"]`; if the backend `register(ctx)` registers `prompt-assembly`, plugin loading SHALL succeed
+#### Scenario: Manifest declares frontend stage in hooks[] — excluded from consistency check
+- **WHEN** a plugin's manifest declares `hooks: [{stage: "prompt-assembly"}, {stage: "chapter:dom:ready", reads: ["container"]}]` and its frontend ES module subscribes to `chapter:dom:ready`
+- **THEN** the consistency check SHALL exclude the `chapter:dom:ready` entry (it is not in PARALLEL_ALLOWED) and operate only on `declaredParallelAllowed = ["prompt-assembly"]`; if the backend `register(ctx)` registers `prompt-assembly`, plugin loading SHALL succeed
+- **AND** the `chapter:dom:ready` entry SHALL remain in the manifest's `hooks` array for hook-inspector introspection
 - **AND** the frontend `chapter:dom:ready` subscription SHALL be enforced separately by `FrontendHookDispatcher.finalizeBoot()` (the consistency check at backend plugin load has no opinion on frontend handlers)
 
-#### Scenario: strip-tags declared in hooks[] is rejected at manifest validation
-- **WHEN** a plugin's manifest declares `hooks: [{stage: "strip-tags"}]`
-- **THEN** the manifest validator SHALL reject the entry per "Plugin manifest format" (`strip-tags` is not in PARALLEL_ALLOWED) and SHALL direct the author to use `promptStripTags` / `displayStripTags` instead
+#### Scenario: strip-tags declared in hooks[] is accepted but excluded from consistency check
+- **WHEN** a plugin's manifest declares `hooks: [{stage: "strip-tags", note: "Strips custom tags"}]`
+- **THEN** the manifest validator SHALL accept the entry for introspection purposes
+- **AND** the consistency check SHALL exclude it (not in PARALLEL_ALLOWED)
+- **AND** the plugin author SHOULD still convey strip-tag intent via `promptStripTags` / `displayStripTags` fields for actual stripping behaviour
 
-#### Scenario: Unknown future stage declared in hooks[] is rejected
-- **WHEN** a plugin's manifest declares `hooks: [{stage: "future-experimental-stage"}, {stage: "prompt-assembly"}]`
-- **THEN** the manifest validator SHALL `log.error` and drop the `future-experimental-stage` entry (`future-experimental-stage` is not in PARALLEL_ALLOWED)
-- **AND** the consistency check SHALL operate only on the remaining `declared = ["prompt-assembly"]`; forward-compatibility for new stages is reserved to engine releases that extend PARALLEL_ALLOWED (or that introduce new declarative channels), NOT to ad-hoc manifest entries
+#### Scenario: Unknown stage declared in hooks[] is accepted for introspection
+- **WHEN** a plugin's manifest declares `hooks: [{stage: "future-experimental-stage", writes: ["foo"]}, {stage: "prompt-assembly"}]`
+- **THEN** the manifest validator SHALL accept both entries
+- **AND** the `future-experimental-stage` entry SHALL be available for hook-inspector introspection but excluded from the consistency check (not in PARALLEL_ALLOWED)
+- **AND** the consistency check SHALL operate only on `declaredParallelAllowed = ["prompt-assembly"]`
 
 ## ADDED Requirements
 
