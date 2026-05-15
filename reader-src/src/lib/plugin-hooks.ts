@@ -65,6 +65,7 @@ export interface HandlerIntrospection {
   readonly plugin: string | undefined;
   readonly priority: number;
   readonly errorCount: number;
+  readonly parallel: boolean;
 }
 
 export interface BootMismatchDetail {
@@ -151,6 +152,7 @@ export class FrontendHookDispatcher {
         plugin: e.originPluginName,
         priority: e.priority,
         errorCount: e.errorCount,
+        parallel: false,
       }));
     }
     return out;

@@ -7,6 +7,7 @@ defineProps<{ handler: HandlerInfo }>();
 <template>
   <div class="handler-row">
     <span class="handler-row__priority">P{{ handler.priority }}</span>
+    <span v-if="handler.parallel" class="badge badge--parallel">⚡ 並行</span>
     <span class="handler-row__plugin">{{ handler.plugin ?? "(unbound)" }}</span>
     <span v-if="(handler.reads ?? []).length" class="badge badge--reads">
       reads: {{ (handler.reads ?? []).join(", ") }}
@@ -46,6 +47,11 @@ defineProps<{ handler: HandlerInfo }>();
 }
 .badge--reads { background: var(--pill-bg); border-color: var(--btn-border); }
 .badge--writes { background: var(--accent-subtle); border-color: var(--accent-border); }
+.badge--parallel {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: rgb(59, 130, 246);
+}
 .badge--errors {
   background: rgba(220, 38, 38, 0.15);
   border-color: var(--accent-solid);
