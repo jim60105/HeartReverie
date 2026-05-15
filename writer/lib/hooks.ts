@@ -64,6 +64,7 @@ export interface HandlerIntrospection {
   readonly plugin: string | undefined;
   readonly priority: number;
   readonly errorCount: number;
+  readonly parallel: boolean;
 }
 
 /** Ring buffer entry emitted per dispatch() call. */
@@ -202,6 +203,7 @@ export class HookDispatcher {
         plugin: e.plugin,
         priority: e.priority,
         errorCount: e.errorCount,
+        parallel: e.parallel,
       }));
     }
     return out;

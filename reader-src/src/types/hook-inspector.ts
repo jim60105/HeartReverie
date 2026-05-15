@@ -8,6 +8,8 @@ export interface HandlerInfo {
   readonly plugin: string | undefined;
   readonly priority: number;
   readonly errorCount: number;
+  /** Whether this handler runs in the parallel bucket. */
+  readonly parallel?: boolean;
   /** Manifest-declared reads, if any. */
   readonly reads?: readonly string[];
   /** Manifest-declared writes, if any. */

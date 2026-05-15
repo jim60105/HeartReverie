@@ -100,10 +100,11 @@ Deno.test({
       // backend snapshot contains the registered handler
       const backend = body.backend as Record<
         string,
-        Array<{ plugin: string; priority: number; errorCount: number }>
+        Array<{ plugin: string; priority: number; errorCount: number; parallel: boolean }>
       >;
       assertEquals(backend["post-response"]?.[0]?.plugin, "demo-plugin");
       assertEquals(backend["post-response"]?.[0]?.errorCount, 0);
+      assertEquals(backend["post-response"]?.[0]?.parallel, false);
       // pipelineFields is the engine-owned list
       assert(Array.isArray(body.pipelineFields));
       assert(
