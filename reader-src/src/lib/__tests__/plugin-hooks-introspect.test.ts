@@ -81,13 +81,26 @@ describe("FrontendHookDispatcher — finalizeBoot", () => {
     expect(mismatches[0]!.registeredOnly).toEqual([]);
   });
 
-  it("records registeredOnly mismatch when plugin registers but manifest is silent", () => {
+  it("no mismatch when plugin registers frontend hooks but manifest declares no frontend stages", () => {
+    // After add-hook-parallel-dispatch, hooks[] is backend-only; plugins that
+    // register frontend hooks without declaring them are expected behavior.
     const d = new FrontendHookDispatcher();
     d.register("notification", () => {}, 100, "plugin-a");
     d.finalizeBoot([{ plugin: "plugin-a", hooks: [] }]);
     const mismatches = d.getBootMismatches();
+    expect(mismatches).toHaveLength(0);
+  });
+
+  it("records registeredOnly mismatch when plugin declares some frontend stages but registers extras", () => {
+    const d = new FrontendHookDispatcher();
+    d.register("notification", () => {}, 100, "plugin-a");
+    d.register("frontend-render", () => {}, 100, "plugin-a");
+    d.finalizeBoot([
+      { plugin: "plugin-a", hooks: [{ stage: "notification" }] },
+    ]);
+    const mismatches = d.getBootMismatches();
     expect(mismatches).toHaveLength(1);
-    expect(mismatches[0]!.registeredOnly).toContain("notification");
+    expect(mismatches[0]!.registeredOnly).toContain("frontend-render");
     expect(mismatches[0]!.declaredOnly).toEqual([]);
   });
 

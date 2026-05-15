@@ -42,7 +42,8 @@ function makeRecordingHooks(): {
     { stage: HookStage; handler: HookHandler; priority?: number }
   > = [];
   const hooks: PluginHooks = {
-    register(stage, handler, priority) {
+    register(stage, handler, priorityOrOptions) {
+      const priority = typeof priorityOrOptions === "number" ? priorityOrOptions : priorityOrOptions?.priority;
       registered.push({ stage, handler, priority });
     },
   };

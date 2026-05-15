@@ -220,6 +220,10 @@ export interface PluginHookDeclaration {
   readonly reads?: readonly string[];
   readonly writes?: readonly string[];
   readonly note?: string;
+  readonly parallel?: boolean;
+  readonly readOnly?: boolean;
+  readonly concurrency?: number;
+  readonly dependsOn?: readonly string[];
 }
 
 /**
@@ -329,9 +333,17 @@ export interface DynamicVariableContext {
   readonly getSettings?: () => Promise<Record<string, unknown>>;
 }
 
+/** Options for the register() overload accepting an options object. */
+export interface RegisterOptions {
+  readonly priority?: number;
+  readonly parallel?: boolean;
+  readonly readOnly?: boolean;
+  readonly dependsOn?: readonly string[];
+}
+
 /** Hook registration interface exposed to plugins (subset of HookDispatcher). */
 export interface PluginHooks {
-  register(stage: HookStage, handler: HookHandler, priority?: number): void;
+  register(stage: HookStage, handler: HookHandler, priorityOrOptions?: number | RegisterOptions): void;
 }
 
 /** Context passed to plugin register() function. */
@@ -360,6 +372,9 @@ export interface PluginRouteContext {
   readonly saveSettings: (settings: Record<string, unknown>) => Promise<void>;
   readonly config: AppConfig;
 }
+
+/** Backend stages eligible for parallel dispatch declarations in manifest hooks[]. */
+export type BackendParallelStage = "prompt-assembly" | "post-response" | "response-stream";
 
 /** Valid hook lifecycle stages. */
 export type HookStage =

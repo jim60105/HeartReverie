@@ -98,7 +98,7 @@ Deno.test("PluginManager — transactional registration", async (t) => {
         join(pDir, "backend.js"),
         `export function register({ hooks }) {
            hooks.register("post-response", async () => {});
-           hooks.register("pre-write", async () => {});
+           hooks.register("prompt-assembly", async () => {});
          }`,
       );
       await Deno.writeTextFile(
@@ -118,7 +118,7 @@ Deno.test("PluginManager — transactional registration", async (t) => {
       // Rollback: neither stage has handlers
       const dump = hd.introspect();
       assertEquals(dump["post-response"]?.length ?? 0, 0);
-      assertEquals(dump["pre-write"]?.length ?? 0, 0);
+      assertEquals(dump["prompt-assembly"]?.length ?? 0, 0);
     });
 
     await t.step("manifest declares strip-tags — rejected with redirect hint", async () => {

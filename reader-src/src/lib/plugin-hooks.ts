@@ -183,8 +183,14 @@ export class FrontendHookDispatcher {
       for (const s of declaredFrontend) {
         if (!observed.has(s)) declaredOnly.push(s);
       }
-      for (const s of observed) {
-        if (!declaredFrontend.has(s)) registeredOnly.push(s);
+      // Only flag registeredOnly when the manifest declares at least one
+      // frontend stage. Since hooks[] is now exclusively for backend parallel-
+      // dispatch metadata, plugins with only backend declarations (or none)
+      // are expected to register frontend hooks without declaring them.
+      if (declaredFrontend.size > 0) {
+        for (const s of observed) {
+          if (!declaredFrontend.has(s)) registeredOnly.push(s);
+        }
       }
       if (declaredOnly.length > 0 || registeredOnly.length > 0) {
         this.#bootMismatches.push({
