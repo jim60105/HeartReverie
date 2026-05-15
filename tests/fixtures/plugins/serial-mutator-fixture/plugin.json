@@ -1,0 +1,7 @@
+{
+  "name": "serial-mutator-fixture",
+  "version": "1.0.0",
+  "description": "Fixture: mimics user-message writing context.preContent on pre-write",
+  "type": "hook-only",
+  "backendModule": "handler.ts"
+}

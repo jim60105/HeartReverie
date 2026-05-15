@@ -47,6 +47,7 @@
 | `displayStripTags` | `array` | Tags/regex to strip from frontend display |
 | `parameters` | `array` | Custom Vento template parameters exposed to the template editor |
 | `actionButtons` | `array` | Reader-mounted action buttons (each with `id`, `label`, optional `icon`, `tooltip`, `priority`, `visibleWhen`). Renders in `PluginActionBar` between `UsagePanel` and `ChatInput`; clicks dispatch the `action-button:click` frontend hook. See [`hook-api.md`](./hook-api.md#action-button-click-context) for the full click-context contract and [`docs/plugin-system.md`](../../../../docs/plugin-system.md#動作按鈕action-buttons) for the manifest field reference. |
+| `hooks` | `array` | Parallel dispatch declarations for backend hook stages. Each entry specifies a `stage` and opt-in parallel fields. See [Hooks Parallel Dispatch](#hooks-parallel-dispatch). |
 | `settingsSchema` | `object` | HeartReverie schema dialect describing user-configurable settings (must be `type: "object"` with `properties` AND `x-schema-version: 1`). When present, the system exposes settings endpoints and a settings page in the reader. See [Plugin Settings](#plugin-settings). |
 
 ## Prompt Fragments
@@ -300,7 +301,37 @@ Both 200 and 400 responses share the shape `{ errors: ValidationError[], warning
 
 Backend handlers can read/write the saved settings through `registerRoutes`'s `getSettings` / `saveSettings` helpers — see [`hook-api.md`](./hook-api.md#registerroutes-export).
 
+### Hooks Parallel Dispatch
 
+The `hooks` array declares per-stage parallel dispatch behavior for backend hooks. Each entry maps to a lifecycle stage and opts in to parallel execution under a `readOnly` contract.
+
+| Property | Type | Required | Description |
+|----------|------|:--------:|-------------|
+| `stage` | `string` | ✅ | Target stage. Enum: `prompt-assembly`, `post-response`, `response-stream` |
+| `parallel` | `boolean` | ❌ | Enable parallel dispatch. Default `false` (but `readOnly:true` implies `true` — see Track B) |
+| `readOnly` | `boolean` | ❌ | Declares the handler does not write to context (parallel-safety contract) |
+| `concurrency` | `integer` | ❌ | Max parallel limit. The dispatcher takes `Math.min(...)` across all entries in the same stage |
+| `dependsOn` | `string[]` | ❌ | Plugin names this entry depends on. Topological sort within the same stage; cycles or unknown names fall back to priority-only |
+
+**Track B default-on**: An entry with `readOnly: true` and no explicit `parallel` is treated as `parallel: true`. Opt out with `"parallel": false`.
+
+**Stage restrictions**: Only `prompt-assembly`, `post-response`, and `response-stream` are allowed. `pre-write` and `strip-tags` are always serial. For `response-stream`, `parallel: true` **must** be accompanied by `readOnly: true` — otherwise the entry is rejected (not coerced).
+
+Example:
+
+```json
+{
+  "name": "my-analytics",
+  "version": "1.0.0",
+  "description": "Post-response analytics via external API",
+  "type": "hook-only",
+  "backendModule": "./handler.ts",
+  "hooks": [
+    { "stage": "post-response", "parallel": true, "readOnly": true },
+    { "stage": "prompt-assembly", "readOnly": true, "dependsOn": ["context-compaction"] }
+  ]
+}
+```
 
 ### Name Validation
 

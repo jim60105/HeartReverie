@@ -312,6 +312,97 @@ export function register({ hooks, logger }) {
 
 同一階段可有多個處理函式，依 priority 排序後依序執行。單一處理函式拋出的例外會被記錄，但不會阻斷後續處理函式的執行。
 
+#### 並行分派模型（Parallel Dispatch Model）
+
+後端 `HookDispatcher` 支援將同一 stage 中符合條件的 handler **並行執行**，以減少 I/O 密集型 handler 的總 wall-clock 時間。並行分派為 **opt-in**，且僅限後端；前端 `FrontendHookDispatcher` 在 v1 完全不受影響。
+
+##### Manifest `hooks[]` 宣告
+
+在 `plugin.json` 中加入 `hooks` 陣列，為每個要宣告的 stage 提供一個 entry：
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|:----:|------|
+| `stage` | `string` | ✅ | 目標階段。枚舉：`prompt-assembly`、`post-response`、`response-stream` |
+| `parallel` | `boolean` | ❌ | 是否啟用並行分派。預設 `false`（但見下方 Track B） |
+| `readOnly` | `boolean` | ❌ | 宣告 handler 不寫入 context（並行安全契約） |
+| `concurrency` | `integer` | ❌ | 並行上限。取同 stage 內所有宣告值的 `Math.min`；未設則無上限 |
+| `dependsOn` | `string[]` | ❌ | 依賴的 plugin 名稱。同 stage 內做拓樸排序；cycle 或未知名稱會退回 priority 排序 |
+
+範例：
+
+```json
+{
+  "hooks": [
+    { "stage": "post-response", "parallel": true, "readOnly": true },
+    { "stage": "prompt-assembly", "readOnly": true, "dependsOn": ["context-compaction"] }
+  ]
+}
+```
+
+> [!NOTE]
+> `hooks[]` 的 `stage` 列舉僅接受 **`PARALLEL_ALLOWED`** 白名單中的三個值：`prompt-assembly`、`post-response`、`response-stream`。`pre-write` 與 `strip-tags` 一律為序列，不可出現在 `hooks[]` 宣告中。所有前端 stage 名稱在 schema 中被排除。
+
+##### Stage 白名單與特殊條件
+
+| Stage | 可並行？ | 備註 |
+|-------|:-------:|------|
+| `prompt-assembly` | ✅ | `parallel:true` 需搭配 `readOnly:true`（缺少則自動降級為 serial + warn） |
+| `post-response` | ✅ | 同上 |
+| `response-stream` | ✅（條件式） | `parallel:true` **必須**搭配 `readOnly:true`，否則整條宣告被 **reject**（非降級）。每 chunk 獨立 fan-out、無 back-pressure |
+| `pre-write` | ❌ | 強制序列（fan-in pipeline，單一寫者） |
+| `strip-tags` | ❌ | 強制序列（未被 dispatch） |
+
+##### Parallel-safe 判準
+
+handler 可安全宣告 `parallel: true` 的條件：
+
+1. handler **不寫入**任何 `context.*` 欄位（如 `previousContext`、`preContent`、`chunk`）
+2. handler **不就地 mutate** context 上的陣列或物件（如 `arr.push()`）
+3. handler 的副作用彼此獨立（HTTP 呼叫、寫入各自路徑的檔案等）
+
+> [!WARNING]
+> Proxy `set` trap 僅在 `HOOK_DEBUG=1` 環境變數下偵測 **top-level** 屬性寫入。對既存陣列 / 物件的就地 mutate（同一 reference 的 `.push()`、`.splice()` 等）**無法被偵測**。請依據上述判準自行確認。
+
+##### Track B：`readOnly:true` 預設並行
+
+宣告 `readOnly: true` 且 **未**顯式指定 `parallel` 的條目，dispatcher 會自動視為 `parallel: true`。這減少了樣板：plugin 作者既然已承諾不寫 context，不需再額外指定 `parallel`。
+
+- 顯式 `parallel: false` 可 opt out，完全尊重
+- 未宣告 `hooks[]` 的 plugin **完全不受影響**（100% 向後相容）
+
+> [!IMPORTANT]
+> **BREAKING 行為變化**：既有的 `readOnly:true` entry 將從 priority-strict 序列執行變為預設並行。若你的 handler 依賴與其他 handler 的執行順序，請加上 `"parallel": false`。
+
+##### Priority 語意變化
+
+並行 handler **一律在所有序列 handler 之後執行**，與 priority 數值無關。Priority 僅作為同一 bucket 內的排序鍵：
+
+- **序列 bucket**：依 priority-asc 依序 `await`（與過去完全一致）
+- **並行 bucket**：序列 bucket 全部完成後，一次 `Promise.allSettled` 啟動
+
+Manifest validator 在 `parallel:true && priority < 100` 時會 `log.warn` 提醒作者：該 handler 不會搶先任何 serial handler。
+
+##### `register()` options-object 多載
+
+除了既有的 `register(stage, handler, priority?)` 簽章外，第三參數現在也接受 options object，用於 per-handler 覆蓋 manifest 預設：
+
+```ts
+hooks.register("post-response", handler, {
+  priority: 50,
+  parallel: true,
+  readOnly: true,
+  dependsOn: ["state"],
+});
+```
+
+- 傳入 `number` 等同 `{ priority: number }`（零行為差異，舊呼叫不受影響）
+- options 仍受 allowlist + `readOnly` 契約校驗；違反者 coerce 並 log warn
+- `dependsOn` 與 manifest 宣告取 **union**（不取代）
+
+##### 前端排除
+
+v1 並行分派僅限後端。`FrontendHookDispatcher` 完全不動，所有前端 hook 階段（`frontend-render`、`notification`、`chat:send:before` 等）的行為與過去 100% 一致。
+
 #### Plugin Logger
 
 每個 plugin 在 `register()` 時會收到一個已綁定 plugin 名稱的 Logger 實例（透過 `baseData: { plugin: name }`）。所有使用此 logger 記錄的訊息都會自動附帶 plugin 名稱，方便在日誌中快速辨識來源。

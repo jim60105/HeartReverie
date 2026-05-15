@@ -34,8 +34,9 @@ import type {
   PluginHookDeclaration,
   PluginManifest,
   PluginRegisterContext,
+  RegisterOptions,
 } from "../types.ts";
-import { HookDispatcher, KNOWN_BACKEND_STAGES, VALID_STAGES } from "./hooks.ts";
+import { HookDispatcher, VALID_STAGES, PARALLEL_ALLOWED } from "./hooks.ts";
 import { createLogger } from "./logger.ts";
 
 const log = createLogger("plugin");
@@ -97,27 +98,6 @@ export function isValidPluginName(name: unknown): name is string {
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-
-/**
- * Frontend hook stages. Kept in sync with `VALID_STAGES` in
- * `reader-src/src/lib/plugin-hooks.ts`. Used by the manifest validator to
- * accept declarations for stages the backend itself cannot register.
- */
-const KNOWN_FRONTEND_STAGES: ReadonlySet<string> = new Set<string>([
-  "frontend-render",
-  "notification",
-  "chat:send:before",
-  "chapter:render:after",
-  "chapter:dom:ready",
-  "chapter:dom:dispose",
-  "story:switch",
-  "chapter:change",
-  "action-button:click",
-  "hook-inspector:report",
-]);
-
-/** Backend stages eligible for the strict declare-vs-register cross-check. */
-const STRICT_BACKEND_STAGES: ReadonlySet<string> = KNOWN_BACKEND_STAGES;
 
 
 export class PluginManager {
@@ -195,6 +175,126 @@ export class PluginManager {
       count: this.#plugins.size,
       plugins: [...this.#plugins.keys()],
     });
+
+    // Global dependsOn DAG validation (task 2.8): run after ALL plugins loaded
+    this.#validateDependsOnDAG();
+  }
+
+  /**
+   * Validate the dependsOn DAG for each PARALLEL_ALLOWED stage across all
+   * loaded plugins. If a cycle or unknown plugin reference is detected for a
+   * given stage, ALL dependsOn declarations for that stage are dropped and
+   * an error is logged.
+   */
+  #validateDependsOnDAG(): void {
+    // Collect hook declarations per stage across all plugins
+    for (const stage of PARALLEL_ALLOWED) {
+      const edges = new Map<string, string[]>(); // plugin → dependsOn[]
+      const knownPlugins = new Set<string>();     // all plugins declaring this stage
+
+      for (const [pluginName, entry] of this.#plugins) {
+        if (!Array.isArray(entry.manifest.hooks)) continue;
+        for (const h of entry.manifest.hooks) {
+          const decl = h as Record<string, unknown>;
+          if (decl.stage !== stage) continue;
+          knownPlugins.add(pluginName);
+          const deps = decl.dependsOn as string[] | undefined;
+          if (deps?.length) {
+            edges.set(pluginName, [...deps]);
+          }
+        }
+      }
+
+      if (edges.size === 0) continue;
+
+      // Check for unknown plugin references
+      let invalid = false;
+      for (const [plugin, deps] of edges) {
+        for (const dep of deps) {
+          if (!knownPlugins.has(dep)) {
+            log.error(
+              "Plugin manifest: dependsOn references unknown plugin",
+              { plugin, stage, unknownDep: dep },
+            );
+            invalid = true;
+          }
+        }
+      }
+
+      // Check for cycles using Kahn's algorithm (topological sort)
+      if (!invalid) {
+        const inDegree = new Map<string, number>();
+        for (const node of knownPlugins) inDegree.set(node, 0);
+        for (const [, deps] of edges) {
+          for (const dep of deps) {
+            if (inDegree.has(dep)) {
+              inDegree.set(dep, (inDegree.get(dep) ?? 0) + 1);
+            }
+          }
+        }
+        // Wait — in dependsOn semantics, "A dependsOn B" means A must run
+        // AFTER B, so the edge is B → A. For Kahn's, count in-degree of
+        // each node where edges point TO the node.
+        // Re-build: edge direction = dependsOn[i] → plugin (dep must finish first)
+        const adj = new Map<string, string[]>();
+        const deg = new Map<string, number>();
+        for (const node of knownPlugins) {
+          adj.set(node, []);
+          deg.set(node, 0);
+        }
+        for (const [plugin, deps] of edges) {
+          for (const dep of deps) {
+            if (adj.has(dep)) {
+              adj.get(dep)!.push(plugin);
+              deg.set(plugin, (deg.get(plugin) ?? 0) + 1);
+            }
+          }
+        }
+
+        const queue: string[] = [];
+        for (const [node, d] of deg) {
+          if (d === 0) queue.push(node);
+        }
+        let processed = 0;
+        while (queue.length > 0) {
+          const node = queue.shift()!;
+          processed++;
+          for (const neighbor of adj.get(node) ?? []) {
+            const newDeg = (deg.get(neighbor) ?? 1) - 1;
+            deg.set(neighbor, newDeg);
+            if (newDeg === 0) queue.push(neighbor);
+          }
+        }
+
+        if (processed < knownPlugins.size) {
+          const cyclePlugins = [...deg.entries()]
+            .filter(([, d]) => d > 0)
+            .map(([n]) => n);
+          log.error(
+            "Plugin manifest: dependsOn cycle detected",
+            { stage, involvedPlugins: cyclePlugins },
+          );
+          invalid = true;
+        }
+      }
+
+      // Drop ALL dependsOn for this stage if invalid
+      if (invalid) {
+        for (const [, entry] of this.#plugins) {
+          if (!Array.isArray(entry.manifest.hooks)) continue;
+          for (const h of entry.manifest.hooks) {
+            const decl = h as Record<string, unknown>;
+            if (decl.stage === stage) {
+              decl.dependsOn = undefined;
+            }
+          }
+        }
+        log.warn(
+          "Plugin manifest: all dependsOn for stage dropped due to invalid DAG",
+          { stage },
+        );
+      }
+    }
   }
 
   /**
@@ -391,10 +491,20 @@ export class PluginManager {
    * - `stage === "strip-tags"` is rejected (use `promptStripTags` /
    *   `displayStripTags` instead)
    * - duplicate `stage` values within the same array are rejected
-   * - unknown stages (not in backend ∪ frontend known sets) log a warn but
-   *   do not block load
    * - `note` longer than 200 chars is rejected
    * - non-string entries in `reads` / `writes` are rejected
+   * - `parallel`, `readOnly` must be booleans when present
+   * - `concurrency` must be a positive integer when present
+   * - `dependsOn` must be a string[] when present
+   *
+   * After schema validation, coercion / guard rules are applied:
+   * - parallel:true on non-PARALLEL_ALLOWED stage → coerced to false
+   * - parallel:true without readOnly:true → coerced to false (error for
+   *   response-stream)
+   * - readOnly:true without parallel → auto-promoted to parallel:true
+   *   (only for PARALLEL_ALLOWED stages)
+   * - parallel:true with priority < 100 → warn (parallel runs after serial)
+   * - invalid concurrency → coerced to undefined
    */
   #validateHookDeclarations(manifest: PluginManifest): boolean {
     if (manifest.hooks === undefined) return true;
@@ -423,6 +533,7 @@ export class PluginManager {
         );
         return false;
       }
+
       if (seen.has(decl.stage)) {
         pluginLog.error(
           "Plugin manifest 'hooks' has duplicate stage entry — skipping plugin",
@@ -431,14 +542,7 @@ export class PluginManager {
         return false;
       }
       seen.add(decl.stage);
-      if (
-        !STRICT_BACKEND_STAGES.has(decl.stage) &&
-        !KNOWN_FRONTEND_STAGES.has(decl.stage)
-      ) {
-        pluginLog.warn("Plugin manifest 'hooks' declares unknown stage", {
-          stage: decl.stage,
-        });
-      }
+
       if (decl.note !== undefined) {
         if (typeof decl.note !== "string" || decl.note.length > 200) {
           pluginLog.error(
@@ -466,7 +570,105 @@ export class PluginManager {
         );
         return false;
       }
+
+      // Validate new parallel-dispatch fields (type checks)
+      if (decl.parallel !== undefined && typeof decl.parallel !== "boolean") {
+        pluginLog.error(
+          "Plugin manifest 'hooks' entry 'parallel' must be a boolean — skipping plugin",
+          { stage: decl.stage },
+        );
+        return false;
+      }
+      if (decl.readOnly !== undefined && typeof decl.readOnly !== "boolean") {
+        pluginLog.error(
+          "Plugin manifest 'hooks' entry 'readOnly' must be a boolean — skipping plugin",
+          { stage: decl.stage },
+        );
+        return false;
+      }
+      if (decl.concurrency !== undefined && typeof decl.concurrency !== "number") {
+        pluginLog.error(
+          "Plugin manifest 'hooks' entry 'concurrency' must be a number — skipping plugin",
+          { stage: decl.stage },
+        );
+        return false;
+      }
+      if (decl.dependsOn !== undefined) {
+        if (!Array.isArray(decl.dependsOn) || decl.dependsOn.some((x) => typeof x !== "string")) {
+          pluginLog.error(
+            "Plugin manifest 'hooks' entry 'dependsOn' must be a string[] — skipping plugin",
+            { stage: decl.stage },
+          );
+          return false;
+        }
+      }
     }
+
+    // Use a mutable alias so we can reassign properties during coercion.
+    const mutableHooks = manifest.hooks as unknown as Array<Record<string, unknown>>;
+
+    // Coercion / guard rules (2.2–2.7)
+    for (const raw of mutableHooks) {
+      const stage = raw.stage as string;
+
+      // 2.2 Stage allowlist guard (redundant with filter above but kept as runtime guard)
+      if (raw.parallel === true && !PARALLEL_ALLOWED.has(stage)) {
+        pluginLog.warn(
+          "Plugin manifest: parallel:true is only allowed for stages in PARALLEL_ALLOWED",
+          { stage },
+        );
+        raw.parallel = false;
+      }
+
+      // 2.3 / 2.4 readOnly requirement for parallel dispatch
+      if (raw.parallel === true && raw.readOnly !== true) {
+        if (stage === "response-stream") {
+          // 2.4 response-stream: REJECT (not coerce)
+          pluginLog.error(
+            "Plugin manifest: response-stream + parallel:true requires readOnly:true",
+            { stage },
+          );
+          raw.parallel = false;
+        } else {
+          // 2.3 Other stages: coerce
+          pluginLog.warn(
+            "Plugin manifest: parallel:true requires readOnly:true — coercing parallel to false",
+            { stage },
+          );
+          raw.parallel = false;
+        }
+      }
+
+      // 2.5 Track B auto-promotion: readOnly:true without explicit parallel → parallel:true
+      // Only applies to PARALLEL_ALLOWED stages; non-eligible stages ignore this.
+      if (raw.readOnly === true && raw.parallel === undefined && PARALLEL_ALLOWED.has(stage)) {
+        raw.parallel = true;
+        pluginLog.debug(
+          "Plugin manifest: Track B auto-promotion readOnly:true → parallel:true",
+          { stage },
+        );
+      }
+
+      // 2.6 Priority warning for parallel handlers
+      if (raw.parallel === true && typeof raw.priority === "number" && (raw.priority as number) < 100) {
+        pluginLog.warn(
+          "Plugin manifest: parallel handlers run after all serial handlers regardless of priority",
+          { stage, priority: raw.priority },
+        );
+      }
+
+      // 2.7 Concurrency coercion
+      if (raw.concurrency !== undefined) {
+        if (!Number.isInteger(raw.concurrency) || (raw.concurrency as number) < 1) {
+          pluginLog.warn(
+            "Plugin manifest: invalid concurrency value, coercing to undefined",
+            { stage, rejectedValue: raw.concurrency },
+          );
+          raw.concurrency = undefined;
+        }
+      }
+    }
+
     return true;
   }
 
@@ -748,9 +950,22 @@ export class PluginManager {
       readonly stage: HookStage;
       readonly handler: HookHandler;
       readonly priority: number;
+      readonly parallel: boolean;
+      readonly readOnly: boolean;
+      readonly concurrency?: number;
+      readonly dependsOn?: readonly string[];
     }
     const staged: StagedEntry[] = [];
     const stagedStages = new Set<HookStage>();
+
+    // Build a lookup for manifest hook declarations (parallel dispatch metadata)
+    const manifestHookMap = new Map<string, Record<string, unknown>>();
+    if (Array.isArray(entry.manifest.hooks)) {
+      for (const h of entry.manifest.hooks) {
+        const decl = h as Record<string, unknown>;
+        manifestHookMap.set(decl.stage as string, decl);
+      }
+    }
 
     try {
       const mod = await import("file://" + modulePath) as Record<
@@ -767,7 +982,7 @@ export class PluginManager {
           register: (
             stage: HookStage,
             handler: HookHandler,
-            priority?: number,
+            priorityOrOptions?: number | RegisterOptions,
           ) => {
             // Mirror HookDispatcher.register validations up-front so a failing
             // stage/handler aborts the plugin before any partial commit can
@@ -787,7 +1002,30 @@ export class PluginManager {
             // `stagedStages` is still tracked as a Set for declare-vs-register
             // cross-check below (presence-only, not count).
             stagedStages.add(stage);
-            staged.push({ stage, handler, priority: priority ?? 100 });
+
+            // Normalize overload: number | RegisterOptions | undefined
+            const opts: RegisterOptions =
+              typeof priorityOrOptions === "number"
+                ? { priority: priorityOrOptions }
+                : priorityOrOptions ?? {};
+
+            // Merge manifest-derived parallel dispatch options (runtime opts
+            // union with manifest: dependsOn arrays are concatenated, explicit
+            // runtime fields take precedence for scalar values).
+            const manifestDecl = manifestHookMap.get(stage);
+            const manifestDeps = (manifestDecl?.dependsOn as readonly string[] | undefined) ?? [];
+            const runtimeDeps = opts.dependsOn ?? [];
+            const mergedDeps = [...new Set([...manifestDeps, ...runtimeDeps])];
+
+            staged.push({
+              stage,
+              handler,
+              priority: opts.priority ?? 100,
+              parallel: (manifestDecl?.parallel as boolean) ?? false,
+              readOnly: (manifestDecl?.readOnly as boolean) ?? false,
+              concurrency: manifestDecl?.concurrency as number | undefined,
+              dependsOn: mergedDeps.length > 0 ? mergedDeps : undefined,
+            });
           },
         };
         const context: PluginRegisterContext = {
@@ -799,16 +1037,19 @@ export class PluginManager {
           ctx: PluginRegisterContext,
         ) => void | Promise<void>)(context);
 
-        // Strict declare-vs-register cross-check (only when the manifest
-        // explicitly declares a hooks field — absent field = legacy / undeclared).
+        // Strict declare-vs-register cross-check for parallel-dispatch stages.
+        // Only PARALLEL_ALLOWED stages participate: parallel dispatch requires
+        // explicit opt-in via hooks[]. Non-PARALLEL_ALLOWED stages in hooks[]
+        // are informational (for hook-inspector reads/writes) and don't require
+        // a matching register() call.
         if (Array.isArray(entry.manifest.hooks)) {
           const declaredBackend = new Set(
             entry.manifest.hooks
               .map((h) => h.stage)
-              .filter((s) => STRICT_BACKEND_STAGES.has(s)),
+              .filter((s) => PARALLEL_ALLOWED.has(s)),
           );
           const registeredBackend = new Set(
-            [...stagedStages].filter((s) => STRICT_BACKEND_STAGES.has(s)),
+            [...stagedStages].filter((s) => PARALLEL_ALLOWED.has(s)),
           );
           const declaredOnly = [...declaredBackend].filter(
             (s) => !registeredBackend.has(s),
@@ -828,7 +1069,13 @@ export class PluginManager {
           this.#hookDispatcher.register(
             s.stage,
             s.handler,
-            s.priority,
+            {
+              priority: s.priority,
+              parallel: s.parallel,
+              readOnly: s.readOnly,
+              concurrency: s.concurrency,
+              dependsOn: s.dependsOn,
+            },
             name,
             pluginLogger,
           );

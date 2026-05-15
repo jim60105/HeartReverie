@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "First-round opening instructions for chapter start guidance",
   "type": "prompt-only",
-  "hooks": [],
   "promptFragments": [
     {
       "file": "./start-hints.md",

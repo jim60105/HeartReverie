@@ -39,6 +39,7 @@ import { registerLoreRoutes } from "./routes/lore.ts";
 import { registerWebSocketRoutes } from "./routes/ws.ts";
 import { registerUsageRoutes } from "./routes/usage.ts";
 import { registerExportRoutes } from "./routes/export.ts";
+import { registerDebugHookRoutes } from "./routes/_debug-hooks.ts";
 import type { Context, Next } from "@hono/hono";
 import type { AppDeps } from "./types.ts";
 
@@ -160,6 +161,7 @@ export function createApp(deps: AppDeps): Hono {
   registerTemplateRoutes(app, deps);
   registerUsageRoutes(app, deps);
   registerImageRoutes(app, deps);
+  registerDebugHookRoutes(app, deps.hookDispatcher);
 
   // Mount plugin-registered API routes (sync phase: registers route handlers)
   // Note: if registerRoutes is async (e.g. dynamic imports), call initPluginRoutes() after createApp.

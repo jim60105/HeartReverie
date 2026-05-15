@@ -1,0 +1,10 @@
+{
+  "name": "parallel-bench",
+  "version": "1.0.0",
+  "description": "Fixture: parallel readOnly post-response handler for integration testing",
+  "type": "hook-only",
+  "hooks": [
+    { "stage": "post-response", "parallel": true, "readOnly": true }
+  ],
+  "backendModule": "handler.ts"
+}
