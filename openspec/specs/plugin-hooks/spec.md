@@ -250,27 +250,43 @@ Handlers mutate `context.text` and `context.placeholderMap` directly — the dis
 
 ### Requirement: Error isolation
 
-If a hook handler throws an error during execution, the hook system SHALL catch the error, log it with the plugin name, hook stage, and error details, increment the `errorCount` on the corresponding `HandlerEntry` (so subsequent calls to `introspect()` reflect the new count), and continue executing the remaining handlers for that stage. A single handler failure SHALL NOT prevent other handlers from running or cause the overall request to fail. The `errorCount` SHALL be stored in memory only and SHALL reset to zero when the process restarts; it SHALL NOT be persisted to disk.
+If a hook handler throws an error during execution, the hook system SHALL catch the error, log it with the plugin name, hook stage, error details, AND the dispatch phase (`"serial"` for handlers in the serial bucket or `"parallel"` for handlers in the parallel bucket — see the `hook-parallel-dispatch` capability for bucket assignment). The hook system SHALL increment the `errorCount` on the corresponding `HandlerEntry` (so subsequent calls to `introspect()` reflect the new count) and continue executing the remaining handlers for that stage. A single handler failure SHALL NOT prevent other handlers from running or cause the overall request to fail. The `errorCount` SHALL be stored in memory only and SHALL reset to zero when the process restarts; it SHALL NOT be persisted to disk.
+
+For parallel-bucket handlers, error isolation SHALL be achieved via `Promise.allSettled`: the dispatcher SHALL inspect every settled result, increment `errorCount` for every `rejected` entry, and emit one `log.error` per rejection. The dispatcher SHALL NOT rethrow.
 
 #### Scenario: Handler throws and others continue
-- **WHEN** handler A (priority 50) throws an error and handler B (priority 100) is also registered for the same stage
-- **THEN** the hook system SHALL log the error from handler A, increment handler A's `errorCount` by one, and proceed to execute handler B normally
+
+- **WHEN** handler A (priority 50, serial) throws an error and handler B (priority 100, serial) is also registered for the same stage
+- **THEN** the hook system SHALL log the error from handler A with `dispatchPhase: "serial"`, increment handler A's `errorCount` by one, and proceed to execute handler B normally
 
 #### Scenario: Error log includes context
+
 - **WHEN** a handler from plugin `my-plugin` throws an error during the `post-response` stage
-- **THEN** the log entry SHALL include the plugin name `my-plugin`, the stage `post-response`, and the error message/stack trace
+- **THEN** the log entry SHALL include the plugin name `my-plugin`, the stage `post-response`, the `dispatchPhase` (`"serial"` or `"parallel"`), and the error message/stack trace
 
 #### Scenario: Request completes despite handler error
-- **WHEN** a `post-response` handler throws an error
+
+- **WHEN** a `post-response` handler throws an error (in either bucket)
 - **THEN** the server SHALL still return the HTTP response with the chapter content successfully
 
 #### Scenario: errorCount increments on repeated throws
+
 - **WHEN** the same handler throws on three separate dispatch calls
 - **THEN** `introspect()` SHALL report that handler's `errorCount` as `3` (or higher if additional throws occurred since), and a process restart SHALL reset the count to `0`
 
 #### Scenario: errorCount is not persisted across restarts
+
 - **WHEN** the process is restarted after handler exceptions were recorded
 - **THEN** the dispatcher SHALL initialize all `errorCount` values to `0` for newly-loaded handlers and SHALL NOT read any prior counter values from disk
+
+#### Scenario: Parallel bucket — single rejection does not stop the others
+
+- **GIVEN** five parallel handlers, two of which throw
+- **WHEN** the parallel pass runs
+- **THEN** all five SHALL settle
+- **AND** the dispatcher SHALL emit exactly two `log.error` entries, each with `dispatchPhase: "parallel"` and the offending plugin name
+- **AND** the corresponding `HandlerEntry.errorCount` values SHALL each increment by one
+- **AND** the overall `dispatch()` promise SHALL resolve
 
 ### Requirement: Hook stage context documentation
 
