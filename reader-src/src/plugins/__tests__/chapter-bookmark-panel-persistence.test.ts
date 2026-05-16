@@ -12,7 +12,7 @@ vi.mock('@plugins-ext/../_shared/utils.js', () => ({
   escapeHtml: (s: string) => s,
 }));
 
-import { register, store, mountPanel, unmountPanel } from '@plugins-ext/chapter-bookmark/frontend.js';
+import { register, store, unmountPanel } from '@plugins-ext/chapter-bookmark/frontend.js';
 
 type HookHandler = (ctx: Record<string, unknown>) => unknown;
 interface HookEntry { name: string; handler: HookHandler; priority: number }
