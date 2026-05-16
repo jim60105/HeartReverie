@@ -79,7 +79,12 @@ export function registerDebugHookRoutes(
       }
     }
 
-    return c.json({ perStage, perPlugin, windowSize: buffer.length });
+    return c.json({
+      perStage,
+      perPlugin,
+      windowSize: buffer.length,
+      observerSubscribers: dispatcher.getHandlerEventSubscribers(),
+    });
   });
 
   // ── GET /api/_debug/hooks/stream — SSE per-dispatch events ─────

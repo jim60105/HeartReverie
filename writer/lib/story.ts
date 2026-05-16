@@ -215,7 +215,11 @@ export function createStoryEngine(
     message: string,
     template?: string,
     extraVariables?: Record<string, unknown>,
+    correlationId?: string,
   ): Promise<BuildPromptResult> {
+    // Mint a correlationId when callers don't supply one so the
+    // prompt-assembly hook context always observes a non-empty value.
+    const effectiveCorrelationId = correlationId ?? crypto.randomUUID();
     let chapterFiles: string[] = await listChapterFiles(storyDir);
     log.debug("Read story directory", { path: storyDir, chapterCount: chapterFiles.length });
 
@@ -271,6 +275,7 @@ export function createStoryEngine(
       storyDir,
       series,
       name,
+      correlationId: effectiveCorrelationId,
     };
     await hookDispatcher.dispatch("prompt-assembly", hookContext);
 
@@ -318,7 +323,9 @@ export function createStoryEngine(
     name: string,
     storyDir: string,
     template?: string,
+    correlationId?: string,
   ): Promise<ContinuePromptResult> {
+    const effectiveCorrelationId = correlationId ?? crypto.randomUUID();
     let chapterFiles: string[] = await listChapterFiles(storyDir);
     log.debug("Read story directory (continue)", { path: storyDir, chapterCount: chapterFiles.length });
 
@@ -370,6 +377,7 @@ export function createStoryEngine(
       storyDir,
       series,
       name,
+      correlationId: effectiveCorrelationId,
     };
     await hookDispatcher.dispatch("prompt-assembly", hookContext);
 

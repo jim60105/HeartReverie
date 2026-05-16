@@ -7,7 +7,8 @@ Hook system architecture that allows plugins to subscribe to ordered lifecycle s
 ### Requirement: Hook stages
 
 The hook system SHALL define the following ordered hook stages that plugins can subscribe to:
-- `prompt-assembly`: Invoked during prompt construction — plugins can modify the `previousContext` array (e.g., replace full chapter text with summaries). The context object SHALL include a mutable `previousContext` (array of strings) field, a `rawChapters` (array of strings containing unstripped chapter content) field, `storyDir` (string), `series` (string), and `name` (string).
+- `prompt-assembly`: Invoked during prompt construction — plugins can modify the `previousContext` array (e.g., replace full chapter text with summaries). The context object SHALL include a mutable `previousContext` (array of strings) field, a `rawChapters` (array of strings containing unstripped chapter content) field, `storyDir` (string), `series` (string), `name` (string), and `correlationId` (non-empty string — a UUID generated at the entry of `executeChat()` / `executeContinue()` and threaded through `buildPromptFromStory()` / `buildContinuePromptFromStory()`; this same UUID SHALL be reused unchanged for the eventual `pre-llm-fetch` dispatch produced by the same chat request).
+- `pre-llm-fetch`: Invoked once per upstream LLM request, dispatched from `streamLlmAndPersist()` in `writer/lib/chat-shared.ts` immediately before the `fetch(config.LLM_API_URL, ...)` call, after the request body has been fully constructed. The context object SHALL include `correlationId` (non-empty string — **the same** UUID that was passed into the `prompt-assembly` context for this request, propagated from `executeChat()` / `executeContinue()` through to `streamLlmAndPersist()`), `messages` (the final `ChatMessage[]` to be serialised), `model` (string), `requestMetadata` (`Readonly<Record<string, unknown>>` carrying the upstream sampler/control knobs including `stream`, `model`, and the same keys as `requestBody`), `storyDir` (string), `series` (string), `name` (string), and `writeMode` (`{ kind: string }` discriminating `"write-new-chapter"`, `"append-to-existing-chapter"`, `"continue-last-chapter"`, or `"replace-last-chapter"`). The stage is **observation-only** — handlers SHALL NOT influence the outgoing HTTP request; mutating any field of `context` SHALL NOT change the bytes posted to `config.LLM_API_URL`. The stage is **serial-only** — the dispatcher SHALL ignore or reject `{ parallel: true }` registrations for this stage. There is exactly one dispatch site; the hook is not re-dispatched on retry.
 - `response-stream`: Invoked once per content delta during streaming — plugins can observe or transform stream chunks as they arrive from the LLM. The context object SHALL include a mutable `chunk` (string) field, plus `correlationId`, `series`, `name`, `storyDir`, `chapterPath`, and `chapterNumber`. Handlers mutate `context.chunk` to transform or (by assigning `""`) drop the chunk.
 - `pre-write`: Invoked after OpenRouter response is confirmed but before chapter file writing — plugins can inject content to prepend to the chapter file (e.g., user message wrappers)
 - `post-response`: Invoked after the response stream completes — plugins can run side effects (e.g., state status update). The context object SHALL include `content`, `storyDir`, `series`, `name`, `rootDir`, an optional `source` (string discriminating the trigger; `"chat"` for normal chat completions and `"plugin-action"` for plugin-action runs), an optional `pluginName` (set when `source === "plugin-action"`), an optional `chapterPath` (set whenever a chapter file was written or appended to), an optional `chapterNumber` (number, set alongside `chapterPath`), and an optional `appendedTag` (set when `source === "plugin-action"` and the run appended a wrapped block). For `source === "plugin-action"` runs, `content` SHALL be the FULL chapter file content after the append (not the bare LLM response) so consumers see identical semantics whether the patch came from a normal chat completion or a plugin-action append.
@@ -26,11 +27,35 @@ Each stage SHALL have a well-defined context object that handlers receive and ca
 
 #### Scenario: Prompt-assembly stage invocation
 - **WHEN** the server constructs the system prompt for an LLM request
-- **THEN** the hook system SHALL invoke all `prompt-assembly` handlers in priority order, passing a context object containing `previousContext` (mutable array of stripped chapter strings), `rawChapters` (array of original unstripped chapter contents for tag extraction), `storyDir` (string path to the story directory), `series` (string series name), and `name` (string story name)
+- **THEN** the hook system SHALL invoke all `prompt-assembly` handlers in priority order, passing a context object containing `previousContext` (mutable array of stripped chapter strings), `rawChapters` (array of original unstripped chapter contents for tag extraction), `storyDir` (string path to the story directory), `series` (string series name), `name` (string story name), and `correlationId` (non-empty string UUID for this chat request)
 
 #### Scenario: Prompt-assembly stage dispatch point
 - **WHEN** `buildPromptFromStory()` has constructed the initial `previousContext` array from chapter files (after tag stripping)
-- **THEN** it SHALL dispatch the `prompt-assembly` hook with both the stripped `previousContext` array and the raw chapter contents, before passing the potentially-modified `previousContext` to `renderSystemPrompt()`
+- **THEN** it SHALL dispatch the `prompt-assembly` hook with both the stripped `previousContext` array and the raw chapter contents (and the inbound `correlationId` argument), before passing the potentially-modified `previousContext` to `renderSystemPrompt()`
+
+#### Scenario: Prompt-assembly correlationId is supplied by caller
+- **WHEN** `executeChat()` or `executeContinue()` is invoked for a chat request
+- **THEN** the entry function SHALL generate a single `correlationId = crypto.randomUUID()` and pass it as an argument into `buildPromptFromStory()` / `buildContinuePromptFromStory()`, which in turn SHALL include it in the `prompt-assembly` hook context as `context.correlationId`
+
+#### Scenario: Prompt-assembly correlationId matches pre-llm-fetch correlationId
+- **WHEN** a single chat request triggers both a `prompt-assembly` dispatch and the subsequent `pre-llm-fetch` dispatch in `streamLlmAndPersist()`
+- **THEN** the `context.correlationId` value observed by `prompt-assembly` handlers SHALL strictly equal (`===`) the `context.correlationId` value observed by `pre-llm-fetch` handlers for that request; the engine SHALL NOT mint a separate UUID inside `streamLlmAndPersist()` when one was supplied by the caller
+
+#### Scenario: Pre-llm-fetch stage invocation
+- **WHEN** `streamLlmAndPersist()` has built `requestBody` (containing `messages`, `model`, sampler knobs, and `stream: true`) and is about to call `fetch(config.LLM_API_URL, { method: "POST", body: JSON.stringify(requestBody), ... })`
+- **THEN** the hook system SHALL invoke all `pre-llm-fetch` handlers serially in priority order, passing a context object containing `correlationId`, `messages`, `model`, `requestMetadata`, `storyDir`, `series`, `name`, and `writeMode`, and SHALL await all handlers before issuing the upstream `fetch(...)` call
+
+#### Scenario: Pre-llm-fetch is observation-only
+- **WHEN** a `pre-llm-fetch` handler mutates `context.messages` (e.g., `context.messages.push(...)` or `context.messages = []`) or `context.requestMetadata`
+- **THEN** the bytes posted to `config.LLM_API_URL` SHALL be byte-for-byte identical to the no-handler case for that request, because the engine uses the locally-built `requestBody` (not the dispatched context) for the actual fetch
+
+#### Scenario: Pre-llm-fetch is serial-only
+- **WHEN** a plugin manifest declares `{ stage: "pre-llm-fetch", parallel: true }`
+- **THEN** the plugin manager SHALL either reject the registration with a logged error or coerce the handler into the serial bucket; the runtime SHALL never invoke a `pre-llm-fetch` handler concurrently with any other handler
+
+#### Scenario: Pre-llm-fetch correlationId is non-empty
+- **WHEN** any `pre-llm-fetch` dispatch occurs
+- **THEN** `context.correlationId` SHALL be a non-empty string (the UUID generated on entry to `streamLlmAndPersist()`)
 
 #### Scenario: Pre-write stage invocation
 - **WHEN** the OpenRouter API returns a valid streaming response and the server is about to write to the chapter file
@@ -628,7 +653,6 @@ The frontend `FrontendHookDispatcher.register()` SHALL accept an optional `origi
 - **WHEN** a plugin registers a `frontend-render` handler
 - **THEN** the dispatcher SHALL invoke that handler for every `frontend-render` dispatch regardless of the recorded origin (no filtering)
 
-
 ### Requirement: Backend HookDispatcher exposes per-handler introspection
 
 The backend `HookDispatcher` SHALL expose a public method `introspect(): Record<HookStage, Array<{ plugin: string | undefined, priority: number, errorCount: number }>>` returning the currently-registered handler entries for every stage, sorted by priority ascending. The method SHALL be synchronous, return a fresh shallow copy of internal state (mutations by callers SHALL NOT affect future dispatches), and SHALL NOT perform any I/O. The `errorCount` value SHALL reflect the number of times the dispatcher has caught an exception thrown by that handler entry since the process started.
@@ -713,3 +737,31 @@ For all other stages (backend and frontend), plugins MAY register multiple handl
 #### Scenario: Multiple handlers per (plugin, stage) on non-action-button stages
 - **WHEN** a plugin's `frontend.js` calls `hooks.register("frontend-render", h1, 30)` and then `hooks.register("frontend-render", h2, 60)`
 - **THEN** both registrations SHALL succeed and both handlers SHALL appear in `frontendHooks.introspect()["frontend-render"]` sorted by priority
+
+### Requirement: Plugin handler-event subscription methods on PluginHooks
+
+The `PluginHooks` interface (the object exposed to plugin `register(ctx)` callbacks via `ctx.hooks`) SHALL expose two optional methods that let a plugin observe every other handler's invocation lifecycle without intercepting dispatch:
+
+- `onHandlerStart?(cb: (event: HandlerEvent & { kind: "handler-start" }) => void): () => void`
+- `onHandlerEnd?(cb: (event: HandlerEvent & { kind: "handler-end" }) => void): () => void`
+
+Both methods SHALL forward to the backend `HookDispatcher`'s per-handler event surface (defined in the `hook-observability` capability). Each method SHALL return a synchronous `unsubscribe` closure that removes the subscription when invoked. Calling `unsubscribe()` more than once SHALL be a no-op. The plugin manager's `PluginHooks` proxy is responsible for wiring these methods to the live `HookDispatcher` instance; when no dispatcher is attached (test harness or pre-init), the methods SHALL be omitted (the optional `?` typing reflects this).
+
+The events delivered to these callbacks SHALL be the *raw* `HandlerEvent` objects defined in the `hook-observability` capability — in particular, the `event.plugin` field reflects the plugin whose handler was invoked (the observed target), NOT the plugin that subscribed.
+
+#### Scenario: Plugin subscribes to handler-start
+- **WHEN** a plugin's `register(ctx)` invokes `const off = ctx.hooks.onHandlerStart!((ev) => collected.push(ev))` and then a `prompt-assembly` handler from any plugin runs
+- **THEN** `collected` SHALL contain at least one event with `kind: "handler-start"` and `stage: "prompt-assembly"`
+
+#### Scenario: Unsubscribe closure is idempotent
+- **WHEN** a plugin obtains an unsubscribe closure via `ctx.hooks.onHandlerStart!(cb)` and invokes it twice in succession
+- **THEN** the second invocation SHALL be a no-op (no thrown error, no double-removal side effects)
+
+#### Scenario: Subscriber observes other plugins' handler invocations
+- **WHEN** plugin A subscribes via `ctx.hooks.onHandlerStart` and plugin B has a registered `response-stream` handler
+- **THEN** plugin A SHALL receive `handler-start` events whose `event.plugin === "B"` for every dispatch of plugin B's handler
+
+#### Scenario: Feature-detect via typeof
+- **WHEN** a plugin executes `typeof ctx.hooks.onHandlerStart === "function"` against an engine where this capability is active
+- **THEN** the expression SHALL evaluate to `true`; conversely on engines without this capability the expression SHALL evaluate to `false` (so plugins can degrade gracefully)
+

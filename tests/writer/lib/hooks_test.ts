@@ -947,3 +947,194 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-handler event subscription surface (add-hook-observability change)
+// ---------------------------------------------------------------------------
+
+Deno.test("HookDispatcher per-handler events", async (t) => {
+  await t.step("emits handler-start before handler-end (serial)", async () => {
+    const hd = new HookDispatcher();
+    hd.register("prompt-assembly", async () => {});
+    const events: string[] = [];
+    hd.subscribeHandlerEvents((ev) => {
+      events.push(ev.kind);
+    });
+    await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
+    assertEquals(events, ["handler-start", "handler-end"]);
+  });
+
+  await t.step("snapshots are deep clones independent of live context", async () => {
+    const hd = new HookDispatcher();
+    hd.register("prompt-assembly", async (ctx: Record<string, unknown>) => {
+      const arr = ctx.previousContext as string[];
+      arr.push("added-by-handler");
+    });
+    let startSnap: unknown;
+    let endSnap: unknown;
+    hd.subscribeHandlerEvents((ev) => {
+      if (ev.kind === "handler-start") startSnap = ev.ctxBeforeSnapshot;
+      else endSnap = ev.ctxAfterSnapshot;
+    });
+    const ctx = { previousContext: ["a"], rawChapters: [] };
+    await hd.dispatch("prompt-assembly", ctx);
+    // Live context now has 2 items; start snapshot has 1; end snapshot has 2.
+    assertEquals((ctx.previousContext as string[]).length, 2);
+    assertEquals(((startSnap as Record<string, unknown>).previousContext as string[]).length, 1);
+    assertEquals(((endSnap as Record<string, unknown>).previousContext as string[]).length, 2);
+    // Mutating the snapshot does NOT change live context.
+    ((endSnap as Record<string, unknown>).previousContext as string[]).push("snap-only");
+    assertEquals((ctx.previousContext as string[]).length, 2);
+  });
+
+  await t.step("detects reassignment via ctxAfterRefs !== ctxBeforeRefs", async () => {
+    const hd = new HookDispatcher();
+    hd.register("prompt-assembly", async (ctx: Record<string, unknown>) => {
+      // Reassign field, do not mutate in place.
+      ctx.previousContext = ["replaced"];
+    });
+    let reassigned: readonly string[] | undefined;
+    hd.subscribeHandlerEvents((ev) => {
+      if (ev.kind === "handler-end") reassigned = ev.reassigned;
+    });
+    await hd.dispatch("prompt-assembly", { previousContext: ["original"], rawChapters: [] });
+    assertEquals(reassigned, ["previousContext"]);
+  });
+
+  await t.step("mutation in place does NOT mark reassigned", async () => {
+    const hd = new HookDispatcher();
+    hd.register("prompt-assembly", async (ctx: Record<string, unknown>) => {
+      (ctx.previousContext as string[]).push("appended");
+    });
+    let reassigned: readonly string[] | undefined;
+    hd.subscribeHandlerEvents((ev) => {
+      if (ev.kind === "handler-end") reassigned = ev.reassigned;
+    });
+    await hd.dispatch("prompt-assembly", { previousContext: ["x"], rawChapters: [] });
+    assertEquals(reassigned, []);
+  });
+
+  await t.step("propagates handler error via event.error", async () => {
+    const hd = new HookDispatcher();
+    hd.register("prompt-assembly", async () => {
+      throw new Error("boom");
+    });
+    let captured: { message: string; name: string } | undefined;
+    hd.subscribeHandlerEvents((ev) => {
+      if (ev.kind === "handler-end") captured = ev.error;
+    });
+    await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
+    assertEquals(captured?.message, "boom");
+    assertEquals(captured?.name, "Error");
+  });
+
+  await t.step("emits for pre-llm-fetch stage (serial-only)", async () => {
+    const hd = new HookDispatcher();
+    hd.register("pre-llm-fetch", async () => {});
+    const stages: string[] = [];
+    hd.subscribeHandlerEvents((ev) => {
+      if (ev.kind === "handler-start") stages.push(ev.stage);
+    });
+    await hd.dispatch("pre-llm-fetch", {
+      correlationId: "test-cid",
+      messages: [],
+      model: "stub",
+      requestMetadata: {},
+    });
+    assertEquals(stages, ["pre-llm-fetch"]);
+  });
+
+  await t.step("isolates subscriber throws + auto-unsubscribes after 2 consecutive", async () => {
+    const hd = new HookDispatcher();
+    hd.register("prompt-assembly", async () => {});
+    let calls = 0;
+    const throwingCb = () => {
+      calls++;
+      throw new Error("subscriber-bad");
+    };
+    let cleanCalls = 0;
+    const cleanCb = () => {
+      cleanCalls++;
+    };
+    hd.subscribeHandlerEvents(throwingCb);
+    hd.subscribeHandlerEvents(cleanCb);
+    // 1st dispatch: start+end both throw (2 events = 2 throws) → unsubscribed
+    await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
+    const callsAfter1 = calls;
+    // 2nd dispatch: throwingCb should NOT be called
+    await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
+    assertEquals(calls, callsAfter1, "auto-unsubscribed after 2 consecutive throws");
+    // Clean subscriber received all 4 events (2 per dispatch)
+    assertEquals(cleanCalls, 4);
+  });
+
+  await t.step("zero subscribers => no snapshot built (gate works)", async () => {
+    const hd = new HookDispatcher();
+    let cloned = false;
+    // Sentinel object whose getter side-effects on access — proves the
+    // dispatcher does not enumerate allowlist fields when no subscribers.
+    const ctx: Record<string, unknown> = {};
+    Object.defineProperty(ctx, "previousContext", {
+      get() {
+        cloned = true;
+        return [];
+      },
+      enumerable: true,
+    });
+    Object.defineProperty(ctx, "rawChapters", { value: [], enumerable: true });
+    hd.register("prompt-assembly", async () => {});
+    await hd.dispatch("prompt-assembly", ctx);
+    assertEquals(cloned, false, "no subscriber => allowlist getter never invoked");
+  });
+
+  await t.step("unsubscribe removes subscriber", async () => {
+    const hd = new HookDispatcher();
+    hd.register("prompt-assembly", async () => {});
+    let count = 0;
+    const cb = () => { count++; };
+    hd.subscribeHandlerEvents(cb);
+    await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
+    assertEquals(count, 2);
+    hd.unsubscribeHandlerEvents(cb);
+    await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
+    assertEquals(count, 2);
+  });
+
+  await t.step("QUALITY-5: non-cloneable allowlist field yields sentinel, dispatch completes", async () => {
+    const hd = new HookDispatcher();
+    // Handler stashes a function on previousContext (non-cloneable).
+    hd.register("prompt-assembly", async (ctx) => {
+      (ctx as Record<string, unknown>).previousContext = () => "I am a function";
+    });
+    const events: Array<{ kind: string; ctxAfterSnapshot?: unknown }> = [];
+    hd.subscribeHandlerEvents((ev) => {
+      if (ev.kind === "handler-end") {
+        events.push({ kind: ev.kind, ctxAfterSnapshot: ev.ctxAfterSnapshot });
+      }
+    });
+    // Dispatch must NOT throw.
+    await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
+    assertEquals(events.length, 1);
+    const snap = events[0]!.ctxAfterSnapshot as Record<string, unknown>;
+    // The non-cloneable field has a sentinel; rawChapters cloned normally.
+    const pc = snap.previousContext as { __snapshotError?: string };
+    assertEquals(typeof pc.__snapshotError, "string");
+    assertEquals(Array.isArray(snap.rawChapters), true);
+  });
+
+  await t.step("QUALITY-8: getHandlerEventSubscribers returns plugin → kinds", () => {
+    const hd = new HookDispatcher();
+    const cbStart = () => {};
+    const cbEnd = () => {};
+    const cbAnon = () => {};
+    hd.subscribeHandlerEvents(cbStart, { plugin: "alpha", kind: "handler-start" });
+    hd.subscribeHandlerEvents(cbEnd, { plugin: "alpha", kind: "handler-end" });
+    hd.subscribeHandlerEvents(cbAnon);
+    const subs = hd.getHandlerEventSubscribers();
+    assertEquals(subs.alpha!.sort(), ["handler-end", "handler-start"]);
+    assertEquals(subs["<anonymous>"], ["handler-end", "handler-start"]);
+    hd.unsubscribeHandlerEvents(cbEnd);
+    const subs2 = hd.getHandlerEventSubscribers();
+    assertEquals(subs2.alpha, ["handler-start"]);
+  });
+});

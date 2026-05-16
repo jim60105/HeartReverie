@@ -393,6 +393,7 @@ export async function runPluginActionWithDeps(
     // prompt content as `templateOverride` and the validated extras as
     // `extraVariables`. Plugin actions render with empty user input — the
     // prompt template is itself the user's intent.
+    const correlationId = crypto.randomUUID();
     const buildResult = await buildPromptFromStory(
       series,
       story,
@@ -400,6 +401,7 @@ export async function runPluginActionWithDeps(
       "",
       promptContent,
       renderVariables,
+      correlationId,
     );
     if (buildResult.ventoError) {
       const vErr = buildResult.ventoError;
@@ -454,6 +456,7 @@ export async function runPluginActionWithDeps(
       onDelta,
       hookDispatcher,
       config,
+      correlationId,
     });
 
     const response: PluginRunPromptResponse = {

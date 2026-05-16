@@ -45,6 +45,30 @@ const log = createLogger("llm");
 const fileLog = createLogger("file");
 
 /**
+ * Recursively freeze all own enumerable properties of `value`, including
+ * array entries and nested objects. Used to make `pre-llm-fetch` payload
+ * fields tamper-evident in strict mode so observer plugins cannot mutate
+ * the shared snapshot and silently desync from the bytes posted upstream.
+ *
+ * Safe on primitives (returns as-is). Skips already-frozen subtrees to
+ * avoid revisiting shared references in cyclic graphs (defence in depth —
+ * `structuredClone` already breaks cycles upstream of the call site).
+ */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  if (Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  if (Array.isArray(value)) {
+    for (const item of value) deepFreeze(item);
+  } else {
+    for (const k of Object.keys(value as Record<string, unknown>)) {
+      deepFreeze((value as Record<string, unknown>)[k]);
+    }
+  }
+  return value;
+}
+
+/**
  * OpenRouter app-attribution headers attached to every upstream chat request.
  * See https://openrouter.ai/docs/app-attribution for the spec. Forks that want
  * to attribute their usage separately MUST edit this constant in source — the
@@ -176,6 +200,15 @@ export interface StreamLlmArgs {
   readonly onDelta?: (chunk: string) => void;
   readonly hookDispatcher: HookDispatcher;
   readonly config: AppConfig;
+  /**
+   * Per-request correlation id. Minted at the inbound request boundary
+   * (e.g. `executeChat` / `executeContinue`) and threaded through both the
+   * `prompt-assembly` hook (via the prompt builders) and the `pre-llm-fetch`
+   * + `response-stream` + `post-response` hooks. When omitted, a fresh
+   * UUID is minted inside `streamLlmAndPersist` so the hook context always
+   * observes a non-empty value (legacy callers / tests).
+   */
+  readonly correlationId?: string;
 }
 
 /** Result of `streamLlmAndPersist`. */
@@ -210,9 +243,13 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     onDelta,
     hookDispatcher,
     config,
+    correlationId: correlationIdInput,
   } = args;
 
-  const correlationId = crypto.randomUUID();
+  // Always have a non-empty correlationId for downstream hook contexts.
+  // Inbound chat/continue paths supply this; legacy/test paths fall back
+  // to a fresh UUID.
+  const correlationId = correlationIdInput ?? crypto.randomUUID();
   const reqLog = log.withContext({ correlationId });
   const reqFileLog = fileLog.withContext({ correlationId });
   const llmLog = createLlmLogger().withContext({ correlationId });
@@ -307,6 +344,37 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     requestBody.reasoning = llmConfig.reasoningEnabled
       ? { enabled: true, effort: llmConfig.reasoningEffort }
       : { enabled: false };
+  }
+
+  // Dispatch the `pre-llm-fetch` observation hook. This stage is observation-
+  // only: handlers receive deep clones of `messages` / `requestMetadata`
+  // that are then deeply frozen so even nested mutation throws (strict mode)
+  // and the bytes posted on the upstream `fetch()` below remain byte-for-byte
+  // unchanged. We dispatch AFTER `requestBody` is fully constructed and
+  // BEFORE `fetch(config.LLM_API_URL, ...)` so handlers see the exact
+  // serialisation we are about to send.
+  const { messages: _omitMessages, ...requestMetadata } = requestBody;
+  const preLlmFetchPayload: Record<string, unknown> = {
+    correlationId,
+    messages: deepFreeze(structuredClone(messages)),
+    model: llmConfig.model,
+    requestMetadata: deepFreeze(structuredClone(requestMetadata)),
+    storyDir,
+    series,
+    name,
+    writeMode: { kind: writeMode.kind },
+  };
+  // Per spec: upstream fetch happens regardless of dispatch failures.
+  // The dispatcher already catches per-handler errors, but a dispatcher-level
+  // failure (or a snapshot/clone failure in the observability fan-out) MUST
+  // NOT block the request. Log and continue.
+  try {
+    await hookDispatcher.dispatch("pre-llm-fetch", preLlmFetchPayload);
+  } catch (err: unknown) {
+    log.warn("pre-llm-fetch dispatch failed", {
+      correlationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   const llmStartTime = performance.now();
@@ -857,6 +925,11 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   reqLog.info("Chat execution started", { series, story: name, messageLength: message.length });
 
+  // Mint the per-request correlationId at the inbound boundary so both
+  // `prompt-assembly` (via buildPromptFromStory) and `pre-llm-fetch`
+  // (inside streamLlmAndPersist) observe the same UUID.
+  const correlationId = crypto.randomUUID();
+
   if (!Deno.env.get("LLM_API_KEY")) {
     reqLog.error("LLM_API_KEY not configured");
     throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
@@ -902,7 +975,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     ventoError,
     chapterFiles,
     chapters,
-  } = await buildPromptFromStory(series, name, storyDir, message, templateOverride);
+  } = await buildPromptFromStory(series, name, storyDir, message, templateOverride, undefined, correlationId);
 
   if (ventoError) {
     throw new ChatError("vento", "Template rendering error", 422, ventoError);
@@ -930,6 +1003,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       onDelta,
       hookDispatcher,
       config,
+      correlationId,
     });
     return {
       chapter: result.chapterNumber ?? 0,
@@ -963,6 +1037,10 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
   const reqLog = log;
 
   reqLog.info("Continue execution started", { series, story: name });
+
+  // Mint correlationId at the inbound boundary; threaded through
+  // prompt-assembly and pre-llm-fetch.
+  const correlationId = crypto.randomUUID();
 
   if (!Deno.env.get("LLM_API_KEY")) {
     reqLog.error("LLM_API_KEY not configured");
@@ -1006,7 +1084,7 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
 
   let promptResult;
   try {
-    promptResult = await buildContinuePromptFromStory(series, name, storyDir, templateOverride);
+    promptResult = await buildContinuePromptFromStory(series, name, storyDir, templateOverride, correlationId);
   } catch (err) {
     if (err instanceof ContinuePromptError) {
       throw new ChatError(err.code, err.message, err.httpStatus);
@@ -1039,6 +1117,7 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
       onDelta,
       hookDispatcher,
       config,
+      correlationId,
     });
     return {
       chapter: result.chapterNumber ?? targetChapterNumber,

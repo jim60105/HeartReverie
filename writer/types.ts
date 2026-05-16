@@ -112,6 +112,7 @@ export type BuildPromptFn = (
   message: string,
   template?: string,
   extraVariables?: Record<string, unknown>,
+  correlationId?: string,
 ) => Promise<BuildPromptResult>;
 
 /** Function signature for buildContinuePromptFromStory. */
@@ -120,6 +121,7 @@ export type BuildContinuePromptFn = (
   name: string,
   storyDir: string,
   template?: string,
+  correlationId?: string,
 ) => Promise<ContinuePromptResult>;
 
 /** Top-level dependency bag passed to createApp and route registrars. */
@@ -344,6 +346,18 @@ export interface RegisterOptions {
 /** Hook registration interface exposed to plugins (subset of HookDispatcher). */
 export interface PluginHooks {
   register(stage: HookStage, handler: HookHandler, priorityOrOptions?: number | RegisterOptions): void;
+  /**
+   * Subscribe to per-handler `handler-start` events from the backend
+   * `HookDispatcher`. Returns an unsubscribe closure that is idempotent.
+   * Optional so plugin code can feature-detect with
+   * `typeof ctx.hooks.onHandlerStart === "function"`.
+   */
+  onHandlerStart?(cb: (event: HandlerEvent & { kind: "handler-start" }) => void): () => void;
+  /**
+   * Subscribe to per-handler `handler-end` events from the backend
+   * `HookDispatcher`. Returns an unsubscribe closure that is idempotent.
+   */
+  onHandlerEnd?(cb: (event: HandlerEvent & { kind: "handler-end" }) => void): () => void;
 }
 
 /** Context passed to plugin register() function. */
@@ -379,10 +393,98 @@ export type BackendParallelStage = "prompt-assembly" | "post-response" | "respon
 /** Valid hook lifecycle stages. */
 export type HookStage =
   | "prompt-assembly"
+  | "pre-llm-fetch"
   | "response-stream"
   | "pre-write"
   | "post-response"
   | "strip-tags";
+
+/**
+ * Context payload dispatched for the `pre-llm-fetch` hook stage.
+ *
+ * Dispatched by `streamLlmAndPersist()` in `writer/lib/chat-shared.ts`
+ * exactly once per upstream LLM request, immediately before the
+ * `fetch(config.LLM_API_URL, ...)` call. Observation-only: mutating any
+ * field SHALL NOT change the bytes posted upstream — the engine builds the
+ * outgoing request body from local variables, not from this context.
+ */
+export interface PreLlmFetchPayload {
+  /** Per-request correlation ID minted at the entry of `executeChat()` / `executeContinue()`. */
+  readonly correlationId: string;
+  /** Final messages array that will be serialised into `requestBody.messages`. */
+  readonly messages: ReadonlyArray<ChatMessage>;
+  /** Resolved upstream model name (`llmConfig.model`). */
+  readonly model: string;
+  /** Structured view of upstream sampler/control knobs (mirror of `requestBody` minus `messages`). */
+  readonly requestMetadata: Readonly<Record<string, unknown>>;
+  /** Absolute path to the story directory. */
+  readonly storyDir: string;
+  /** Series name under `playground/`. */
+  readonly series: string;
+  /** Story name under `playground/<series>/`. */
+  readonly name: string;
+  /** Discriminated write-mode tag (kind only is exposed; other fields stay internal). */
+  readonly writeMode: { readonly kind: string };
+  /** Logger injected by `HookDispatcher` at dispatch time. */
+  readonly logger?: unknown;
+}
+
+/**
+ * Per-handler observation event emitted by `HookDispatcher`'s
+ * `subscribeHandlerEvents` / per-plugin `onHandlerStart` / `onHandlerEnd`
+ * surfaces. See `openspec/specs/hook-observability/spec.md`.
+ *
+ * Subscribers receive raw events synchronously; throwing subscribers are
+ * isolated from dispatch and auto-unsubscribed after two consecutive throws.
+ *
+ * `ctxBeforeSnapshot` / `ctxAfterSnapshot` are `structuredClone` deep copies
+ * of a per-stage allowlist of context fields (empty `{}` for non-allowlisted
+ * stages). `reassigned` is computed by reference comparison of the live
+ * pre-clone refs (so reassignment of top-level slots is detected without
+ * false positives from clone identity).
+ */
+export type HandlerEvent =
+  | {
+      readonly kind: "handler-start";
+      readonly stage: HookStage;
+      readonly plugin: string | undefined;
+      readonly priority: number;
+      readonly handlerIndex: number;
+      readonly correlationId: string | undefined;
+      readonly timestamp: number;
+      readonly ctxBeforeSnapshot: unknown;
+      readonly ctxBeforeRefs: Readonly<Record<string, unknown>>;
+    }
+  | {
+      readonly kind: "handler-end";
+      readonly stage: HookStage;
+      readonly plugin: string | undefined;
+      readonly priority: number;
+      readonly handlerIndex: number;
+      readonly correlationId: string | undefined;
+      readonly timestamp: number;
+      readonly ctxAfterSnapshot: unknown;
+      readonly ctxAfterRefs: Readonly<Record<string, unknown>>;
+      readonly reassigned: ReadonlyArray<string>;
+      readonly error: { readonly message: string; readonly name: string } | undefined;
+      readonly durationMs: number;
+    };
+
+/** Subscriber callback for per-handler `HookDispatcher` events. */
+export type HandlerEventSubscriber = (event: HandlerEvent) => void;
+
+/**
+ * Optional metadata recorded alongside a `subscribeHandlerEvents` registration
+ * so introspection surfaces (`/api/_debug/hooks`,
+ * `/api/plugin-introspection/hooks`) can attribute observer subscriptions back
+ * to a plugin and to the kind(s) of events the subscriber filters.
+ */
+export interface HandlerEventSubscriptionOptions {
+  /** Owning plugin name; surfaced in introspection. */
+  readonly plugin?: string;
+  /** Restricted event kind this subscriber observes ("handler-start" or "handler-end"). */
+  readonly kind?: "handler-start" | "handler-end";
+}
 
 /**
  * Context payload dispatched for the `response-stream` hook stage.

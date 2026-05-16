@@ -29,6 +29,7 @@ import type {
   ActionButtonDescriptor,
   ActionButtonVisibility,
   DynamicVariableContext,
+  HandlerEventSubscriber,
   HookHandler,
   HookStage,
   PluginHookDeclaration,
@@ -957,6 +958,9 @@ export class PluginManager {
     }
     const staged: StagedEntry[] = [];
     const stagedStages = new Set<HookStage>();
+    // Hoisted so the failure path can tear down subscriptions even when the
+    // plugin's register() threw partway through.
+    const eventSubscriberUnsubs = new Set<() => void>();
 
     // Build a lookup for manifest hook declarations (parallel dispatch metadata)
     const manifestHookMap = new Map<string, Record<string, unknown>>();
@@ -978,6 +982,9 @@ export class PluginManager {
         const pluginLogger = createLogger("plugin", {
           baseData: { plugin: name },
         });
+        // Track per-plugin handler-event subscriber unsubscribers so we
+        // can deterministically tear them down if registration fails.
+        // (Backed by the hoisted Set above so the catch block can access it.)
         const stagingHooks = {
           register: (
             stage: HookStage,
@@ -1026,6 +1033,49 @@ export class PluginManager {
               concurrency: manifestDecl?.concurrency as number | undefined,
               dependsOn: mergedDeps.length > 0 ? mergedDeps : undefined,
             });
+          },
+          /**
+           * Subscribe to `handler-start` events for any handler running in
+           * the live dispatcher. The subscription persists for the lifetime
+           * of the plugin; returns an idempotent unsubscribe closure.
+           */
+          onHandlerStart: (
+            cb: (event: import("../types.ts").HandlerEvent & { kind: "handler-start" }) => void,
+          ): (() => void) => {
+            const wrapped: HandlerEventSubscriber = (ev) => {
+              if (ev.kind === "handler-start") cb(ev);
+            };
+            this.#hookDispatcher.subscribeHandlerEvents(wrapped, { plugin: name, kind: "handler-start" });
+            let unsubbed = false;
+            const unsub = () => {
+              if (unsubbed) return;
+              unsubbed = true;
+              this.#hookDispatcher.unsubscribeHandlerEvents(wrapped);
+              eventSubscriberUnsubs.delete(unsub);
+            };
+            eventSubscriberUnsubs.add(unsub);
+            return unsub;
+          },
+          /**
+           * Subscribe to `handler-end` events for any handler running in
+           * the live dispatcher. Returns an idempotent unsubscribe closure.
+           */
+          onHandlerEnd: (
+            cb: (event: import("../types.ts").HandlerEvent & { kind: "handler-end" }) => void,
+          ): (() => void) => {
+            const wrapped: HandlerEventSubscriber = (ev) => {
+              if (ev.kind === "handler-end") cb(ev);
+            };
+            this.#hookDispatcher.subscribeHandlerEvents(wrapped, { plugin: name, kind: "handler-end" });
+            let unsubbed = false;
+            const unsub = () => {
+              if (unsubbed) return;
+              unsubbed = true;
+              this.#hookDispatcher.unsubscribeHandlerEvents(wrapped);
+              eventSubscriberUnsubs.delete(unsub);
+            };
+            eventSubscriberUnsubs.add(unsub);
+            return unsub;
           },
         };
         const context: PluginRegisterContext = {
@@ -1110,6 +1160,12 @@ export class PluginManager {
         plugin: name,
         error: err instanceof Error ? err.message : String(err),
       });
+      // Tear down any handler-event subscriptions the plugin made during
+      // its (now-failed) register() call so the dispatcher does not retain
+      // dangling references for a plugin that isn't loaded.
+      for (const u of eventSubscriberUnsubs) {
+        try { u(); } catch { /* ignore teardown errors */ }
+      }
       // Discard staged entries and unregister the plugin entirely. This
       // ensures #plugins, the route registrar map, dynamic var providers,
       // and the live HookDispatcher remain consistent.

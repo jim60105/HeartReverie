@@ -30,6 +30,7 @@ export function buildIntrospectionDump(
   manifestDeclarations: ReturnType<PluginManager["getPluginHookDeclarations"]>;
   stripTags: ReturnType<PluginManager["getStripTagDeclarations"]>;
   pipelineFields: typeof PIPELINE_FIELDS;
+  observerSubscribers: ReturnType<HookDispatcher["getHandlerEventSubscribers"]>;
   generatedAt: string;
 } {
   return {
@@ -37,6 +38,7 @@ export function buildIntrospectionDump(
     manifestDeclarations: pluginManager.getPluginHookDeclarations(),
     stripTags: pluginManager.getStripTagDeclarations(),
     pipelineFields: PIPELINE_FIELDS,
+    observerSubscribers: hookDispatcher.getHandlerEventSubscribers(),
     generatedAt: new Date().toISOString(),
   };
 }

@@ -267,18 +267,80 @@ LLM 回應中包含 plugin 定義的 XML 標籤，這些標籤會隨回應一同
 
 ### 後端 Hook
 
-HookDispatcher 提供五個生命週期階段，plugin 可在任意階段註冊非同步處理函式：
+HookDispatcher 提供以下生命週期階段，plugin 可在任意階段註冊非同步處理函式：
 
 | 階段 | 觸發時機 | Context 參數 |
 |------|---------|-------------|
-| `prompt-assembly` | 系統提示詞渲染期間 | `{ previousContext, rawChapters, storyDir, series, name }` |
+| `prompt-assembly` | 系統提示詞渲染期間 | `{ previousContext, rawChapters, storyDir, series, name, correlationId }` |
+| `pre-llm-fetch` | 上游 LLM `fetch()` 之前（觀察用） | `{ correlationId, messages, model, requestMetadata, storyDir, series, name, writeMode }` |
 | `response-stream` | 每次從 LLM SSE 串流解析出非空內容片段時 | `{ correlationId, chunk, series, name, storyDir, chapterPath, chapterNumber }` |
 | `pre-write` | LLM 回應完成、寫入檔案之前 | `{ message, chapterPath, storyDir, series, name, preContent }` |
 | `post-response` | LLM 回應完成後 | `{ content, storyDir, series, name, rootDir }` |
 | `strip-tags` | 內容標籤清除時 | `{ content }` |
 
 > [!NOTE]
-> `strip-tags` 目前未被任何程式碼路徑分派，僅作為未來擴充保留。實際分派的 hook 階段為：`prompt-assembly`（story.ts）、`response-stream`（chat-shared.ts）、`pre-write`（chat-shared.ts）、`post-response`（chat-shared.ts）。
+> `strip-tags` 目前未被任何程式碼路徑分派，僅作為未來擴充保留。實際分派的 hook 階段為：`prompt-assembly`（story.ts）、`pre-llm-fetch`（chat-shared.ts）、`response-stream`（chat-shared.ts）、`pre-write`（chat-shared.ts）、`post-response`（chat-shared.ts）。
+
+#### `pre-llm-fetch`（觀察用，serial-only）
+
+`pre-llm-fetch` 由 `streamLlmAndPersist()` 在 `fetch(config.LLM_API_URL, ...)` **之前、`requestBody` 完全建構之後** 分派一次，提供 plugin 觀察即將送出的請求內容（messages、model、sampler 參數、writeMode 種類等）。
+
+- **此階段為觀察用（observation-only）**：handler 不可影響實際送出的 HTTP 請求。dispatcher 會以 `deepFreeze(structuredClone(...))` **深層複製並深度凍結** `messages` 與 `requestMetadata`，因此即使 plugin 嘗試巢狀寫入（`ctx.messages[0].content = "..."`、`ctx.requestMetadata.temperature = 9.9`）都會在 strict mode 下拋出 `TypeError`，並被既有 per-handler `try/catch` 吸收，不會影響上游 `fetch()`。
+- **dispatcher-level rejection 也不阻擋 fetch**：`streamLlmAndPersist()` 以 `try/catch` 包裹 `await hookDispatcher.dispatch("pre-llm-fetch", ...)`；若 dispatcher 本身（而非個別 handler）拒絕，會以 `log.warn("pre-llm-fetch dispatch failed", { correlationId, error })` 記錄並繼續送出請求。
+- **此階段為 serial-only**：plugin manager 會拒絕或強制將 `{ parallel: true }` 註冊改為 serial。
+- `context.correlationId` 與同一個 chat 請求中先前 `prompt-assembly` 觀察到的 `correlationId` **strict equal**，可用於跨 stage 關聯日誌。
+- `writeMode.kind` 取值為 `"write-new-chapter"`、`"append-to-existing-chapter"`、`"continue-last-chapter"` 或 `"replace-last-chapter"`。
+- 重試不會重新分派此 hook（每次請求恰好一次）。
+
+```javascript
+export function register({ hooks, logger }) {
+  hooks.register('pre-llm-fetch', (ctx) => {
+    logger.info('about to call LLM', {
+      correlationId: ctx.correlationId,
+      model: ctx.model,
+      messageCount: ctx.messages.length,
+      mode: ctx.writeMode.kind,
+    });
+  });
+}
+```
+
+#### Per-handler 觀察事件：`ctx.hooks.onHandlerStart` / `onHandlerEnd`
+
+除了註冊 hook handler，plugin 也可以**觀察其他 plugin 的 handler 執行**（用於除錯面板、效能分析、coverage 偵測等）。此 API 預設關閉——只有在至少一個訂閱者存在時，dispatcher 才會建立 snapshot 並 fan-out 事件，否則路徑零成本。
+
+```javascript
+export function register({ hooks, logger }) {
+  const offStart = hooks.onHandlerStart?.((ev) => {
+    logger.debug('handler started', {
+      stage: ev.stage,
+      plugin: ev.plugin,
+      priority: ev.priority,
+      correlationId: ev.correlationId,
+    });
+  });
+  const offEnd = hooks.onHandlerEnd?.((ev) => {
+    logger.debug('handler ended', {
+      stage: ev.stage,
+      plugin: ev.plugin,
+      durationMs: ev.durationMs,
+      reassigned: ev.reassigned, // 陣列：被 handler 透過賦值取代的 allowlist 欄位
+      error: ev.error?.message,
+    });
+  });
+  // 回傳的 unsubscribe 為 idempotent（重複呼叫無副作用）。
+  // 註冊期間建立的訂閱會在 plugin 載入失敗時自動清除。
+}
+```
+
+**事件語意**：
+
+- `handler-start` 在 dispatcher 呼叫 handler **之前** 發送；`handler-end` 在 handler 回傳或拋出之後發送。兩者攜帶 `ctxBeforeSnapshot` / `ctxAfterSnapshot`（每個 stage 對應 allowlist 子集的 deep clone）。
+- **`correlationId` 為事件物件的頂層欄位**（與 `stage`、`plugin`、`timestamp` 平行），**並非** 巢狀於 `ctxBeforeSnapshot` / `ctxAfterSnapshot` 內。請以 `ev.correlationId` 讀取，切勿寫成 `ev.ctxBeforeSnapshot.correlationId`。
+- `ctxBeforeRefs` / `ctxAfterRefs` 為 **identity 比較用**——`reassigned: string[]` 包含「handler 將 `ctx.X` 整段取代而非原地修改」的欄位，依字母序排序。
+- snapshot 採每欄位獨立 `structuredClone`：若單一 allowlist 欄位無法被 clone（例如指向 function），該欄位會以哨兵物件 `{ __snapshotError: <message> }` 取代，其餘欄位仍會正常拍照，事件仍會照常發送。
+- 訂閱者拋出例外不會影響 dispatcher 正確性；連續兩次例外的訂閱者會被自動取消註冊，且每個 stage 每 60 秒最多輸出一筆 `warn` 訊息。
+- 訂閱 API 僅作為觀察介面，**不可** 被用於修改 dispatch context（context 應透過 hook handler 修改）。
 
 #### `response-stream` 範例
 

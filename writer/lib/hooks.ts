@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import type { HookStage, HookHandler, RegisterOptions } from "../types.ts";
+import type { HookStage, HookHandler, RegisterOptions, HandlerEvent, HandlerEventSubscriber, HandlerEventSubscriptionOptions } from "../types.ts";
 import { createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";
 
@@ -46,6 +46,7 @@ interface HandlerEntry {
  */
 export const KNOWN_BACKEND_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
   "prompt-assembly",
+  "pre-llm-fetch",
   "response-stream",
   "pre-write",
   "post-response",
@@ -53,11 +54,30 @@ export const KNOWN_BACKEND_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
 
 export const VALID_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
   "prompt-assembly",
+  "pre-llm-fetch",
   "response-stream",
   "pre-write",
   "post-response",
   "strip-tags",
 ]);
+
+/**
+ * Per-stage allowlist of context fields snapshotted into `HandlerEvent`
+ * `ctxBeforeSnapshot` / `ctxAfterSnapshot`. Stages not listed here produce
+ * empty `{}` snapshots — `handler-start`/`handler-end` events still fire so
+ * subscribers can attribute timing and errors.
+ *
+ * The allowlist is intentionally narrow to keep `structuredClone` cost
+ * bounded on the hot path and to avoid copying function-valued fields like
+ * `logger` which `structuredClone` cannot handle.
+ */
+const SNAPSHOT_ALLOWLIST: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "prompt-assembly": Object.freeze(["previousContext", "rawChapters"]) as readonly string[],
+  "pre-llm-fetch": Object.freeze(["messages", "model", "requestMetadata"]) as readonly string[],
+});
+
+/** Rate-limit window (ms) for warn logs about throwing subscriber callbacks. */
+const SUBSCRIBER_WARN_RATE_LIMIT_MS = 60_000;
 
 /** Per-stage handler info returned by `HookDispatcher.introspect()`. */
 export interface HandlerIntrospection {
@@ -90,6 +110,17 @@ export class HookDispatcher {
   #streamWallTimes: Map<string, number[]> = new Map();
   // Track whether we've already warned for a given handler (reset on crossing back below threshold)
   #streamWarnedSinceCrossing: Map<string, boolean> = new Map();
+  // Per-handler observability event subscribers (opt-in, off by default).
+  #handlerEventSubscribers: Set<HandlerEventSubscriber> = new Set();
+  // Consecutive-throw counter per subscriber — reset on any clean invocation.
+  #subscriberThrowCount: WeakMap<HandlerEventSubscriber, number> = new WeakMap();
+  // Rate-limit map for subscriber-throw warn logs, keyed by hook stage.
+  #subscriberWarnLastMs: Map<HookStage, number> = new Map();
+  // Metadata (owning plugin, event kind) recorded alongside each subscription
+  // for introspection (`getHandlerEventSubscribers`). Untagged subscriptions
+  // are still tracked here with an empty options object so they appear in
+  // introspection under the synthetic plugin name "<anonymous>".
+  #handlerEventSubscriberMeta: Map<HandlerEventSubscriber, HandlerEventSubscriptionOptions> = new Map();
 
   /**
    * Register a handler for a given hook stage.
@@ -229,6 +260,161 @@ export class HookDispatcher {
   }
 
   // ---------------------------------------------------------------------------
+  // Per-handler observability events (opt-in)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Subscribe to per-handler `handler-start` / `handler-end` events.
+   *
+   * Subscribers run synchronously inside `dispatch`, with each callback
+   * wrapped in `try/catch` so they cannot break dispatch correctness.
+   * A subscriber that throws on two consecutive events is auto-unsubscribed
+   * and the second throw is logged (rate-limited per stage) at `warn` level.
+   *
+   * When zero subscribers are registered, `dispatch` skips all snapshot
+   * construction — the cost of this surface is bounded by a `Set.size === 0`
+   * check per handler.
+   */
+  subscribeHandlerEvents(cb: HandlerEventSubscriber, opts?: HandlerEventSubscriptionOptions): void {
+    this.#handlerEventSubscribers.add(cb);
+    this.#handlerEventSubscriberMeta.set(cb, opts ?? {});
+  }
+
+  /** Unsubscribe from per-handler events. Calling on an unknown cb is a no-op. */
+  unsubscribeHandlerEvents(cb: HandlerEventSubscriber): void {
+    this.#handlerEventSubscribers.delete(cb);
+    this.#subscriberThrowCount.delete(cb);
+    this.#handlerEventSubscriberMeta.delete(cb);
+  }
+
+  /**
+   * Return the set of plugins that currently hold observer subscriptions via
+   * `subscribeHandlerEvents`, grouped by plugin name and listing the event
+   * kinds each plugin filters. Untagged subscriptions appear under the
+   * synthetic plugin name `"<anonymous>"`. The list of kinds is deduplicated
+   * and sorted; an empty `kind` filter (subscriber listens to both
+   * `handler-start` and `handler-end`) is reported as both kinds.
+   *
+   * Used by introspection routes (`/api/_debug/hooks`,
+   * `/api/plugin-introspection/hooks`) so operators can see which plugins are
+   * observing handler events without exposing subscriber payloads.
+   */
+  getHandlerEventSubscribers(): Record<string, Array<"handler-start" | "handler-end">> {
+    const out: Record<string, Set<"handler-start" | "handler-end">> = {};
+    for (const [, meta] of this.#handlerEventSubscriberMeta) {
+      const pluginName = meta.plugin ?? "<anonymous>";
+      let bucket = out[pluginName];
+      if (!bucket) {
+        bucket = new Set();
+        out[pluginName] = bucket;
+      }
+      if (meta.kind === "handler-start" || meta.kind === "handler-end") {
+        bucket.add(meta.kind);
+      } else {
+        bucket.add("handler-start");
+        bucket.add("handler-end");
+      }
+    }
+    const result: Record<string, Array<"handler-start" | "handler-end">> = {};
+    for (const [name, set] of Object.entries(out)) {
+      result[name] = [...set].sort();
+    }
+    return result;
+  }
+
+  /** True iff at least one subscriber is registered (used to gate snapshot work). */
+  #hasHandlerEventSubscribers(): boolean {
+    return this.#handlerEventSubscribers.size > 0;
+  }
+
+  /**
+   * Fan a single event out to every subscriber, isolating throws.
+   *
+   * Returns nothing — failure modes (throwing subscriber, auto-unsubscribe,
+   * rate-limited warn) are handled internally so dispatch correctness is
+   * unaffected. Pre-existing dispatcher logs are NOT extended with event
+   * payloads (see hook-observability spec: "new surfaces SHALL NOT log
+   * payloads").
+   */
+  #emitHandlerEvent(event: HandlerEvent): void {
+    if (this.#handlerEventSubscribers.size === 0) return;
+    // Snapshot the set so a subscriber that unsubscribes itself mid-fan-out
+    // does not perturb iteration.
+    const subscribers = [...this.#handlerEventSubscribers];
+    for (const cb of subscribers) {
+      try {
+        cb(event);
+        // Clean invocation — reset consecutive throw counter.
+        if (this.#subscriberThrowCount.has(cb)) {
+          this.#subscriberThrowCount.delete(cb);
+        }
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const prior = this.#subscriberThrowCount.get(cb) ?? 0;
+        const next = prior + 1;
+        this.#subscriberThrowCount.set(cb, next);
+
+        // Rate-limit warn logs: at most once per stage per 60 s.
+        const now = performance.now();
+        const lastWarn = this.#subscriberWarnLastMs.get(event.stage) ?? -Infinity;
+        if (now - lastWarn >= SUBSCRIBER_WARN_RATE_LIMIT_MS) {
+          this.#subscriberWarnLastMs.set(event.stage, now);
+          // NOTE: per spec, do NOT include event payload fields — only the
+          // subscriber error message and the originating stage are logged.
+          log.warn("Handler-event subscriber threw", {
+            stage: event.stage,
+            consecutiveThrows: next,
+            error: errMsg,
+          });
+        }
+
+        // Auto-unsubscribe after two consecutive throws.
+        if (next >= 2) {
+          this.#handlerEventSubscribers.delete(cb);
+          this.#subscriberThrowCount.delete(cb);
+        }
+      }
+    }
+  }
+
+  /**
+   * Read the per-stage allowlist of live context-field refs. Returned object
+   * preserves identity of `context[k]` for each allowlisted `k` — used to
+   * detect reassignment via `===` after the handler returns.
+   */
+  #captureRefs(stage: HookStage, context: Record<string, unknown>): Record<string, unknown> {
+    const fields = SNAPSHOT_ALLOWLIST[stage] ?? [];
+    const refs: Record<string, unknown> = {};
+    for (const field of fields) {
+      refs[field] = (context as Record<string, unknown>)[field];
+    }
+    return refs;
+  }
+
+  /**
+   * Deep-clone the per-stage allowlist subset of `context` into a plain
+   * object snapshot. Stages not in the allowlist produce `{}`.
+   */
+  #cloneAllowlistSnapshot(stage: HookStage, context: Record<string, unknown>): Record<string, unknown> {
+    const fields = SNAPSHOT_ALLOWLIST[stage] ?? [];
+    const out: Record<string, unknown> = {};
+    // Per-field try/catch: a prior handler may have stashed a non-cloneable
+    // value (function, Proxy, WeakRef, etc.) on an allowlisted field. We
+    // MUST NOT let one bad field break the dispatch — store a sentinel and
+    // keep going so subscribers still see the rest of the snapshot.
+    for (const field of fields) {
+      const value = (context as Record<string, unknown>)[field];
+      try {
+        out[field] = structuredClone(value);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        out[field] = { __snapshotError: msg };
+      }
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
   // Dispatch — two-bucket serial-first algorithm
   // ---------------------------------------------------------------------------
 
@@ -260,18 +446,20 @@ export class HookDispatcher {
     }
 
     // 1. Serial pass — shared base context (§3.11: empty parallel = legacy path)
-    for (const entry of serial) {
-      await this.#runSerial(stage, entry, context, correlationId);
+    for (let i = 0; i < serial.length; i++) {
+      await this.#runSerial(stage, serial[i]!, i, context, correlationId);
     }
 
     // 2. Parallel pass (if any)
     if (parallel.length > 0) {
+      // Parallel entries start at handlerIndex = serial.length (sorted dispatch order).
+      const parallelBase = serial.length;
       if (stage === "response-stream") {
         // Fire-and-forget: don't await. Background promise handles logging.
-        this.#runParallelBucket(stage, parallel, context, correlationId, startTime)
+        this.#runParallelBucket(stage, parallel, parallelBase, context, correlationId, startTime)
           .catch(() => { /* allSettled already handles individual errors */ });
       } else {
-        await this.#runParallelBucket(stage, parallel, context, correlationId, startTime);
+        await this.#runParallelBucket(stage, parallel, parallelBase, context, correlationId, startTime);
       }
     }
 
@@ -312,13 +500,38 @@ export class HookDispatcher {
   async #runSerial(
     stage: HookStage,
     entry: HandlerEntry,
+    handlerIndex: number,
     context: Record<string, unknown>,
     correlationId?: string,
   ): Promise<void> {
     context.logger = this.#deriveLogger(entry, correlationId) as unknown;
+
+    const hasSubs = this.#hasHandlerEventSubscribers();
+    let ctxBeforeRefs: Record<string, unknown> | undefined;
+    let startTime = 0;
+    if (hasSubs) {
+      // Capture live refs BEFORE structuredClone runs (spec D3).
+      ctxBeforeRefs = this.#captureRefs(stage, context);
+      const ctxBeforeSnapshot = this.#cloneAllowlistSnapshot(stage, context);
+      startTime = performance.now();
+      this.#emitHandlerEvent({
+        kind: "handler-start",
+        stage,
+        plugin: entry.plugin,
+        priority: entry.priority,
+        handlerIndex,
+        correlationId,
+        timestamp: startTime,
+        ctxBeforeSnapshot,
+        ctxBeforeRefs,
+      });
+    }
+
+    let handlerError: unknown = undefined;
     try {
       await entry.handler(context);
     } catch (err: unknown) {
+      handlerError = err;
       entry.errorCount++;
       log.error(`Hook error in stage '${stage}'`, {
         stage,
@@ -327,16 +540,53 @@ export class HookDispatcher {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+
+    if (hasSubs && ctxBeforeRefs) {
+      // Re-read live refs BEFORE the post-handler clone (spec D3).
+      const ctxAfterRefs = this.#captureRefs(stage, context);
+      const reassigned: string[] = [];
+      for (const k of Object.keys(ctxBeforeRefs)) {
+        if (ctxAfterRefs[k] !== ctxBeforeRefs[k]) reassigned.push(k);
+      }
+      reassigned.sort();
+      const ctxAfterSnapshot = this.#cloneAllowlistSnapshot(stage, context);
+      const endTime = performance.now();
+      this.#emitHandlerEvent({
+        kind: "handler-end",
+        stage,
+        plugin: entry.plugin,
+        priority: entry.priority,
+        handlerIndex,
+        correlationId,
+        timestamp: endTime,
+        ctxAfterSnapshot,
+        ctxAfterRefs,
+        reassigned,
+        error: handlerError !== undefined
+          ? {
+              message: handlerError instanceof Error ? handlerError.message : String(handlerError),
+              name: handlerError instanceof Error ? handlerError.name : "Error",
+            }
+          : undefined,
+        durationMs: endTime - startTime,
+      });
+    }
   }
 
   /**
    * Run a single parallel handler with a Proxy view of the context.
    * The Proxy intercepts `logger` reads/writes and (under HOOK_DEBUG)
    * logs any other writes as readOnly violations.
+   *
+   * Per-handler observability events are emitted around the handler call
+   * when `subscribeHandlerEvents` has at least one subscriber. Refs are
+   * captured from the underlying `context` (not the Proxy view) so identity
+   * comparison detects reassignment that bypasses the Proxy.
    */
   async #runParallel(
     stage: HookStage,
     entry: HandlerEntry,
+    handlerIndex: number,
     context: Record<string, unknown>,
     correlationId?: string,
   ): Promise<void> {
@@ -359,7 +609,83 @@ export class HookDispatcher {
         return Reflect.set(target, prop, value, receiver);
       },
     });
-    await entry.handler(view);
+
+    const hasSubs = this.#hasHandlerEventSubscribers();
+    let ctxBeforeRefs: Record<string, unknown> | undefined;
+    let startTime = 0;
+    if (hasSubs) {
+      ctxBeforeRefs = this.#captureRefs(stage, context);
+      const ctxBeforeSnapshot = this.#cloneAllowlistSnapshot(stage, context);
+      startTime = performance.now();
+      this.#emitHandlerEvent({
+        kind: "handler-start",
+        stage,
+        plugin: entry.plugin,
+        priority: entry.priority,
+        handlerIndex,
+        correlationId,
+        timestamp: startTime,
+        ctxBeforeSnapshot,
+        ctxBeforeRefs,
+      });
+    }
+
+    let handlerError: unknown;
+    try {
+      await entry.handler(view);
+    } catch (err: unknown) {
+      handlerError = err;
+      // Re-throw so the existing Promise.allSettled / parallel-bucket error
+      // accounting in #runParallelBucket continues to work unchanged.
+      if (hasSubs && ctxBeforeRefs) {
+        this.#emitParallelEnd(stage, entry, handlerIndex, correlationId, context, ctxBeforeRefs, startTime, handlerError);
+      }
+      throw err;
+    }
+
+    if (hasSubs && ctxBeforeRefs) {
+      this.#emitParallelEnd(stage, entry, handlerIndex, correlationId, context, ctxBeforeRefs, startTime, undefined);
+    }
+  }
+
+  /** Emit the `handler-end` event for a parallel handler. Internal helper. */
+  #emitParallelEnd(
+    stage: HookStage,
+    entry: HandlerEntry,
+    handlerIndex: number,
+    correlationId: string | undefined,
+    context: Record<string, unknown>,
+    ctxBeforeRefs: Record<string, unknown>,
+    startTime: number,
+    handlerError: unknown,
+  ): void {
+    const ctxAfterRefs = this.#captureRefs(stage, context);
+    const reassigned: string[] = [];
+    for (const k of Object.keys(ctxBeforeRefs)) {
+      if (ctxAfterRefs[k] !== ctxBeforeRefs[k]) reassigned.push(k);
+    }
+    reassigned.sort();
+    const ctxAfterSnapshot = this.#cloneAllowlistSnapshot(stage, context);
+    const endTime = performance.now();
+    this.#emitHandlerEvent({
+      kind: "handler-end",
+      stage,
+      plugin: entry.plugin,
+      priority: entry.priority,
+      handlerIndex,
+      correlationId,
+      timestamp: endTime,
+      ctxAfterSnapshot,
+      ctxAfterRefs,
+      reassigned,
+      error: handlerError !== undefined
+        ? {
+            message: handlerError instanceof Error ? handlerError.message : String(handlerError),
+            name: handlerError instanceof Error ? handlerError.name : "Error",
+          }
+        : undefined,
+      durationMs: endTime - startTime,
+    });
   }
 
   /**
@@ -445,11 +771,15 @@ export class HookDispatcher {
   async #runParallelBucket(
     stage: HookStage,
     parallel: HandlerEntry[],
+    parallelBase: number,
     context: Record<string, unknown>,
     correlationId: string | undefined,
     _startTime: number,
   ): Promise<void> {
     const layers = this.#computeTopoLayers(parallel, stage);
+    // Map each parallel entry to a stable handlerIndex (dispatch-sorted position).
+    const indexOf = new Map<HandlerEntry, number>();
+    parallel.forEach((e, i) => indexOf.set(e, parallelBase + i));
 
     // Effective concurrency = min of all declared
     const declaredConcurrencies = parallel
@@ -465,7 +795,7 @@ export class HookDispatcher {
         const results = await Promise.allSettled(
           layer.map((entry) => {
             const t0 = performance.now();
-            return this.#runParallel(stage, entry, context, correlationId).then(
+            return this.#runParallel(stage, entry, indexOf.get(entry)!, context, correlationId).then(
               () => { this.#recordStreamWallTime(stage, entry, performance.now() - t0); },
               (err) => { this.#recordStreamWallTime(stage, entry, performance.now() - t0); throw err; },
             );
@@ -479,7 +809,7 @@ export class HookDispatcher {
           const results = await Promise.allSettled(
             chunk.map((entry) => {
               const t0 = performance.now();
-              return this.#runParallel(stage, entry, context, correlationId).then(
+              return this.#runParallel(stage, entry, indexOf.get(entry)!, context, correlationId).then(
                 () => { this.#recordStreamWallTime(stage, entry, performance.now() - t0); },
                 (err) => { this.#recordStreamWallTime(stage, entry, performance.now() - t0); throw err; },
               );
