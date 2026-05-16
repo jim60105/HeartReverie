@@ -129,6 +129,7 @@ describe("FrontendHookDispatcher — new stages", () => {
       previousStory: "b",
       series: "c",
       story: "d",
+      chapters: [{ number: 1 }],
     };
     d.dispatch("story:switch", ctx);
     expect(received).toBe(ctx);

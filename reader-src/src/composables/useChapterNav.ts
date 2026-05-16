@@ -77,6 +77,7 @@ function dispatchStorySwitch(nextSeries: string, nextStory: string): void {
     previousStory,
     series: nextSeries,
     story: nextStory,
+    chapters: chapters.value.map((c) => ({ number: c.number })),
   };
   frontendHooks.dispatch("story:switch", ctx);
   previousSeries = nextSeries;
@@ -277,18 +278,16 @@ async function loadFromBackend(
 ): Promise<void> {
   clearPolling();
   const token = ++loadToken;
-  const priorSeries = currentSeries;
-  const priorStory = currentStory;
   currentSeries = series;
   currentStory = story;
   folderName.value = `${series} / ${story}`;
 
   // Dispatch story:switch only for real transitions (different series/story).
   // Reloads of the same story MUST NOT fire the hook.
-  const isTransition = priorSeries !== series || priorStory !== story;
-  if (isTransition) {
-    dispatchStorySwitch(series, story);
-  }
+  // Use previousSeries/previousStory (only updated after successful dispatch)
+  // to detect transitions — this handles the race where a stale-guarded call
+  // pre-sets currentSeries before this call completes.
+  const isTransition = previousSeries !== series || previousStory !== story;
 
   await loadFromBackendInternal(series, story);
   // Discard stale result if a newer load was triggered
@@ -299,6 +298,10 @@ async function loadFromBackend(
     currentIndex.value = 0;
     startPollingIfNeeded();
     return;
+  }
+
+  if (isTransition) {
+    dispatchStorySwitch(series, story);
   }
 
   const startIdx = startChapter

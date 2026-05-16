@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname!, "src"),
+      "@plugins-ext": resolve(import.meta.dirname!, "../../HeartReverie_Plugins"),
     },
   },
   build: {
@@ -15,6 +16,9 @@ export default defineConfig({
     sourcemap: true,
   },
   server: {
+    fs: {
+      allow: [".", "../../HeartReverie_Plugins"],
+    },
     proxy: {
       "/api": {
         target: "http://localhost:8080",

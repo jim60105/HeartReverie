@@ -198,4 +198,11 @@ describe("MainLayout", () => {
     const textarea = wrapper.find("textarea").element as HTMLTextAreaElement;
     expect(textarea.value).toContain("新的選項");
   });
+
+  it("renders #plugin-panel-slot as a direct child of .main-layout", () => {
+    const wrapper = mountMainLayout();
+    const slot = wrapper.find("#plugin-panel-slot");
+    expect(slot.exists()).toBe(true);
+    expect(slot.element.parentElement?.classList.contains("main-layout")).toBe(true);
+  });
 });

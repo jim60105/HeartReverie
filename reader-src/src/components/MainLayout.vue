@@ -90,6 +90,7 @@ onMounted(() => {
         </template>
       </ChatInput>
     </main>
+    <div id="plugin-panel-slot"></div>
   </div>
 </template>
 
@@ -103,5 +104,16 @@ onMounted(() => {
 .main-content {
   flex: 1;
   padding: 1rem 1rem 1.5rem;
+}
+
+#plugin-panel-slot {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+:deep(#plugin-panel-slot > *) {
+  pointer-events: auto;
 }
 </style>

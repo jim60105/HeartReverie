@@ -8,6 +8,11 @@ import AppHeader from "@/components/AppHeader.vue";
 const mockRouter = { push: vi.fn() };
 const currentIndexRef = ref(0);
 const totalChaptersRef = ref(3);
+const chaptersRef = ref([
+  { number: 1, content: "" },
+  { number: 2, content: "" },
+  { number: 3, content: "" },
+]);
 const isFirstRef = ref(true);
 const isLastRef = ref(false);
 const folderNameRef = ref("test-folder");
@@ -36,6 +41,7 @@ vi.mock("@/router", () => ({
 vi.mock("@/composables/useChapterNav", () => ({
   useChapterNav: () => ({
     currentIndex: currentIndexRef,
+    chapters: chaptersRef,
     totalChapters: totalChaptersRef,
     isFirst: isFirstRef,
     isLast: isLastRef,
@@ -267,6 +273,85 @@ describe("AppHeader", () => {
       expect(source).toMatch(
         /\n\.chapter-progress\s*\{[^}]*white-space:\s*nowrap/,
       );
+    });
+  });
+
+  describe("chapter-list data attributes", () => {
+    it("wraps chapter navigation in a <nav data-chapter-list> when chapters exist", () => {
+      const wrapper = mount(AppHeader);
+      const nav = wrapper.find("[data-chapter-list]");
+      expect(nav.exists()).toBe(true);
+      expect(nav.element.tagName).toBe("NAV");
+    });
+
+    it("does not render [data-chapter-list] when no chapters exist", () => {
+      totalChaptersRef.value = 0;
+      const wrapper = mount(AppHeader);
+      expect(wrapper.find("[data-chapter-list]").exists()).toBe(false);
+    });
+
+    it("sets correct data-chapter-number on all 5 navigation elements at chapter 1 of 3", () => {
+      currentIndexRef.value = 0;
+      totalChaptersRef.value = 3;
+      isFirstRef.value = true;
+      isLastRef.value = false;
+      const wrapper = mount(AppHeader);
+
+      const firstBtn = wrapper.findAll("button").find((b) => b.text() === "⇇");
+      const prevBtn = wrapper.findAll("button").find((b) => b.text().includes("上一章"));
+      const progress = wrapper.find(".chapter-progress");
+      const nextBtn = wrapper.findAll("button").find((b) => b.text().includes("下一章"));
+      const lastBtn = wrapper.findAll("button").find((b) => b.text() === "⇉");
+
+      expect(firstBtn!.attributes("data-chapter-number")).toBe("1");
+      expect(prevBtn!.attributes("data-chapter-number")).toBe("1");
+      expect(progress.attributes("data-chapter-number")).toBe("1");
+      expect(nextBtn!.attributes("data-chapter-number")).toBe("2");
+      expect(lastBtn!.attributes("data-chapter-number")).toBe("3");
+    });
+
+    it("sets correct data-chapter-number at chapter 2 of 3 (middle)", () => {
+      currentIndexRef.value = 1;
+      totalChaptersRef.value = 3;
+      isFirstRef.value = false;
+      isLastRef.value = false;
+      const wrapper = mount(AppHeader);
+
+      const firstBtn = wrapper.findAll("button").find((b) => b.text() === "⇇");
+      const prevBtn = wrapper.findAll("button").find((b) => b.text().includes("上一章"));
+      const progress = wrapper.find(".chapter-progress");
+      const nextBtn = wrapper.findAll("button").find((b) => b.text().includes("下一章"));
+      const lastBtn = wrapper.findAll("button").find((b) => b.text() === "⇉");
+
+      expect(firstBtn!.attributes("data-chapter-number")).toBe("1");
+      expect(prevBtn!.attributes("data-chapter-number")).toBe("1");
+      expect(progress.attributes("data-chapter-number")).toBe("2");
+      expect(nextBtn!.attributes("data-chapter-number")).toBe("3");
+      expect(lastBtn!.attributes("data-chapter-number")).toBe("3");
+    });
+
+    it("sets correct data-chapter-number at last chapter (3 of 3)", () => {
+      currentIndexRef.value = 2;
+      totalChaptersRef.value = 3;
+      isFirstRef.value = false;
+      isLastRef.value = true;
+      const wrapper = mount(AppHeader);
+
+      const progress = wrapper.find(".chapter-progress");
+      const prevBtn = wrapper.findAll("button").find((b) => b.text().includes("上一章"));
+      const nextBtn = wrapper.findAll("button").find((b) => b.text().includes("下一章"));
+
+      expect(progress.attributes("data-chapter-number")).toBe("3");
+      expect(prevBtn!.attributes("data-chapter-number")).toBe("2");
+      expect(nextBtn!.attributes("data-chapter-number")).toBe("3");
+    });
+
+    it("uses display: contents on [data-chapter-list] so nav children remain flex participants", () => {
+      const testFilePath = (import.meta as { filename?: string }).filename
+        ?? fileURLToPath(import.meta.url);
+      const sfcPath = resolve(dirname(testFilePath), "..", "AppHeader.vue");
+      const source = readFileSync(sfcPath, "utf8");
+      expect(source).toMatch(/\[data-chapter-list\]\s*\{[^}]*display:\s*contents/);
     });
   });
 });

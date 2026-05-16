@@ -9,6 +9,7 @@ const router = useRouter();
 
 const {
   currentIndex,
+  chapters,
   totalChapters,
   isFirst,
   isLast,
@@ -21,6 +22,22 @@ const {
 } = useChapterNav();
 
 const hasChapters = computed(() => totalChapters.value > 0);
+
+const currentChapterNum = computed(() =>
+  chapters.value[currentIndex.value]?.number ?? currentIndex.value + 1,
+);
+const firstChapterNum = computed(() =>
+  chapters.value[0]?.number ?? 1,
+);
+const prevChapterNum = computed(() =>
+  chapters.value[Math.max(0, currentIndex.value - 1)]?.number ?? currentChapterNum.value,
+);
+const nextChapterNum = computed(() =>
+  chapters.value[Math.min(chapters.value.length - 1, currentIndex.value + 1)]?.number ?? currentChapterNum.value,
+);
+const lastChapterNum = computed(() =>
+  chapters.value[chapters.value.length - 1]?.number ?? totalChapters.value,
+);
 
 const progressText = computed(() =>
   hasChapters.value ? `${currentIndex.value + 1} / ${totalChapters.value}` : "0 / 0",
@@ -63,10 +80,11 @@ function openSettings() {
         ⚙️
       </button>
 
-      <template v-if="hasChapters">
+      <nav v-if="hasChapters" data-chapter-list>
         <button
           class="themed-btn header-btn header-btn--icon header-btn--boundary"
           :disabled="isFirst"
+          :data-chapter-number="firstChapterNum"
           title="第一章"
           aria-label="第一章"
           @click="goToFirst"
@@ -76,14 +94,19 @@ function openSettings() {
         <button
           class="themed-btn header-btn"
           :disabled="isFirst"
+          :data-chapter-number="prevChapterNum"
           @click="previous"
         >
           ← 上一章
         </button>
-        <span class="chapter-progress">{{ progressText }}</span>
+        <span
+          class="chapter-progress"
+          :data-chapter-number="currentChapterNum"
+        >{{ progressText }}</span>
         <button
           class="themed-btn header-btn"
           :disabled="isLast"
+          :data-chapter-number="nextChapterNum"
           @click="next"
         >
           下一章 →
@@ -91,13 +114,14 @@ function openSettings() {
         <button
           class="themed-btn header-btn header-btn--icon header-btn--boundary"
           :disabled="isLast"
+          :data-chapter-number="lastChapterNum"
           title="最後一章"
           aria-label="最後一章"
           @click="goToLast"
         >
           ⇉
         </button>
-      </template>
+      </nav>
     </div>
   </header>
 </template>
@@ -158,6 +182,10 @@ function openSettings() {
   color: var(--text-label);
   font-size: 0.875rem;
   white-space: nowrap;
+}
+
+[data-chapter-list] {
+  display: contents;
 }
 
 @media (max-width: 767px) {

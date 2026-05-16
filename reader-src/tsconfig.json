@@ -18,7 +18,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@plugins-ext/*": ["../../HeartReverie_Plugins/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "env.d.ts"]

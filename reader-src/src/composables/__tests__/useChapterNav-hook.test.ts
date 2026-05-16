@@ -75,6 +75,7 @@ describe("useChapterNav — story:switch and chapter:change hooks", () => {
     expect(events[0]!.previousStory).toBeNull();
     expect(events[0]!.series).toBe("A");
     expect(events[0]!.story).toBe("X");
+    expect(events[0]!.chapters).toEqual([{ number: 1 }]);
 
     expect(chapterEvents.length).toBe(1);
     expect(chapterEvents[0]!.previousIndex).toBeNull();

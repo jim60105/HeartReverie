@@ -148,7 +148,7 @@ describe("ChapterContent", () => {
     await flushPromises();
 
     expect(mockState.editChapterMock).toHaveBeenCalledWith("series-a", "story-a", 2, "updated chapter");
-    expect(mockState.refreshAfterEditMock).toHaveBeenCalledWith(2);
+    expect(mockState.refreshAfterEditMock).toHaveBeenCalledWith(1);
     expect(mockState.reloadToLastMock).not.toHaveBeenCalled();
     expect(wrapper.find("textarea.chapter-editor").exists()).toBe(false);
   });
@@ -170,10 +170,10 @@ describe("ChapterContent", () => {
     await flushPromises();
 
     expect(mockState.branchFromMock).toHaveBeenCalledWith("series-a", "story-a", 2, "new-branch");
-    expect(mockState.loadFromBackendMock).toHaveBeenCalledWith("next-s", "next-n", 2);
+    expect(mockState.loadFromBackendMock).toHaveBeenCalledWith("next-s", "next-n", 1);
     expect(mockState.routerPushMock).toHaveBeenCalledWith({
       name: "chapter",
-      params: { series: "next-s", story: "next-n", chapter: "2" },
+      params: { series: "next-s", story: "next-n", chapter: "1" },
     });
   });
 

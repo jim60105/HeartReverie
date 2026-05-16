@@ -10,7 +10,7 @@ Vue 3 component hierarchy, Single File Component structure, composables for shar
 
 The Vue application SHALL follow a single root hierarchy with two top-level routed layouts: `App.vue` → `PassphraseGate` → (router-view renders either `MainLayout` or `SettingsLayout` based on current route).
 
-**MainLayout branch**: `MainLayout` → (`AppHeader`, `ContentArea`, `Sidebar`, `ChatInput`, `StorySelector`, `ChapterContent`, `VentoErrorCard`). `MainLayout` SHALL orchestrate the grid layout and conditionally render child components based on application state. The `AppHeader` within `MainLayout` SHALL replace the previous `⚙️ Prompt` button with a gear icon that navigates to the `/settings` route via `router.push('/settings')`. The `AppHeader` SHALL NOT contain `showEditor`, `showPreview` state, or `<Teleport>` directives for editor/preview overlays.
+**MainLayout branch**: `MainLayout` → (`AppHeader`, `ContentArea`, `Sidebar`, `ChatInput`, `StorySelector`, `ChapterContent`, `VentoErrorCard`). `MainLayout` SHALL orchestrate the grid layout and conditionally render child components based on application state. The `AppHeader` within `MainLayout` SHALL replace the previous `⚙️ Prompt` button with a gear icon that navigates to the `/settings` route via `router.push('/settings')`. The `AppHeader` SHALL NOT contain `showEditor`, `showPreview` state, or `<Teleport>` directives for editor/preview overlays. The `AppHeader` SHALL wrap the 5 chapter navigation controls (first/prev/progress/next/last) in a `<nav data-chapter-list>` element — this marks the navigation area, not a full chapter list — and annotate each of the 5 elements with `data-chapter-number` attributes for plugin discoverability (see the `chapter-list-data-attrs` capability).
 
 **ContentArea SHALL gate `<ChapterContent>` on the conjunction of `currentContent` (non-empty) AND `pluginsSettled` (true). When `currentContent` is non-empty but plugins have not yet settled, ContentArea SHALL render a minimal loading placeholder instead of `<ChapterContent>`. ContentArea SHALL also relocate `.plugin-sidebar` elements into `<Sidebar>` via an explicit `watch` whose dependencies cover every render-invalidation signal (`currentContent`, `isLastChapter`, `pluginsReady`, `renderEpoch`).**
 
@@ -47,6 +47,11 @@ This change does NOT relocate ownership of deep-link backend chapter loading. `A
 #### Scenario: ContentArea defers ChapterContent until plugins are settled
 - **WHEN** `currentContent` is non-empty but `pluginsSettled` is still `false`
 - **THEN** `ContentArea` SHALL render the loading placeholder element and SHALL NOT mount `<ChapterContent>`
+
+#### Scenario: AppHeader exposes chapter navigation via data attributes
+- **WHEN** a story with chapters is loaded and `AppHeader` renders the chapter navigation controls
+- **THEN** the navigation controls SHALL be wrapped in a `<nav data-chapter-list>` element
+- **AND** each of the 5 navigation elements (first, previous, progress, next, last) SHALL carry a `data-chapter-number` attribute with the appropriate 1-based chapter number
 
 ### Requirement: Single File Component structure
 

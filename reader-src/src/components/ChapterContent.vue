@@ -122,7 +122,7 @@ async function saveEdit(): Promise<void> {
   try {
     await editChapter(ctx.series, ctx.story, currentChapterNumber.value, editBuffer.value);
     cancelEditState();
-    await refreshAfterEdit(currentChapterNumber.value);
+    await refreshAfterEdit(currentIndex.value + 1);
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : "儲存失敗";
   } finally {
@@ -164,13 +164,13 @@ async function handleBranch(): Promise<void> {
       currentChapterNumber.value,
       trimmed ? trimmed : undefined,
     );
-    await loadFromBackend(result.series, result.name, currentChapterNumber.value);
+    await loadFromBackend(result.series, result.name, currentIndex.value + 1);
     router.push({
       name: "chapter",
       params: {
         series: result.series,
         story: result.name,
-        chapter: String(currentChapterNumber.value),
+        chapter: String(currentIndex.value + 1),
       },
     }).catch(() => {});
   } catch (err) {

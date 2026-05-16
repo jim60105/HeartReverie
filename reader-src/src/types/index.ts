@@ -405,6 +405,7 @@ export interface StorySwitchContext {
   previousStory: string | null;
   series: string;
   story: string;
+  chapters: { number: number }[];
 }
 
 export interface ChapterChangeContext {
