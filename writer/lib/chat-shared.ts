@@ -25,6 +25,7 @@ import type {
   LLMStreamChunk,
   VentoError,
   TokenUsageRecord,
+  PostResponsePayload,
 } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import {
@@ -328,6 +329,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     messages,
     stream: true,
     stream_options: { include_usage: true },
+    usage: { include: true },
     temperature: llmConfig.temperature,
     frequency_penalty: llmConfig.frequencyPenalty,
     presence_penalty: llmConfig.presencePenalty,
@@ -538,10 +540,16 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     notifyDelta("\n</think>\n");
   };
 
-  let tokenUsage: { prompt: number | null; completion: number | null; total: number | null } = {
+  let tokenUsage: {
+    prompt: number | null;
+    completion: number | null;
+    total: number | null;
+    cost: number | null;
+  } = {
     prompt: null,
     completion: null,
     total: null,
+    cost: null,
   };
 
   /** Persist a content delta — mode-specific. */
@@ -636,10 +644,15 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
         await persistChunk(contentDelta);
       }
       if (parsed.usage) {
+        const costRaw = (parsed.usage as Record<string, unknown>).cost;
+        const cost = typeof costRaw === "number" && isFinite(costRaw) && costRaw >= 0
+          ? costRaw
+          : null;
         tokenUsage = {
           prompt: parsed.usage.prompt_tokens ?? null,
           completion: parsed.usage.completion_tokens ?? null,
           total: parsed.usage.total_tokens ?? null,
+          cost,
         };
       }
     };
@@ -758,9 +771,39 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       completionTokens: tokenUsage.completion,
       totalTokens: tokenUsage.total,
       model: llmConfig.model,
+      upstreamCostUsd: tokenUsage.cost,
     });
   } else {
     reqLog.debug("Usage unavailable from upstream", { chapter: targetNum, model: llmConfig.model });
+  }
+
+  // ── Pre-build the deep-frozen `usage` reference and `endpoint` once ──
+  // The whole `PostResponsePayload` is frozen at dispatch (see
+  // `PostResponsePayload` docs and `openspec/specs/plugin-hooks/spec.md`).
+  // `usage` itself is structuredClone'd so that, when non-null, the
+  // frozen value is independent of the local mutable record used to
+  // append to `_usage.json`.
+  const usageForDispatch: TokenUsageRecord | null = usage === null
+    ? null
+    : structuredClone(usage);
+  const endpoint: string = config.LLM_API_URL;
+
+  /**
+   * Build a `post-response` payload from a base (everything except `usage`
+   * and `endpoint`) and deep-freeze the entire object. Every field
+   * (including nested values inside `usage`) is read-only at dispatch
+   * time; both top-level reassignment and nested mutation throw
+   * `TypeError` under strict mode.
+   */
+  function buildPostResponsePayload(
+    base: Omit<PostResponsePayload, "usage" | "endpoint">,
+  ): Readonly<PostResponsePayload> {
+    const payload: PostResponsePayload = {
+      ...base,
+      endpoint,
+      usage: usageForDispatch,
+    };
+    return deepFreeze(payload);
   }
 
   let chapterContentAfter: string | null = null;
@@ -779,17 +822,20 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
 
     chapterContentAfter = fullContent;
 
-    await hookDispatcher.dispatch("post-response", {
-      correlationId,
-      content: fullContent,
-      storyDir,
-      series,
-      name,
-      rootDir,
-      chapterNumber: targetNum,
-      chapterPath,
-      source: "chat",
-    });
+    await hookDispatcher.dispatch(
+      "post-response",
+      buildPostResponsePayload({
+        correlationId,
+        content: fullContent,
+        storyDir,
+        series,
+        name,
+        rootDir,
+        chapterNumber: targetNum,
+        chapterPath,
+        source: "chat",
+      }) as unknown as Record<string, unknown>,
+    );
   } else if (writeMode.kind === "append-to-existing-chapter" && chapterPath !== null && targetNum !== null) {
     const { appendTag, pluginName } = writeMode;
     const normalised = normaliseAppendContent(aiContent, appendTag);
@@ -808,19 +854,30 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       pluginName,
     });
 
-    await hookDispatcher.dispatch("post-response", {
-      correlationId,
-      content: chapterContentAfter,
-      storyDir,
-      series,
-      name,
-      rootDir,
-      chapterNumber: targetNum,
-      chapterPath,
-      source: "plugin-action",
-      pluginName,
-      appendedTag: appendTag,
-    });
+    // Parity with the other three success branches: append the usage
+    // record BEFORE dispatching `post-response` so subscribers that
+    // re-read `_usage.json` (legacy path) and subscribers that read
+    // `ctx.usage` (new path) observe a consistent ledger state.
+    if (usage !== null) {
+      await appendUsage(storyDir, usage);
+    }
+
+    await hookDispatcher.dispatch(
+      "post-response",
+      buildPostResponsePayload({
+        correlationId,
+        content: chapterContentAfter,
+        storyDir,
+        series,
+        name,
+        rootDir,
+        chapterNumber: targetNum,
+        chapterPath,
+        source: "plugin-action",
+        pluginName,
+        appendedTag: appendTag,
+      }) as unknown as Record<string, unknown>,
+    );
   } else if (writeMode.kind === "continue-last-chapter" && chapterPath !== null && targetNum !== null) {
     if (usage !== null) {
       await appendUsage(storyDir, usage);
@@ -836,17 +893,20 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       bytes: encoder.encode(aiContent).length,
     });
 
-    await hookDispatcher.dispatch("post-response", {
-      correlationId,
-      content: chapterContentAfter,
-      storyDir,
-      series,
-      name,
-      rootDir,
-      chapterNumber: targetNum,
-      chapterPath,
-      source: "continue",
-    });
+    await hookDispatcher.dispatch(
+      "post-response",
+      buildPostResponsePayload({
+        correlationId,
+        content: chapterContentAfter,
+        storyDir,
+        series,
+        name,
+        rootDir,
+        chapterNumber: targetNum,
+        chapterPath,
+        source: "continue",
+      }) as unknown as Record<string, unknown>,
+    );
   } else if (writeMode.kind === "replace-last-chapter" && chapterPath !== null && targetNum !== null) {
     const { pluginName } = writeMode;
     const padded = String(targetNum).padStart(3, "0");
@@ -870,18 +930,21 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       bytes: encoder.encode(newContent).length,
     });
 
-    await hookDispatcher.dispatch("post-response", {
-      correlationId,
-      content: chapterContentAfter,
-      storyDir,
-      series,
-      name,
-      rootDir,
-      chapterNumber: targetNum,
-      chapterPath,
-      source: "plugin-action",
-      pluginName,
-    });
+    await hookDispatcher.dispatch(
+      "post-response",
+      buildPostResponsePayload({
+        correlationId,
+        content: chapterContentAfter,
+        storyDir,
+        series,
+        name,
+        rootDir,
+        chapterNumber: targetNum,
+        chapterPath,
+        source: "plugin-action",
+        pluginName,
+      }) as unknown as Record<string, unknown>,
+    );
   }
   // discard: no chapter mutation, no hook dispatch
 

@@ -210,5 +210,72 @@ Deno.test({
         await Deno.remove(dst, { recursive: true });
       }
     });
+
+    await t.step("buildRecord propagates upstreamCostUsd when finite and non-negative", () => {
+      const rec = buildRecord({
+        chapter: 1,
+        promptTokens: 10,
+        completionTokens: 20,
+        totalTokens: 30,
+        model: "m",
+        upstreamCostUsd: 0.0123,
+      });
+      assertEquals(rec.upstreamCostUsd, 0.0123);
+    });
+
+    await t.step("buildRecord omits upstreamCostUsd when absent", () => {
+      const rec = buildRecord({
+        chapter: 1,
+        promptTokens: 10,
+        completionTokens: 20,
+        totalTokens: 30,
+        model: "m",
+      });
+      assertEquals("upstreamCostUsd" in rec, false);
+      assertEquals(rec.upstreamCostUsd, undefined);
+    });
+
+    await t.step("buildRecord drops upstreamCostUsd when null/negative/non-finite", () => {
+      for (const bad of [null, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        const rec = buildRecord({
+          chapter: 1,
+          promptTokens: 10,
+          completionTokens: 20,
+          totalTokens: 30,
+          model: "m",
+          upstreamCostUsd: bad as number | null,
+        });
+        assertEquals("upstreamCostUsd" in rec, false, `bad input: ${String(bad)}`);
+      }
+    });
+
+    await t.step("appendUsage + readUsage roundtrip upstreamCostUsd", async () => {
+      const dir = await Deno.makeTempDir({ prefix: "usage-cost-roundtrip-" });
+      try {
+        const withCost = buildRecord({
+          chapter: 1,
+          promptTokens: 10,
+          completionTokens: 20,
+          totalTokens: 30,
+          model: "m",
+          upstreamCostUsd: 0.005,
+        });
+        const withoutCost = buildRecord({
+          chapter: 2,
+          promptTokens: 1,
+          completionTokens: 2,
+          totalTokens: 3,
+          model: "m",
+        });
+        await appendUsage(dir, withCost);
+        await appendUsage(dir, withoutCost);
+        const records = await readUsage(dir);
+        assertEquals(records.length, 2);
+        assertEquals(records[0]!.upstreamCostUsd, 0.005);
+        assertEquals("upstreamCostUsd" in records[1]!, false);
+      } finally {
+        await Deno.remove(dir, { recursive: true });
+      }
+    });
   },
 });

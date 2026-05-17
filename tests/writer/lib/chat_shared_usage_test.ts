@@ -213,6 +213,110 @@ Deno.test({
       }
     });
 
+    await t.step("upstream cost from final SSE chunk propagates into post-response payload", async () => {
+      const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-cost-" });
+      try {
+        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+        const stub = stubFetch([
+          'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+          'data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33,"cost":0.0123}}\n\n',
+          "data: [DONE]\n\n",
+        ]);
+        const hd = new HookDispatcher();
+        let captured: unknown = null;
+        hd.register("post-response", (ctx) => {
+          captured = ctx;
+          return Promise.resolve();
+        });
+        try {
+          const result = await executeChat({
+            series: "s1",
+            name: "n1",
+            message: "Hi",
+            config: buildConfig(tmpDir),
+            safePath: createSafePath(tmpDir),
+            hookDispatcher: hd,
+            buildPromptFromStory: buildPromptStub(),
+          });
+          assertEquals(result.usage?.upstreamCostUsd, 0.0123);
+        } finally {
+          stub.restore();
+        }
+        const p = captured as { usage: { upstreamCostUsd?: number | null } | null } | null;
+        assertEquals(p?.usage?.upstreamCostUsd, 0.0123);
+        const records = await readUsage(join(tmpDir, "s1", "n1"));
+        assertEquals(records.length, 1);
+        assertEquals(records[0]!.upstreamCostUsd, 0.0123);
+      } finally {
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+
+    await t.step("missing upstream cost → upstreamCostUsd omitted from post-response usage", async () => {
+      const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-nocost-" });
+      try {
+        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+        const stub = stubFetch([
+          'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+          'data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33}}\n\n',
+          "data: [DONE]\n\n",
+        ]);
+        const hd = new HookDispatcher();
+        let captured: unknown = null;
+        hd.register("post-response", (ctx) => {
+          captured = ctx;
+          return Promise.resolve();
+        });
+        try {
+          await executeChat({
+            series: "s1",
+            name: "n1",
+            message: "Hi",
+            config: buildConfig(tmpDir),
+            safePath: createSafePath(tmpDir),
+            hookDispatcher: hd,
+            buildPromptFromStory: buildPromptStub(),
+          });
+        } finally {
+          stub.restore();
+        }
+        const p = captured as { usage: Record<string, unknown> | null } | null;
+        assertEquals(p?.usage !== null && p?.usage !== undefined, true);
+        assertEquals("upstreamCostUsd" in (p!.usage as Record<string, unknown>), false);
+      } finally {
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+
+    await t.step("non-finite/negative upstream cost is treated as absent", async () => {
+      const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-badcost-" });
+      try {
+        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+        const stub = stubFetch([
+          'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+          'data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33,"cost":-1}}\n\n',
+          "data: [DONE]\n\n",
+        ]);
+        try {
+          const result = await executeChat({
+            series: "s1",
+            name: "n1",
+            message: "Hi",
+            config: buildConfig(tmpDir),
+            safePath: createSafePath(tmpDir),
+            hookDispatcher: new HookDispatcher(),
+            buildPromptFromStory: buildPromptStub(),
+          });
+          assertEquals(result.usage?.upstreamCostUsd, undefined);
+          assertEquals("upstreamCostUsd" in (result.usage as object), false);
+        } finally {
+          stub.restore();
+        }
+      } finally {
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+
     Deno.env.delete("LLM_API_KEY");
   },
 });
