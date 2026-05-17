@@ -39,11 +39,16 @@ In addition to `register`, a backend module MAY export:
 | Stage | When Fired | Context Parameters |
 |-------|-----------|-------------------|
 | `prompt-assembly` | During system prompt rendering | `{ previousContext, rawChapters, storyDir, series, name }` |
+| `pre-llm-fetch` | Once per upstream LLM request, immediately before `fetch(config.LLM_API_URL, …)`. Observation-only — `messages` and `requestMetadata` are deep-frozen via `structuredClone` + `Object.freeze` | `PreLlmFetchPayload` (see `writer/types.ts`): `{ correlationId, messages, model, requestMetadata, storyDir, series, name, writeMode }`. Parallel-eligible when registered with `readOnly: true` |
 | `response-stream` | For each delta chunk during chat / continue-last-chapter writes (NOT plugin-action append/replace) | `{ correlationId, chunk, series, name, storyDir, chapterPath, chapterNumber }` — **mutate `context.chunk`** to transform/redact the streamed text before it is written |
-| `pre-write` | Before opening/truncating a NEW chapter file (chat `write-new-chapter` only) — runs BEFORE any LLM streaming, so the LLM response is NOT yet available | `{ message, chapterPath, storyDir, series, name, preContent }` — set `context.preContent` to a string that will be written to the chapter BEFORE the streamed deltas |
-| `post-response` | After the LLM response is complete and written | `{ content, storyDir, series, name, rootDir, correlationId, chapterNumber, chapterPath, source, pluginName?, appendedTag? }` — `source` is one of `"chat"`, `"continue"`, `"plugin-action"`; `pluginName` and `appendedTag` are set only when `source === "plugin-action"` |
+| `pre-write` | Before opening/truncating a NEW chapter file (chat `write-new-chapter` only) — runs BEFORE any LLM streaming, so the LLM response is NOT yet available | `{ correlationId, message, chapterPath, storyDir, series, name, preContent }` — set `context.preContent` to a string that will be written to the chapter BEFORE the streamed deltas |
+| `post-response` | After the LLM response is complete and written. **The dispatched payload is a deep-frozen, `readonly` `PostResponsePayload`** (`writer/types.ts`) | `{ correlationId, content, storyDir, series, name, rootDir, chapterNumber, chapterPath, source, pluginName?, appendedTag?, endpoint, usage }` — `source` is `"chat" \| "continue" \| "plugin-action"`. `pluginName` is set for `"plugin-action"`; `appendedTag` is set ONLY for append (not replace). `endpoint` is the resolved upstream LLM URL. `usage: TokenUsageRecord \| null` carries token counts and optional `upstreamCostUsd` (see [TokenUsageRecord](#tokenusagerecord)) |
 
-> **Note:** `strip-tags` is a valid stage name in the dispatcher but is not currently dispatched by any code path. Plugins registered on it will load without error but their handlers will never fire.
+> **Source literal mapping.** `write-new-chapter` → `"chat"`; `continue-last-chapter` → `"continue"`; `append-to-existing-chapter` → `"plugin-action"` with `pluginName` + `appendedTag`; `replace-last-chapter` → `"plugin-action"` with `pluginName` (no `appendedTag`).
+
+> **Deep-frozen payload.** The `post-response` context is recursively frozen (including nested `usage`). Both top-level reassignment AND nested mutation throw `TypeError` under Deno ESM strict mode. The per-handler `ctx.logger` is delivered via a non-mutating `Proxy` over the frozen payload — plugins must not attempt `ctx.logger = …`.
+
+> **`strip-tags`:** declaring `strip-tags` in `plugin.json` `hooks[]` is **rejected at load time** by `PluginManager`. The strip-tags transformation is performed via the `promptStripTags` / `displayStripTags` manifest fields instead.
 
 > **Plugin-action lifecycle (runPluginPrompt):** `append` and `replace` modes do NOT dispatch `pre-write` or `response-stream` (the engine streams to a buffer, then performs the atomic file mutation in one shot). Only `post-response` fires after a successful write, with `source: "plugin-action"`. Discard mode (no `append`/`replace`) dispatches NO backend hooks at all.
 
@@ -122,15 +127,47 @@ hooks.register("response-stream", async (context) => {
 
 #### `post-response`
 
-Runs after the LLM response is complete and written. Use for side effects: running external tools, updating state files, logging.
+Runs after the LLM response is complete and written. Use for side effects: ledger appends, external tools, state files, logging.
 
-```javascript
-hooks.register("post-response", async (context) => {
-  const log = context.logger;
-  const { content, storyDir, rootDir } = context;
-  // Run external binary, update files, etc.
-}, 100);
+**The context is a deep-frozen `PostResponsePayload` — DO NOT mutate.**
+
+```typescript
+import type { PostResponsePayload } from "../../writer/types.ts";
+
+hooks.register("post-response", (ctx) => {
+  const log = ctx.logger;
+  if (!ctx.usage) {
+    log?.debug("upstream omitted usage", { source: ctx.source });
+    return;
+  }
+  log?.info("chapter persisted", {
+    correlationId: ctx.correlationId,
+    chapter: ctx.chapterNumber,
+    source: ctx.source,                       // "chat" | "continue" | "plugin-action"
+    pluginName: ctx.pluginName ?? null,       // set when source === "plugin-action"
+    endpoint: ctx.endpoint,                   // resolved upstream URL
+    model: ctx.usage.model,
+    tokens: ctx.usage.totalTokens,
+    upstreamCostUsd: ctx.usage.upstreamCostUsd ?? null,
+  });
+}, 200);
 ```
+
+#### `TokenUsageRecord`
+
+Shape of `ctx.usage` on `post-response` and the `usage` field returned by `runPluginPrompt`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `chapter` | `number` | Chapter number this completion targeted |
+| `promptTokens` | `number` | Prompt token count |
+| `completionTokens` | `number` | Completion token count |
+| `totalTokens` | `number` | Total tokens |
+| `model` | `string` | Upstream-reported model |
+| `timestamp` | `string` | ISO-8601 |
+| `upstreamCostUsd?` | `number \| null` | Optional upstream-billed USD cost. Present **only** when the upstream final SSE chunk carries `usage.cost`. The engine **NEVER** synthesises this from a local price table — missing/invalid values cause the field to be omitted or `null` |
+
+The engine unconditionally sends `usage: { include: true }` in the request body so OpenRouter-compatible upstreams opt into per-turn cost reporting (other OpenAI-compatible backends silently ignore it).
 
 ### Priority System
 

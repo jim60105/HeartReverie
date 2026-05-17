@@ -40,7 +40,7 @@
 |-------|------|-------------|
 | `promptFragments` | `array` | Markdown files to inject as Vento template variables |
 | `backendModule` | `string` | Path to backend module (relative to plugin dir), e.g., `"./handler.js"` or `"./handler.ts"` |
-| `frontendModule` | `string` | Path to frontend module (relative to plugin dir). **Must be `"./frontend.js"`** — the runtime loader hardcodes this filename. |
+| `frontendModule` | `string` | Path to frontend ES module, relative to plugin dir. The backend resolves the declared path inside the plugin directory and serves it at `/plugins/<name>/<path>`. **However, the reader currently auto-imports `/plugins/<name>/frontend.js`** — so for the frontend module to actually load you must use `"./frontend.js"`. The declared path field is honored by the static server but not yet by the auto-loader. |
 | `frontendStyles` | `array<string>` | Relative paths to CSS files injected into the frontend `<head>` as `<link rel="stylesheet">` elements. Each entry must end with `.css`, must not be absolute, and must not contain `..` segments. |
 | `tags` | `array<string>` | XML tag names managed by this plugin (used for metadata/API response) |
 | `promptStripTags` | `array` | Tags/regex to strip from `previousContext` when building prompts |
@@ -307,7 +307,7 @@ The `hooks` array declares per-stage parallel dispatch behavior for backend hook
 
 | Property | Type | Required | Description |
 |----------|------|:--------:|-------------|
-| `stage` | `string` | ✅ | Target stage. Enum: `prompt-assembly`, `post-response`, `response-stream` |
+| `stage` | `string` | ✅ | Target stage. Enum: `prompt-assembly`, `pre-llm-fetch`, `post-response`, `response-stream` |
 | `parallel` | `boolean` | ❌ | Enable parallel dispatch. Default `false` (but `readOnly:true` implies `true` — see Track B) |
 | `readOnly` | `boolean` | ❌ | Declares the handler does not write to context (parallel-safety contract) |
 | `concurrency` | `integer` | ❌ | Max parallel limit. The dispatcher takes `Math.min(...)` across all entries in the same stage |
@@ -315,7 +315,7 @@ The `hooks` array declares per-stage parallel dispatch behavior for backend hook
 
 **Track B default-on**: An entry with `readOnly: true` and no explicit `parallel` is treated as `parallel: true`. Opt out with `"parallel": false`.
 
-**Stage restrictions**: Only `prompt-assembly`, `post-response`, and `response-stream` are allowed. `pre-write` and `strip-tags` are always serial. For `response-stream`, `parallel: true` **must** be accompanied by `readOnly: true` — otherwise the entry is rejected (not coerced).
+**Stage restrictions**: Only `prompt-assembly`, `pre-llm-fetch`, `post-response`, and `response-stream` are parallel-eligible. `pre-write` and `strip-tags` are always serial (and `strip-tags` is rejected entirely at load time — see manifest schema). For `response-stream`, `parallel: true` **must** be accompanied by `readOnly: true` — otherwise the entry is rejected (not coerced). `pre-llm-fetch` is observation-only; its `messages` and `requestMetadata` are deep-frozen at dispatch, so `readOnly: true` is the natural fit.
 
 Example:
 

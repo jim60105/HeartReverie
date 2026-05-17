@@ -95,7 +95,8 @@ Then add type-appropriate optional fields per the patterns below.
   "tags": ["mytag"],
   "promptStripTags": ["mytag"],
   "hooks": [
-    { "stage": "post-response", "writes": ["content"] },
+    { "stage": "post-response", "parallel": true, "readOnly": true,
+      "reads": ["usage", "endpoint", "source", "pluginName", "correlationId"] },
     { "stage": "frontend-render" }
   ]
 }
@@ -222,6 +223,7 @@ export function register(hooks, context) {
 Key points:
 
 - `register(hooks, context)` — both args are provided. Older plugins that only declare `register(hooks)` keep working.
+- `hooks.register(stage, handler, priority?)` and the equivalent alias `hooks.on(stage, handler, priority?)` are both available on the per-plugin proxy. New code may use either; some community plugins feature-detect via `(hooks.on ?? hooks.register)`.
 - `hooks.getSettings(name?)` and `context.getSettings(name?)` both return the live settings snapshot for `name` (defaults to the calling plugin). The reader hydrates settings on boot and, after a ~50 ms debounce on `plugin-settings:changed`, bumps the chapter render epoch — that re-runs render-pipeline hooks (`frontend-render`, `chapter:render:after`, `chapter:dom:ready`) and re-applies `displayStripTags`. The `notification` hook is NOT re-dispatched on settings change.
 - `register` MAY be `async` (the loader awaits it before flipping `pluginsReady`).
 - `hooks.register(stage, handler, priority?)` — the `originPluginName` is auto-curried by the loader proxy; do NOT pass it manually.
@@ -254,6 +256,34 @@ Key points:
 | `action-button:click` | **async** | Triggered by `PluginActionBar`; dispatcher only invokes handlers owned by the button's plugin. |
 
 For the full context-parameter table, settings-aware patterns, and DOMPurify re-sanitization rules, read [`references/hook-api.md`](./references/hook-api.md#frontend-hooks).
+
+### Mounting a Floating Panel
+
+For persistent floating UI (widgets, debuggers, dashboards), the reader always renders a `<div id="plugin-panel-slot">` inside `MainLayout.vue`. It is fixed, full-viewport, `z-index: 100`, `pointer-events: none` on the container and `pointer-events: auto` on direct children — i.e. plugins are expected to mount widgets whose own root elements opt back in to pointer events.
+
+**Mount into `#plugin-panel-slot`** rather than directly under `document.body`. The slot can be torn down and re-created on route changes (e.g. login screen → main reader), so use a `MutationObserver` on `document.body` to remount when the slot reappears.
+
+```javascript
+function mountWidget(slot) {
+  if (slot.querySelector('.my-plugin-root')) return;          // idempotent
+  const root = document.createElement('div');
+  root.className = 'my-plugin-root';
+  slot.appendChild(root);
+  // ... render into `root`
+}
+
+function setupSlotObserver() {
+  const slot = document.getElementById('plugin-panel-slot');
+  if (slot) mountWidget(slot);
+  const obs = new MutationObserver(() => {
+    const s = document.getElementById('plugin-panel-slot');
+    if (s) mountWidget(s);
+  });
+  obs.observe(document.body, { childList: true, subtree: true });
+}
+```
+
+See `HeartReverie_Plugins/cost-tracker/frontend.js` (`setupSlotObserver`) for a complete reference implementation.
 
 ### Notification Hook
 
@@ -401,9 +431,11 @@ The schema MUST be `type: "object"` with a `properties` record (other shapes are
 ```json
 "settingsSchema": {
   "type": "object",
+  "x-schema-version": 1,
+  "additionalProperties": false,
   "properties": {
-    "endpoint":   { "type": "string",  "title": "API Endpoint", "default": "https://api.example.com" },
-    "apiKey":     { "type": "string",  "title": "API Key", "format": "password" },
+    "endpoint":   { "type": "string",  "title": "API Endpoint", "format": "url", "default": "https://api.example.com" },
+    "apiKey":     { "type": "string",  "title": "API Key", "writeOnly": true },
     "model":      { "type": "string",  "title": "Model", "enum": ["small", "medium", "large"] },
     "samplers":   { "type": "array",   "title": "Allowed Samplers", "items": { "type": "string" }, "x-options-url": "/api/plugins/<name>/proxy/samplers" },
     "blocklist":  { "type": "array",   "title": "Blocked Keywords", "items": { "type": "string" } },
@@ -411,6 +443,8 @@ The schema MUST be `type: "object"` with a `properties` record (other shapes are
   }
 }
 ```
+
+Always declare `x-schema-version: 1` on a settings schema. If omitted, the loader auto-migrates it to `1` with a warning; unsupported versions don't block plugin load but cause `GET /settings` to return defaults and `PUT /settings` to respond `409`. Secrets MUST use `writeOnly: true` — the supported `format` keywords are `path`, `color`, `url`, `email`, `uuid`; **`format: "password"` is silently ignored**, so always pair sensitive fields with `writeOnly: true`. `writeOnly` values are masked as `null` in `GET` responses and never logged.
 
 Backend handlers read settings via the `getSettings()` helper present on every backend register context: `register({ hooks, logger, getSettings })`, `registerRoutes(context)`, and `getDynamicVariables(context)` all receive it. Backend `getSettings()` is **zero-arg, own-plugin only** — it cannot read other plugins' settings. Mutations go through `saveSettings(...)` which is exposed ONLY on `registerRoutes(context)` (it validates against the schema before writing); `register()` and `getDynamicVariables()` cannot persist settings. Avoid reading `playground/_plugins/<name>/config.json` directly — only fall back to it as a last-resort legacy path.
 
