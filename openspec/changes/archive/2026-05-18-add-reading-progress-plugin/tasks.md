@@ -57,10 +57,10 @@
 
 ## 9. Integration Verification
 
-- [ ] 9.1 Run `deno task test` — all backend tests pass
-- [ ] 9.2 Run `deno task build:reader` — frontend bundle succeeds
-- [ ] 9.3 Run `scripts/podman-build-run.sh` — container builds and starts cleanly (no errors/warnings in logs)
-- [ ] 9.4 Verify PUT endpoint via curl: `curl -X PUT -H "X-Passphrase: ..." -H "Content-Type: application/json" -d '{"chapterIndex":3,"scrollRatio":0.42,"lastReadAt":"2025-01-15T00:00:00Z"}' localhost:8080/api/plugins/reading-progress/progress/demo-series/demo-story` → `{ ok: true, revision: 1 }`
-- [ ] 9.5 Verify auth: same request without X-Passphrase → 401
-- [ ] 9.6 Verify file created at `${PLAYGROUND_DIR}/_plugins/reading-progress/progress/demo-series/demo-story.json`
-- [ ] 9.7 Two-tab manual test: tab A reads to chapter 3 → tab B refocuses → conflict dialog appears
+- [x] 9.1 Run `deno task test` — all backend tests pass
+- [x] 9.2 Run `deno task build:reader` — frontend bundle succeeds
+- [x] 9.3 Run `scripts/podman-build-run.sh` — container builds and starts cleanly (no errors/warnings in logs)
+- [x] 9.4 Verify PUT endpoint via curl: `curl -X PUT -H "X-Passphrase: ..." -H "Content-Type: application/json" -d '{"chapterIndex":3,"scrollRatio":0.42,"lastReadAt":"2025-01-15T00:00:00Z"}' localhost:8080/api/plugins/reading-progress/progress/demo-series/demo-story` → `{ ok: true, revision: 1 }`
+- [x] 9.5 Verify auth: same request without X-Passphrase → 401
+- [x] 9.6 Verify file created at `${PLAYGROUND_DIR}/_plugins/reading-progress/progress/demo-series/demo-story.json`
+- [x] 9.7 Two-tab manual test: tab A reads to chapter 3 → tab B refocuses → conflict dialog appears

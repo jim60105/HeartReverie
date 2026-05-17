@@ -2,7 +2,7 @@
 
 ### Requirement: Progress PUT endpoint
 
-The plugin SHALL expose `PUT /api/plugins/reading-progress/progress/:series/:story` that accepts a JSON body with fields: `chapterIndex` (non-negative integer), `scrollRatio` (number 0–1), `lastReadAt` (ISO 8601 string), optional `selectionAnchor` (TextFragmentAnchor object or null), optional `clientId` (string), and optional `ifMatchRevision` (non-negative integer). The endpoint SHALL validate all fields and return `400` for invalid input. Request body SHALL NOT exceed 4096 bytes (return `413`).
+The plugin SHALL expose `PUT /api/plugins/reading-progress/progress/:series/:story` that accepts a JSON body with fields: `chapterIndex` (non-negative integer), `scrollRatio` (number 0–1), `lastReadAt` (valid ISO 8601 date string), optional `selectionAnchor` (TextFragmentAnchor object or null), optional `clientId` (string), and optional `ifMatchRevision` (non-negative integer). The endpoint SHALL validate all fields and return `400` for invalid input. Request body SHALL NOT exceed 4096 bytes (return `413`).
 
 #### Scenario: Valid PUT creates progress file
 
@@ -16,23 +16,23 @@ The plugin SHALL expose `PUT /api/plugins/reading-progress/progress/:series/:sto
 
 #### Scenario: Invalid series name rejected
 
-- **WHEN** PUT is sent with `series` containing `..`, empty string, or exceeding 128 characters
+- **WHEN** PUT is sent with `series` containing `..`, `.`, empty string, or exceeding 128 characters
 - **THEN** the server SHALL return `400` with `{ error: "invalid_identity" }`
 
 #### Scenario: Invalid story name rejected
 
-- **WHEN** PUT is sent with `story` containing `..`, `/`, `\`, empty string, or exceeding 128 characters
+- **WHEN** PUT is sent with `story` containing `..`, `.`, `/`, `\`, empty string, or exceeding 128 characters
 - **THEN** the server SHALL return `400` with `{ error: "invalid_identity" }`
 
 #### Scenario: Path traversal in series or story rejected
 
-- **WHEN** PUT is sent with `series` or `story` containing path traversal sequences or OS-reserved names
-- **THEN** the safePath validation SHALL reject the input and return `400` with `{ error: "invalid_identity" }`
+- **WHEN** PUT is sent with `series` or `story` containing path traversal sequences, `.` (bare dot), or OS-reserved names
+- **THEN** the validation SHALL reject the input and return `400` with `{ error: "invalid_identity" }`
 
 #### Scenario: Invalid payload rejected
 
 - **WHEN** PUT is sent with `scrollRatio: 1.5` or `chapterIndex: -1` or non-integer `chapterIndex`
-- **THEN** the server SHALL return `400` with `{ error: "invalid_payload" }`
+- **THEN** the server SHALL return `400` with `{ error: "validation_error", detail: "<reason>" }`
 
 #### Scenario: Oversized body rejected
 
@@ -42,7 +42,7 @@ The plugin SHALL expose `PUT /api/plugins/reading-progress/progress/:series/:sto
 #### Scenario: selectionAnchor validation
 
 - **WHEN** PUT is sent with `selectionAnchor.textStart` exceeding 32 characters or missing `textStart`
-- **THEN** the server SHALL return `400` with `{ error: "invalid_anchor" }`
+- **THEN** the server SHALL return `400` with `{ error: "validation_error", detail: "selectionAnchor is invalid or fields exceed 32 chars" }`
 
 ### Requirement: Conflict detection via ifMatchRevision
 
@@ -83,7 +83,7 @@ All file writes SHALL use a unique temporary file name (`${file}.${randomUUID}.t
 
 ### Requirement: Progress GET endpoint
 
-The plugin SHALL expose `GET /api/plugins/reading-progress/progress/:series/:story` returning the stored progress entry or `404` if none exists.
+The plugin SHALL expose `GET /api/plugins/reading-progress/progress/:series/:story` returning the stored progress entry as JSON, or `null` (with HTTP 200) if none exists. This avoids browser console "Failed to load resource" noise from 404 responses on normal first-visit fetch calls.
 
 #### Scenario: GET existing progress
 
@@ -93,7 +93,7 @@ The plugin SHALL expose `GET /api/plugins/reading-progress/progress/:series/:sto
 #### Scenario: GET non-existent progress
 
 - **WHEN** GET is sent for a `(series, story)` with no stored progress
-- **THEN** the server SHALL return `404`
+- **THEN** the server SHALL return `200` with `null` body
 
 ### Requirement: Progress DELETE endpoint
 
@@ -155,7 +155,7 @@ All reading-progress endpoints SHALL be mounted under `/api/plugins/reading-prog
 
 ### Requirement: Frontend scroll tracking
 
-The frontend module SHALL subscribe to `chapter:dom:ready` and install a throttled scroll listener (configurable interval via `syncIntervalSeconds` setting, default 5s). The throttle SHALL use leading + trailing strategy. Each scroll event SHALL update an in-memory `lastEntryByIndex` map keyed by chapter index.
+The frontend module SHALL subscribe to `chapter:dom:ready` and install a throttled scroll listener on `window` (the actual page scroll container, since `.chapter-content` has `overflow: visible`). The throttle interval is configurable via `syncIntervalSeconds` setting (default 5s). The throttle SHALL use trailing strategy. Each scroll event SHALL update an in-memory `lastEntryByIndex` map keyed by chapter index. Text fragment anchor lookup SHALL use the `ctx.container` element (where chapter text nodes reside).
 
 #### Scenario: Scroll triggers throttled PUT
 
@@ -205,7 +205,7 @@ On `visibilitychange → hidden` and `pagehide`, the frontend SHALL call `flushA
 
 ### Requirement: Scroll restoration on mount
 
-On `chapter:dom:ready`, the frontend SHALL `GET` the stored progress. If `saved.chapterIndex` matches the current chapter, it SHALL restore scroll position using: (1) Text Fragment anchor lookup if available, (2) `scrollRatio` fallback. Restoration SHALL use ResizeObserver + `document.fonts.ready` for stabilization with a 1.5s maximum retry window. User scroll SHALL immediately cancel restoration.
+On `chapter:dom:ready`, the frontend SHALL `GET` the stored progress. If the response is non-null and `saved.chapterIndex` differs from the current chapter, the frontend SHALL show a cross-chapter navigation dialog (or auto-navigate if `confirmRemoteJump` is false). If `saved.chapterIndex` matches the current chapter, it SHALL restore scroll position on `document.scrollingElement` using: (1) Text Fragment anchor lookup if available, (2) `scrollRatio` fallback. Restoration SHALL use ResizeObserver + `document.fonts.ready` for stabilization with a 1.5s maximum retry window. User scroll SHALL immediately cancel restoration.
 
 #### Scenario: Restore scroll from ratio
 
@@ -273,19 +273,19 @@ The plugin SHALL expose a settings schema with the following configurable fields
 - **WHEN** `enabled` is `false`
 - **THEN** the plugin SHALL not subscribe to any hooks or make any network requests
 
-### Requirement: Settings page progress management
+### Requirement: Settings page progress management (DEFERRED)
 
-The plugin frontend SHALL provide a settings panel listing all stored progress entries with the ability to delete individual entries. It SHALL also provide an "Import local progress" button that triggers the import flow (dry-run preview → user confirmation → write).
+The plugin frontend SHALL provide exported utility functions `collectLocalEntries()` and `importLocalToServer(options)` for future use by a settings panel. A full settings panel UI with per-entry deletion and import flow is DEFERRED until the engine provides a custom settings panel extension point. The utility functions SHALL be available as named ESM exports from the frontend module.
 
-#### Scenario: Delete progress from settings
+#### Scenario: collectLocalEntries reads localStorage
 
-- **WHEN** user clicks delete on a progress entry in settings
-- **THEN** `DELETE` SHALL be called and the entry removed from the list
+- **WHEN** `collectLocalEntries()` is called
+- **THEN** it SHALL return an array of all `reading-progress:*` entries from localStorage with `series`, `story`, `chapterIndex`, `scrollRatio`, `lastReadAt`, and `clientId` fields
 
-#### Scenario: Import local progress flow
+#### Scenario: importLocalToServer calls import endpoint
 
-- **WHEN** user clicks "Import local progress" button
-- **THEN** the frontend SHALL read localStorage entries, call `POST import-local` with `dryRun: true`, show a preview of what will be written, and on user confirmation call with `dryRun: false`
+- **WHEN** `importLocalToServer({ dryRun: true })` is called
+- **THEN** it SHALL collect local entries and POST to `/import-local` with `dryRun: true`, returning the server response
 
 ### Requirement: Plugin manifest
 
