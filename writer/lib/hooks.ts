@@ -326,13 +326,14 @@ export class HookDispatcher {
     const newDecl = `concurrency=${fmt(newEntry.concurrency)}`;
     let roleSentence: string;
     if (newIsThrottler && !newIsSlowed) {
-      roleSentence = `This plugin declared ${newDecl} which throttles peers in the '${stage}' parallel bucket.`;
+      roleSentence =
+        `This plugin declared ${newDecl} which will throttle the entire '${stage}' parallel bucket.`;
     } else if (newIsSlowed && !newIsThrottler) {
       roleSentence =
-        `This plugin declared ${newDecl}, but existing peer(s) with a lower concurrency cap will throttle the '${stage}' parallel bucket — including this registration.`;
+        `This plugin declared ${newDecl}, but existing peer(s) with a lower concurrency cap will throttle the entire '${stage}' parallel bucket — including this registration.`;
     } else {
       roleSentence =
-        `This plugin declared ${newDecl}; it both throttles some peers and is throttled by others in the '${stage}' parallel bucket.`;
+        `This plugin declared ${newDecl}; it both throttles some peers and is throttled by others — collectively these caps throttle the entire '${stage}' parallel bucket.`;
     }
     const message =
       `${roleSentence} Effective concurrency for this stage is now capped at ${effective}. Other plugins in this bucket (e.g. ${peerSample[0]}) declared ${fmt(peerSample[1])}. Throttlers: ${throttlersList}.`;
