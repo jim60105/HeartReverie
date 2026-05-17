@@ -589,17 +589,22 @@ Plugin manifests SHALL accept an optional `actionButtons` field at the top level
 
 ### Requirement: Plugin route registration
 
-The plugin system SHALL allow backend modules to register custom HTTP routes by exporting a `registerRoutes(app, basePath)` function. The core SHALL mount these routes at `/api/plugins/:pluginName/` and SHALL apply passphrase authentication middleware to all plugin routes. Plugin routes SHALL NOT be able to escape their namespace prefix.
+The plugin system SHALL allow backend modules to register custom HTTP routes by exporting a `registerRoutes(context: PluginRouteContext)` function. The context provides `app` (Hono instance), `basePath` (computed as `/api/plugins/<name>`), `logger`, `getSettings`, `saveSettings`, and `config`. Routes MUST be registered using `ctx.app.<method>(\`${ctx.basePath}/<path>\`, handler)` to ensure they fall under the `/api/plugins/<name>/` prefix and inherit the global passphrase middleware. The core SHALL apply passphrase authentication middleware to all `/api/*` routes (except explicitly exempted paths). Plugin routes SHALL NOT be able to escape their namespace prefix.
 
 #### Scenario: Plugin route responds to request
 
-- **WHEN** a plugin named `sd-webui-image-gen` registers a route handler for `GET /proxy/sd-models`
+- **WHEN** a plugin named `sd-webui-image-gen` registers a route handler for `GET /proxy/sd-models` using `app.get(\`${basePath}/proxy/sd-models\`, handler)`
 - **THEN** the route SHALL be accessible at `GET /api/plugins/sd-webui-image-gen/proxy/sd-models` with passphrase protection
 
 #### Scenario: Plugin route isolated to namespace
 
 - **WHEN** a plugin attempts to register a route at a path outside its namespace
 - **THEN** the plugin manager SHALL prevent the route from being accessible outside `/api/plugins/<pluginName>/`
+
+#### Scenario: Route without basePath prefix is unprotected
+
+- **WHEN** a plugin registers `app.put("/custom-path", handler)` without using `basePath`
+- **THEN** the route SHALL NOT require passphrase authentication (this is a plugin authoring error)
 
 ### Requirement: SPA fallback does not shadow async plugin routes
 
@@ -683,4 +688,18 @@ The `PUT /api/templates` endpoint SHALL refuse any `templatePath` beginning with
 - **WHEN** the user selects a plugin-fragment entry in the template editor's left pane
 - **THEN** the entry shows a "唯讀" (read-only) badge
 - **AND** the save button is not rendered for that entry
+
+### Requirement: Plugin data directory convention
+
+Plugins MAY create persistent data directories under `${PLAYGROUND_DIR}/_plugins/<plugin-name>/` for storing runtime data (e.g., progress files, caches, user-generated content). The engine SHALL NOT manage or clean up these directories automatically. Plugin documentation SHALL specify the data directory path and how to remove it for complete data cleanup. The engine already creates `${PLAYGROUND_DIR}/_plugins/` at startup for plugin settings storage (`config.json`); plugins storing additional data SHALL create subdirectories within their own `_plugins/<name>/` namespace.
+
+#### Scenario: Plugin creates data directory at startup
+
+- **WHEN** a plugin's `registerRoutes` function creates `${PLAYGROUND_DIR}/_plugins/<plugin-name>/data/`
+- **THEN** the directory SHALL be created with `{ recursive: true }` and persist across restarts
+
+#### Scenario: Data directory independent of plugin lifecycle
+
+- **WHEN** a plugin is disabled or removed
+- **THEN** its data directory under `_plugins/` SHALL remain until manually deleted by the user
 
