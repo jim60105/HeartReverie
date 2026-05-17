@@ -356,14 +356,28 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
   const { messages: _omitMessages, ...requestMetadata } = requestBody;
   const preLlmFetchPayload: Record<string, unknown> = {
     correlationId,
-    messages: deepFreeze(structuredClone(messages)),
     model: llmConfig.model,
-    requestMetadata: deepFreeze(structuredClone(requestMetadata)),
     storyDir,
     series,
     name,
     writeMode: { kind: writeMode.kind },
   };
+  // Define `messages` and `requestMetadata` as non-writable on the outer
+  // payload so handlers cannot reassign the keys (deep-freeze only protects
+  // the values; without this, `ctx.messages = []` would succeed and peer
+  // observers in the parallel bucket would see the replaced reference).
+  Object.defineProperty(preLlmFetchPayload, "messages", {
+    value: deepFreeze(structuredClone(messages)),
+    writable: false,
+    enumerable: true,
+    configurable: false,
+  });
+  Object.defineProperty(preLlmFetchPayload, "requestMetadata", {
+    value: deepFreeze(structuredClone(requestMetadata)),
+    writable: false,
+    enumerable: true,
+    configurable: false,
+  });
   // Per spec: upstream fetch happens regardless of dispatch failures.
   // The dispatcher already catches per-handler errors, but a dispatcher-level
   // failure (or a snapshot/clone failure in the observability fan-out) MUST

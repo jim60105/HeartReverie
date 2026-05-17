@@ -23,7 +23,24 @@ export const PARALLEL_ALLOWED: ReadonlySet<string> = new Set([
   "prompt-assembly",
   "post-response",
   "response-stream",
+  "pre-llm-fetch",
 ]);
+
+// Module-scoped suppression set for register-time throttle warnings.
+// Key format: `${stage}::${plugin ?? "<anonymous>"}::${concurrency ?? "none"}`.
+// Intentionally never cleared (process-lifetime dedup); see spec
+// `hook-parallel-dispatch`: Dedup across process lifetime.
+const throttleWarnDedup = new Set<string>();
+
+/**
+ * @internal
+ * Test-only helper that clears the module-scoped throttle-warning suppression
+ * set so independent test cases can deterministically observe re-emission.
+ * MUST NOT be called from production code.
+ */
+export function _resetThrottleWarnDedupForTesting(): void {
+  throttleWarnDedup.clear();
+}
 
 export const HOOK_DEBUG = Deno.env.get("HOOK_DEBUG") === "1";
 
@@ -206,7 +223,7 @@ export class HookDispatcher {
 
     if (!this.#handlers.has(stage)) this.#handlers.set(stage, []);
     const list = this.#handlers.get(stage)!;
-    list.push({
+    const newEntry: HandlerEntry = {
       handler,
       priority,
       plugin,
@@ -216,8 +233,122 @@ export class HookDispatcher {
       concurrency,
       dependsOn,
       errorCount: 0,
-    });
+    };
+    list.push(newEntry);
     list.sort((a, b) => a.priority - b.priority);
+
+    // Registration-time throttle warning. See spec `hook-parallel-dispatch`:
+    // "Registration-time throttle warning". Only meaningful for parallel-bucket
+    // entries; serial handlers are ignored by the check.
+    if (newEntry.parallel) {
+      this.#warnIfHeterogeneousConcurrency(stage, list, newEntry);
+    }
+  }
+
+  /**
+   * Walk the parallel bucket on `stage` and emit at most one `log.warn` when
+   * the newly-registered entry would cause a concurrency mismatch against any
+   * pre-existing parallel handler.
+   *
+   * Dedup is keyed by `${stage}::${plugin ?? "<anonymous>"}::${concurrency ?? "none"}`
+   * and persists for the process lifetime (cleared only by the test-only
+   * `_resetThrottleWarnDedupForTesting()` export).
+   */
+  // Keep this check O(handlers per stage); no I/O.
+  #warnIfHeterogeneousConcurrency(
+    stage: HookStage,
+    list: readonly HandlerEntry[],
+    newEntry: HandlerEntry,
+  ): void {
+    const parallelPeers = list.filter((e) => e !== newEntry && e.parallel);
+    if (parallelPeers.length === 0) return;
+
+    const nc = newEntry.concurrency;
+    type MismatchPair = {
+      throttler: HandlerEntry;
+      throttlerValue: number | undefined;
+      slowed: HandlerEntry;
+      slowedValue: number | undefined;
+    };
+    const mismatches: MismatchPair[] = [];
+    for (const peer of parallelPeers) {
+      const pc = peer.concurrency;
+      // (a) finite-vs-unbounded mismatch
+      if (nc !== undefined && pc === undefined) {
+        mismatches.push({ throttler: newEntry, throttlerValue: nc, slowed: peer, slowedValue: undefined });
+      } else if (nc === undefined && pc !== undefined) {
+        mismatches.push({ throttler: peer, throttlerValue: pc, slowed: newEntry, slowedValue: undefined });
+      } else if (nc !== undefined && pc !== undefined && nc !== pc) {
+        // (b) finite-vs-higher-finite mismatch: lower value is the throttler
+        if (nc < pc) {
+          mismatches.push({ throttler: newEntry, throttlerValue: nc, slowed: peer, slowedValue: pc });
+        } else {
+          mismatches.push({ throttler: peer, throttlerValue: pc, slowed: newEntry, slowedValue: nc });
+        }
+      }
+    }
+    if (mismatches.length === 0) return;
+
+    const key = `${stage}::${newEntry.plugin ?? "<anonymous>"}::${newEntry.concurrency ?? "none"}`;
+    if (throttleWarnDedup.has(key)) return;
+    throttleWarnDedup.add(key);
+
+    // Pick the lowest declared concurrency among involved entries as the
+    // effective cap. With at least one mismatch involving an unbounded peer
+    // and a finite peer, the finite value wins.
+    const declaredValues = mismatches
+      .flatMap((m) => [m.throttlerValue, m.slowedValue])
+      .filter((v): v is number => typeof v === "number");
+    const effective = declaredValues.length > 0 ? Math.min(...declaredValues) : nc ?? "unbounded";
+
+    // Dedup by throttler-plugin so the same peer is not cited twice.
+    const throttlerCites = new Map<string, number | undefined>();
+    const slowedCites = new Map<string, number | undefined>();
+    for (const m of mismatches) {
+      const tk = m.throttler.plugin ?? "<anonymous>";
+      const sk = m.slowed.plugin ?? "<anonymous>";
+      if (!throttlerCites.has(tk)) throttlerCites.set(tk, m.throttlerValue);
+      if (!slowedCites.has(sk)) slowedCites.set(sk, m.slowedValue);
+    }
+    const fmt = (v: number | undefined): string => (v === undefined ? "unbounded" : String(v));
+    const throttlersList = [...throttlerCites.entries()]
+      .map(([p, v]) => `${p} (concurrency=${fmt(v)})`)
+      .join(", ");
+    const peerSample = [...slowedCites.entries()][0]!;
+    const slowedFields = [...slowedCites.entries()].map(([p, v]) => ({ plugin: p, concurrency: fmt(v) }));
+    const throttlerFields = [...throttlerCites.entries()].map(([p, v]) => ({ plugin: p, concurrency: fmt(v) }));
+
+    // Determine the role of `newEntry` in this batch. It can be throttler-only,
+    // slowed-only, or both (mixed bucket with >=2 heterogeneous peers).
+    const newIsThrottler = mismatches.some((m) => m.throttler === newEntry);
+    const newIsSlowed = mismatches.some((m) => m.slowed === newEntry);
+    const newPluginLabel = newEntry.plugin ?? "<anonymous>";
+    const newDecl = `concurrency=${fmt(newEntry.concurrency)}`;
+    let roleSentence: string;
+    if (newIsThrottler && !newIsSlowed) {
+      roleSentence = `This plugin declared ${newDecl} which throttles peers in the '${stage}' parallel bucket.`;
+    } else if (newIsSlowed && !newIsThrottler) {
+      roleSentence =
+        `This plugin declared ${newDecl}, but existing peer(s) with a lower concurrency cap will throttle the '${stage}' parallel bucket — including this registration.`;
+    } else {
+      roleSentence =
+        `This plugin declared ${newDecl}; it both throttles some peers and is throttled by others in the '${stage}' parallel bucket.`;
+    }
+    const message =
+      `${roleSentence} Effective concurrency for this stage is now capped at ${effective}. Other plugins in this bucket (e.g. ${peerSample[0]}) declared ${fmt(peerSample[1])}. Throttlers: ${throttlersList}.`;
+
+    const payload = {
+      plugin: newPluginLabel,
+      stage,
+      concurrency: fmt(newEntry.concurrency),
+      role: newIsThrottler && newIsSlowed ? "mixed" : newIsThrottler ? "throttler" : "slowed",
+      throttlers: throttlerFields,
+      slowedPeers: slowedFields,
+      message,
+    };
+
+    const logger = newEntry.baseLogger ?? log;
+    logger.warn(message, payload);
   }
 
   /**

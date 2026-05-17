@@ -388,7 +388,7 @@ export interface PluginRouteContext {
 }
 
 /** Backend stages eligible for parallel dispatch declarations in manifest hooks[]. */
-export type BackendParallelStage = "prompt-assembly" | "post-response" | "response-stream";
+export type BackendParallelStage = "prompt-assembly" | "post-response" | "response-stream" | "pre-llm-fetch";
 
 /** Valid hook lifecycle stages. */
 export type HookStage =

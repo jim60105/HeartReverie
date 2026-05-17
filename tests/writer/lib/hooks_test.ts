@@ -1138,3 +1138,301 @@ Deno.test("HookDispatcher per-handler events", async (t) => {
     assertEquals(subs2.alpha, ["handler-start"]);
   });
 });
+
+// =============================================================================
+// pre-llm-fetch parallel-eligibility (enhance-hook-parallel-controls)
+// =============================================================================
+
+Deno.test("HookDispatcher — pre-llm-fetch parallel eligibility", async (t) => {
+  const { _resetThrottleWarnDedupForTesting } = await import("../../../writer/lib/hooks.ts");
+
+  await t.step("pre-llm-fetch accepts {parallel:true, readOnly:true} without coercion warn", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register(
+        "pre-llm-fetch",
+        async () => {},
+        { parallel: true, readOnly: true },
+        "obs-plugin",
+      );
+      // Must NOT trigger the PARALLEL_ALLOWED rejection warn.
+      assertEquals(
+        countCallsContaining(warnCalls, "PARALLEL_ALLOWED"),
+        0,
+        "pre-llm-fetch should be in PARALLEL_ALLOWED",
+      );
+      const intro = hd.introspect();
+      assertEquals(intro["pre-llm-fetch"]![0]!.parallel, true);
+    });
+  });
+
+  await t.step("pre-llm-fetch {readOnly:true} auto-promotes to parallel (Track B)", async () => {
+    await withSilencedConsole(async () => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register(
+        "pre-llm-fetch",
+        async () => {},
+        { readOnly: true },
+        "auto-promote-plugin",
+      );
+      const intro = hd.introspect();
+      assertEquals(intro["pre-llm-fetch"]![0]!.parallel, true);
+    });
+  });
+
+  await t.step("parallel handler push() on ctx.messages throws TypeError (deep-frozen)", async () => {
+    await withSilencedConsole(async () => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      let caught: unknown;
+      hd.register("pre-llm-fetch", async (ctx) => {
+        try {
+          (ctx.messages as unknown as Array<unknown>).push({ role: "system", content: "rogue" });
+        } catch (e) {
+          caught = e;
+          throw e;
+        }
+      }, { parallel: true, readOnly: true }, "mutator");
+      // Simulate the dispatch-site freeze invariant by freezing messages here.
+      const msgs = Object.freeze([{ role: "user", content: "hi" }]);
+      await hd.dispatch("pre-llm-fetch", { messages: msgs });
+      assertEquals(caught instanceof TypeError, true, "push on frozen array should throw TypeError");
+    });
+  });
+
+  await t.step("parallel handler mutating nested message field throws (deep-frozen)", async () => {
+    await withSilencedConsole(async () => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      let caught: unknown;
+      hd.register("pre-llm-fetch", async (ctx) => {
+        try {
+          (ctx.messages as Array<{ role: string }>)[0]!.role = "x";
+        } catch (e) {
+          caught = e;
+          throw e;
+        }
+      }, { parallel: true, readOnly: true }, "nested-mutator");
+      // Deep-freeze the nested element (mirrors chat-shared deepFreeze).
+      const msg0 = Object.freeze({ role: "user", content: "hi" });
+      const msgs = Object.freeze([msg0]);
+      await hd.dispatch("pre-llm-fetch", { messages: msgs });
+      assertEquals(caught instanceof TypeError, true, "nested freeze should throw TypeError");
+    });
+  });
+
+  await t.step("parallel handler reassigning ctx.model does NOT throw (outer not frozen, observe-only)", async () => {
+    await withSilencedConsole(async () => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      let errored = false;
+      hd.register("pre-llm-fetch", async (ctx) => {
+        try {
+          (ctx as Record<string, unknown>).model = "tampered";
+        } catch {
+          errored = true;
+        }
+      }, { parallel: true, readOnly: true }, "outer-mutator");
+      await hd.dispatch("pre-llm-fetch", { model: "real-model", messages: Object.freeze([]) });
+      assertEquals(errored, false, "reassigning outer-context field must not throw");
+    });
+  });
+});
+
+// =============================================================================
+// Registration-time throttle warning (enhance-hook-parallel-controls)
+// =============================================================================
+
+Deno.test("HookDispatcher — register-time throttle warning", async (t) => {
+  const { _resetThrottleWarnDedupForTesting } = await import("../../../writer/lib/hooks.ts");
+
+  await t.step("finite-vs-unbounded: exactly one warn emitted on second registration", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "throttle-a");
+      // First registration alone: must NOT warn.
+      assertEquals(countCallsContaining(warnCalls, "'prompt-assembly' parallel bucket"), 0);
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "throttle-b");
+      const warns = countCallsContaining(warnCalls, "'prompt-assembly' parallel bucket");
+      assertEquals(warns, 1, "Exactly one throttle warn must be emitted");
+      // Warn should cite both plugins.
+      const warnLine = warnCalls.find((a) =>
+        typeof a[0] === "string" && a[0].includes("'prompt-assembly' parallel bucket"))![0] as string;
+      assertEquals(warnLine.includes("throttle-a"), true);
+      assertEquals(warnLine.includes("throttle-b"), true);
+    });
+  });
+
+  await t.step("finite-1 vs finite-5: warn names plugin-1 as throttler", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 5 }, "high-cap");
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "low-cap");
+      const warnLine = warnCalls.find((a) =>
+        typeof a[0] === "string" && a[0].includes("'prompt-assembly' parallel bucket"));
+      assertEquals(warnLine !== undefined, true);
+      const msg = warnLine![0] as string;
+      // low-cap is the throttler (declared 1).
+      assertEquals(msg.includes("low-cap (concurrency=1)"), true, msg);
+      // high-cap is the slowed peer (declared 5).
+      assertEquals(msg.includes("high-cap"), true);
+    });
+  });
+
+  await t.step("same finite cap on both → no throttle warn", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 2 }, "same-a");
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 2 }, "same-b");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 0);
+    });
+  });
+
+  await t.step("dedup: identical (stage, plugin, concurrency) registered twice → one warn", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "dedup-peer");
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "dedup-target");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
+      // Re-register the same plugin with same concurrency — dedup kicks in.
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "dedup-target");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1, "dedup must keep count at 1");
+    });
+  });
+
+  await t.step("dedup-key discrimination: same plugin different concurrency → two warns", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "discrim-peer");
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "discrim-target");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 2 }, "discrim-target");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 2,
+        "different concurrency must produce a new warn");
+    });
+  });
+
+  await t.step("_resetThrottleWarnDedupForTesting() clears dedup so warns re-emit", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "reset-peer");
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "reset-target");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
+      // Re-registration WITHOUT reset → still 1.
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "reset-target");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
+      // After reset on a fresh dispatcher → fires again.
+      _resetThrottleWarnDedupForTesting();
+      const hd2 = new HookDispatcher();
+      hd2.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "reset-peer");
+      hd2.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "reset-target");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 2,
+        "post-reset re-registration must re-emit");
+    });
+  });
+
+  await t.step("serial-bucket handlers are ignored by the check", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      // Plain serial handler with no parallel options.
+      hd.register("prompt-assembly", async () => {}, 100, "serial-handler");
+      // Parallel handler with finite concurrency — no parallel peer, so no warn.
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "only-parallel");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 0);
+    });
+  });
+
+  await t.step("reverse: existing finite + new unbounded → warn names existing as throttler, role=slowed", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true, concurrency: 1 }, "existing-cap");
+      // New unbounded registration is the SLOWED party.
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "new-unbounded");
+      const warnLine = warnCalls.find((a) =>
+        typeof a[0] === "string" && a[0].includes("parallel bucket"));
+      assertEquals(warnLine !== undefined, true, "must emit one warn");
+      const msg = warnLine![0] as string;
+      // existing-cap is the throttler (declared 1).
+      assertEquals(msg.includes("existing-cap (concurrency=1)"), true, msg);
+      // Wording must NOT claim the new unbounded plugin is throttling peers.
+      assertEquals(msg.includes("which throttles peers"), false,
+        `new-unbounded is the slowed party, not the throttler: ${msg}`);
+      // Reverse-direction wording must surface that the bucket — including the
+      // new registration — is being throttled.
+      assertEquals(msg.includes("will throttle"), true,
+        `must surface that the bucket is throttled: ${msg}`);
+    });
+  });
+
+  await t.step("all-unbounded peers → no warn", async () => {
+    await withSilencedConsole(async ({ warnCalls }) => {
+      _resetThrottleWarnDedupForTesting();
+      const hd = new HookDispatcher();
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "ub-a");
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "ub-b");
+      hd.register("prompt-assembly", async () => {},
+        { parallel: true, readOnly: true }, "ub-c");
+      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 0);
+    });
+  });
+
+  await t.step("warn is emitted via injected baseLogger, not just console", async () => {
+    _resetThrottleWarnDedupForTesting();
+    const captured: Array<{ msg: unknown; payload: unknown }> = [];
+    const baseLogger = {
+      warn: (msg: unknown, payload?: unknown) => { captured.push({ msg, payload }); },
+      info: () => {},
+      error: () => {},
+      debug: () => {},
+    };
+    const hd = new HookDispatcher();
+    hd.register("prompt-assembly", async () => {},
+      { parallel: true, readOnly: true }, "peer-a");
+    hd.register(
+      "prompt-assembly",
+      async () => {},
+      { parallel: true, readOnly: true, concurrency: 1 },
+      "target",
+      // deno-lint-ignore no-explicit-any
+      baseLogger as any,
+    );
+    const throttleWarns = captured.filter((c) =>
+      typeof c.msg === "string" && (c.msg as string).includes("parallel bucket"));
+    assertEquals(throttleWarns.length, 1, "baseLogger.warn must receive the throttle warn");
+    const payload = throttleWarns[0]!.payload as { role?: string; throttlers?: unknown[] };
+    assertEquals(payload.role, "throttler");
+    assertEquals(Array.isArray(payload.throttlers), true);
+  });
+});
