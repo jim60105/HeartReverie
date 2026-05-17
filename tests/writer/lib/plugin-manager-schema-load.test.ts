@@ -333,6 +333,16 @@ Deno.test("plugin-manager schema-load audit", async (t) => {
 Deno.test("real HeartReverie_Plugins manifests load cleanly (task 12.2)", async () => {
   const pluginsDir = new URL("../../../../HeartReverie_Plugins", import.meta.url)
     .pathname;
+
+  // Skip when sibling plugin repo is not present (e.g., standalone CI checkout).
+  try {
+    const stat = await Deno.stat(pluginsDir);
+    assert(stat.isDirectory, `${pluginsDir} should be a directory`);
+  } catch (err) {
+    if (err instanceof Deno.errors.NotFound) return;
+    throw err;
+  }
+
   const playgroundDir = await Deno.makeTempDir({ prefix: "pm-real-plugins-pg-" });
   const logStub = stub(console, "log", () => {});
   const warnStub = stub(console, "warn", () => {});
