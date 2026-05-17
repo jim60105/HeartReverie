@@ -1391,6 +1391,12 @@ Deno.test("HookDispatcher — register-time throttle warning", async (t) => {
       // new registration — is being throttled.
       assertEquals(msg.includes("will throttle"), true,
         `must surface that the bucket is throttled: ${msg}`);
+      // Spec / tasks.md / docs mandate this literal phrase for operator grep.
+      assertEquals(
+        msg.includes("throttle the entire 'prompt-assembly' parallel bucket"),
+        true,
+        `warn message MUST contain the literal phrase "throttle the entire '<stage>' parallel bucket": ${msg}`,
+      );
     });
   });
 
