@@ -430,6 +430,70 @@ export interface PreLlmFetchPayload {
 }
 
 /**
+ * Context payload dispatched for the `post-response` hook stage.
+ *
+ * Dispatched by `streamLlmAndPersist()` in `writer/lib/chat-shared.ts`
+ * exactly once per successful generation, in each of the four success
+ * branches (`write-new-chapter`, `append-to-existing-chapter`,
+ * `continue-last-chapter`, `replace-last-chapter`). Subscribers receive
+ * the token-usage record (when available) and the resolved upstream
+ * endpoint URL so they can attribute cost without re-reading
+ * `_usage.json` or re-deriving the URL.
+ *
+ * The fully-assembled payload is deep-frozen at dispatch
+ * (`Object.isFrozen(payload) === true`, recursively across nested
+ * values including `usage`). Every field is `readonly`. Both top-level
+ * reassignment (`ctx.usage = null`, `ctx.content = "..."`, …) and
+ * nested mutation (`ctx.usage.totalTokens = 0`, adding new keys) SHALL
+ * throw `TypeError` under strict mode (Deno ESM modules are strict).
+ * This generalises the field-scoped deep-freeze contract that
+ * `pre-llm-fetch` already establishes for `messages` / `requestMetadata`.
+ */
+export interface PostResponsePayload {
+  /** Per-request correlation ID minted on entry to `executeChat()` / `executeContinue()`. */
+  readonly correlationId: string;
+  /** Full chapter file content for plugin-action append, bare LLM response otherwise. */
+  readonly content: string;
+  /** Absolute path to the story directory. */
+  readonly storyDir: string;
+  /** Series name under `playground/`. */
+  readonly series: string;
+  /** Story name under `playground/<series>/`. */
+  readonly name: string;
+  /** Absolute path to the engine root directory. */
+  readonly rootDir: string;
+  /** The chapter number written or appended to. */
+  readonly chapterNumber: number;
+  /** Absolute path of the chapter file written or appended to. */
+  readonly chapterPath: string;
+  /**
+   * Discriminator for the originating success branch:
+   * - `"chat"` for `write-new-chapter`
+   * - `"continue"` for `continue-last-chapter`
+   * - `"plugin-action"` for `append-to-existing-chapter` and `replace-last-chapter`
+   */
+  readonly source: "chat" | "continue" | "plugin-action";
+  /** Set when `source === "plugin-action"`. */
+  readonly pluginName?: string;
+  /** Set when `source === "plugin-action"` and the run appended a wrapped block. */
+  readonly appendedTag?: string;
+  /**
+   * Resolved upstream LLM API URL used for this request (the same URL
+   * the engine `fetch()`-ed — sourced from `config.LLM_API_URL`). Plugins
+   * may key per-endpoint pricing (e.g. `models[endpoint][model]`) on
+   * this value without re-deriving it from environment state.
+   */
+  readonly endpoint: string;
+  /**
+   * Token-usage record for this completion, or `null` when the upstream
+   * LLM omitted token counts (or emitted a partial triple). When non-null
+   * the value is deep-frozen along with the surrounding payload, so
+   * neither nested mutation nor top-level reassignment is possible.
+   */
+  readonly usage: TokenUsageRecord | null;
+}
+
+/**
  * Per-handler observation event emitted by `HookDispatcher`'s
  * `subscribeHandlerEvents` / per-plugin `onHandlerStart` / `onHandlerEnd`
  * surfaces. See `openspec/specs/hook-observability/spec.md`.
@@ -760,6 +824,12 @@ export interface LLMStreamChunk {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
+    /**
+     * Upstream-billed cost in USD. Currently emitted by OpenRouter when the
+     * request body opts into usage accounting via `usage: { include: true }`.
+     * Other OpenAI-compatible providers ignore the opt-in and omit this field.
+     */
+    cost?: number;
   };
   /**
    * OpenRouter mid-stream error envelope. After HTTP 200 has been sent, errors
@@ -785,6 +855,12 @@ export interface TokenUsageRecord {
   readonly totalTokens: number;
   readonly model: string;
   readonly timestamp: string;
+  /**
+   * Upstream-billed cost in USD, when the LLM provider reports it
+   * (e.g. OpenRouter when the request opts into usage accounting).
+   * `null` (or missing) when the provider does not report a cost.
+   */
+  readonly upstreamCostUsd?: number | null;
 }
 
 /** Aggregated totals over a list of `TokenUsageRecord`. */

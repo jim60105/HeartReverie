@@ -628,7 +628,16 @@ export class HookDispatcher {
     });
   }
 
-  /** Run a single serial handler — mutates context.logger in place. */
+  /**
+   * Run a single serial handler.
+   *
+   * The per-handler logger is injected via a `Proxy` view (NOT by mutating
+   * `context.logger`), so the underlying context object is left untouched.
+   * This lets the dispatcher accept frozen context objects (e.g. the
+   * fully-frozen `PostResponsePayload`) without throwing on logger
+   * injection. Mutations to any other property pass through to the real
+   * context so serial handlers continue to share state with their peers.
+   */
   async #runSerial(
     stage: HookStage,
     entry: HandlerEntry,
@@ -636,7 +645,17 @@ export class HookDispatcher {
     context: Record<string, unknown>,
     correlationId?: string,
   ): Promise<void> {
-    context.logger = this.#deriveLogger(entry, correlationId) as unknown;
+    const handlerLogger = this.#deriveLogger(entry, correlationId);
+    const view = new Proxy(context, {
+      get(target, prop, receiver) {
+        if (prop === "logger") return handlerLogger;
+        return Reflect.get(target, prop, receiver);
+      },
+      set(target, prop, value, receiver) {
+        if (prop === "logger") return true; // per-handler logger is immutable
+        return Reflect.set(target, prop, value, receiver);
+      },
+    });
 
     const hasSubs = this.#hasHandlerEventSubscribers();
     let ctxBeforeRefs: Record<string, unknown> | undefined;
@@ -661,7 +680,7 @@ export class HookDispatcher {
 
     let handlerError: unknown = undefined;
     try {
-      await entry.handler(context);
+      await entry.handler(view);
     } catch (err: unknown) {
       handlerError = err;
       entry.errorCount++;

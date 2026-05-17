@@ -68,7 +68,11 @@ function coerceRecord(raw: unknown): TokenUsageRecord | null {
   ) {
     return null;
   }
-  return {
+  const costRaw = r.upstreamCostUsd;
+  const upstreamCostUsd = typeof costRaw === "number" && isFinite(costRaw) && costRaw >= 0
+    ? costRaw
+    : null;
+  const base: TokenUsageRecord = {
     chapter: r.chapter,
     promptTokens: r.promptTokens,
     completionTokens: r.completionTokens,
@@ -76,6 +80,7 @@ function coerceRecord(raw: unknown): TokenUsageRecord | null {
     model: r.model,
     timestamp: r.timestamp,
   };
+  return upstreamCostUsd !== null ? { ...base, upstreamCostUsd } : base;
 }
 
 /**
@@ -182,8 +187,15 @@ export function buildRecord(input: {
   readonly completionTokens: number;
   readonly totalTokens: number;
   readonly model: string;
+  /**
+   * Upstream-billed cost in USD, when the provider reports it.
+   * Omitted/null when the provider does not report a cost.
+   */
+  readonly upstreamCostUsd?: number | null;
 }): TokenUsageRecord {
-  return {
+  const cost = input.upstreamCostUsd;
+  const hasCost = typeof cost === "number" && isFinite(cost) && cost >= 0;
+  const base: TokenUsageRecord = {
     chapter: input.chapter,
     promptTokens: input.promptTokens,
     completionTokens: input.completionTokens,
@@ -191,6 +203,7 @@ export function buildRecord(input: {
     model: input.model,
     timestamp: new Date().toISOString(),
   };
+  return hasCost ? { ...base, upstreamCostUsd: cost } : base;
 }
 
 /**
