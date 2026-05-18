@@ -118,11 +118,27 @@ text-main = "rgba(220, 220, 215, 1)"
 1. **提示詞注入**：`promptFragments` 把 Markdown 檔案映射成 Vento 模板變數，渲染時自動塞進提示詞
 2. **提示詞標籤移除**：`promptStripTags` 告訴引擎在組建提示詞時從 previousContext（已儲存章節內容）中移除哪些 XML 標籤
 3. **顯示標籤移除**：`displayStripTags` 告訴前端在瀏覽器渲染時移除哪些 XML 標籤，讀者不會看到這些內部標記
-4. **後端掛鉤**：`backendModule` 透過 context 物件（含 hooks 與 logger）介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`strip-tags` 五個階段
+4. **後端掛鉤**：`backendModule` 透過 context 物件（含 hooks 與 logger）介入 `prompt-assembly`、`response-stream`、`pre-write`、`post-response`、`pre-llm-fetch` 五個階段
 5. **前端模組**：`frontendModule` 在瀏覽器端透過 Vue composable 與 `frontend-render` 掛鉤處理自訂區塊渲染
 6. **前端樣式注入**：`frontendStyles` 宣告 CSS 樣式表路徑，在前端載入時自動注入為 `<link>` 元素
+7. **自訂路由**：`backendModule` 可透過 `registerRoutes(ctx)` 註冊 RESTful API 端點，掛載在 `/api/plugins/<name>/` 下
 
 完整文件請見 [`docs/plugin-system.md`][plugin-system-doc]。
+
+### 內建外掛
+
+| 外掛 | 說明 |
+|------|------|
+| `context-compaction` | 多層上下文壓縮策略，控制送入 LLM 的歷史章節數量 |
+| `dialogue-colorize` | CSS Custom Highlight API 對話引號高亮，不修改 DOM |
+| `reading-progress` | 跨裝置閱讀進度同步——捲動位置追蹤、文字錨點書籤、跨章節恢復提示 |
+| `polish` | 潤稿模式——對最後一章進行語法與文風修正 |
+| `response-notify` | LLM 回應完成通知（Tab 隱藏時發送系統通知） |
+| `start-hints` | 首輪對話引導提示 |
+| `thinking` | 摺疊式 `<think>` 推理區塊 |
+| `user-message` | 使用者訊息生命週期管理 |
+
+所有內建外掛皆可透過讀者端的「外掛設定」頁面進行開關與參數調整，變更即時生效無需重新載入。
 
 ### 選用外掛（推薦）
 
