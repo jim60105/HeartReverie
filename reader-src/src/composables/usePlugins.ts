@@ -67,9 +67,13 @@ function subscribeSettingsChanged(): void {
       if (reRenderTimer !== null) clearTimeout(reRenderTimer);
       reRenderTimer = window.setTimeout(() => {
         reRenderTimer = null;
+        // A settings change does not externally mutate the rendered DOM —
+        // plugins re-walk the existing chapter and re-apply. Use the
+        // notification-only helper so the v-html DOM is NOT remounted
+        // (which would snap the scroll position).
         void import("@/composables/useChapterNav").then(({ useChapterNav }) => {
-          const { bumpRenderEpoch } = useChapterNav();
-          bumpRenderEpoch();
+          const { notifyRenderInvalidated } = useChapterNav();
+          notifyRenderInvalidated();
         }).catch((err: unknown) => {
           console.warn(
             "Failed to re-render after plugin settings change:",

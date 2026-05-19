@@ -71,7 +71,7 @@ All Vue components SHALL use the `<script setup lang="ts">` syntax with the Comp
 
 ### Requirement: Composables for shared state
 
-Shared reactive state SHALL be encapsulated in composable functions following the `use*()` naming convention. The following composables SHALL be implemented: `useAuth()` (passphrase state and verification), `useChapterNav()` (chapter index, content, navigation, polling, **`renderEpoch` invalidation counter, `refreshAfterEdit(targetChapter)` entry point**), `usePlugins()` (plugin loading, hook dispatcher initialization, **`pluginsReady` and `pluginsSettled` reactive readiness flags**), `useStorySelector()` (series/story reactive selection state), and `usePromptEditor()` (template content, localStorage sync). Composable files SHALL reside in `reader-src/src/composables/` and SHALL export typed return interfaces.
+Shared reactive state SHALL be encapsulated in composable functions following the `use*()` naming convention. The following composables SHALL be implemented: `useAuth()` (passphrase state and verification), `useChapterNav()` (chapter index, content, navigation, polling, **`renderEpoch` notification counter, `remountToken` force-remount counter, `notifyRenderInvalidated()` / `forceTokenRemount()` helpers, `refreshAfterEdit(targetChapter)` entry point**), `usePlugins()` (plugin loading, hook dispatcher initialization, **`pluginsReady` and `pluginsSettled` reactive readiness flags**), `useStorySelector()` (series/story reactive selection state), and `usePromptEditor()` (template content, localStorage sync). Composable files SHALL reside in `reader-src/src/composables/` and SHALL export typed return interfaces.
 
 #### Scenario: useAuth composable provides reactive auth state
 - **WHEN** a component calls `useAuth()`
@@ -79,7 +79,7 @@ Shared reactive state SHALL be encapsulated in composable functions following th
 
 #### Scenario: useChapterNav composable manages navigation
 - **WHEN** a component calls `useChapterNav()`
-- **THEN** it SHALL receive reactive refs for `currentIndex`, `chapters`, `totalChapters`, `isLastChapter`, `currentContent` (a `shallowRef`), and `renderEpoch`, plus functions `next()`, `previous()`, `loadFromBackend()`, `refreshAfterEdit(targetChapter)`, and `bumpRenderEpoch()`
+- **THEN** it SHALL receive reactive refs for `currentIndex`, `chapters`, `totalChapters`, `isLastChapter`, `currentContent` (a `shallowRef`), `renderEpoch`, and `remountToken`, plus functions `next()`, `previous()`, `loadFromBackend()`, `refreshAfterEdit(targetChapter)`, `notifyRenderInvalidated()`, and `forceTokenRemount()`
 
 #### Scenario: usePlugins composable wraps hook dispatcher
 - **WHEN** a component calls `usePlugins()`
@@ -295,25 +295,35 @@ The component SHALL NOT import or branch on plugin-specific Vue components (such
 - **WHEN** `currentContent` is empty (no story loaded)
 - **THEN** the welcome section SHALL render regardless of `pluginsSettled`
 
-### Requirement: ChapterContent v-html token list keys on renderEpoch
+### Requirement: ChapterContent v-html token list keys on remountToken
 
-`reader-src/src/components/ChapterContent.vue` SHALL render its rendered-token list with a `v-for` whose `:key` includes the current `renderEpoch` value (e.g. `:key="\`${idx}-${renderEpoch}\`"`). This ensures that when `renderEpoch` increments, every `<div v-html="token.content">` (and `<VentoErrorCard>`) is unmounted and remounted, even if the underlying token content is byte-identical to the previous render.
+`reader-src/src/components/ChapterContent.vue` SHALL render its rendered-token list with a `v-for` whose `:key` includes the current `remountToken` value (e.g. `:key="\`${idx}-${remountToken}\`"`). The key SHALL NOT include `renderEpoch`. As a result, ordinary `commitContent()` invocations — which bump `renderEpoch` but NOT `remountToken` — SHALL NOT cause any `<div v-html="token.content">` (nor any `<VentoErrorCard>`) to unmount. Vue's `v-html` directive SHALL patch the existing element's `innerHTML` in place when the bound string changes.
 
-This is required because `ContentArea.vue`'s sidebar-relocation watch externally mutates the DOM (moving `.plugin-sidebar` children out of the `v-html` div via `appendChild`). Vue's `v-html` directive only resets `innerHTML` when the bound string changes; for a byte-identical re-render, Vue would otherwise skip the patch and the externally-removed `.plugin-sidebar` would never reappear. Including `renderEpoch` in the key forces a full remount, restoring the panel for the relocation watch to move.
+A force-remount is only required when a caller has externally mutated the rendered DOM in a way Vue cannot recover from on its own — specifically: `ContentArea.vue`'s sidebar-relocation watch moves `.plugin-sidebar` children out of the v-html div via `appendChild`. If a subsequent re-render produces byte-identical token strings (cancel-edit is the canonical case), Vue's `v-html` short-circuits and the moved children never reappear. The dedicated `forceTokenRemount()` helper exposed by `useChapterNav()` SHALL be used by such callers; it increments `remountToken` (forcing the v-for to remount the affected node) AND `renderEpoch` (so downstream watchers — sidebar relocation, `chapter:dom:ready` dispatch — still fire).
 
-Additionally, when `ChapterContent` toggles out of edit mode via `cancelEdit` (the user pressed 取消), the v-if-gated tokens template is re-mounted and recreates `.plugin-sidebar` nodes inside chapter content. Because cancel does NOT mutate chapter content, no other reactive signal would notify `ContentArea`'s sidebar-relocation watch. `cancelEdit` SHALL therefore call `bumpRenderEpoch()` (exposed by `useChapterNav()`) so the relocation watch re-runs, clears the stale sidebar copies, and moves the freshly-recreated panels into place. Without this bump the user ends up with duplicated panels (originals in sidebar plus new copies in content) after pressing 取消.
+When `ChapterContent` toggles out of edit mode via `cancelEdit` (the user pressed 取消), the v-if-gated tokens template is re-mounted and recreates `.plugin-sidebar` nodes inside chapter content. Because cancel does NOT mutate chapter content, no other reactive signal would notify `ContentArea`'s sidebar-relocation watch. `cancelEdit` SHALL therefore call `forceTokenRemount()` (exposed by `useChapterNav()`) so the relocation watch re-runs, clears the stale sidebar copies, and moves the freshly-recreated panels into place. Without this call the user ends up with duplicated panels (originals in sidebar plus new copies in content) after pressing 取消.
 
-#### Scenario: Byte-identical re-render restores externally-mutated v-html children
-- **WHEN** the rendered-token list is identical to the previous render but `renderEpoch` increments
+#### Scenario: Streaming commit does not remount v-html nodes
+- **WHEN** `commitContent()` is invoked with a new chapter content string (e.g. on each WebSocket `chapters:content` push during LLM streaming) so that `currentContent` and `renderEpoch` change but `remountToken` does NOT
+- **THEN** the existing rendered `<div v-html>` root element instance SHALL be reused (Vue patches its `innerHTML` in place, which still re-parses descendants — only the wrapper element instance is guaranteed stable); an imperative marker placed on the v-html ROOT element before the commit (e.g. `el.setAttribute('data-test-marker', 'kept')`) SHALL survive the commit; the document scroll position SHALL be preserved for a reader who has scrolled below the fold
+
+#### Scenario: Chapter navigation reuses v-html root and re-parses descendants
+- **WHEN** `currentContent` changes to a different chapter's content (different `tokens` string contents) without `remountToken` changing — e.g. the user clicks Next while the WebSocket subscription stays on the same story
+- **THEN** the v-html ROOT element instance at v-for index 0 SHALL still be reused (Vue patches `innerHTML`); the rendered descendants are re-parsed from the new content; `chapter:dom:ready` SHALL be dispatched via the `renderEpoch` bump so plugins re-walk the new descendants
+
+#### Scenario: Byte-identical re-render via forceTokenRemount restores externally-mutated v-html children
+- **WHEN** a caller invokes `forceTokenRemount()` while the rendered-token list is byte-identical to the previous render
 - **THEN** `ChapterContent` SHALL remount each token element so that any DOM children removed externally (e.g. by the sidebar relocation watch) are recreated from the v-html string
 
 #### Scenario: Cancel from edit mode does not duplicate sidebar panels
 - **WHEN** the user clicks 編輯 to enter edit mode and then 取消 to leave without saving
-- **THEN** `cancelEdit` SHALL call `bumpRenderEpoch()` so `ContentArea`'s sidebar relocation watch re-runs, leaving exactly one set of `.plugin-sidebar` panels in the sidebar and zero in chapter content
+- **THEN** `cancelEdit` SHALL call `forceTokenRemount()` so `ContentArea`'s sidebar relocation watch re-runs, leaving exactly one set of `.plugin-sidebar` panels in the sidebar and zero in chapter content
 
 ### Requirement: ContentArea sidebar relocation tracks render invalidation
 
 `reader-src/src/components/ContentArea.vue` SHALL relocate every `.plugin-sidebar` element produced inside `<ChapterContent>` into the `<Sidebar>` element. The relocation effect SHALL track `currentContent`, `isLastChapter`, `pluginsReady`, AND `renderEpoch` (from `useChapterNav()`) as dependencies — at minimum the union sufficient to re-run whenever the chapter view is re-rendered for any reason. The effect SHALL run with `flush: "post"` and SHALL `await nextTick()` before reading `.plugin-sidebar` so Vue's `v-html` patches have completed. The effect SHALL clear the `<Sidebar>` contents at the start of every run so stale panels from a previous chapter or a previous render cannot leak. The effect SHALL skip the relocation step entirely when `pluginsSettled` is `false` or `currentContent` is empty.
+
+Because `commitContent()` now leaves rendered v-html DOM intact (no remount during streaming), the relocation effect SHALL be idempotent across consecutive streaming bumps of `renderEpoch`: it SHALL detect that `.plugin-sidebar` panels already in `<Sidebar>` are still valid and SHALL NOT clear them unless their corresponding source panels have actually changed (the content-key based logic already present in `ContentArea.vue` satisfies this — it is retained as part of this change).
 
 #### Scenario: Sidebar relocation re-runs after byte-identical edit
 - **WHEN** the user edits the current chapter to byte-identical content and saves
@@ -326,6 +336,10 @@ Additionally, when `ChapterContent` toggles out of edit mode via `cancelEdit` (t
 #### Scenario: Sidebar relocation re-runs after pluginsReady transitions
 - **WHEN** `pluginsReady` flips from `false` to `true` while `currentContent` is non-empty (e.g. async plugin registration completes after the initial render)
 - **THEN** the relocation watch SHALL re-run and SHALL relocate any newly-produced `.plugin-sidebar` panels into `<Sidebar>`
+
+#### Scenario: Streaming bumps do not destroy already-relocated sidebar panels
+- **WHEN** `commitContent()` fires repeatedly during LLM streaming, bumping `renderEpoch` once per chunk
+- **THEN** sidebar panels already moved into `<Sidebar>` by an earlier relocation pass SHALL remain in place across every chunk; the relocation watch SHALL NOT clear them unless `currentContent`'s underlying text actually changes in a way that invalidates them
 
 ### Requirement: ChapterContent dispatches chapter:dom:ready after render commits
 
@@ -344,7 +358,7 @@ The component SHALL NOT dispatch `chapter:dom:ready` in edit mode (when the chap
 - **THEN** after Vue's first post-flush tick, `chapter:dom:ready` SHALL have been dispatched exactly once with the live container element
 
 #### Scenario: Render-epoch bump dispatches again
-- **WHEN** the parent calls `bumpRenderEpoch()` (e.g., after cancelling an edit) and the component re-mounts its v-html template
+- **WHEN** the parent calls `forceTokenRemount()` (e.g., after cancelling an edit) and the component re-mounts its v-html template
 - **THEN** after the post-flush tick, `chapter:dom:ready` SHALL be dispatched again with the freshly-mounted container element; the new container element reference SHALL be different from the previous one (because the template was re-mounted)
 
 #### Scenario: Edit mode does not dispatch

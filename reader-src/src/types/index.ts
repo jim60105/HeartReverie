@@ -210,6 +210,7 @@ export interface UseChapterNavReturn {
   isLastChapter: ComputedRef<boolean>;
   currentContent: ShallowRef<string>;
   renderEpoch: Ref<number>;
+  remountToken: Ref<number>;
   folderName: Ref<string>;
   next: () => void;
   previous: () => void;
@@ -218,7 +219,8 @@ export interface UseChapterNavReturn {
   loadFromBackend: (series: string, story: string, startChapter?: number) => Promise<void>;
   reloadToLast: () => Promise<void>;
   refreshAfterEdit: (targetChapter: number) => Promise<void>;
-  bumpRenderEpoch: () => void;
+  notifyRenderInvalidated: () => void;
+  forceTokenRemount: () => void;
   getBackendContext: () => {
     series: string | null;
     story: string | null;

@@ -21,12 +21,27 @@ const chapters = ref<ChapterData[]>([]);
 const currentContent = shallowRef<string>("");
 /**
  * Render-invalidation epoch. Bumped by `commitContent()` every time chapter
- * content is committed, regardless of byte-equality. Effects that need to
- * re-run on any content commit (e.g. the sidebar relocation watch in
- * `ContentArea.vue`) should track `renderEpoch` rather than `currentContent`,
- * because Vue's `triggerRef` only signals dependents that read the ref.
+ * content is committed, regardless of byte-equality, and by
+ * `notifyRenderInvalidated()` / `forceTokenRemount()`. This is a
+ * **notification** signal: effects that need to re-run on any content
+ * commit (e.g. the sidebar relocation watch in `ContentArea.vue` and the
+ * `chapter:dom:ready` dispatch watch in `ChapterContent.vue`) should track
+ * `renderEpoch` rather than `currentContent` because Vue's `triggerRef`
+ * only signals dependents that read the ref. `renderEpoch` MUST NOT be
+ * used as a v-for key — keying on it would force a remount on every
+ * streaming chunk and snap the user's scroll position to the top.
  */
 const renderEpoch = ref(0);
+/**
+ * Force-remount token. Distinct from `renderEpoch`: this counter is
+ * consulted by `ChapterContent.vue`'s v-for `:key`, so a bump unmounts
+ * and remounts each rendered token element even when its bound v-html
+ * string is byte-identical. Bumped ONLY by `forceTokenRemount()`. It is
+ * NOT bumped by `commitContent()` or `notifyRenderInvalidated()`, so
+ * ordinary streaming commits keep the v-html DOM stable and preserve
+ * the reader's scroll position.
+ */
+const remountToken = ref(0);
 const folderName = ref("");
 
 // Private state
@@ -103,13 +118,32 @@ function dispatchChapterChange(
 }
 
 /**
- * Bump `renderEpoch` without touching `currentContent`. Used by callers that
- * need to re-trigger downstream effects (e.g. ContentArea's sidebar
- * relocation watch) after a UI state change that does NOT mutate chapter
- * content but DOES recreate DOM Vue believes is unchanged — for example,
- * leaving edit mode where the v-html template is re-mounted.
+ * Notification-only render invalidation: bumps `renderEpoch` so downstream
+ * watchers (`chapter:dom:ready` dispatch, `ContentArea` sidebar relocation)
+ * re-run, but does NOT bump `remountToken`. Use this when a caller needs
+ * downstream effects to re-run but has NOT externally mutated the rendered
+ * DOM. Canonical caller: `usePlugins.ts#subscribeSettingsChanged` after a
+ * plugin's settings change — plugins re-walk the existing rendered DOM and
+ * re-apply; no v-html remount is required.
  */
-function bumpRenderEpoch(): void {
+function notifyRenderInvalidated(): void {
+  renderEpoch.value += 1;
+}
+
+/**
+ * Force a remount of `ChapterContent`'s rendered token elements even when
+ * the token strings are byte-identical to the previous render. Bumps BOTH
+ * `remountToken` (drives the v-for `:key` change that triggers the remount)
+ * AND `renderEpoch` (so notification-only watchers still fire). Use ONLY
+ * when a caller has externally mutated the rendered DOM in a way Vue
+ * cannot recover from (e.g. `ContentArea`'s sidebar relocation watch
+ * `appendChild`ing `.plugin-sidebar` out of the v-html div). Sole
+ * legitimate caller today: `ChapterContent.vue#cancelEditAction`. Do NOT
+ * add new call sites without documenting why a byte-identical remount is
+ * needed.
+ */
+function forceTokenRemount(): void {
+  remountToken.value += 1;
   renderEpoch.value += 1;
 }
 
@@ -126,6 +160,8 @@ function commitContent(next: string): void {
   } else {
     currentContent.value = next;
   }
+  // remountToken intentionally not bumped here: streaming commits must not
+  // cause v-for remount of ChapterContent's token list.
   renderEpoch.value += 1;
   renderDebug("chapter-content-committed", {
     series: currentSeries,
@@ -505,6 +541,7 @@ export function useChapterNav(): UseChapterNavReturn {
     isLastChapter,
     currentContent,
     renderEpoch,
+    remountToken,
     folderName,
     next,
     previous,
@@ -513,7 +550,8 @@ export function useChapterNav(): UseChapterNavReturn {
     loadFromBackend,
     reloadToLast,
     refreshAfterEdit,
-    bumpRenderEpoch,
+    notifyRenderInvalidated,
+    forceTokenRemount,
     getBackendContext,
   };
 }

@@ -121,6 +121,47 @@ describe("usePlugins", () => {
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
+
+  // Regression: a plugin-settings:changed event for a plugin with rendering
+  // contribution must trigger notifyRenderInvalidated() (renderEpoch-only
+  // bump) and NOT forceTokenRemount() (which would remount the v-html DOM
+  // and snap the reader's scroll position).
+  it("plugin-settings:changed triggers notifyRenderInvalidated, NOT forceTokenRemount", async () => {
+    vi.useFakeTimers();
+    const notifySpy = vi.fn();
+    const forceSpy = vi.fn();
+    vi.doMock("@/composables/useChapterNav", () => ({
+      useChapterNav: () => ({
+        notifyRenderInvalidated: notifySpy,
+        forceTokenRemount: forceSpy,
+      }),
+    }));
+
+    mockFetch([
+      { name: "render-plugin", hasFrontendModule: true },
+    ]);
+    const p = await getPlugins();
+    await p.initPlugins();
+
+    const { emitEvent } = await import("@/lib/event-bus");
+    emitEvent("plugin-settings:changed", {
+      name: "render-plugin",
+      settings: { foo: "bar" },
+    });
+
+    // Advance past the 50ms debounce, then flush microtasks for the dynamic
+    // import to resolve.
+    await vi.advanceTimersByTimeAsync(60);
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
+    // Allow the dynamically-imported module's promise chain to resolve.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(forceSpy).not.toHaveBeenCalled();
+
+    vi.doUnmock("@/composables/useChapterNav");
+  });
 });
 
 describe("usePlugins - CSS injection", () => {

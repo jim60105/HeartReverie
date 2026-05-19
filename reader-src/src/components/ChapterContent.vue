@@ -19,9 +19,10 @@ const {
   getBackendContext,
   reloadToLast,
   refreshAfterEdit,
-  bumpRenderEpoch,
+  forceTokenRemount,
   loadFromBackend,
   renderEpoch,
+  remountToken,
 } = useChapterNav();
 const { editChapter, rewindAfter, branchFrom } = useChapterActions();
 const { isEditing, editBuffer, beginEdit, cancelEdit: cancelEditState, editingChapterIndex } = useChapterEditor();
@@ -106,12 +107,15 @@ function cancelEditAction(): void {
   cancelEditState();
   // Leaving edit mode re-mounts the v-html token template, recreating any
   // .plugin-sidebar nodes inside chapter content. ContentArea's sidebar
-  // relocation watch only fires on its tracked deps; bumping renderEpoch
-  // forces it to re-run so it clears the stale sidebar copies and moves
-  // the freshly recreated panels into place. Without this bump the user
+  // relocation watch only fires on its tracked deps; forceTokenRemount()
+  // bumps both `remountToken` (defensive force-remount of the token v-for
+  // in case a future refactor removes the v-if-driven recreate) AND
+  // `renderEpoch` (the load-bearing bump — it re-fires ContentArea's
+  // relocation watch so it clears stale sidebar copies and moves the
+  // freshly-recreated panels into place). Without this call the user
   // ends up with duplicated panels (originals in sidebar + new ones in
   // content) after pressing 取消.
-  bumpRenderEpoch();
+  forceTokenRemount();
 }
 
 async function saveEdit(): Promise<void> {
@@ -240,7 +244,7 @@ async function handleBranch(): Promise<void> {
     ></textarea>
 
     <template v-else>
-      <template v-for="(token, idx) in tokens" :key="`${idx}-${renderEpoch}`">
+      <template v-for="(token, idx) in tokens" :key="`${idx}-${remountToken}`">
         <!-- eslint-disable-next-line vue/no-v-html -->
         <div v-if="token.type === 'html'" v-html="token.content"></div>
         <VentoErrorCard v-else-if="token.type === 'vento-error'" v-bind="token.data" />

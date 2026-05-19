@@ -24,6 +24,7 @@ const mockState = vi.hoisted(() => {
     chaptersRef: { value: [{ number: 2, stateDiff: { hp: "+1" } }] },
     currentIndexRef: { value: 0 },
     renderEpochRef: null as unknown as { value: number },
+    remountTokenRef: null as unknown as { value: number },
     pluginsReadyRef: { value: true },
     pluginsSettledRef: { value: true },
     backendContextRef: { value: {
@@ -33,7 +34,8 @@ const mockState = vi.hoisted(() => {
     } },
     reloadToLastMock: vi.fn().mockResolvedValue(undefined),
     refreshAfterEditMock: vi.fn().mockResolvedValue(undefined),
-    bumpRenderEpochMock: vi.fn(),
+    forceTokenRemountMock: vi.fn(),
+    notifyRenderInvalidatedMock: vi.fn(),
     loadFromBackendMock: vi.fn().mockResolvedValue(undefined),
     editChapterMock: vi.fn().mockResolvedValue(undefined),
     rewindAfterMock: vi.fn().mockResolvedValue(undefined),
@@ -46,9 +48,20 @@ const mockState = vi.hoisted(() => {
   };
 });
 
-// Initialise renderEpochRef as a real Vue ref so reactivity-dependent
-// assertions (e.g. v-for key change on renderEpoch bump) work.
+// Initialise renderEpochRef and remountTokenRef as real Vue refs so
+// reactivity-dependent assertions work.
 mockState.renderEpochRef = ref(0);
+mockState.remountTokenRef = ref(0);
+
+// The spies installed below bump the underlying refs the same way the real
+// composable does, so component reactivity reacts to the call.
+mockState.forceTokenRemountMock.mockImplementation(() => {
+  mockState.remountTokenRef.value++;
+  mockState.renderEpochRef.value++;
+});
+mockState.notifyRenderInvalidatedMock.mockImplementation(() => {
+  mockState.renderEpochRef.value++;
+});
 
 vi.mock("@/composables/useMarkdownRenderer", () => ({
   useMarkdownRenderer: () => ({ renderChapter: mockState.renderChapterMock }),
@@ -59,10 +72,12 @@ vi.mock("@/composables/useChapterNav", () => ({
     chapters: mockState.chaptersRef,
     currentIndex: mockState.currentIndexRef,
     renderEpoch: mockState.renderEpochRef,
+    remountToken: mockState.remountTokenRef,
     getBackendContext: () => mockState.backendContextRef.value,
     reloadToLast: mockState.reloadToLastMock,
     refreshAfterEdit: mockState.refreshAfterEditMock,
-    bumpRenderEpoch: mockState.bumpRenderEpochMock,
+    forceTokenRemount: mockState.forceTokenRemountMock,
+    notifyRenderInvalidated: mockState.notifyRenderInvalidatedMock,
     loadFromBackend: mockState.loadFromBackendMock,
   }),
 }));
@@ -90,6 +105,7 @@ describe("ChapterContent", () => {
   beforeEach(() => {
     mockState.currentIndexRef.value = 0;
     mockState.renderEpochRef.value = 0;
+    mockState.remountTokenRef.value = 0;
     mockState.pluginsReadyRef.value = true;
     mockState.pluginsSettledRef.value = true;
     mockState.backendContextRef.value = { series: "series-a", story: "story-a", isBackendMode: true };
@@ -100,7 +116,8 @@ describe("ChapterContent", () => {
     mockState.branchFromMock.mockClear();
     mockState.reloadToLastMock.mockClear();
     mockState.refreshAfterEditMock.mockClear();
-    mockState.bumpRenderEpochMock.mockClear();
+    mockState.forceTokenRemountMock.mockClear();
+    mockState.notifyRenderInvalidatedMock.mockClear();
     mockState.loadFromBackendMock.mockClear();
     mockState.routerPushMock.mockClear();
     vi.stubGlobal("confirm", vi.fn(() => true));
@@ -193,56 +210,81 @@ describe("ChapterContent", () => {
     expect(mockState.branchFromMock).toHaveBeenCalledWith("series-a", "story-a", 2, undefined);
   });
 
-  // Regression: when ContentArea's sidebar relocation watch externally moves
-  // .plugin-sidebar nodes out of the v-html div, a subsequent renderEpoch
-  // bump with byte-identical token content must still cause Vue to remount
-  // the v-html div so the panel is restored in the DOM (where the watch can
-  // pick it up again). Without `:key` including `renderEpoch`, Vue would
-  // skip the v-html update on byte-identical strings and the panel would be
-  // permanently lost on the next sidebar.innerHTML clear.
-  it("WHEN renderEpoch bumps with byte-identical tokens THEN v-html div remounts", async () => {
+  // Regression: during LLM streaming, `commitContent()` bumps `renderEpoch`
+  // many times per second but MUST NOT bump `remountToken`. The v-for key
+  // depends on `remountToken`, so a renderEpoch-only bump must keep the
+  // existing v-html element instance — preserving scroll position and any
+  // imperative DOM markers (e.g. plugin-attached attributes) on the v-html
+  // ROOT element.
+  it("WHEN renderEpoch bumps without remountToken THEN v-html div is NOT remounted", async () => {
     mockState.renderChapterMock.mockImplementation(() => [
       { type: "html" as const, content: "<div class='plugin-sidebar'>panel</div>" },
     ]);
 
     const wrapper = mountComponent();
     await flushPromises();
-    const callsBefore = mockState.renderChapterMock.mock.calls.length;
+    const initialDiv = wrapper.find(".chapter-content > div:not(.chapter-toolbar)").element;
+    expect(initialDiv).toBeTruthy();
+    // Place an imperative marker on the v-html ROOT element (the wrapper
+    // div). Vue will patch its innerHTML in place on subsequent commits,
+    // re-parsing descendants — but the root element instance is reused.
+    (initialDiv as HTMLElement).setAttribute("data-test-marker", "kept");
+
+    mockState.renderEpochRef.value++;
+    await flushPromises();
+    await nextTick();
+
+    const afterDiv = wrapper.find(".chapter-content > div:not(.chapter-toolbar)").element;
+    expect(afterDiv).toBe(initialDiv);
+    expect((afterDiv as HTMLElement).getAttribute("data-test-marker")).toBe("kept");
+  });
+
+  // Regression: when ContentArea's sidebar relocation watch externally moves
+  // .plugin-sidebar nodes out of the v-html div, a `forceTokenRemount()` call
+  // (which bumps remountToken AND renderEpoch) must cause Vue to remount the
+  // v-html div so the panel is restored in the DOM. Without keying on
+  // `remountToken`, Vue would skip the v-html update on byte-identical
+  // strings and the panel would be permanently lost on the next sidebar
+  // clear.
+  it("WHEN remountToken bumps with byte-identical tokens THEN v-html div remounts", async () => {
+    mockState.renderChapterMock.mockImplementation(() => [
+      { type: "html" as const, content: "<div class='plugin-sidebar'>panel</div>" },
+    ]);
+
+    const wrapper = mountComponent();
+    await flushPromises();
     const initialPanel = wrapper.find(".plugin-sidebar").element as HTMLElement;
     expect(initialPanel).toBeTruthy();
 
-    // Simulate the sidebar relocation watch removing the panel from the
-    // v-html div (as ContentArea.vue does via sidebar.appendChild).
+    // Simulate ContentArea's relocation: remove the panel from the v-html
+    // div as if it had been appendChild'd into the sidebar.
     initialPanel.remove();
     expect(wrapper.findAll(".plugin-sidebar")).toHaveLength(0);
 
-    // Bump renderEpoch with the SAME token output — Vue must remount the
-    // v-html div because the v-for key changed.
+    // Bumping remountToken (which forceTokenRemount also does) must cause
+    // Vue to remount the v-html div even with byte-identical content.
+    mockState.remountTokenRef.value++;
     mockState.renderEpochRef.value++;
     await flushPromises();
-    const callsAfter = mockState.renderChapterMock.mock.calls.length;
-    expect(callsAfter).toBeGreaterThan(callsBefore);
 
-    const restoredPanels = wrapper.findAll(".plugin-sidebar");
-    expect(restoredPanels).toHaveLength(1);
+    const restored = wrapper.findAll(".plugin-sidebar");
+    expect(restored).toHaveLength(1);
   });
 
-  // Regression: pressing 取消 (cancel) after entering edit mode must bump
-  // renderEpoch so ContentArea's sidebar relocation watch re-runs. Without
-  // this bump, the v-html template re-mount on cancel recreates panels in
-  // chapter content while stale copies remain in the sidebar, producing
-  // duplicates.
-  it("WHEN cancel is pressed THEN renderEpoch is bumped via bumpRenderEpoch", async () => {
+  // Regression: pressing 取消 (cancel) after entering edit mode must call
+  // `forceTokenRemount()` so ContentArea's sidebar relocation watch re-runs
+  // AND the v-for is remounted. Without this, the v-html template re-mount
+  // on cancel recreates panels in chapter content while stale copies remain
+  // in the sidebar, producing duplicates.
+  it("WHEN cancel is pressed THEN forceTokenRemount is called", async () => {
     const wrapper = mountComponent();
-    // Enter edit mode (button index 0 is the edit button when not editing).
     await wrapper.findAll("button")[0]!.trigger("click");
     expect(wrapper.find("textarea.chapter-editor").exists()).toBe(true);
 
-    // Click cancel (button index 1 in edit mode: 儲存=0, 取消=1).
     await wrapper.findAll("button")[1]!.trigger("click");
     await flushPromises();
 
-    expect(mockState.bumpRenderEpochMock).toHaveBeenCalledTimes(1);
+    expect(mockState.forceTokenRemountMock).toHaveBeenCalledTimes(1);
     expect(wrapper.find("textarea.chapter-editor").exists()).toBe(false);
   });
 

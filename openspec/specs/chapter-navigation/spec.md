@@ -156,11 +156,19 @@ The `useChapterNav()` composable SHALL expose a reactive computed property `isLa
 
 ### Requirement: Vue composable API contract
 
-The `useChapterNav()` composable SHALL return a well-typed interface including at minimum: `currentIndex` (Ref<number>), `chapters` (Ref<ChapterData[]>), `totalChapters` (ComputedRef<number>), `isFirst` (ComputedRef<boolean>), `isLast` (ComputedRef<boolean>), `isLastChapter` (ComputedRef<boolean>), **`currentContent` (`ShallowRef<string>`)**, **`renderEpoch` (Ref<number>)**, `folderName` (Ref<string>), `next()`, `previous()`, `reloadToLast(): Promise<void>`, **`refreshAfterEdit(targetChapter: number): Promise<void>`**, `loadFromBackend(series, story, startChapter?)`, and `getBackendContext()`.
+The `useChapterNav()` composable SHALL return a well-typed interface including at minimum: `currentIndex` (Ref<number>), `chapters` (Ref<ChapterData[]>), `totalChapters` (ComputedRef<number>), `isFirst` (ComputedRef<boolean>), `isLast` (ComputedRef<boolean>), `isLastChapter` (ComputedRef<boolean>), **`currentContent` (`ShallowRef<string>`)**, **`renderEpoch` (Ref<number>)**, **`remountToken` (Ref<number>)**, `folderName` (Ref<string>), `next()`, `previous()`, `reloadToLast(): Promise<void>`, **`refreshAfterEdit(targetChapter: number): Promise<void>`**, `loadFromBackend(series, story, startChapter?)`, **`notifyRenderInvalidated(): void`**, **`forceTokenRemount(): void`**, and `getBackendContext()`.
 
-`currentContent` SHALL be implemented as a `shallowRef<string>` so the composable can use `triggerRef` to invalidate dependents when committing a string that is `===` to the previous value. All writes to `currentContent` from inside `useChapterNav` SHALL go through a private `commitContent(next: string): void` helper which (a) assigns `next` if different OR calls `triggerRef(currentContent)` if equal, and (b) always increments `renderEpoch`. Direct `currentContent.value = ...` assignments SHALL NOT exist outside `commitContent`. Consumers outside `useChapterNav` SHALL treat `currentContent` as read-only.
+`currentContent` SHALL be implemented as a `shallowRef<string>` so the composable can use `triggerRef` to invalidate dependents when committing a string that is `===` to the previous value. All writes to `currentContent` from inside `useChapterNav` SHALL go through a private `commitContent(next: string): void` helper which (a) assigns `next` if different OR calls `triggerRef(currentContent)` if equal, and (b) always increments `renderEpoch`. `commitContent` SHALL NOT touch `remountToken`. Direct `currentContent.value = ...` assignments SHALL NOT exist outside `commitContent`. Consumers outside `useChapterNav` SHALL treat `currentContent` as read-only.
 
-`renderEpoch` SHALL be a `ref<number>` exposed on the return value, monotonically non-decreasing for the lifetime of the page, used by other composables and components (notably the sidebar relocation watch in `ContentArea.vue` and the `tokens` computed in `ChapterContent.vue`) to react to render-invalidation events that don't surface as a `currentContent` reference change.
+`renderEpoch` SHALL be a `ref<number>` exposed on the return value, monotonically non-decreasing for the lifetime of the page, used by other composables and components (notably the sidebar relocation watch in `ContentArea.vue` and the `chapter:dom:ready` dispatch watch in `ChapterContent.vue`) to react to render-invalidation events that don't surface as a `currentContent` reference change. `renderEpoch` is a **notification** signal and SHALL NOT be used as a v-for key suffix in any component.
+
+`remountToken` SHALL be a `ref<number>` exposed on the return value, monotonically non-decreasing for the lifetime of the page. `remountToken` is a **force-remount** signal: it is consulted by `ChapterContent.vue`'s v-for key so that a change to `remountToken` causes Vue to unmount and remount each rendered token element. `remountToken` SHALL be incremented ONLY by the exported `forceTokenRemount()` helper. `commitContent()`, `notifyRenderInvalidated()`, and all streaming code paths SHALL NOT touch `remountToken`.
+
+`notifyRenderInvalidated(): void` SHALL increment `renderEpoch` only. It is the helper used by callers that need downstream watchers (`chapter:dom:ready` dispatch, `ContentArea` sidebar relocation) to re-run but have NOT externally mutated the rendered DOM. The canonical caller is `usePlugins.ts#subscribeSettingsChanged`, which fires after a plugin's settings change so plugins can re-walk the existing rendered chapter and re-apply.
+
+`forceTokenRemount(): void` SHALL increment **both** `remountToken` and `renderEpoch`, in that order, within a single synchronous call. It is the only public way to force `ChapterContent`'s rendered token elements to remount even when the rendered token strings are byte-identical to the previous render. Its sole legitimate caller in the current codebase is `ChapterContent.vue#cancelEditAction` (the cancel-edit recovery path). Future callers SHALL document why a byte-identical remount is required before adding additional call sites.
+
+The previously-exported `bumpRenderEpoch()` function is REMOVED. Replace every call to `bumpRenderEpoch()` with the appropriate narrower helper based on intent: `usePlugins.ts#subscribeSettingsChanged` → `notifyRenderInvalidated()` (settings change does not externally mutate the rendered DOM); `ChapterContent.vue#cancelEditAction` → `forceTokenRemount()` (cancel-edit recovery from sidebar relocation moving children out of v-html). Future call sites SHALL audit at the call site whether the caller has externally mutated the rendered DOM. If yes, use `forceTokenRemount()`; otherwise use `notifyRenderInvalidated()`. Test mocks that exposed `bumpRenderEpoch` SHALL be updated to expose `notifyRenderInvalidated`, `forceTokenRemount`, and a `remountToken: Ref<number>` field.
 
 The `next()` and `previous()` methods SHALL update `currentIndex`, which triggers a `watch` effect that calls `syncRoute()` to update the URL via `router.replace()`. The `loadFromBackend(series, story, startChapter?)` method SHALL load chapter data from the backend API, set `currentIndex` to `startChapter` (clamped to valid range) or 0, and call `syncRoute()` to update the URL. Story-level navigation (e.g., from the story selector) SHALL use `navigateToStory()` in `useStorySelector` which calls `router.push()`, and the route watcher in `useChapterNav` SHALL react to load the new story.
 
@@ -172,7 +180,7 @@ This change does NOT relocate ownership of the initial deep-link backend load aw
 
 #### Scenario: Composable returns typed reactive interface
 - **WHEN** a Vue component calls `useChapterNav()`
-- **THEN** the returned object SHALL contain typed reactive refs (`currentIndex`, `chapters`, `currentContent` as `ShallowRef<string>`, `renderEpoch`, `folderName`), computed properties (`totalChapters`, `isFirst`, `isLast`, `isLastChapter`), and methods (`next`, `previous`, `loadFromBackend`, `reloadToLast`, `refreshAfterEdit`, `getBackendContext`)
+- **THEN** the returned object SHALL contain typed reactive refs (`currentIndex`, `chapters`, `currentContent` as `ShallowRef<string>`, `renderEpoch`, `remountToken`, `folderName`), computed properties (`totalChapters`, `isFirst`, `isLast`, `isLastChapter`), and methods (`next`, `previous`, `loadFromBackend`, `reloadToLast`, `refreshAfterEdit`, `notifyRenderInvalidated`, `forceTokenRemount`, `getBackendContext`)
 
 #### Scenario: reloadToLast navigates to the newest chapter
 - **WHEN** the chat input component calls `reloadToLast()` after sending a message
@@ -202,9 +210,25 @@ This change does NOT relocate ownership of the initial deep-link backend load aw
 - **WHEN** `loadFromBackend('my-series', 'my-story')` is called and a WebSocket connection is active
 - **THEN** the composable SHALL send `{ type: "subscribe", series: "my-series", story: "my-story" }` via the WebSocket to receive real-time chapter updates
 
+#### Scenario: commitContent never touches remountToken
+- **WHEN** any code path (load, navigation, edit save, polling, WebSocket `chapters:content` handler) invokes `commitContent(next)`
+- **THEN** `currentContent` SHALL be updated (assigned or `triggerRef`'d) AND `renderEpoch` SHALL be incremented AND `remountToken` SHALL remain at its previous value
+
+#### Scenario: forceTokenRemount bumps both counters
+- **WHEN** a caller (currently only `ChapterContent.vue#cancelEditAction`) invokes `forceTokenRemount()`
+- **THEN** both `remountToken` and `renderEpoch` SHALL increment by 1, in the same synchronous call
+
+#### Scenario: notifyRenderInvalidated bumps renderEpoch only
+- **WHEN** a caller (currently `usePlugins.ts#subscribeSettingsChanged`) invokes `notifyRenderInvalidated()`
+- **THEN** `renderEpoch` SHALL increment by 1, and `remountToken` SHALL remain unchanged, so downstream watchers re-run but the v-html DOM is not remounted
+
+#### Scenario: Plugin settings change does not remount rendered tokens
+- **WHEN** the user toggles a plugin setting that affects rendering (e.g. dialogue-colorize colors) and `usePlugins.ts` calls `notifyRenderInvalidated()` after the debounce timer fires
+- **THEN** `ChapterContent.vue`'s rendered token elements SHALL NOT be remounted (their DOM instances persist), AND `chapter:dom:ready` SHALL be dispatched at least once so the plugin can re-walk and re-apply
+
 #### Scenario: All content writes go through commitContent
 - **WHEN** any load path (`loadFromBackend`, `reloadToLast`, `refreshAfterEdit`, `pollBackend`, the WebSocket `chapters:content` handler) commits a chapter content value
-- **THEN** the value SHALL be assigned via the private `commitContent` helper, the `renderEpoch` ref SHALL be incremented, and a string-equal commit SHALL additionally call `triggerRef(currentContent)` so dependents that read `currentContent` re-evaluate
+- **THEN** the value SHALL be assigned via the private `commitContent` helper, the `renderEpoch` ref SHALL be incremented, `remountToken` SHALL NOT change, and a string-equal commit SHALL additionally call `triggerRef(currentContent)` so dependents that read `currentContent` re-evaluate
 
 ### Requirement: refreshAfterEdit preserves the edited chapter and forces re-render
 
