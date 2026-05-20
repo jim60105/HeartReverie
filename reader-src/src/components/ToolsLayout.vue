@@ -102,7 +102,10 @@ const drawerClosedOnMobile = computed(() => isMobile.value && !isOpen.value);
 .tools-layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -110,6 +113,7 @@ const drawerClosedOnMobile = computed(() => isMobile.value && !isOpen.value);
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -122,6 +126,8 @@ const drawerClosedOnMobile = computed(() => isMobile.value && !isOpen.value);
   background: var(--settings-sidebar-bg);
   padding: 16px 0;
   width: var(--settings-sidebar-width);
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .back-btn {
@@ -167,6 +173,7 @@ const drawerClosedOnMobile = computed(() => isMobile.value && !isOpen.value);
   padding: var(--settings-content-padding);
   min-width: 0;
   min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
