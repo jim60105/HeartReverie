@@ -4,10 +4,22 @@ import { useRouter } from "vue-router";
 import { settingsChildren } from "@/router";
 import { useLastReadingRoute } from "@/composables/useLastReadingRoute";
 import { useAuth } from "@/composables/useAuth";
+import { useSidebarDrawer } from "@/composables/useSidebarDrawer";
+import AppHeader from "./AppHeader.vue";
 
 const router = useRouter();
 const { lastReadingRoute } = useLastReadingRoute();
 const { getAuthHeaders } = useAuth();
+
+const {
+  isOpen,
+  isMobile,
+  toggle,
+  close,
+  triggerRef,
+  drawerRef,
+  onKeydownTrap,
+} = useSidebarDrawer();
 
 const generalTabs = computed(() =>
   settingsChildren
@@ -46,8 +58,8 @@ onMounted(async () => {
           label: (p.name as string),
         }));
     }
-  } catch {
-    // Plugin list unavailable — sidebar won't show plugin links
+  } catch (err) {
+    console.warn("[SettingsLayout] failed to fetch plugin list", err);
   }
 });
 
@@ -59,38 +71,52 @@ function goBack() {
     router.push({ name: "home" });
   }
 }
+
+const drawerClosedOnMobile = computed(() => isMobile.value && !isOpen.value);
 </script>
 
 <template>
   <div class="settings-layout">
-    <aside class="settings-sidebar">
-      <button class="back-btn themed-btn" @click="goBack">← 返回閱讀</button>
-      <nav class="sidebar-nav">
-        <router-link
-          v-for="tab in generalTabs"
-          :key="tab.name"
-          :to="{ name: tab.name }"
-          class="sidebar-link"
-          active-class="sidebar-link--active"
+    <AppHeader>
+      <template v-if="isMobile" #leading>
+        <button
+          ref="triggerRef"
+          type="button"
+          class="drawer-toggle themed-btn header-btn header-btn--icon"
+          aria-controls="settings-drawer"
+          :aria-expanded="isOpen ? 'true' : 'false'"
+          aria-label="開啟設定選單"
+          @click="toggle"
         >
-          {{ tab.title }}
-        </router-link>
-        <template v-if="pluginTabs.length">
-          <span class="sidebar-divider">插件</span>
+          ☰
+        </button>
+      </template>
+    </AppHeader>
+
+    <div class="settings-body">
+      <div
+        v-if="isOpen && isMobile"
+        class="drawer-backdrop"
+        @click="close"
+      ></div>
+
+      <aside
+        id="settings-drawer"
+        ref="drawerRef"
+        class="settings-sidebar"
+        :class="{ 'is-open': isOpen, 'is-mobile': isMobile }"
+        :role="isMobile ? 'dialog' : undefined"
+        :aria-modal="isMobile ? 'true' : undefined"
+        :aria-labelledby="isMobile ? 'settings-drawer-label' : undefined"
+        :aria-hidden="drawerClosedOnMobile ? 'true' : 'false'"
+        :inert="drawerClosedOnMobile || undefined"
+        @keydown="isOpen && isMobile ? onKeydownTrap($event) : undefined"
+      >
+        <h2 id="settings-drawer-label" class="visually-hidden">設定選單</h2>
+        <button class="back-btn themed-btn" @click="goBack">← 返回閱讀</button>
+        <nav class="sidebar-nav">
           <router-link
-            v-for="pt in pluginTabs"
-            :key="pt.pluginName"
-            :to="{ name: 'settings-plugin', params: { pluginName: pt.pluginName } }"
-            class="sidebar-link"
-            active-class="sidebar-link--active"
-          >
-            {{ pt.label }}
-          </router-link>
-        </template>
-        <template v-if="developerToolsTabs.length">
-          <span class="sidebar-divider">開發者工具</span>
-          <router-link
-            v-for="tab in developerToolsTabs"
+            v-for="tab in generalTabs"
             :key="tab.name"
             :to="{ name: tab.name }"
             class="sidebar-link"
@@ -98,19 +124,52 @@ function goBack() {
           >
             {{ tab.title }}
           </router-link>
-        </template>
-      </nav>
-    </aside>
-    <main class="settings-content">
-      <router-view />
-    </main>
+          <template v-if="pluginTabs.length">
+            <span class="sidebar-divider">插件</span>
+            <router-link
+              v-for="pt in pluginTabs"
+              :key="pt.pluginName"
+              :to="{ name: 'settings-plugin', params: { pluginName: pt.pluginName } }"
+              class="sidebar-link"
+              active-class="sidebar-link--active"
+            >
+              {{ pt.label }}
+            </router-link>
+          </template>
+          <template v-if="developerToolsTabs.length">
+            <span class="sidebar-divider">開發者工具</span>
+            <router-link
+              v-for="tab in developerToolsTabs"
+              :key="tab.name"
+              :to="{ name: tab.name }"
+              class="sidebar-link"
+              active-class="sidebar-link--active"
+            >
+              {{ tab.title }}
+            </router-link>
+          </template>
+        </nav>
+      </aside>
+      <main class="settings-content">
+        <router-view />
+      </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .settings-layout {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
+  position: relative;
+}
+
+.settings-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
 }
 
 .settings-sidebar {
@@ -182,40 +241,61 @@ function goBack() {
   flex-direction: column;
 }
 
+.drawer-toggle {
+  display: none;
+}
+
+.drawer-backdrop {
+  display: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 @media (max-width: 767px) {
-  .settings-layout {
-    flex-direction: column;
+  .drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .settings-sidebar {
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    padding: 8px 12px;
-    gap: 8px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
+  .drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 7;
+  }
+
+  .settings-sidebar.is-mobile {
+    position: fixed;
+    top: var(--header-height, 3.5rem);
+    left: 0;
+    bottom: 0;
+    width: min(280px, 80vw);
+    z-index: 8;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    border-right: 1px solid var(--border-color);
+    border-bottom: none;
+    overflow-y: auto;
+  }
+
+  .settings-sidebar.is-mobile.is-open {
+    transform: translateX(0);
   }
 
   .back-btn {
-    margin: 0;
-  }
-
-  .sidebar-nav {
-    flex-direction: row;
-    gap: 4px;
-  }
-
-  .sidebar-link {
-    border-left: none;
-    border-bottom: 2px solid transparent;
-    padding: 6px 12px;
-  }
-
-  .sidebar-link--active {
-    border-left-color: transparent;
-    border-bottom-color: var(--settings-sidebar-active-border);
+    margin: 0 12px 12px;
   }
 }
 </style>

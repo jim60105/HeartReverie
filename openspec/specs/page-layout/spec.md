@@ -128,7 +128,7 @@ The sticky `<header>` element SHALL use reduced vertical and horizontal padding 
 
 The tools-menu button (`🧰`) SHALL be rendered immediately adjacent to the settings button (`⚙️`) and SHALL share the same `header-btn header-btn--icon` class set as the settings button. Clicking the tools button SHALL toggle a dropdown panel rendered as a descendant of the `<header>` element (NOT via `<Teleport>`) so that the panel inherits the header's sticky stacking context and z-index. The contents of the dropdown are specified by the `tools-menu` capability.
 
-The header SHALL NOT render a mobile hamburger button. Any such legacy `☰` control and its associated `mobileMenuOpen` state SHALL be removed from the component; future mobile-drawer functionality, if introduced, SHALL be specified in a separate change rather than carried as dead code.
+`AppHeader.vue` itself SHALL NOT declare a mobile hamburger button or a `mobileMenuOpen` reactive state ref; the legacy in-component `☰` control SHALL remain removed. A `☰` control MAY appear inside the rendered `<header>` only when it originates from a layout-owned `#leading` slot fill (e.g. `SettingsLayout.vue` or `ToolsLayout.vue` injecting their drawer toggle on mobile); such slot-injected toggles are governed by the `settings-page` / `tools-menu` capabilities respectively. Any other future mobile-drawer functionality, if introduced, SHALL be specified in a separate change rather than carried as dead code.
 
 At a viewport width of 767 px or less, the header SHALL adapt to a single-row layout via CSS media queries:
 
@@ -138,7 +138,13 @@ At a viewport width of 767 px or less, the header SHALL adapt to a single-row la
 - The `📖` story-selector toggle, the `🔄` reload button, the `🧰` tools-menu button, and the `⚙️` settings button SHALL remain visible at all viewport widths.
 - The header row SHALL NOT wrap onto multiple lines and the visible content SHALL fit within the row width without horizontal overflow at any viewport width in the audited mobile range (360 px to 767 px) at default user-agent text scaling. Behavior at viewport widths below 360 px or under non-default text scaling (e.g. browser-level zoom or user-set base font size of 200 % or more) is not guaranteed by this requirement; if a future regression report identifies an overflow at those widths, a follow-up change SHALL extend coverage rather than silently re-introducing wrap.
 
-The mobile media-query breakpoint (`@media (max-width: 767px)`) SHALL be the same value used by `ContentArea.vue`'s grid-collapse rule so that header collapse and content single-column collapse trigger together.
+At a viewport width below 410 px (audited at 360 px and 375 px), the `← 上一章` and `下一章 →` button labels SHALL collapse to icon-only `←` and `→`: the textual portion (the localized Chinese label "上一章" / "下一章") SHALL be hidden from sight (`display: none` on a dedicated label span) AND hidden from assistive tech reachability for the visible button (the button SHALL still expose an `aria-label` carrying the full localized name, so screen readers continue to announce "Previous chapter" / "Next chapter"). The arrow glyph SHALL remain visible and the button SHALL remain a single tap target. At viewport widths ≥ 410 px the full `← 上一章` / `下一章 →` labels SHALL be visible.
+
+To prevent a long chapter progress counter (e.g. `123 / 999`) from re-introducing horizontal overflow even with the labels collapsed, the `.chapter-progress` element SHALL be constrained with `flex-shrink: 1`, `min-width: 0`, `overflow: hidden`, `text-overflow: ellipsis`, and `white-space: nowrap` so it truncates rather than pushing other items off-screen. The no-overflow guarantee (`documentElement.scrollWidth === clientWidth` across the 360–767 px range) SHALL hold for any plausible counter string up to and including `999 / 999`.
+
+The collapse-to-icon transition SHALL NOT remount the buttons — it SHALL be a pure CSS media-query toggle so Vue state (e.g. focus inside the cluster, tooltip open state) is preserved.
+
+The mobile media-query breakpoint (`@media (max-width: 767px)`) SHALL be the same value used by `ContentArea.vue`'s grid-collapse rule so that header collapse and content single-column collapse trigger together. The narrow-label-collapse breakpoint (`@media (max-width: 409px)`) is a separate, narrower threshold that operates inside the existing mobile range.
 
 #### Scenario: Compact header padding
 
@@ -153,7 +159,27 @@ The mobile media-query breakpoint (`@media (max-width: 767px)`) SHALL be the sam
 #### Scenario: Mobile header layout when story is loaded
 
 - **WHEN** a story is loaded (chapters are present) on a viewport in the audited mobile range (360 px to 767 px) at default user-agent text scaling
-- **THEN** the header SHALL display only the story selector toggle (`📖`), the reload button (`🔄`), the tools-menu button (`🧰`), the settings button (`⚙️`), and the reduced chapter-navigation cluster (`← 上一章` `i / N` `下一章 →`) in a single row without wrapping or horizontal overflow, and the folder-name breadcrumb, the `⇇` button, and the `⇉` button SHALL NOT be visible or focusable
+- **THEN** the header SHALL display only the story selector toggle (`📖`), the reload button (`🔄`), the tools-menu button (`🧰`), the settings button (`⚙️`), and the reduced chapter-navigation cluster (the previous button, the `i / N` progress indicator, and the next button) in a single row without wrapping or horizontal overflow, and the folder-name breadcrumb, the `⇇` button, and the `⇉` button SHALL NOT be visible or focusable
+
+#### Scenario: Narrow-viewport label collapse on prev/next chapter buttons
+
+- **WHEN** a story is loaded on a viewport whose width is below 410 px (audited at 360 px and 375 px) at default user-agent text scaling
+- **THEN** the previous-chapter button SHALL display as `←` only (with the "上一章" text label hidden), the next-chapter button SHALL display as `→` only (with the "下一章" text label hidden), both buttons SHALL still expose their full localized label via `aria-label`, the document SHALL satisfy `documentElement.scrollWidth === clientWidth` (no horizontal page overflow), and the header row SHALL still NOT wrap
+
+#### Scenario: Wider mobile viewport keeps the full text labels
+
+- **WHEN** a story is loaded on a viewport whose width is between 410 px and 767 px (audited at 443 px)
+- **THEN** the previous-chapter button SHALL display as `← 上一章` (with the text label visible), the next-chapter button SHALL display as `下一章 →` (with the text label visible), and the document SHALL satisfy `documentElement.scrollWidth === clientWidth`
+
+#### Scenario: Long chapter counter does not overflow
+
+- **WHEN** a story with 999 chapters is loaded at chapter 123 (so the progress indicator reads `123 / 999`) on a 360 px viewport at default text scaling
+- **THEN** the document SHALL satisfy `documentElement.scrollWidth === clientWidth` (no horizontal overflow), the header row SHALL NOT wrap, and the `.chapter-progress` element computed style SHALL include `overflow: hidden`, `text-overflow: ellipsis`, and `white-space: nowrap` so any further-overrun counter truncates rather than pushing other items off-screen
+
+#### Scenario: Label collapse is CSS-only (no remount)
+
+- **WHEN** the viewport is resized from 443 px to 375 px and back, with the previous-chapter button focused
+- **THEN** the prev/next button DOM elements SHALL NOT be remounted, focus SHALL remain on the previous-chapter button across the transitions, and the button's `aria-label` SHALL remain stable throughout
 
 #### Scenario: Mobile breakpoint matches content-area breakpoint
 
@@ -170,10 +196,10 @@ The mobile media-query breakpoint (`@media (max-width: 767px)`) SHALL be the sam
 - **WHEN** no story has been loaded yet
 - **THEN** the entire chapter-navigation cluster — first-chapter button, previous button, progress indicator, next button, last-chapter button — SHALL be hidden via Vue directive (`v-if`), and only the story selector, reload button, tools-menu button, and settings button SHALL remain visible
 
-#### Scenario: No hamburger button in header
+#### Scenario: No hamburger button declared by AppHeader itself
 
 - **WHEN** the application is rendered in any state, at any viewport width
-- **THEN** the header SHALL NOT render a `☰` hamburger button, and the component SHALL NOT declare an unused `mobileMenuOpen` reactive state ref
+- **THEN** `AppHeader.vue` SHALL NOT declare a `☰` hamburger button in its own template and SHALL NOT declare an unused `mobileMenuOpen` reactive state ref; any `☰` that appears within the `<header>` element SHALL originate from a layout-owned `#leading` slot fill (e.g. `SettingsLayout` or `ToolsLayout`) and SHALL be governed by the `settings-page` or `tools-menu` capability, not by this requirement
 
 #### Scenario: Tools button placement
 

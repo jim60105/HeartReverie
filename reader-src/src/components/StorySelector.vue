@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from "vue";
+import { useRoute } from "vue-router";
 import { useStorySelector } from "@/composables/useStorySelector";
 import { useStoryExport, type ExportFormat } from "@/composables/useStoryExport";
+import { useChapterNav } from "@/composables/useChapterNav";
+import { isReadingRoute } from "@/router/isReadingRoute";
+
+const route = useRoute();
 
 const {
   seriesList,
@@ -13,6 +18,7 @@ const {
   navigateToStory,
 } = useStorySelector();
 const { exportStory } = useStoryExport();
+const { loadFromBackend } = useChapterNav();
 
 const newStoryName = ref("");
 const isOpen = ref(false);
@@ -35,15 +41,25 @@ async function handleCreate() {
   await createStory(series, name);
   selectedStory.value = name;
   newStoryName.value = "";
-  navigateToStory(series, name);
+  const onReading = isReadingRoute(route.path);
+  if (onReading) {
+    navigateToStory(series, name);
+  } else {
+    await loadFromBackend(series, name, undefined, { syncRoute: false });
+  }
   isOpen.value = false;
 }
 
-function handleLoad() {
+async function handleLoad() {
   const series = selectedSeries.value;
   const story = selectedStory.value;
   if (!series || !story) return;
-  navigateToStory(series, story);
+  const onReading = isReadingRoute(route.path);
+  if (onReading) {
+    navigateToStory(series, story);
+  } else {
+    await loadFromBackend(series, story, undefined, { syncRoute: false });
+  }
   isOpen.value = false;
 }
 

@@ -6,6 +6,7 @@ import type { RouteLocationNormalizedLoaded } from "vue-router";
 
 const mockRouter = {
   push: vi.fn(),
+  afterEach: vi.fn(() => () => {}),
 };
 
 vi.mock("vue-router", () => ({
@@ -44,6 +45,7 @@ function mountLayout() {
       stubs: {
         "router-link": RouterLinkStub,
         "router-view": RouterViewStub,
+        AppHeader: defineComponent({ name: "AppHeader", template: '<header class="app-header-stub"><slot name="leading" /></header>' }),
       },
     },
   });

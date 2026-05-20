@@ -156,7 +156,7 @@ The `useChapterNav()` composable SHALL expose a reactive computed property `isLa
 
 ### Requirement: Vue composable API contract
 
-The `useChapterNav()` composable SHALL return a well-typed interface including at minimum: `currentIndex` (Ref<number>), `chapters` (Ref<ChapterData[]>), `totalChapters` (ComputedRef<number>), `isFirst` (ComputedRef<boolean>), `isLast` (ComputedRef<boolean>), `isLastChapter` (ComputedRef<boolean>), **`currentContent` (`ShallowRef<string>`)**, **`renderEpoch` (Ref<number>)**, **`remountToken` (Ref<number>)**, `folderName` (Ref<string>), `next()`, `previous()`, `reloadToLast(): Promise<void>`, **`refreshAfterEdit(targetChapter: number): Promise<void>`**, `loadFromBackend(series, story, startChapter?)`, **`notifyRenderInvalidated(): void`**, **`forceTokenRemount(): void`**, and `getBackendContext()`.
+The `useChapterNav()` composable SHALL return a well-typed interface including at minimum: `currentIndex` (Ref<number>), `chapters` (Ref<ChapterData[]>), `totalChapters` (ComputedRef<number>), `isFirst` (ComputedRef<boolean>), `isLast` (ComputedRef<boolean>), `isLastChapter` (ComputedRef<boolean>), **`currentContent` (`ShallowRef<string>`)**, **`renderEpoch` (Ref<number>)**, **`remountToken` (Ref<number>)**, `folderName` (Ref<string>), `next()`, `previous()`, `reloadToLast(): Promise<void>`, **`refreshAfterEdit(targetChapter: number): Promise<void>`**, `loadFromBackend(series, story, startChapter?, options?)`, **`notifyRenderInvalidated(): void`**, **`forceTokenRemount(): void`**, and `getBackendContext()`.
 
 `currentContent` SHALL be implemented as a `shallowRef<string>` so the composable can use `triggerRef` to invalidate dependents when committing a string that is `===` to the previous value. All writes to `currentContent` from inside `useChapterNav` SHALL go through a private `commitContent(next: string): void` helper which (a) assigns `next` if different OR calls `triggerRef(currentContent)` if equal, and (b) always increments `renderEpoch`. `commitContent` SHALL NOT touch `remountToken`. Direct `currentContent.value = ...` assignments SHALL NOT exist outside `commitContent`. Consumers outside `useChapterNav` SHALL treat `currentContent` as read-only.
 
@@ -170,11 +170,11 @@ The `useChapterNav()` composable SHALL return a well-typed interface including a
 
 The previously-exported `bumpRenderEpoch()` function is REMOVED. Replace every call to `bumpRenderEpoch()` with the appropriate narrower helper based on intent: `usePlugins.ts#subscribeSettingsChanged` → `notifyRenderInvalidated()` (settings change does not externally mutate the rendered DOM); `ChapterContent.vue#cancelEditAction` → `forceTokenRemount()` (cancel-edit recovery from sidebar relocation moving children out of v-html). Future call sites SHALL audit at the call site whether the caller has externally mutated the rendered DOM. If yes, use `forceTokenRemount()`; otherwise use `notifyRenderInvalidated()`. Test mocks that exposed `bumpRenderEpoch` SHALL be updated to expose `notifyRenderInvalidated`, `forceTokenRemount`, and a `remountToken: Ref<number>` field.
 
-The `next()` and `previous()` methods SHALL update `currentIndex`, which triggers a `watch` effect that calls `syncRoute()` to update the URL via `router.replace()`. The `loadFromBackend(series, story, startChapter?)` method SHALL load chapter data from the backend API, set `currentIndex` to `startChapter` (clamped to valid range) or 0, and call `syncRoute()` to update the URL. Story-level navigation (e.g., from the story selector) SHALL use `navigateToStory()` in `useStorySelector` which calls `router.push()`, and the route watcher in `useChapterNav` SHALL react to load the new story.
+The `next()` and `previous()` methods SHALL update `currentIndex`, which triggers a `watch` effect that calls `syncRoute()` to update the URL via `router.replace()`. The `loadFromBackend(series, story, startChapter?, options?)` method SHALL load chapter data from the backend API, set `currentIndex` to `startChapter` (clamped to valid range) or 0, and — unless `options.syncRoute === false` — call `syncRoute()` to update the URL. Story-level navigation (e.g., from the story selector when on a reading route) SHALL use `navigateToStory()` in `useStorySelector` which calls `router.push()`, and the route watcher in `useChapterNav` SHALL react to load the new story. When `StorySelector` is invoked from a non-reading route (e.g., `/settings/*` or `/tools/*`), it SHALL call `loadFromBackend(..., { syncRoute: false })` directly so the user remains on the current page while the story is loaded into the backend context.
 
 The `reloadToLast()` method SHALL reload chapters and update the route to the **new last chapter**. It is reserved for callers whose semantics genuinely are "go to the new last chapter": post-LLM-stream navigation in `MainLayout`, the rewind toolbar action, and the branch toolbar action. **The edit-save flow SHALL NOT use `reloadToLast()`; it SHALL use `refreshAfterEdit(targetChapter)` instead so the user stays on the chapter they edited.**
 
-A module-level `loadToken` counter SHALL protect against stale results from concurrent loads. Additionally, `loadFromBackend` SHALL trigger a WebSocket `subscribe` message for the loaded story when a WebSocket connection is active.
+A module-level `loadToken` counter SHALL protect against stale results from concurrent loads. Additionally, `loadFromBackend` SHALL trigger a WebSocket `subscribe` message for the loaded story when a WebSocket connection is active, regardless of the `options.syncRoute` value.
 
 This change does NOT relocate ownership of the initial deep-link backend load away from `App.vue#handleUnlocked`. The existing path — `Promise.all([initPlugins(), applyBackground()])` then `loadFromBackend(...)` — combined with the new `pluginsSettled` gate in `ContentArea.vue`, is sufficient to guarantee that chapter rendering does not run before plugins have settled. A future change MAY relocate this ownership to a route watcher; doing so is out of scope here.
 
@@ -209,6 +209,14 @@ This change does NOT relocate ownership of the initial deep-link backend load aw
 #### Scenario: loadFromBackend subscribes via WebSocket
 - **WHEN** `loadFromBackend('my-series', 'my-story')` is called and a WebSocket connection is active
 - **THEN** the composable SHALL send `{ type: "subscribe", series: "my-series", story: "my-story" }` via the WebSocket to receive real-time chapter updates
+
+#### Scenario: loadFromBackend with syncRoute:false does not change URL
+- **WHEN** a caller invokes `loadFromBackend('my-series', 'my-story', undefined, { syncRoute: false })` while the current route is `/settings/prompt-editor`
+- **THEN** chapters SHALL be loaded, `folderName` SHALL be set to `my-series / my-story`, the `story:switch` hook SHALL dispatch, and `router.replace()` SHALL NOT be called — the URL SHALL remain `/settings/prompt-editor`
+
+#### Scenario: loadFromBackend without options preserves existing behavior
+- **WHEN** an existing caller invokes `loadFromBackend('my-series', 'my-story')` without the `options` parameter
+- **THEN** the behavior SHALL be unchanged from before this change: chapters load AND `syncRoute()` is invoked to update the URL to the chapter route
 
 #### Scenario: commitContent never touches remountToken
 - **WHEN** any code path (load, navigation, edit save, polling, WebSocket `chapters:content` handler) invokes `commitContent(next)`

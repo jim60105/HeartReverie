@@ -216,7 +216,7 @@ export interface UseChapterNavReturn {
   previous: () => void;
   goToFirst: () => void;
   goToLast: () => void;
-  loadFromBackend: (series: string, story: string, startChapter?: number) => Promise<void>;
+  loadFromBackend: (series: string, story: string, startChapter?: number, options?: { syncRoute?: boolean }) => Promise<void>;
   reloadToLast: () => Promise<void>;
   refreshAfterEdit: (targetChapter: number) => Promise<void>;
   notifyRenderInvalidated: () => void;

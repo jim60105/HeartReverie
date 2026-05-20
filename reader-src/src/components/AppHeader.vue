@@ -1,11 +1,40 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useChapterNav } from "@/composables/useChapterNav";
+import { isReadingRoute } from "@/router/isReadingRoute";
 import StorySelector from "./StorySelector.vue";
 import ToolsMenu from "./ToolsMenu.vue";
 
 const router = useRouter();
+const route = useRoute();
+
+const showReaderControls = computed(() => isReadingRoute(route.path));
+
+const headerRef = ref<HTMLElement | null>(null);
+let resizeObserver: ResizeObserver | null = null;
+
+function syncHeaderHeight(el: HTMLElement) {
+  const h = Math.round(el.getBoundingClientRect().height);
+  if (h > 0) {
+    document.documentElement.style.setProperty("--header-height", `${h}px`);
+  }
+}
+
+onMounted(() => {
+  const el = headerRef.value;
+  if (!el) return;
+  syncHeaderHeight(el);
+  if (typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(() => syncHeaderHeight(el));
+    resizeObserver.observe(el);
+  }
+});
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+});
 
 const {
   currentIndex,
@@ -53,14 +82,16 @@ function openSettings() {
 </script>
 
 <template>
-  <header class="app-header">
+  <header ref="headerRef" class="app-header">
     <div class="header-row">
+      <slot name="leading" />
+
       <StorySelector />
 
       <span class="folder-name">{{ folderName || '尚未選擇故事' }}</span>
 
       <button
-        v-if="hasChapters"
+        v-if="showReaderControls && hasChapters"
         class="themed-btn header-btn header-btn--icon"
         title="重新載入資料夾"
         @click="handleReload"
@@ -70,17 +101,18 @@ function openSettings() {
 
       <span class="header-spacer"></span>
 
-      <ToolsMenu />
+      <template v-if="showReaderControls">
+        <ToolsMenu />
 
-      <button
-        class="themed-btn header-btn header-btn--icon"
-        title="設定"
-        @click="openSettings"
-      >
-        ⚙️
-      </button>
+        <button
+          class="themed-btn header-btn header-btn--icon"
+          title="設定"
+          @click="openSettings"
+        >
+          ⚙️
+        </button>
 
-      <nav v-if="hasChapters" data-chapter-list>
+        <nav v-if="hasChapters" data-chapter-list>
         <button
           class="themed-btn header-btn header-btn--icon header-btn--boundary"
           :disabled="isFirst"
@@ -95,9 +127,10 @@ function openSettings() {
           class="themed-btn header-btn"
           :disabled="isFirst"
           :data-chapter-number="prevChapterNum"
+          aria-label="上一章"
           @click="previous"
         >
-          ← 上一章
+          ←<span class="nav-label"> 上一章</span>
         </button>
         <span
           class="chapter-progress"
@@ -107,9 +140,10 @@ function openSettings() {
           class="themed-btn header-btn"
           :disabled="isLast"
           :data-chapter-number="nextChapterNum"
+          aria-label="下一章"
           @click="next"
         >
-          下一章 →
+          <span class="nav-label">下一章 </span>→
         </button>
         <button
           class="themed-btn header-btn header-btn--icon header-btn--boundary"
@@ -122,6 +156,7 @@ function openSettings() {
           ⇉
         </button>
       </nav>
+      </template>
     </div>
   </header>
 </template>
@@ -156,13 +191,16 @@ function openSettings() {
   transition: background 0.15s, border-color 0.15s;
 }
 
+:slotted(.header-btn) {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
 .header-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
-}
-
-.header-btn--icon {
-  font-size: 1rem;
 }
 
 .folder-name {
@@ -182,6 +220,10 @@ function openSettings() {
   color: var(--text-label);
   font-size: 0.875rem;
   white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 [data-chapter-list] {
@@ -196,6 +238,12 @@ function openSettings() {
     display: none;
   }
   .header-btn--boundary {
+    display: none;
+  }
+}
+
+@media (max-width: 409px) {
+  .nav-label {
     display: none;
   }
 }

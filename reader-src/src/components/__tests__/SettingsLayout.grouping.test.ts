@@ -8,7 +8,7 @@ import { defineComponent, nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 
 vi.mock("vue-router", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), afterEach: vi.fn(() => () => {}) }),
 }));
 
 vi.mock("@/composables/useAuth", () => ({
@@ -58,7 +58,7 @@ describe("SettingsLayout — sidebar grouping by meta.category", () => {
   it("renders general links before the developer-tools divider; hook-inspector lives in developer-tools", async () => {
     const SettingsLayout = (await import("@/components/SettingsLayout.vue")).default;
     const wrapper = mount(SettingsLayout, {
-      global: { stubs: { "router-link": RouterLinkStub, "router-view": RouterViewStub } },
+      global: { stubs: { "router-link": RouterLinkStub, "router-view": RouterViewStub, AppHeader: defineComponent({ name: "AppHeader", template: '<header class="app-header-stub"><slot name="leading" /></header>' }) } },
     });
     await nextTick();
     await new Promise((r) => setTimeout(r, 5));

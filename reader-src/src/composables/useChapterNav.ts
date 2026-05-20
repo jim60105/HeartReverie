@@ -311,6 +311,7 @@ async function loadFromBackend(
   series: string,
   story: string,
   startChapter?: number,
+  options?: { syncRoute?: boolean },
 ): Promise<void> {
   clearPolling();
   const token = ++loadToken;
@@ -349,7 +350,9 @@ async function loadFromBackend(
     dispatchChapterChange(null, startIdx);
   }
 
-  syncRoute();
+  if (options?.syncRoute !== false) {
+    syncRoute();
+  }
   sendSubscribeIfConnected();
   startPollingIfNeeded();
 }

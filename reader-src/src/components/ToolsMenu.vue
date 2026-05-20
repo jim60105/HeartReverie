@@ -156,10 +156,6 @@ watch(
   transition: background 0.15s, border-color 0.15s;
 }
 
-.tools-menu .header-btn--icon {
-  font-size: 1rem;
-}
-
 .tools-menu__panel {
   position: absolute;
   top: calc(100% + 10px);

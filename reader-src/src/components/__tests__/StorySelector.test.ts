@@ -10,7 +10,10 @@ const selectedStoryRef = ref("");
 const fetchSeriesMock = vi.fn().mockResolvedValue(undefined);
 const createStoryMock = vi.fn().mockResolvedValue(undefined);
 const navigateToStoryMock = vi.fn();
+const loadFromBackendMock = vi.fn().mockResolvedValue(undefined);
 const exportStoryMock = vi.fn().mockResolvedValue(undefined);
+
+const routeRef = { path: "/", fullPath: "/" };
 
 vi.mock("@/composables/useStorySelector", () => ({
   useStorySelector: () => ({
@@ -28,13 +31,24 @@ vi.mock("@/composables/useStoryExport", () => ({
   useStoryExport: () => ({ exportStory: exportStoryMock }),
 }));
 
+vi.mock("@/composables/useChapterNav", () => ({
+  useChapterNav: () => ({ loadFromBackend: loadFromBackendMock }),
+}));
+
+vi.mock("vue-router", () => ({
+  useRoute: () => routeRef,
+}));
+
 describe("StorySelector", () => {
   beforeEach(() => {
     selectedSeriesRef.value = "";
     selectedStoryRef.value = "";
+    routeRef.path = "/";
+    routeRef.fullPath = "/";
     fetchSeriesMock.mockClear();
     createStoryMock.mockClear();
     navigateToStoryMock.mockClear();
+    loadFromBackendMock.mockClear();
     exportStoryMock.mockClear();
     exportStoryMock.mockResolvedValue(undefined);
   });
@@ -64,11 +78,71 @@ describe("StorySelector", () => {
     const wrapper = mount(StorySelector);
     await wrapper.findAll(".action-btn")[1]!.trigger("click");
     expect(navigateToStoryMock).not.toHaveBeenCalled();
+    expect(loadFromBackendMock).not.toHaveBeenCalled();
 
     selectedSeriesRef.value = "alpha";
     selectedStoryRef.value = "story-1";
     await wrapper.findAll(".action-btn")[1]!.trigger("click");
     expect(navigateToStoryMock).toHaveBeenCalledWith("alpha", "story-1");
+    expect(loadFromBackendMock).not.toHaveBeenCalled();
+  });
+
+  it("loads story without navigating when on a settings route", async () => {
+    routeRef.path = "/settings/prompt-editor";
+    routeRef.fullPath = "/settings/prompt-editor";
+    selectedSeriesRef.value = "alpha";
+    selectedStoryRef.value = "story-1";
+
+    const wrapper = mount(StorySelector);
+    await wrapper.findAll(".action-btn")[1]!.trigger("click");
+    await flushPromises();
+
+    expect(loadFromBackendMock).toHaveBeenCalledWith(
+      "alpha",
+      "story-1",
+      undefined,
+      { syncRoute: false },
+    );
+    expect(navigateToStoryMock).not.toHaveBeenCalled();
+  });
+
+  it("loads story without navigating when on a tools route", async () => {
+    routeRef.path = "/tools/something";
+    routeRef.fullPath = "/tools/something";
+    selectedSeriesRef.value = "alpha";
+    selectedStoryRef.value = "story-1";
+
+    const wrapper = mount(StorySelector);
+    await wrapper.findAll(".action-btn")[1]!.trigger("click");
+    await flushPromises();
+
+    expect(loadFromBackendMock).toHaveBeenCalledWith(
+      "alpha",
+      "story-1",
+      undefined,
+      { syncRoute: false },
+    );
+    expect(navigateToStoryMock).not.toHaveBeenCalled();
+  });
+
+  it("creates story and loads without navigating when on settings", async () => {
+    routeRef.path = "/settings/lore";
+    routeRef.fullPath = "/settings/lore";
+    selectedSeriesRef.value = "alpha";
+
+    const wrapper = mount(StorySelector);
+    await wrapper.find(".selector-input").setValue("brand-new");
+    await wrapper.findAll(".action-btn")[0]!.trigger("click");
+    await flushPromises();
+
+    expect(createStoryMock).toHaveBeenCalledWith("alpha", "brand-new");
+    expect(loadFromBackendMock).toHaveBeenCalledWith(
+      "alpha",
+      "brand-new",
+      undefined,
+      { syncRoute: false },
+    );
+    expect(navigateToStoryMock).not.toHaveBeenCalled();
   });
 
   it("disables export buttons without selection and calls export with format", async () => {
