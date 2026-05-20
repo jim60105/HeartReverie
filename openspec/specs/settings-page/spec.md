@@ -258,32 +258,44 @@ The settings area SHALL include a new tab registered as a child route of `/setti
 - **WHEN** the Save request returns a non-2xx response
 - **THEN** the page SHALL show an error toast using the existing toast notification mechanism and SHALL leave the form values unchanged so the user can retry
 
-### Requirement: Settings layout caps its height to the viewport on the prompt-editor route
+### Requirement: Settings drawer and content scroll independently within the viewport
 
-The global stylesheet (`reader-src/src/styles/base.css`) SHALL declare a route-scoped rule that caps the `.settings-layout` element's height to exactly the visible viewport whenever a descendant `.editor-page` element is present in the DOM (i.e., the user is on `/settings/prompt-editor`). The rule SHALL use the `:has()` selector with the duplicated class chain `.settings-layout.settings-layout:has(.editor-page)` to raise specificity above `SettingsLayout.vue`'s scoped `.settings-layout { min-height: 100vh; }` rule (a plain `.settings-layout:has(.editor-page)` selector has the same specificity as the scoped class rule, so on mobile where `100vh > 100dvh` the un-neutralized `min-height` could win and re-introduce page scroll). The rule SHALL declare `height: 100vh; height: 100dvh;` (the second value is preferred on browsers that support `dvh`; the first is a fallback) together with `min-height: 0` (to neutralize the inherited `min-height: 100vh`) and `overflow: hidden`.
+When viewport width ≥ 768 px (desktop / tablet), the `SettingsLayout.vue` component SHALL constrain the visible area to the viewport so that the sticky `<header>` (`AppHeader.vue`) is always on screen and the two columns inside `.settings-body` each scroll on their own. Specifically:
 
-When the user is on a different settings route (e.g., `/settings/lore`, `/settings/llm`), the rule MUST NOT apply: `.settings-layout` retains its existing `min-height: 100vh` and the page may grow past the viewport with the document body acting as the scroll container, exactly as today. This change is strictly additive and route-scoped; other settings tabs are not affected.
+- The `.settings-layout` root SHALL be height-capped to `100dvh` (with `100vh` as a `dvh`-unaware fallback declared first). `min-height: 100vh` SHALL NOT cause the layout to grow past the viewport.
+- The `.settings-body` flex container SHALL fill the remaining vertical space below the header and SHALL set `flex: 1; min-height: 0; overflow: hidden` so neither column can spill into a body-level scroll.
+- The desktop sidebar (`#settings-drawer` `<aside>`, class `.settings-sidebar` without `.is-mobile`) SHALL set `overflow-y: auto; min-height: 0` so that a sidebar long enough to exceed the available height (general tabs + plugin tabs + developer-tools tabs + back-to-reader button) scrolls inside the aside only. Sidebar scroll position SHALL NOT move the content area.
+- The content `<main>` (`.settings-content`) SHALL set `overflow-y: auto; min-height: 0` so that long routed content (e.g. `/settings/prompt-editor`, `/settings/lore`, `/settings/llm`, `/settings/theme`, plugin pages) scrolls inside the main column only. Content scroll position SHALL NOT move the sidebar.
+- The document body SHALL NOT introduce a vertical scrollbar on any `/settings/*` route at viewport widths ≥ 768 px: `document.documentElement.scrollHeight` SHALL be less than or equal to `document.documentElement.clientHeight + 1` (allowing subpixel rounding), and the sticky header SHALL never scroll out of view.
 
-The mobile breakpoint (≤767px) SHALL apply the same route-scoped cap. The sidebar stacks above the content on mobile, but on the prompt-editor route the combined element MUST still fit within `100dvh` so that the document body remains non-scrolling.
+At viewport widths ≤ 767 px (mobile) the mobile drawer rules in "Settings sidebar collapses to an overlay drawer on mobile" continue to apply unchanged. The mobile content area MAY scroll either inside `.settings-content` or as the document body (current behavior is unchanged); the desktop independent-scroll guarantee above does NOT apply on mobile.
 
-#### Scenario: Route-scoped cap rule is declared in base.css
+#### Scenario: Long sidebar scrolls within the aside on desktop
 
-- **WHEN** the project's global stylesheet `reader-src/src/styles/base.css` is read as text
-- **THEN** it SHALL contain a rule whose selector is `.settings-layout.settings-layout:has(.editor-page)` (the duplicated class chain raises specificity above `SettingsLayout.vue`'s scoped `.settings-layout` rule)
-- **AND** the rule's declarations SHALL include `height: 100vh`, `height: 100dvh`, `min-height: 0`, and `overflow: hidden`
+- **GIVEN** the user is on a `/settings/*` route at 1280 × 720 viewport with so many plugin/developer-tools tabs registered that the sidebar's natural content height exceeds the viewport
+- **WHEN** the user scrolls inside `#settings-drawer`
+- **THEN** the aside's internal scroll position SHALL advance, the `<main class="settings-content">` element's `scrollTop` SHALL remain `0`, the sticky `<header>` SHALL remain fully visible, and `document.documentElement.scrollTop` SHALL remain `0`
 
-#### Scenario: Cap does not apply when the editor page is not in the DOM
+#### Scenario: Long routed content scrolls within the main on desktop
 
-- **WHEN** `.settings-layout` has no descendant element with class `.editor-page` (e.g., the user is on `/settings/lore` or `/settings/llm`)
-- **THEN** the `:has(.editor-page)` rule SHALL NOT match `.settings-layout`
-- **AND** `.settings-layout` keeps its existing `min-height: 100vh` from `SettingsLayout.vue`'s scoped style block (verified by manual browser smoke; not unit-testable in Happy DOM)
+- **GIVEN** the user is on `/settings/lore` at 1280 × 720 viewport with a lore list whose natural height exceeds the viewport
+- **WHEN** the user scrolls inside `.settings-content`
+- **THEN** the main's internal scroll position SHALL advance, `#settings-drawer` element's `scrollTop` SHALL remain `0`, the sticky `<header>` SHALL remain fully visible, and `document.documentElement.scrollTop` SHALL remain `0`
 
-#### Scenario: Document body does not scroll on the prompt-editor route (manual smoke)
+#### Scenario: Document body does not scroll on any settings route at desktop widths
 
-- **GIVEN** the route-scoped cap rule is in effect on `/settings/prompt-editor`
-- **WHEN** the routed content's natural height exceeds the viewport
-- **THEN** the document body SHALL NOT produce a vertical scrollbar
-- **AND** the `.settings-layout` root element SHALL be sized to the viewport height (validated by manual browser smoke; Happy DOM does not perform layout)
+- **WHEN** the user navigates to any `/settings/*` route at a viewport ≥ 768 px (audited at 1280 × 720 and 768 × 1024)
+- **THEN** `document.documentElement.scrollHeight` SHALL be less than or equal to `document.documentElement.clientHeight + 1` (no body-level vertical scrollbar), regardless of how tall the sidebar or content's natural heights are
+
+#### Scenario: Computed styles enforce the scroll containers
+
+- **WHEN** the user is on a `/settings/*` route at a viewport ≥ 768 px
+- **THEN** `getComputedStyle(.settings-layout).height` SHALL equal the viewport height (within 1 px), `getComputedStyle(.settings-body)` SHALL include `min-height: 0px` and `overflow: hidden`, `getComputedStyle(#settings-drawer)` SHALL include `min-height: 0px` and `overflow-y: auto`, and `getComputedStyle(.settings-content)` SHALL include `min-height: 0px` and `overflow-y: auto`
+
+#### Scenario: Mobile behavior unaffected
+
+- **WHEN** the user is on a `/settings/*` route at a viewport ≤ 767 px
+- **THEN** the desktop-only independent-scroll guarantee SHALL NOT be required, the mobile drawer SHALL render per "Settings sidebar collapses to an overlay drawer on mobile", and the mobile content scroll behavior SHALL remain whatever it was before this change (no regression on mobile)
 
 ### Requirement: Theme settings tab
 
