@@ -31,14 +31,24 @@ export async function apiFetch(
   const { throwOnError = true, errorMessage, ...rest } = init;
 
   const url = typeof input === "string" ? input : input.toString();
-  const headers = { ...getAuthHeaders(), ...(rest.headers ?? {}) };
+
+  // Use Headers to normalize all three RequestInit.headers shapes
+  // (object literal, Headers instance, [key, value][]); caller wins on collision.
+  const headers = new Headers(getAuthHeaders() as Record<string, string>);
+  if (rest.headers) {
+    new Headers(rest.headers).forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
 
   const res = await fetch(url, { ...rest, headers });
 
   if (!res.ok && throwOnError) {
     const body = await res.json().catch(() => ({}));
     const detail = (body as { detail?: string }).detail;
-    throw new Error(detail ?? errorMessage ?? res.statusText ?? `Request failed: ${url}`);
+    throw new Error(
+      detail ?? errorMessage ?? (res.statusText || `Request failed: ${url}`),
+    );
   }
 
   return res;

@@ -60,7 +60,7 @@ describe("PromptEditorMessageCard — extra coverage", () => {
         catalogVariables: [
           { name: "core_var", source: "core", type: "string" },
           { name: "lore_var", source: "lore", type: "string" },
-          { name: "plug_var", source: "thinking", type: "string" },
+          { name: "plug_var", source: "plugin-fragment", type: "string" },
         ],
       },
     });

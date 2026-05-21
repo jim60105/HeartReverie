@@ -15,11 +15,11 @@
 
 // Plugin: thinking — Fold <thinking> and <think> tags into collapsible details
 
-import { escapeHtml } from '../_shared/utils.js';
+import { escapeHtml, getPluginSettings } from '../_shared/utils.js';
 
 export function register(hooks) {
   hooks.register('frontend-render', (context) => {
-    const settings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+    const settings = getPluginSettings(hooks);
     if (settings.enabled === false) return;
 
     const defaultCollapsed = settings.defaultCollapsed !== false;

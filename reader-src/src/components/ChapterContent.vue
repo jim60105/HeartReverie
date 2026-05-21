@@ -25,7 +25,7 @@ const {
   remountToken,
 } = useChapterNav();
 const { editChapter, rewindAfter, branchFrom } = useChapterActions();
-const { isEditing, editBuffer, beginEdit, cancelEdit: cancelEditState, editingChapterIndex } = useChapterEditor();
+const { isEditing, editBuffer, beginEdit, cancelEdit: cancelEditState } = useChapterEditor();
 const { pluginsReady } = usePlugins();
 
 const tokens = computed(() => {

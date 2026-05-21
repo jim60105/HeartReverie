@@ -23,7 +23,7 @@ describe("template-api HTTP client", () => {
     expect(url).toContain("series=s");
     expect(url).toContain("story=t");
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
-    expect((init.headers as Record<string, string>)["X-Passphrase"]).toBe("pw");
+    expect(new Headers(init.headers).get("X-Passphrase")).toBe("pw");
   });
 
   it("lintTemplate POSTs JSON with auth", async () => {
@@ -37,8 +37,9 @@ describe("template-api HTTP client", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/templates/lint");
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
-    expect((init.headers as Record<string, string>)["X-Passphrase"]).toBe("pw");
+    const h = new Headers(init.headers);
+    expect(h.get("Content-Type")).toBe("application/json");
+    expect(h.get("X-Passphrase")).toBe("pw");
     expect(JSON.parse(init.body as string)).toEqual({ templatePath: "system.md", source: "hi" });
   });
 

@@ -6,7 +6,7 @@ import type {
   UsePluginsReturn,
 } from "@/types";
 import { FrontendHookDispatcher, frontendHooks } from "@/lib/plugin-hooks";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch, apiFetchJson } from "@/lib/api";
 import { useNotification } from "@/composables/useNotification";
 import { renderDebug } from "@/lib/render-debug";
 import { onEvent } from "@/lib/event-bus";
@@ -163,23 +163,18 @@ function injectPluginStyles(pluginList: PluginDescriptor[]): void {
 }
 
 async function doInit(): Promise<void> {
-  const { getAuthHeaders } = useAuth();
-
-  const res = await fetch("/api/plugins", { headers: { ...getAuthHeaders() } });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch /api/plugins: HTTP ${res.status}`);
-  }
-  const pluginList: PluginDescriptor[] = await res.json();
+  const pluginList = await apiFetchJson<PluginDescriptor[]>(
+    "/api/plugins",
+    { errorMessage: "Failed to fetch /api/plugins" },
+  );
   for (const plugin of pluginList) {
     if (plugin.settings && typeof plugin.settings === "object") {
       updatePluginSettings(plugin.name, plugin.settings);
     } else if (plugin.hasSettings) {
       try {
-        const settingsRes = await fetch(
+        const settingsRes = await apiFetch(
           `/api/plugins/${plugin.name}/settings`,
-          {
-            headers: { ...getAuthHeaders() },
-          },
+          { throwOnError: false },
         );
         if (settingsRes.ok) {
           updatePluginSettings(plugin.name, await settingsRes.json());

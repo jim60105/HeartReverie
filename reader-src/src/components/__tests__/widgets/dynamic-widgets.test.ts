@@ -6,6 +6,12 @@ import SelectWidget from "@/components/widgets/SelectWidget.vue";
 import MultiSelectWidget from "@/components/widgets/MultiSelectWidget.vue";
 import ComboboxWidget from "@/components/widgets/ComboboxWidget.vue";
 
+vi.mock("@/composables/useAuth", () => ({
+  useAuth: () => ({
+    getAuthHeaders: () => ({ "X-Passphrase": "pp" }),
+  }),
+}));
+
 describe("SelectWidget", () => {
   it("renders enum options and emits on change", async () => {
     const { wrapper, emitted } = mountWidget(SelectWidget, {
@@ -19,7 +25,7 @@ describe("SelectWidget", () => {
   });
 
   it("fetches dynamic options from x-options-url", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
       ({
         ok: true,
         status: 200,
@@ -36,13 +42,12 @@ describe("SelectWidget", () => {
       const { wrapper } = mountWidget(SelectWidget, {
         schema: { type: "string", enum: [], "x-options-url": "/api/things" },
         modelValue: "",
-        authHeaders: () => ({ "X-Passphrase": "pp" }),
       });
       await flushPromises();
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/things",
-        expect.objectContaining({ headers: expect.objectContaining({ "X-Passphrase": "pp" }) }),
-      );
+      expect(fetchMock).toHaveBeenCalled();
+      const [calledUrl, init] = fetchMock.mock.calls[0]!;
+      expect(calledUrl).toBe("/api/things");
+      expect(new Headers(init?.headers).get("X-Passphrase")).toBe("pp");
       const opts = wrapper.findAll("option").map((o) => o.text());
       expect(opts.join(",")).toContain("Apple");
       expect(opts.join(",")).toContain("Banana");

@@ -22,3 +22,35 @@ export function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 }
+
+/**
+ * Read plugin settings from the hooks object, returning an empty object when
+ * the host runtime does not expose `getSettings` (older engine builds, tests).
+ * @param {{ getSettings?: () => Record<string, unknown> }} hooks
+ * @returns {Record<string, unknown>}
+ */
+export function getPluginSettings(hooks) {
+  if (!hooks || typeof hooks.getSettings !== 'function') return {};
+  const value = hooks.getSettings();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value;
+}
+
+/**
+ * Resolve the logger from a plugin register context, falling back to a
+ * `console.info`-backed tagged logger when the host does not provide one.
+ * Always exposes at least an `info` method; callers that need warn/error
+ * should guard or extend the returned object.
+ * @param {{ logger?: { info?: (...args: unknown[]) => void } } | undefined} context
+ * @param {string} tag short plugin identifier prefixed to console output
+ * @returns {{ info: (...args: unknown[]) => void }}
+ */
+export function createPluginLogger(context, tag) {
+  if (context && context.logger && typeof context.logger.info === 'function') {
+    return context.logger;
+  }
+  const prefix = tag ? `[${tag}]` : '[plugin]';
+  return {
+    info: (...args) => console.info(prefix, ...args),
+  };
+}

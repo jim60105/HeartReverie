@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import type { ChatMessage, PromptPreviewProps, PromptPreviewResult } from "@/types";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 
 const props = defineProps<PromptPreviewProps>();
-
-const { getAuthHeaders } = useAuth();
 
 const loading = ref(false);
 const messages = ref<ChatMessage[]>([]);
@@ -43,12 +41,13 @@ async function fetchPreview() {
       body.template = props.template;
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(props.series)}/${encodeURIComponent(props.story)}/preview-prompt`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        throwOnError: false,
       },
     );
 

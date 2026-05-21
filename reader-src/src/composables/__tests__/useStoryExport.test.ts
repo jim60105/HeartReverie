@@ -74,7 +74,8 @@ describe("useStoryExport", () => {
     expect(url).toContain(encodeURIComponent("系列"));
     expect(url).toContain(encodeURIComponent("故事"));
     expect(url).toContain("format=md");
-    expect((init as RequestInit).headers).toMatchObject({ "X-Passphrase": "secret-pass" });
+    expect((init as RequestInit).headers).toBeInstanceOf(Headers);
+    expect(((init as RequestInit).headers as Headers).get("X-Passphrase")).toBe("secret-pass");
 
     expect(URL.createObjectURL).toHaveBeenCalled();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");

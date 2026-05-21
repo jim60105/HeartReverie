@@ -42,8 +42,8 @@ import type {
   PromptPreviewResult,
   UsePromptEditorReturn,
 } from "@/types";
-import { useAuth } from "@/composables/useAuth";
 import { useStorySelector } from "@/composables/useStorySelector";
+import { apiFetch } from "@/lib/api";
 import {
   parseSystemTemplate,
   serializeMessageCards,
@@ -144,11 +144,8 @@ function applyParseResult(source: string): void {
 }
 
 async function loadTemplate(): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   try {
-    const res = await fetch("/api/template", {
-      headers: { ...getAuthHeaders() },
-    });
+    const res = await apiFetch("/api/template", { throwOnError: false });
     if (!res.ok) return;
     const data: { content: string; source: "custom" | "default" } = await res
       .json();
@@ -182,23 +179,14 @@ async function save(): Promise<void> {
     }
   }
 
-  const { getAuthHeaders } = useAuth();
   isSaving.value = true;
   try {
-    const res = await fetch("/api/template", {
+    await apiFetch("/api/template", {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: body }),
+      errorMessage: "Failed to save template",
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        (err as { detail?: string }).detail ?? "Failed to save template",
-      );
-    }
     // Refresh both snapshots: originalRawSource always, originalCards in
     // cards mode. The saved-event regression guard requires raw-mode saves
     // to also leave the editor clean.
@@ -213,11 +201,10 @@ async function save(): Promise<void> {
 }
 
 async function resetTemplate(): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   try {
-    await fetch("/api/template", {
+    await apiFetch("/api/template", {
       method: "DELETE",
-      headers: { ...getAuthHeaders() },
+      throwOnError: false,
     });
   } catch {
     // Ignore delete errors
@@ -333,15 +320,14 @@ async function loadParameters(series?: string, story?: string): Promise<void> {
   parametersAbortController = new AbortController();
   const { signal } = parametersAbortController;
 
-  const { getAuthHeaders } = useAuth();
   try {
     const url = new URL("/api/plugins/parameters", globalThis.location.origin);
     if (series) url.searchParams.set("series", series);
     if (story) url.searchParams.set("story", story);
 
-    const res = await fetch(url.toString(), {
-      headers: { ...getAuthHeaders() },
+    const res = await apiFetch(url.toString(), {
       signal,
+      throwOnError: false,
     });
     if (!res.ok) return;
     parameters.value = await res.json();
@@ -365,7 +351,6 @@ async function previewTemplate(
   story: string,
   message: string,
 ): Promise<PromptPreviewResult> {
-  const { getAuthHeaders } = useAuth();
   const body: Record<string, string> = { message: message || "(preview)" };
 
   // Send current editor content for preview if it differs from saved.
@@ -373,19 +358,20 @@ async function previewTemplate(
     body["template"] = serializeCurrent();
   }
 
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/stories/${encodeURIComponent(series)}/${
       encodeURIComponent(story)
     }/preview-prompt`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      throwOnError: false,
     },
   );
 
   if (!res.ok) {
-    const err = await res.json();
+    const err = await res.json().catch(() => ({}));
     throw new Error(
       (err as { message?: string; detail?: string }).message ??
         (err as { detail?: string }).detail ??

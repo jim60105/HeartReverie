@@ -18,6 +18,8 @@
 
 'use strict';
 
+import { createPluginLogger, getPluginSettings } from '../_shared/utils.js';
+
 // ---------------------------------------------------------------------------
 // Helpers (module-level, stateless)
 // ---------------------------------------------------------------------------
@@ -533,9 +535,7 @@ function initLocalMode(hooks, settings) {
 // ---------------------------------------------------------------------------
 
 function initFileMode(hooks, context, settings) {
-  const logger = context && context.logger
-    ? context.logger
-    : { info: (...args) => console.info('[reading-progress]', ...args) };
+  const logger = createPluginLogger(context, 'reading-progress');
 
   // -- Core state --
   let cachedRevision = 0;
@@ -838,7 +838,7 @@ export async function importLocalToServer(options = {}) {
 // ---------------------------------------------------------------------------
 
 export function register(hooks, context) {
-  const settings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+  const settings = getPluginSettings(hooks);
   if (settings.enabled === false) return;
 
   if (settings.storageBackend === 'local') {

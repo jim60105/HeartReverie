@@ -77,8 +77,10 @@ describe("useStorySelector route synchronization", () => {
 
   async function flushRouteSync(): Promise<void> {
     await nextTick();
-    await Promise.resolve();
-    await Promise.resolve();
+    // The watcher is async (awaits fetchStories → apiFetchJson → apiFetch
+    // → fetch → res.json), so we need enough microtask ticks to let the
+    // whole chain settle before asserting.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
   }
 
   it("reacts to route params by syncing selection and usage", async () => {

@@ -20,7 +20,7 @@ function onInput(ev: Event): void {
 }
 
 const inputId = computed(() => `f-${props.path || "root"}`);
-const inputMode = computed<string | undefined>(() =>
+const inputMode = computed<"email" | "url" | undefined>(() =>
   props.schema["format"] === "email"
     ? "email"
     : props.schema["format"] === "url"

@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import type { UseThemeReturn, ThemePayload } from "@/types";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch, apiFetchJson } from "@/lib/api";
 
 const STORAGE_KEY_ID = "heartReverie.themeId";
 const STORAGE_KEY_CACHE_PREFIX = "heartReverie.themeCache.";
@@ -46,21 +46,19 @@ function applyTheme(theme: ThemePayload): void {
 }
 
 async function listThemes(): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   try {
-    const res = await fetch("/api/themes", { headers: { ...getAuthHeaders() } });
-    if (res.ok) {
-      themes.value = await res.json();
-    }
-  } catch { /* Network error — leave empty */ }
+    themes.value = await apiFetchJson<Array<{ id: string; label: string }>>(
+      "/api/themes",
+    );
+  } catch { /* Network or non-2xx — leave empty */ }
 }
 
 async function selectTheme(id: string): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   try {
-    const res = await fetch(`/api/themes/${encodeURIComponent(id)}`, {
-      headers: { ...getAuthHeaders() },
-    });
+    const res = await apiFetch(
+      `/api/themes/${encodeURIComponent(id)}`,
+      { throwOnError: false },
+    );
     if (res.ok) {
       const theme: ThemePayload = await res.json();
       applyTheme(theme);

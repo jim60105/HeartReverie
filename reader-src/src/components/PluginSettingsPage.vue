@@ -15,8 +15,8 @@ import {
   watch,
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useAuth } from "@/composables/useAuth";
 import { useNotification } from "@/composables/useNotification";
+import { apiFetch } from "@/lib/api";
 import { emitEvent } from "@/lib/event-bus";
 import SchemaField from "@/components/SchemaField.vue";
 import {
@@ -32,7 +32,6 @@ import { diffPaths, isPathHidden } from "./schema-field-helpers";
 
 const route = useRoute();
 const router = useRouter();
-const { getAuthHeaders } = useAuth();
 const { notify } = useNotification();
 
 const pluginName = computed(() => route.params.pluginName as string);
@@ -68,7 +67,6 @@ const formContext = reactive({
   errors: errors.value,
   schemaMeta: schemaMeta.value,
   basePath: "",
-  getAuthHeaders: () => getAuthHeaders() as Record<string, string>,
   rootModel: settings.value as Record<string, unknown>,
 }) as unknown as FormContextValue;
 provide(FormContextKey, formContext);
@@ -118,8 +116,8 @@ async function loadSchema(): Promise<void> {
   schema.value = null;
   generalError.value = "";
   try {
-    const res = await fetch(`/api/plugins/${pluginName.value}/settings-schema`, {
-      headers: getAuthHeaders() as Record<string, string>,
+    const res = await apiFetch(`/api/plugins/${pluginName.value}/settings-schema`, {
+      throwOnError: false,
     });
     if (!res.ok) {
       generalError.value = res.status === 404 ? "此插件沒有設定項目" : `載入設定結構失敗 (${res.status})`;
@@ -133,8 +131,8 @@ async function loadSchema(): Promise<void> {
 
 async function loadSettings(): Promise<void> {
   try {
-    const res = await fetch(`/api/plugins/${pluginName.value}/settings`, {
-      headers: getAuthHeaders() as Record<string, string>,
+    const res = await apiFetch(`/api/plugins/${pluginName.value}/settings`, {
+      throwOnError: false,
     });
     if (!res.ok) return;
     const body = (await res.json()) as Record<string, unknown>;
@@ -151,8 +149,8 @@ async function loadSettings(): Promise<void> {
 
 async function loadSchemaMeta(): Promise<void> {
   try {
-    const res = await fetch(`/api/plugins/${pluginName.value}/settings/schema-meta`, {
-      headers: getAuthHeaders() as Record<string, string>,
+    const res = await apiFetch(`/api/plugins/${pluginName.value}/settings/schema-meta`, {
+      throwOnError: false,
     });
     if (!res.ok) return;
     schemaMeta.value = (await res.json()) as SchemaMeta;
@@ -196,13 +194,11 @@ async function save(): Promise<void> {
       ...settings.value,
       _changedPaths: computeChangedPaths(),
     };
-    const res = await fetch(`/api/plugins/${pluginName.value}/settings`, {
+    const res = await apiFetch(`/api/plugins/${pluginName.value}/settings`, {
       method: "PUT",
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "application/json",
-      } as Record<string, string>,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      throwOnError: false,
     });
     const payload = (await res.json().catch(() => ({}))) as {
       errors?: ValidationError[];
@@ -270,13 +266,11 @@ async function runValidate(): Promise<void> {
       ...settings.value,
       _changedPaths: computeChangedPaths(),
     };
-    const res = await fetch(`/api/plugins/${pluginName.value}/settings/validate`, {
+    const res = await apiFetch(`/api/plugins/${pluginName.value}/settings/validate`, {
       method: "POST",
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "application/json",
-      } as Record<string, string>,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      throwOnError: false,
     });
     if (!res.ok) return;
     const payload = (await res.json()) as {
@@ -300,13 +294,11 @@ async function executeAction(action: SchemaAction): Promise<void> {
         body[field] = settings.value[field] ?? "";
       }
     }
-    const res = await fetch(action.url, {
+    const res = await apiFetch(action.url, {
       method: action.method || "POST",
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "application/json",
-      } as Record<string, string>,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      throwOnError: false,
     });
     const data = (await res.json()) as { ok: boolean; error?: string };
     actionResult.value = { ...actionResult.value, [action.id]: data };
