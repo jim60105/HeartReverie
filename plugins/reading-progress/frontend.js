@@ -45,6 +45,119 @@ function getScrollElement() {
   return document.scrollingElement || document.documentElement;
 }
 
+function computeScrollRatio() {
+  const scrollEl = getScrollElement();
+  return scrollEl.scrollTop / Math.max(1, scrollEl.scrollHeight - window.innerHeight);
+}
+
+function clampRatio(r) {
+  return Math.min(1, Math.max(0, r));
+}
+
+function navigateToChapter(series, story, chapterNumber) {
+  window.location.href = `/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapter/${chapterNumber}`;
+}
+
+function handleCrossChapter(remoteChapterIndex, series, story, confirmRemoteJump) {
+  const remoteChapterNumber = remoteChapterIndex + 1;
+  if (confirmRemoteJump) {
+    showConflictDialog(remoteChapterNumber, series, story, null);
+  } else {
+    navigateToChapter(series, story, remoteChapterNumber);
+  }
+}
+
+function makeProgressEntry(identity, scrollRatio, selectionAnchor) {
+  return {
+    chapterIndex: identity.chapterIndex,
+    scrollRatio,
+    lastReadAt: new Date().toISOString(),
+    selectionAnchor: selectionAnchor ?? null,
+    clientId: getClientId(),
+    series: identity.series,
+    story: identity.story,
+  };
+}
+
+/**
+ * Register an idempotent chapter:dom:ready handler that guards against
+ * repeated dispatches for the same (container, chapterIndex) pair (e.g.,
+ * during LLM streaming). Also wires up matching chapter:dom:dispose cleanup
+ * and clears currentIdentity on story:switch.
+ *
+ * @param {object} hooks - Plugin hooks API.
+ * @param {(ctx: object, container: HTMLElement, getIdentity: () => object | null) => (() => void) | void} onFreshChapter
+ *        Called only once per (container, chapterIndex). Returns a cleanup function
+ *        to run on chapter:dom:dispose (or when a new chapter reuses the container).
+ * @returns {{
+ *   getCurrentIdentity: () => object | null,
+ *   setCurrentIdentity: (next: object | null) => void,
+ * }}
+ */
+function registerIdempotentChapterReady(hooks, onFreshChapter) {
+  const containerState = new WeakMap();
+  let currentIdentity = null;
+
+  hooks.register('story:switch', () => {
+    currentIdentity = null;
+  });
+
+  hooks.register('chapter:dom:ready', (ctx) => {
+    if (!ctx.series || !ctx.story) return;
+    const container = ctx.container;
+    if (!(container instanceof HTMLElement)) return;
+
+    const newIdentity = {
+      series: ctx.series,
+      story: ctx.story,
+      chapterIndex: ctx.chapterIndex,
+    };
+
+    // Idempotency guard: skip re-setup if the same (container, series, story,
+    // chapterIndex) tuple fires again (e.g., chapter:dom:ready dispatched on
+    // every streamed chunk). Always refresh currentIdentity in case ctx fields
+    // rotated. Match on full identity so switching stories that reuse the same
+    // container still triggers fresh setup.
+    const existing = containerState.get(container);
+    if (
+      existing &&
+      existing.series === ctx.series &&
+      existing.story === ctx.story &&
+      existing.chapterIndex === ctx.chapterIndex
+    ) {
+      currentIdentity = newIdentity;
+      return;
+    }
+
+    // Different identity on same container, or stale state → run prior cleanup.
+    if (existing) existing.cleanup();
+    currentIdentity = newIdentity;
+
+    const cleanup = onFreshChapter(ctx, container, () => currentIdentity) || (() => {});
+    containerState.set(container, {
+      series: ctx.series,
+      story: ctx.story,
+      chapterIndex: ctx.chapterIndex,
+      cleanup,
+    });
+  }, 50);
+
+  hooks.register('chapter:dom:dispose', (ctx) => {
+    const container = ctx.container;
+    if (!(container instanceof HTMLElement)) return;
+    const state = containerState.get(container);
+    if (state) {
+      state.cleanup();
+      containerState.delete(container);
+    }
+  }, 50);
+
+  return {
+    getCurrentIdentity: () => currentIdentity,
+    setCurrentIdentity: (next) => { currentIdentity = next; },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 4.2 — Throttled sync helper
 // ---------------------------------------------------------------------------
@@ -220,7 +333,7 @@ function showConflictDialog(remoteChapterNumber, series, story, onDismiss) {
 
   jumpBtn.onclick = () => {
     dialog.remove();
-    window.location.href = `/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapter/${remoteChapterNumber}`;
+    navigateToChapter(series, story, remoteChapterNumber);
   };
   stayBtn.onclick = () => {
     dialog.remove();
@@ -293,15 +406,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
     targetIndex = chapters.length - 1;
     // Fire-and-forget corrected PUT
     queueMicrotask(() => {
-      putProgressFn({
-        chapterIndex: targetIndex,
-        scrollRatio: 1,
-        lastReadAt: new Date().toISOString(),
-        selectionAnchor: null,
-        clientId: getClientId(),
-        series: currentIdentity.series,
-        story: currentIdentity.story,
-      });
+      putProgressFn(makeProgressEntry({ ...currentIdentity, chapterIndex: targetIndex }, 1, null));
     });
   }
 
@@ -388,48 +493,12 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
 // ---------------------------------------------------------------------------
 
 function initLocalMode(hooks, settings) {
-  const containerState = new WeakMap();
-  let currentIdentity = null;
-
   function storageKey(series, story) {
     return `reading-progress:${series}/${story}`;
   }
 
-  hooks.register('story:switch', (ctx) => {
-    currentIdentity = null;
-  });
-
-  hooks.register('chapter:dom:ready', (ctx) => {
-    if (!ctx.series || !ctx.story) return;
-
-    const container = ctx.container;
-    if (!(container instanceof HTMLElement)) return;
-
-    // Idempotency guard: if we've already set up scroll-restore + listener
-    // for this same container + chapterIndex, skip. Streaming dispatches
-    // chapter:dom:ready on every chunk; without this guard each chunk would
-    // re-restore scroll back to the saved position, fighting the reader.
-    const existing = containerState.get(container);
-    if (existing && existing.chapterIndex === ctx.chapterIndex) {
-      // Just refresh identity in case ctx fields rotated.
-      currentIdentity = {
-        series: ctx.series,
-        story: ctx.story,
-        chapterIndex: ctx.chapterIndex,
-      };
-      return;
-    }
-
-    currentIdentity = {
-      series: ctx.series,
-      story: ctx.story,
-      chapterIndex: ctx.chapterIndex,
-    };
-
-    // Cleanup prior state (different chapter on same container, or stale)
-    if (existing) existing.cleanup();
-
-    // Restore from localStorage
+  registerIdempotentChapterReady(hooks, (ctx, _container, getIdentity) => {
+    // Restore from localStorage (best-effort; ignore corrupt data)
     try {
       const raw = localStorage.getItem(storageKey(ctx.series, ctx.story));
       if (raw) {
@@ -442,39 +511,21 @@ function initLocalMode(hooks, settings) {
       }
     } catch { /* corrupt data */ }
 
-    // Scroll listener — listen on window (the actual scroll container)
     function onScroll() {
-      if (!currentIdentity) return;
-      const scrollEl = getScrollElement();
-      const scrollRatio = scrollEl.scrollTop / Math.max(1, scrollEl.scrollHeight - window.innerHeight);
+      const identity = getIdentity();
+      if (!identity) return;
       try {
-        localStorage.setItem(storageKey(currentIdentity.series, currentIdentity.story), JSON.stringify({
-          chapterIndex: currentIdentity.chapterIndex,
-          scrollRatio: Math.min(1, Math.max(0, scrollRatio)),
+        localStorage.setItem(storageKey(identity.series, identity.story), JSON.stringify({
+          chapterIndex: identity.chapterIndex,
+          scrollRatio: clampRatio(computeScrollRatio()),
           lastReadAt: new Date().toISOString(),
         }));
       } catch { /* storage full */ }
     }
 
     window.addEventListener('scroll', onScroll, { passive: true });
-    containerState.set(container, {
-      chapterIndex: ctx.chapterIndex,
-      cleanup() {
-        window.removeEventListener('scroll', onScroll);
-      },
-    });
-  }, 50);
-
-  hooks.register('chapter:dom:dispose', (ctx) => {
-    const container = ctx.container;
-    if (container instanceof HTMLElement) {
-      const state = containerState.get(container);
-      if (state) {
-        state.cleanup();
-        containerState.delete(container);
-      }
-    }
-  }, 50);
+    return () => window.removeEventListener('scroll', onScroll);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -491,10 +542,12 @@ function initFileMode(hooks, context, settings) {
   let syncDisabled = false;
   let applyingRemote = false;
   const lastEntryByIndex = new Map();
-  const containerState = new WeakMap();
-  let currentIdentity = null;
   let chapters = [];
   let pollTimer = null;
+
+  // Late-bound identity accessors; assigned after registerIdempotentChapterReady below.
+  let getIdentity = () => null;
+  let setIdentity = () => {};
 
   const syncIntervalMs = ((settings.syncIntervalSeconds ?? 5) * 1000);
 
@@ -570,8 +623,9 @@ function initFileMode(hooks, context, settings) {
   // -- 6.1, 6.3, 6.4 — Conflict detection --
 
   async function checkRemoteConflict() {
-    if (!currentIdentity || syncDisabled) return;
-    const { series, story, chapterIndex } = currentIdentity;
+    const identity = getIdentity();
+    if (!identity || syncDisabled) return;
+    const { series, story, chapterIndex } = identity;
     const remote = await getProgress(series, story);
     if (!remote) return;
 
@@ -581,17 +635,9 @@ function initFileMode(hooks, context, settings) {
     cachedRevision = remote.revision;
 
     const confirmRemoteJump = settings.confirmRemoteJump !== false;
-    const chapterDiff = remote.chapterIndex !== chapterIndex;
 
-    if (chapterDiff) {
-      // Cross-chapter conflict
-      const remoteChapterNumber = remote.chapterIndex + 1;
-      if (confirmRemoteJump) {
-        showConflictDialog(remoteChapterNumber, series, story, null);
-      } else {
-        // Auto-jump
-        window.location.href = `/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapter/${remoteChapterNumber}`;
-      }
+    if (remote.chapterIndex !== chapterIndex) {
+      handleCrossChapter(remote.chapterIndex, series, story, confirmRemoteJump);
     } else {
       // Same chapter: check scroll divergence
       const localEntry = lastEntryByIndex.get(chapterIndex);
@@ -602,38 +648,9 @@ function initFileMode(hooks, context, settings) {
     }
   }
 
-  // -- 4.3 — chapter:dom:ready --
+  // -- 4.3 — chapter:dom:ready (idempotent) --
 
-  hooks.register('chapter:dom:ready', (ctx) => {
-    if (!ctx.series || !ctx.story) return;
-
-    const container = ctx.container;
-    if (!(container instanceof HTMLElement)) return;
-
-    // Idempotency guard: if we've already set up listener + restore for
-    // this same container + chapterIndex, skip. Streaming dispatches
-    // chapter:dom:ready on every chunk; without this guard each chunk would
-    // re-restore scroll back to the saved position (or trigger restoreScroll
-    // again — whose 1.5s ResizeObserver keeps fighting the user's scroll).
-    const existing = containerState.get(container);
-    if (existing && existing.chapterIndex === ctx.chapterIndex) {
-      currentIdentity = {
-        series: ctx.series,
-        story: ctx.story,
-        chapterIndex: ctx.chapterIndex,
-      };
-      return;
-    }
-
-    currentIdentity = {
-      series: ctx.series,
-      story: ctx.story,
-      chapterIndex: ctx.chapterIndex,
-    };
-
-    // Cleanup prior state (different chapter on same container, or stale)
-    if (existing) existing.cleanup();
-
+  const idRef = registerIdempotentChapterReady(hooks, (ctx, container, getId) => {
     const trackAnchor = settings.trackSelectionAnchor !== false;
 
     function onScroll() {
@@ -641,38 +658,17 @@ function initFileMode(hooks, context, settings) {
         applyingRemote = false;
         return;
       }
-      if (!currentIdentity) return;
+      const identity = getId();
+      if (!identity) return;
 
-      const scrollEl = getScrollElement();
-      const scrollRatio = scrollEl.scrollTop / Math.max(1, scrollEl.scrollHeight - window.innerHeight);
-      const clampedRatio = Math.min(1, Math.max(0, scrollRatio));
+      const selectionAnchor = trackAnchor ? captureTextFragmentAnchor(container) : null;
+      const entry = makeProgressEntry(identity, clampRatio(computeScrollRatio()), selectionAnchor);
 
-      let selectionAnchor = null;
-      if (trackAnchor) {
-        selectionAnchor = captureTextFragmentAnchor(container);
-      }
-
-      const entry = {
-        chapterIndex: currentIdentity.chapterIndex,
-        scrollRatio: clampedRatio,
-        lastReadAt: new Date().toISOString(),
-        selectionAnchor,
-        clientId: getClientId(),
-        series: currentIdentity.series,
-        story: currentIdentity.story,
-      };
-
-      lastEntryByIndex.set(currentIdentity.chapterIndex, entry);
+      lastEntryByIndex.set(identity.chapterIndex, entry);
       throttle.push(entry);
     }
 
     window.addEventListener('scroll', onScroll, { passive: true });
-    containerState.set(container, {
-      chapterIndex: ctx.chapterIndex,
-      cleanup() {
-        window.removeEventListener('scroll', onScroll);
-      },
-    });
 
     // Fire-and-forget: GET progress and attempt restore or cross-chapter prompt
     queueMicrotask(async () => {
@@ -680,30 +676,38 @@ function initFileMode(hooks, context, settings) {
       if (!saved) return;
       cachedRevision = saved.revision;
 
-      // Cross-chapter: saved progress is on a different chapter → prompt/navigate
       if (saved.chapterIndex !== ctx.chapterIndex) {
-        const remoteChapterNumber = saved.chapterIndex + 1;
         const confirmRemoteJump = settings.confirmRemoteJump !== false;
-        if (confirmRemoteJump) {
-          showConflictDialog(remoteChapterNumber, ctx.series, ctx.story, null);
-        } else {
-          window.location.href = `/${encodeURIComponent(ctx.series)}/${encodeURIComponent(ctx.story)}/chapter/${remoteChapterNumber}`;
-        }
+        handleCrossChapter(saved.chapterIndex, ctx.series, ctx.story, confirmRemoteJump);
         return;
       }
 
-      // Same chapter: restore scroll position
+      // Same chapter: restore scroll position. Guard against stale navigation
+      // (story switched while GET was in-flight); only restore if the latest
+      // identity still matches the ctx that scheduled this fetch.
+      const identity = getId();
+      if (
+        !identity ||
+        identity.series !== ctx.series ||
+        identity.story !== ctx.story ||
+        identity.chapterIndex !== ctx.chapterIndex
+      ) return;
+
       applyingRemote = true;
       restoreScroll(
         container,
         saved,
         settings,
         chapters,
-        currentIdentity,
+        identity,
         (corrected) => putProgress(corrected),
       );
     });
-  }, 50);
+
+    return () => window.removeEventListener('scroll', onScroll);
+  });
+  getIdentity = idRef.getCurrentIdentity;
+  setIdentity = idRef.setCurrentIdentity;
 
   // -- 4.4 — chapter:change --
 
@@ -711,41 +715,27 @@ function initFileMode(hooks, context, settings) {
     if (ctx.previousIndex !== null && ctx.previousIndex !== undefined && ctx.previousIndex !== ctx.index) {
       throttle.flush();
     }
-    if (currentIdentity) {
-      currentIdentity = {
-        ...currentIdentity,
-        chapterIndex: ctx.index,
-      };
+    const identity = getIdentity();
+    if (identity) {
+      setIdentity({ ...identity, chapterIndex: ctx.index });
     }
   }, 50);
 
-  // -- 4.5 — chapter:dom:dispose --
+  // -- 4.5 — chapter:dom:dispose (throttle flush; helper handles container cleanup) --
 
   hooks.register('chapter:dom:dispose', (ctx) => {
-    // Flush pending for this chapter
-    const entry = lastEntryByIndex.get(ctx.chapterIndex);
-    if (entry) {
+    if (lastEntryByIndex.has(ctx.chapterIndex)) {
       throttle.flush();
-    }
-
-    const container = ctx.container;
-    if (container instanceof HTMLElement) {
-      const state = containerState.get(container);
-      if (state) {
-        state.cleanup();
-        containerState.delete(container);
-      }
     }
     lastEntryByIndex.delete(ctx.chapterIndex);
   }, 50);
 
-  // -- story:switch --
+  // -- story:switch (helper clears identity; reset mode-specific state) --
 
   hooks.register('story:switch', (ctx) => {
     flushAll();
     throttle.cancel();
     lastEntryByIndex.clear();
-    currentIdentity = null;
     cachedRevision = 0;
     chapters = Array.isArray(ctx.chapters) ? ctx.chapters : [];
   }, 50);
