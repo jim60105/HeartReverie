@@ -1,5 +1,7 @@
+// Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
+
 import { ref } from "vue";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch, apiFetchJson } from "@/lib/api";
 import type {
   LorePassageMetadata,
   LorePassageData,
@@ -28,22 +30,14 @@ async function fetchPassages(
   story?: string,
   tag?: string,
 ): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   loading.value = true;
   error.value = null;
   try {
     const url = new URL(buildScopeUrl(scope, series, story), location.origin);
     if (tag) url.searchParams.set("tag", tag);
-    const res = await fetch(url.toString(), {
-      headers: { ...getAuthHeaders() },
+    passages.value = await apiFetchJson<LorePassageMetadata[]>(url.toString(), {
+      errorMessage: "Failed to fetch passages",
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(
-        (body as { detail?: string }).detail ?? "Failed to fetch passages",
-      );
-    }
-    passages.value = await res.json();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Unknown error";
   } finally {
@@ -52,11 +46,8 @@ async function fetchPassages(
 }
 
 async function fetchTags(): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   try {
-    const res = await fetch("/api/lore/tags", {
-      headers: { ...getAuthHeaders() },
-    });
+    const res = await apiFetch("/api/lore/tags", { throwOnError: false });
     if (!res.ok) return;
     allTags.value = await res.json();
   } catch {
@@ -70,19 +61,11 @@ async function readPassage(
   series?: string,
   story?: string,
 ): Promise<LorePassageData> {
-  const { getAuthHeaders } = useAuth();
   const base = buildScopeUrl(scope, series, story);
-  const res = await fetch(
+  return apiFetchJson<LorePassageData>(
     `${base}/${encodeURIComponent(path)}`,
-    { headers: { ...getAuthHeaders() } },
+    { errorMessage: "Failed to read passage" },
   );
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      (body as { detail?: string }).detail ?? "Failed to read passage",
-    );
-  }
-  return res.json() as Promise<LorePassageData>;
 }
 
 async function writePassage(
@@ -93,22 +76,13 @@ async function writePassage(
   series?: string,
   story?: string,
 ): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   const base = buildScopeUrl(scope, series, story);
-  const res = await fetch(
-    `${base}/${encodeURIComponent(path)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-      body: JSON.stringify({ frontmatter, content }),
-    },
-  );
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      (body as { detail?: string }).detail ?? "Failed to save passage",
-    );
-  }
+  await apiFetch(`${base}/${encodeURIComponent(path)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ frontmatter, content }),
+    errorMessage: "Failed to save passage",
+  });
 }
 
 async function deletePassage(
@@ -117,21 +91,11 @@ async function deletePassage(
   series?: string,
   story?: string,
 ): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   const base = buildScopeUrl(scope, series, story);
-  const res = await fetch(
-    `${base}/${encodeURIComponent(path)}`,
-    {
-      method: "DELETE",
-      headers: { ...getAuthHeaders() },
-    },
-  );
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      (body as { detail?: string }).detail ?? "Failed to delete passage",
-    );
-  }
+  await apiFetch(`${base}/${encodeURIComponent(path)}`, {
+    method: "DELETE",
+    errorMessage: "Failed to delete passage",
+  });
 }
 
 export function useLoreApi(): UseLoreApiReturn {
