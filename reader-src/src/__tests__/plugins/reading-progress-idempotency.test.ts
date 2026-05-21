@@ -26,7 +26,7 @@ function createMockHooks(settings: Record<string, unknown>): MockHooks {
   };
 }
 
-async function freshImport() {
+async function freshImportReadingProgress() {
   vi.resetModules();
   // @ts-expect-error — plain JS plugin module, no type declaration
   return await import("../../../../plugins/reading-progress/frontend.js");
@@ -56,13 +56,13 @@ describe("reading-progress plugin — chapter:dom:ready idempotency", () => {
       }),
     );
 
-    const mod = await freshImport();
+    const mod = await freshImportReadingProgress();
     const hooks = createMockHooks({ enabled: true, storageBackend: "local" });
     mod.register(hooks, {});
 
     const handlers = hooks.handlers.get("chapter:dom:ready") ?? [];
     expect(handlers).toHaveLength(1);
-    const handler = handlers[0];
+    const handler = handlers[0]!;
 
     // Build a fake scroll element with a measurable scrollHeight.
     const container = document.createElement("div");
