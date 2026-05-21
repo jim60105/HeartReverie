@@ -15,15 +15,15 @@ const actual = Object.keys(env.filters).sort();
 const backend = [...BACKEND_HELPERS].sort();
 const frontend = [...FRONTEND_HELPERS].sort();
 
-function diff(name: string, declared: string[]): { missing: string[]; extra: string[] } {
+function diff(declared: string[]): { missing: string[]; extra: string[] } {
   return {
     missing: actual.filter((k) => !declared.includes(k)),
     extra: declared.filter((k) => !actual.includes(k)),
   };
 }
 
-const backendDiff = diff("backend", backend);
-const frontendDiff = diff("frontend", frontend);
+const backendDiff = diff(backend);
+const frontendDiff = diff(frontend);
 const mirrorDrift = backend.join(",") !== frontend.join(",");
 
 const fail =
