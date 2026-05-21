@@ -15,7 +15,7 @@
 
 import { join } from "@std/path";
 import { isValidParam, validateParams } from "../lib/middleware.ts";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { copyChapterFile, listChapterFiles } from "../lib/story.ts";
 import { copyUsage } from "../lib/usage.ts";
@@ -83,7 +83,7 @@ export function registerBranchRoutes(
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[POST /api/stories/:series/:name/branch] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to access source story"), 500);
       }
@@ -92,7 +92,7 @@ export function registerBranchRoutes(
       try {
         body = await c.req.json();
       } catch (err: unknown) {
-        log.warn(`[POST /api/branch] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+        log.warn(`[POST /api/branch] Malformed request body: ${errorMessage(err)}`);
         return c.json(problemJson("Bad Request", 400, "Malformed JSON body"), 400);
       }
       if (typeof body !== "object" || body === null) {
@@ -140,7 +140,7 @@ export function registerBranchRoutes(
         if (err instanceof Deno.errors.AlreadyExists) {
           return c.json(problemJson("Conflict", 409, "Destination story already exists"), 409);
         }
-        const errMsg = err instanceof Error ? err.message : String(err);
+        const errMsg = errorMessage(err);
         log.warn("Failed to create branch destination", { op: "mkdir", path: destDir, error: errMsg });
         return c.json(problemJson("Internal Server Error", 500, "Failed to create destination story"), 500);
       }
@@ -190,7 +190,7 @@ export function registerBranchRoutes(
           await Deno.copyFile(join(srcDir, "_config.json"), join(destDir, "_config.json"));
         } catch (err: unknown) {
           if (!(err instanceof Deno.errors.NotFound)) {
-            log.warn(`[branch] Failed to copy _config.json: ${err instanceof Error ? err.message : String(err)}`);
+            log.warn(`[branch] Failed to copy _config.json: ${errorMessage(err)}`);
           }
         }
 
@@ -212,7 +212,7 @@ export function registerBranchRoutes(
           }
         } catch (err: unknown) {
           if (!(err instanceof Deno.errors.NotFound)) {
-            log.warn(`[branch] Failed to copy image metadata: ${err instanceof Error ? err.message : String(err)}`);
+            log.warn(`[branch] Failed to copy image metadata: ${errorMessage(err)}`);
           }
         }
 
@@ -228,7 +228,7 @@ export function registerBranchRoutes(
               );
             } catch (err: unknown) {
               if (!(err instanceof Deno.errors.NotFound)) {
-                log.warn(`[branch] Failed to copy image file ${entry.filename}: ${err instanceof Error ? err.message : String(err)}`);
+                log.warn(`[branch] Failed to copy image file ${entry.filename}: ${errorMessage(err)}`);
               }
             }
           }
@@ -252,7 +252,7 @@ export function registerBranchRoutes(
           201,
         );
       } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
+        const errMsg = errorMessage(err);
         log.warn("Branch copy failed; cleaning up destination", { op: "branch", dest: destDir, error: errMsg });
         try {
           await Deno.remove(destDir, { recursive: true });

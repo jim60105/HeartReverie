@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "../lib/errors.ts";
 import { upgradeWebSocket } from "@hono/hono/deno";
 import { timingSafeEqual } from "@std/crypto/timing-safe-equal";
 import { join } from "@std/path";
@@ -35,7 +36,7 @@ function logWsError(op: string, err: unknown) {
   const last = wsErrorLastLog.get(op) ?? 0;
   if (now - last > 5000) {
     wsErrorLastLog.set(op, now);
-    log.debug(`[ws:poll] ${op} error: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`[ws:poll] ${op} error: ${errorMessage(err)}`);
   }
 }
 
@@ -293,7 +294,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
             id,
             series,
             story,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorMessage(err),
             stack: err instanceof Error ? err.stack : undefined,
           });
         }
@@ -368,7 +369,7 @@ export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
             id,
             series,
             story,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorMessage(err),
             stack: err instanceof Error ? err.stack : undefined,
           });
         }

@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { basename, dirname, join, SEPARATOR } from "@std/path";
 
 /**
@@ -78,7 +79,7 @@ export async function atomicWriteWithBackup(
     throw new PathSafetyError(
       "parent-missing",
       `allowedBase does not exist: ${allowedBase} (${
-        err instanceof Error ? err.message : String(err)
+        errorMessage(err)
       })`,
     );
   }
@@ -91,7 +92,7 @@ export async function atomicWriteWithBackup(
     throw new PathSafetyError(
       "parent-missing",
       `target parent does not exist: ${parentDir} (${
-        err instanceof Error ? err.message : String(err)
+        errorMessage(err)
       })`,
     );
   }

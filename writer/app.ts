@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./lib/errors.ts";
 import { Hono } from "@hono/hono";
 import { secureHeaders } from "@hono/hono/secure-headers";
 import { bodyLimit } from "@hono/hono/body-limit";
@@ -252,7 +253,7 @@ export function registerSpaFallback(app: Hono, config: { READER_DIR: string }): 
       return c.html(content);
     } catch (err: unknown) {
       if (err instanceof Deno.errors.NotFound) return c.notFound();
-      httpLog.error(`[SPA fallback] Failed to serve index.html: ${err instanceof Error ? err.message : String(err)}`);
+      httpLog.error(`[SPA fallback] Failed to serve index.html: ${errorMessage(err)}`);
       return c.text("Internal Server Error", 500);
     }
   });

@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "../../writer/lib/errors.ts";
 import { join } from "@std/path";
 import { parse as parseYaml } from "@std/yaml";
 
@@ -107,7 +108,7 @@ async function loadPluginSettings(
     }
     onWarn?.("Failed to read context-compaction plugin settings file", {
       path: settingsPath,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
     return {};
   }
@@ -121,7 +122,7 @@ async function loadPluginSettings(
   } catch (err) {
     onWarn?.("context-compaction plugin settings file is not valid JSON", {
       path: settingsPath,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
     return {};
   }

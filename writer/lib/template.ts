@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { join } from "@std/path";
 import vento from "ventojs";
 import type { Environment as VentoEnvironment } from "ventojs/core/environment";
@@ -164,7 +165,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
         } catch (renderErr: unknown) {
           log.warn(`Lore passage '${passage.relativePath}' Vento render failed, using raw content`, {
             passage: passage.relativePath,
-            error: renderErr instanceof Error ? renderErr.message : String(renderErr),
+            error: errorMessage(renderErr),
           });
           return passage;
         }
@@ -213,7 +214,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
           variable: name,
           plugin: meta?.plugin ?? "unknown",
           file: meta?.file ?? "unknown",
-          error: renderErr instanceof Error ? renderErr.message : String(renderErr),
+          error: errorMessage(renderErr),
         });
       }
     }
@@ -286,7 +287,7 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       return { messages, error: null };
     } catch (err: unknown) {
       log.error("Template rendering failed", {
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
         templatePath: templateOverride ? "(override)" : systemTemplatePath,
       });
       return {

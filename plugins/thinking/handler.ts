@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "../../writer/lib/errors.ts";
 import { dirname, fromFileUrl, join } from "@std/path";
 import type { DynamicVariableContext } from "../../writer/types.ts";
 
@@ -35,7 +36,7 @@ export async function getDynamicVariables(
     const content = await Deno.readTextFile(FRAGMENT_FILE);
     return { think_before_reply: content };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     console.error(
       `[thinking] Failed to read think-before-reply.md: ${message}`,
     );

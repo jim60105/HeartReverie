@@ -15,7 +15,7 @@
 
 import { join } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import {
   buildContentDisposition,
   renderJson,
@@ -93,7 +93,7 @@ export function registerExportRoutes(
         log.warn("Failed to read story for export", {
           series,
           story: name,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
         return c.json(
           problemJson("Internal Server Error", 500, "Failed to read story"),
@@ -115,7 +115,7 @@ export function registerExportRoutes(
         log.warn("Failed to read chapter during export", {
           series,
           story: name,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
         return c.json(
           problemJson("Internal Server Error", 500, "Failed to read chapter"),

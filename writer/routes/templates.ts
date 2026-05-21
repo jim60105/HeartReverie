@@ -16,7 +16,7 @@
 import { join, resolve } from "@std/path";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { validateTemplate } from "../lib/template.ts";
 import {
@@ -255,7 +255,7 @@ export function registerTemplateRoutes(app: Hono, deps: AppDeps): void {
         }
       } catch (err: unknown) {
         log.warn("Failed to enumerate plugin fragments", {
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
       }
 
@@ -269,14 +269,14 @@ export function registerTemplateRoutes(app: Hono, deps: AppDeps): void {
         }
       } catch (err: unknown) {
         log.warn("Failed to enumerate lore entries", {
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
       }
 
       return c.json({ entries, templates: entries });
     } catch (err: unknown) {
       log.error("GET /api/templates failed", {
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       return c.json(problemJson("Internal Server Error", 500, "Failed to list templates"), 500);
     }
@@ -314,7 +314,7 @@ export function registerTemplateRoutes(app: Hono, deps: AppDeps): void {
       return c.json({ variables: result.variables, warnings: result.warnings });
     } catch (err: unknown) {
       log.error("GET /api/templates/variables failed", {
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       return c.json(problemJson("Internal Server Error", 500, "Failed to build variable catalog"), 500);
     }
@@ -358,7 +358,7 @@ export function registerTemplateRoutes(app: Hono, deps: AppDeps): void {
       }
       log.error("GET /api/templates/source failed", {
         templatePath,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       return c.json(problemJson("Internal Server Error", 500, "Failed to read template source"), 500);
     }
@@ -514,7 +514,7 @@ export function registerTemplateRoutes(app: Hono, deps: AppDeps): void {
       } catch (err: unknown) {
         log.error("POST /api/templates/lint (source-form) failed", {
           kind: kindRaw,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
         return c.json(problemJson("Internal Server Error", 500, "Lint pipeline failure"), 500);
       }
@@ -540,7 +540,7 @@ export function registerTemplateRoutes(app: Hono, deps: AppDeps): void {
       return c.json({ diagnostics });
     } catch (err: unknown) {
       log.error("POST /api/templates/lint failed", {
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       return c.json(problemJson("Internal Server Error", 500, "Lint pipeline failure"), 500);
     }
@@ -608,7 +608,7 @@ export function registerTemplateRoutes(app: Hono, deps: AppDeps): void {
       return c.json(result);
     } catch (err: unknown) {
       log.error("POST /api/templates/preview failed", {
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       return c.json(problemJson("Internal Server Error", 500, "Preview failed"), 500);
     }
@@ -691,7 +691,7 @@ export function registerTemplateRoutes(app: Hono, deps: AppDeps): void {
       }
       log.error("PUT /api/templates failed", {
         templatePath,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       return c.json(problemJson("Internal Server Error", 500, "Failed to save template"), 500);
     }

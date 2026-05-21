@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/errors";
 import { ref } from "vue";
 import type {
   HookHandler,
@@ -77,7 +78,7 @@ function subscribeSettingsChanged(): void {
         }).catch((err: unknown) => {
           console.warn(
             "Failed to re-render after plugin settings change:",
-            err instanceof Error ? err.message : String(err),
+            errorMessage(err),
           );
         });
       }, 50);
@@ -182,7 +183,7 @@ async function doInit(): Promise<void> {
       } catch (err: unknown) {
         console.warn(
           `Failed to hydrate plugin settings for ${plugin.name}:`,
-          err instanceof Error ? err.message : String(err),
+          errorMessage(err),
         );
       }
     }

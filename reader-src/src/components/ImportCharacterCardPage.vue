@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from "@/lib/errors";
 import { computed, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch } from "@/lib/api";
@@ -250,7 +251,7 @@ async function onFileChosen(file: File | null) {
     const card = await parseCharacterCard(file);
     hydrateFrom(card);
   } catch (err) {
-    parseError.value = err instanceof Error ? err.message : String(err);
+    parseError.value = errorMessage(err);
   }
 }
 
@@ -358,7 +359,7 @@ async function preflightExists(lorePath: string): Promise<boolean> {
     res = await apiFetch(url, { throwOnError: false });
   } catch (err) {
     throw new Error(
-      `預檢篇章失敗：${err instanceof Error ? err.message : String(err)}`,
+      `預檢篇章失敗：${errorMessage(err)}`,
     );
   }
   if (res.status === 200) return true;
@@ -537,7 +538,7 @@ async function onImport(e: Event) {
       params: { series: seriesName.value, story: storyName.value },
     });
   } catch (err) {
-    errors.submit = err instanceof Error ? err.message : String(err);
+    errors.submit = errorMessage(err);
     stepStatus.value = "";
   } finally {
     submitting.value = false;

@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { parse as parseToml } from "@std/toml";
 import { createLogger } from "./logger.ts";
 
@@ -124,7 +125,7 @@ export async function loadThemes(dir: string): Promise<ThemeIndex> {
     } catch (err) {
       log.error("Failed to load theme file; skipping", {
         file: filepath,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       skipped++;
     }

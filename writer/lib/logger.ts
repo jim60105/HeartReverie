@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { dirname } from "@std/path";
 
 /** Log severity levels in ascending order. */
@@ -104,7 +105,7 @@ function enqueueWrite(entry: LogEntry): void {
     const now = Date.now();
     if (now - lastLogWriteErrorTime > 60_000) {
       lastLogWriteErrorTime = now;
-      console.error(`[logger] Write queue error: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`[logger] Write queue error: ${errorMessage(err)}`);
     }
   });
 }
@@ -114,7 +115,7 @@ function enqueueLlmWrite(entry: LogEntry): void {
     const now = Date.now();
     if (now - lastLogWriteErrorTime > 60_000) {
       lastLogWriteErrorTime = now;
-      console.error(`[logger] Write queue error: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`[logger] Write queue error: ${errorMessage(err)}`);
     }
   });
 }
@@ -194,7 +195,7 @@ async function writeToFile(entry: LogEntry): Promise<void> {
   } catch (err: unknown) {
     logWriteFailureCount++;
     if (logWriteFailureCount === 1) {
-      console.error(`[logger] Log file write failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`[logger] Log file write failed: ${errorMessage(err)}`);
     }
   }
 }
@@ -219,7 +220,7 @@ async function writeToLlmFile(entry: LogEntry): Promise<void> {
   } catch (err: unknown) {
     logWriteFailureCount++;
     if (logWriteFailureCount === 1) {
-      console.error(`[logger] Log file write failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`[logger] Log file write failed: ${errorMessage(err)}`);
     }
   }
 }

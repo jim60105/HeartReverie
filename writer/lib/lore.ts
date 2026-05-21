@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { join, relative } from "@std/path";
 import { createLogger } from "./logger.ts";
 
@@ -317,7 +318,7 @@ async function readPassage(
     };
   } catch (err: unknown) {
     if (!(err instanceof Deno.errors.NotFound)) {
-      log.warn(`[lore:readPassage] Failed to read ${filepath}: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`[lore:readPassage] Failed to read ${filepath}: ${errorMessage(err)}`);
     }
     return null;
   }

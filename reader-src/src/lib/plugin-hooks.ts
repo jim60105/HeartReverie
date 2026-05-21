@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/errors";
 import type {
   HookStage,
   HookHandler,
@@ -249,7 +250,7 @@ export class FrontendHookDispatcher {
             );
           } catch (err) {
             entry.errorCount++;
-            const message = err instanceof Error ? err.message : String(err);
+            const message = errorMessage(err);
             console.error(
               `Frontend hook error in 'action-button:click':`,
               message,

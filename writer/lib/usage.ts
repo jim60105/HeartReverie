@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { join } from "@std/path";
 import { createLogger } from "./logger.ts";
 import type { TokenUsageRecord, UsageTotals } from "../types.ts";
@@ -98,7 +99,7 @@ export async function readUsage(storyDir: string): Promise<TokenUsageRecord[]> {
     raw = await Deno.readTextFile(filePath);
   } catch (err) {
     if (err instanceof Deno.errors.NotFound) return [];
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     log.warn("Failed to read _usage.json", { op: "read", path: filePath, error: msg });
     return [];
   }
@@ -108,7 +109,7 @@ export async function readUsage(storyDir: string): Promise<TokenUsageRecord[]> {
   try {
     parsed = JSON.parse(trimmed);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     log.warn("Malformed _usage.json", { op: "read", path: filePath, error: msg });
     return [];
   }
@@ -144,13 +145,13 @@ async function readForAppend(storyDir: string): Promise<TokenUsageRecord[]> {
     parsed = JSON.parse(trimmed);
     if (!Array.isArray(parsed)) throw new Error("not an array");
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     const backupPath = join(storyDir, USAGE_BACKUP_FILENAME);
     try {
       await Deno.rename(filePath, backupPath);
       log.warn("Backed up malformed _usage.json", { op: "backup", path: backupPath, error: msg });
     } catch (backupErr) {
-      const bmsg = backupErr instanceof Error ? backupErr.message : String(backupErr);
+      const bmsg = errorMessage(backupErr);
       log.warn("Failed to back up malformed _usage.json", { op: "backup", path: backupPath, error: bmsg });
     }
     return [];
@@ -226,7 +227,7 @@ export async function appendUsage(storyDir: string, record: TokenUsageRecord): P
       await Deno.writeTextFile(tmpPath, body, { mode: 0o664 });
       await Deno.rename(tmpPath, filePath);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       log.warn("Failed to append usage record", { op: "write", storyDir, error: msg });
     }
   });
@@ -249,7 +250,7 @@ export async function pruneUsage(storyDir: string, keepThroughChapter: number): 
       await Deno.writeTextFile(tmpPath, body, { mode: 0o664 });
       await Deno.rename(tmpPath, filePath);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       log.warn("Failed to prune usage records", { op: "write", storyDir, error: msg });
     }
   });
@@ -276,7 +277,7 @@ export async function copyUsage(
       await Deno.rename(tmpPath, filePath);
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     log.warn("Failed to copy usage records", { op: "write", sourceDir, destDir, error: msg });
   }
 }

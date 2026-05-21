@@ -197,6 +197,16 @@ export function levenshtein(a: string, b: string): number {
 }
 
 /**
+ * Safely extract a human-readable message from an unknown thrown value.
+ *
+ * Replaces the boilerplate `err instanceof Error ? err.message : String(err)`
+ * idiom scattered across the codebase with a single source of truth.
+ */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
  * Safely serialize an error for structured logging.
  * Extracts name, message, and stack from Error instances.
  */

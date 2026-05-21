@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { dirname, join } from "@std/path";
 import type { LlmConfig, StoryLlmConfigOverrides } from "../types.ts";
 import { REASONING_EFFORTS } from "../types.ts";
@@ -168,7 +169,7 @@ export async function readStoryLlmConfig(
     parsed = JSON.parse(trimmed);
   } catch (err) {
     throw new StoryConfigValidationError(
-      `Invalid JSON in ${STORY_CONFIG_FILENAME}: ${err instanceof Error ? err.message : String(err)}`,
+      `Invalid JSON in ${STORY_CONFIG_FILENAME}: ${errorMessage(err)}`,
     );
   }
   return validateStoryLlmConfig(parsed);

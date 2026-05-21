@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import {
   readStoryLlmConfig,
@@ -52,7 +52,7 @@ export function registerStoryConfigRoutes(
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[GET /api/:series/:name/config] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to stat story directory"), 500);
       }
@@ -63,7 +63,7 @@ export function registerStoryConfigRoutes(
         if (err instanceof StoryConfigValidationError) {
           return c.json(problemJson("Unprocessable Entity", 422, err.message), 422);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[GET /api/:series/:name/config] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to read story config"), 500);
       }
@@ -92,7 +92,7 @@ export function registerStoryConfigRoutes(
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[PUT /api/:series/:name/config] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to stat story directory"), 500);
       }
@@ -115,7 +115,7 @@ export function registerStoryConfigRoutes(
         if (err instanceof StoryConfigNotFoundError) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[PUT /api/:series/:name/config] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to write story config"), 500);
       }

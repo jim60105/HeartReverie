@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { isReservedDirectoryName, validateParams } from "../lib/middleware.ts";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
@@ -41,7 +41,7 @@ export function registerStoriesRoutes(app: Hono, deps: Pick<AppDeps, "safePath" 
         .map((e) => e.name);
       return c.json(dirs);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       log.error(`[GET /api/stories] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to list stories"), 500);
     }
@@ -67,7 +67,7 @@ export function registerStoriesRoutes(app: Hono, deps: Pick<AppDeps, "safePath" 
       if (err instanceof Deno.errors.NotFound) {
         return c.json(problemJson("Not Found", 404, "Series not found"), 404);
       }
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       log.error(`[GET /api/stories/:series] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to list series"), 500);
     }

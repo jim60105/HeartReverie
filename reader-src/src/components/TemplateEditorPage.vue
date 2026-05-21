@@ -15,6 +15,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <script setup lang="ts">
+import { errorMessage } from "@/lib/errors";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { createPatch } from "diff";
 import TemplateFileTree from "./TemplateFileTree.vue";
@@ -116,7 +117,7 @@ async function refreshList(): Promise<void> {
   } catch (err) {
     notify({
       title: "載入模板清單失敗",
-      body: err instanceof Error ? err.message : String(err),
+      body: errorMessage(err),
       level: "error",
     });
   }
@@ -195,7 +196,7 @@ async function runLint(): Promise<void> {
       severity: "warning",
       line: 1,
       column: 1,
-      message: err instanceof Error ? err.message : String(err),
+      message: errorMessage(err),
     }];
   }
 }
@@ -211,7 +212,7 @@ function parseInlineFixture(): Record<string, unknown> | null {
     inlineFixtureError.value = "fixture 必須是 JSON 物件";
     return null;
   } catch (err) {
-    inlineFixtureError.value = err instanceof Error ? err.message : String(err);
+    inlineFixtureError.value = errorMessage(err);
     return null;
   }
 }
@@ -241,7 +242,7 @@ async function runPreview(): Promise<void> {
     preview.value = res;
   } catch (err) {
     preview.value = null;
-    previewError.value = err instanceof Error ? err.message : String(err);
+    previewError.value = errorMessage(err);
   } finally {
     previewLoading.value = false;
   }
@@ -370,7 +371,7 @@ async function confirmSave(): Promise<void> {
     } else {
       notify({
         title: "儲存失敗",
-        body: err instanceof Error ? err.message : String(err),
+        body: errorMessage(err),
         level: "error",
       });
     }

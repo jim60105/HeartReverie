@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import type { Environment as VentoEnvironment, Template as VentoTemplate } from "ventojs/core/environment";
 import { VENTO_HELPERS } from "./vento-helpers.ts";
 import { validateTemplate } from "./template.ts";
@@ -152,7 +153,7 @@ export async function buildVariableCatalog(
       });
     }
   } catch (err: unknown) {
-    warnings.push(`pluginManager.getPromptVariables() failed: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`pluginManager.getPromptVariables() failed: ${errorMessage(err)}`);
   }
 
   // Runtime dynamic + lore: only when both series and story provided
@@ -205,7 +206,7 @@ async function collectDynamicVars(
       });
     }
   } catch (err: unknown) {
-    warnings.push(`plugin getDynamicVariables() failed: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`plugin getDynamicVariables() failed: ${errorMessage(err)}`);
   }
   return out;
 }
@@ -226,7 +227,7 @@ async function collectLoreVars(
         description: `Lore variable resolved from ${opts.series}/${opts.story ?? "(series scope)"}`,
       }));
   } catch (err: unknown) {
-    warnings.push(`resolveLoreVariables() failed: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`resolveLoreVariables() failed: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -395,7 +396,7 @@ export async function lintTemplate(opts: LintOptions): Promise<Diagnostic[]> {
   try {
     ast = ventoEnv.compile(source, "<lint>");
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     const ruleId = multiMessageRuleId(msg) ?? "vento.parse-error";
     const pos = positionFromError(err, source);
     diagnostics.push({
@@ -422,7 +423,7 @@ export async function lintTemplate(opts: LintOptions): Promise<Diagnostic[]> {
     } catch (err: unknown) {
       log.warn("Variable catalog build failed during lint", {
         templatePath: opts.templatePath,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
     }
   }

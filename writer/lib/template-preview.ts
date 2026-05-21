@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { join } from "@std/path";
 import type { Environment as VentoEnvironment } from "ventojs/core/environment";
 import { validateTemplate } from "./template.ts";
@@ -187,7 +188,7 @@ async function renderMessagesPure(
         kind: "messages",
         messages,
         variables: { injected },
-        ventoError: { message: err instanceof Error ? err.message : String(err) },
+        ventoError: { message: errorMessage(err) },
         fixtureUsed: mode,
       };
     }
@@ -195,13 +196,13 @@ async function renderMessagesPure(
   } catch (err: unknown) {
     log.warn("Preview render (messages) failed", {
       mode,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
     return {
       kind: "messages",
       messages: [],
       variables: { injected },
-      ventoError: { message: err instanceof Error ? err.message : String(err) },
+      ventoError: { message: errorMessage(err) },
       fixtureUsed: mode,
     };
   }
@@ -220,13 +221,13 @@ async function renderMarkdownPure(
   } catch (err: unknown) {
     log.warn("Preview render (markdown) failed", {
       mode,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
     return {
       kind: "markdown",
       content: "",
       variables: { injected },
-      ventoError: { message: err instanceof Error ? err.message : String(err) },
+      ventoError: { message: errorMessage(err) },
       fixtureUsed: mode,
     };
   }
@@ -275,13 +276,13 @@ async function renderCurrentMode(
       log.warn("Preview render (current/system) failed", {
         series,
         story,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       return {
         kind: "messages",
         messages: [],
         variables: { injected: [] },
-        ventoError: { message: err instanceof Error ? err.message : String(err) },
+        ventoError: { message: errorMessage(err) },
         fixtureUsed: "current",
       };
     }
@@ -315,13 +316,13 @@ async function renderCurrentMode(
     log.warn("Preview render (current/markdown) failed", {
       series,
       story,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
     return {
       kind: "markdown",
       content: "",
       variables: { injected: [] },
-      ventoError: { message: err instanceof Error ? err.message : String(err) },
+      ventoError: { message: errorMessage(err) },
       fixtureUsed: "current",
     };
   }

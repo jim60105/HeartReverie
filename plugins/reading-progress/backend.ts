@@ -1,3 +1,4 @@
+import { errorMessage } from "../../writer/lib/errors.ts";
 import type { PluginRouteContext } from "../../writer/types.ts";
 import { join } from "@std/path";
 
@@ -275,7 +276,7 @@ export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
 
       return c.json({ ok: true, revision: nextRevision, serverUpdatedAt });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       logger.debug("PUT progress failed", { series, story, error: message });
       return c.json({ error: "internal_error" }, 500);
     } finally {
@@ -301,7 +302,7 @@ export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
       }
       return c.json(entry);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       logger.debug("GET progress failed", { series, story, error: message });
       return c.json({ error: "internal_error" }, 500);
     }
@@ -326,7 +327,7 @@ export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
       if (err instanceof Deno.errors.NotFound) {
         return c.json({ error: "not_found" }, 404);
       }
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       logger.debug("DELETE progress failed", { series, story, error: message });
       return c.json({ error: "internal_error" }, 500);
     }
@@ -347,7 +348,7 @@ export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
             const text = await Deno.readTextFile(join(seriesPath, file.name));
             entries.push(JSON.parse(text) as StoredEntry);
           } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
+            const message = errorMessage(err);
             logger.debug("Skipping corrupt progress file", {
               series: seriesDir.name,
               file: file.name,
@@ -358,7 +359,7 @@ export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
       }
     } catch (err: unknown) {
       if (!(err instanceof Deno.errors.NotFound)) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         logger.debug("List progress failed", { error: message });
         return c.json({ error: "internal_error" }, 500);
       }
@@ -482,7 +483,7 @@ export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
 
         logger.debug("import-local wrote", { series, story, revision: nextRevision });
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         logger.debug("import-local write failed", { series, story, error: message });
       } finally {
         acquired.release();

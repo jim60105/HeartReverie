@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { relative, resolve, SEPARATOR } from "@std/path";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { resolveLoreVariables } from "../lib/lore.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
@@ -134,7 +134,7 @@ export function registerPluginRoutes(
       if (err instanceof Deno.errors.NotFound) {
         return c.json(problemJson("Not Found", 404, "Not found"), 404);
       }
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       log.warn(`[GET /plugins/_shared] File serving error: ${message}`);
       return c.json(
         problemJson("Internal Server Error", 500, "Internal server error"),
@@ -169,7 +169,7 @@ export function registerPluginRoutes(
           if (err instanceof Deno.errors.NotFound) {
             return c.json(problemJson("Not Found", 404, "Not found"), 404);
           }
-          const message = err instanceof Error ? err.message : String(err);
+          const message = errorMessage(err);
           log.warn(
             `[GET /plugins/:plugin/module] File serving error: ${message}`,
           );
@@ -216,7 +216,7 @@ export function registerPluginRoutes(
           if (err instanceof Deno.errors.NotFound) {
             return c.json(problemJson("Not Found", 404, "Not found"), 404);
           }
-          const message = err instanceof Error ? err.message : String(err);
+          const message = errorMessage(err);
           log.warn(`[GET /plugins/:plugin/css] File serving error: ${message}`);
           return c.json(
             problemJson("Internal Server Error", 500, "Internal server error"),

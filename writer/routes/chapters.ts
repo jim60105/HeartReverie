@@ -16,7 +16,7 @@
 import { join } from "@std/path";
 import { parse as parseYaml } from "@std/yaml";
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { atomicWriteChapter, listChapterFiles } from "../lib/story.ts";
 import { isGenerationActive } from "../lib/generation-registry.ts";
@@ -72,7 +72,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[GET /api/stories/:series/:name/chapters] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to list chapters"), 500);
       }
@@ -124,7 +124,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Chapter not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[GET /api/stories/:series/:name/chapters/:number] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to read chapter"), 500);
       }
@@ -168,7 +168,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[DELETE /api/stories/:series/:name/chapters/last] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to delete chapter"), 500);
       }
@@ -224,7 +224,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Chapter not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[PUT /api/stories/:series/:name/chapters/:number] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to stat chapter"), 500);
       }
@@ -247,7 +247,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
 
         return c.json({ number: num, content });
       } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
+        const errMsg = errorMessage(err);
         log.warn("Failed to edit chapter", { op: "write", path: filePath, error: errMsg });
         return c.json(problemJson("Internal Server Error", 500, "Failed to write chapter"), 500);
       }
@@ -287,7 +287,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[DELETE /api/stories/:series/:name/chapters/after/:number] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to access story"), 500);
       }
@@ -308,7 +308,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
           log.info("Chapter deleted", { op: "delete", path, chapter: n });
         } catch (err: unknown) {
           if (err instanceof Deno.errors.NotFound) continue;
-          const errMsg = err instanceof Error ? err.message : String(err);
+          const errMsg = errorMessage(err);
           log.warn("Failed to delete chapter", { op: "delete", path, error: errMsg });
           return c.json(problemJson("Internal Server Error", 500, "Failed to delete chapters"), 500);
         }
@@ -358,7 +358,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
           return c.json({ message: "Story initialized" }, 201);
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.error(`[POST /api/stories/:series/:name/init] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to initialize story"), 500);
       }

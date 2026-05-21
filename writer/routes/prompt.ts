@@ -15,7 +15,7 @@
 
 import { join, dirname } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { validateTemplate } from "../lib/template.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
@@ -43,7 +43,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
       const result = await readTemplate(config);
       return c.json(result);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       log.error(`[GET /api/template] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to read template"), 500);
     }
@@ -55,7 +55,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
       try {
         body = await c.req.json();
       } catch (err: unknown) {
-        log.warn(`[PUT /api/template] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+        log.warn(`[PUT /api/template] Malformed request body: ${errorMessage(err)}`);
         return c.json(problemJson("Bad Request", 400, "Invalid JSON in request body"), 400);
       }
       const content: unknown = body.content;
@@ -83,7 +83,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
       log.info("Template file saved", { op: "write", path: config.PROMPT_FILE, bytes: new TextEncoder().encode(content).length });
       return c.json({ ok: true });
     } catch (err: unknown) {
-      log.error("Failed to save template", { op: "write", path: config.PROMPT_FILE, error: err instanceof Error ? err.message : String(err) });
+      log.error("Failed to save template", { op: "write", path: config.PROMPT_FILE, error: errorMessage(err) });
       return c.json(problemJson("Internal Server Error", 500, "Failed to save template"), 500);
     }
   });
@@ -94,7 +94,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
       log.info("Template file deleted", { op: "delete", path: config.PROMPT_FILE });
     } catch (err: unknown) {
       if (!(err instanceof Deno.errors.NotFound)) {
-        log.error("Failed to delete template", { op: "delete", path: config.PROMPT_FILE, error: err instanceof Error ? err.message : String(err) });
+        log.error("Failed to delete template", { op: "delete", path: config.PROMPT_FILE, error: errorMessage(err) });
         return c.json(problemJson("Internal Server Error", 500, "Failed to delete template"), 500);
       }
     }
@@ -109,7 +109,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
       try {
         body = await c.req.json();
       } catch (err: unknown) {
-        log.warn(`[POST /api/preview-prompt] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+        log.warn(`[POST /api/preview-prompt] Malformed request body: ${errorMessage(err)}`);
         return c.json(problemJson("Bad Request", 400, "Invalid JSON in request body"), 400);
       }
       const message: unknown = body.message;
@@ -138,7 +138,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
             }
           } catch (err: unknown) {
             if (!(err instanceof Deno.errors.NotFound)) {
-              log.error(`[prompt] Template read failed: ${err instanceof Error ? err.message : String(err)}`);
+              log.error(`[prompt] Template read failed: ${errorMessage(err)}`);
               return c.json(problemJson("Internal Server Error", 500, "Failed to read prompt template"), 500);
             }
             // NotFound → use default rendering
@@ -175,7 +175,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
           errors: [],
         });
       } catch (err: unknown) {
-        log.error("Preview prompt error", { error: err instanceof Error ? err.message : String(err), path: c.req.path });
+        log.error("Preview prompt error", { error: errorMessage(err), path: c.req.path });
         return c.json(problemJson("Internal Server Error", 500, "Failed to preview prompt"), 500);
       }
     }

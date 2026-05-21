@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import type { HookStage, HookHandler, RegisterOptions, HandlerEvent, HandlerEventSubscriber, HandlerEventSubscriptionOptions } from "../types.ts";
 import { createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";
@@ -481,7 +482,7 @@ export class HookDispatcher {
           this.#subscriberThrowCount.delete(cb);
         }
       } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
+        const errMsg = errorMessage(err);
         const prior = this.#subscriberThrowCount.get(cb) ?? 0;
         const next = prior + 1;
         this.#subscriberThrowCount.set(cb, next);
@@ -539,7 +540,7 @@ export class HookDispatcher {
       try {
         out[field] = structuredClone(value);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = errorMessage(err);
         out[field] = { __snapshotError: msg };
       }
     }
@@ -688,7 +689,7 @@ export class HookDispatcher {
         stage,
         plugin: entry.plugin,
         dispatchPhase: "serial",
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
     }
 
@@ -715,7 +716,7 @@ export class HookDispatcher {
         reassigned,
         error: handlerError !== undefined
           ? {
-              message: handlerError instanceof Error ? handlerError.message : String(handlerError),
+              message: errorMessage(handlerError),
               name: handlerError instanceof Error ? handlerError.name : "Error",
             }
           : undefined,
@@ -831,7 +832,7 @@ export class HookDispatcher {
       reassigned,
       error: handlerError !== undefined
         ? {
-            message: handlerError instanceof Error ? handlerError.message : String(handlerError),
+            message: errorMessage(handlerError),
             name: handlerError instanceof Error ? handlerError.name : "Error",
           }
         : undefined,
@@ -989,7 +990,7 @@ export class HookDispatcher {
           plugin: entry.plugin,
           dispatchPhase: "parallel",
           error: {
-            message: err instanceof Error ? err.message : String(err),
+            message: errorMessage(err),
             stack: err instanceof Error ? err.stack : undefined,
           },
         });

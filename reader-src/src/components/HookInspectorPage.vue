@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from "@/lib/errors";
 import { ref, computed, onMounted } from "vue";
 import { apiFetch } from "@/lib/api";
 import { frontendHooks } from "@/lib/plugin-hooks";
@@ -77,7 +78,7 @@ async function loadReport(): Promise<void> {
     // Dispatch the typed event AFTER state is set so listeners can read it.
     frontendHooks.dispatch("hook-inspector:report", payload);
   } catch (err) {
-    errorMsg.value = err instanceof Error ? err.message : String(err);
+    errorMsg.value = errorMessage(err);
   } finally {
     loading.value = false;
   }

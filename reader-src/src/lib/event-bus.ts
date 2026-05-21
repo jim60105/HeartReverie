@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "@/lib/errors";
 type EventPayloads = {
   "plugin-settings:changed": {
     name: string;
@@ -50,7 +51,7 @@ export function emitEvent<T extends EventName>(
     } catch (err: unknown) {
       console.warn(
         `[event-bus] handler for ${event} failed:`,
-        err instanceof Error ? err.message : String(err),
+        errorMessage(err),
       );
     }
   }

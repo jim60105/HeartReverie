@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { dirname, isAbsolute, join, resolve, SEPARATOR } from "@std/path";
 import { isPathContained } from "./path-safety.ts";
 import { validateTemplate } from "./template.ts";
@@ -332,7 +333,7 @@ export class PluginManager {
           log.error("Plugin fragment file unreadable during SSTI validation — removing plugin", {
             plugin: name,
             file: frag.file,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorMessage(err),
           });
           toRemove.push(name);
           break;
@@ -373,7 +374,7 @@ export class PluginManager {
       }
       log.warn("Failed to read plugin directory", {
         dir,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       return;
     }
@@ -413,7 +414,7 @@ export class PluginManager {
       } catch (err: unknown) {
         log.warn("Invalid JSON in manifest", {
           path: manifestPath,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
         continue;
       }
@@ -914,7 +915,7 @@ export class PluginManager {
         log.warn("Plugin frontendStyles entry not found", {
           plugin: manifest.name,
           entry,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
         continue;
       }
@@ -1158,7 +1159,7 @@ export class PluginManager {
     } catch (err: unknown) {
       log.error("Failed to load backend module", {
         plugin: name,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       // Tear down any handler-event subscriptions the plugin made during
       // its (now-failed) register() call so the dispatcher does not retain
@@ -1268,7 +1269,7 @@ export class PluginManager {
         log.warn("Plugin has invalid regex in stripTag — skipping", {
           plugin: pluginName,
           tag,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
         return null;
       }
@@ -1371,7 +1372,7 @@ export class PluginManager {
           log.warn("Failed to read prompt fragment", {
             plugin: manifest.name,
             file: frag.file,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorMessage(err),
           });
           continue;
         }
@@ -1477,7 +1478,7 @@ export class PluginManager {
           result[key] = value;
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         log.warn("Plugin getDynamicVariables() failed", {
           plugin: pluginName,
           error: message,
@@ -2076,7 +2077,7 @@ export class PluginManager {
       if (!(err instanceof Deno.errors.NotFound)) {
         log.warn("Failed to read plugin config", {
           plugin: name,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
       }
     }

@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import { errorMessage } from "./errors.ts";
 import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
 import type {
@@ -389,7 +390,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
   } catch (err: unknown) {
     log.warn("pre-llm-fetch dispatch failed", {
       correlationId,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
   }
 
@@ -412,7 +413,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       llmLog.info("LLM error", { type: "error", errorCode: "aborted", latencyMs });
       throw new ChatAbortError("Generation aborted by client");
     }
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = errorMessage(err);
     reqLog.error("LLM fetch failed", { latencyMs, error: errMsg });
     llmLog.info("LLM error", { type: "error", errorCode: "network", latencyMs, error: errMsg });
     throw new ChatError("llm-api", "AI service request failed", 502);
@@ -692,7 +693,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       throw err;
     }
     const latencyMs = Math.round(performance.now() - llmStartTime);
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = errorMessage(err);
     llmLog.info("LLM error", {
       type: "error",
       errorCode: "stream",
@@ -706,7 +707,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     try {
       await closeThinkBlockOnExit();
     } catch (cleanupErr) {
-      const msg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+      const msg = errorMessage(cleanupErr);
       reqLog.warn("close-think-block failed during streaming finally", { error: msg });
     } finally {
       if (file) file.close();
@@ -1025,7 +1026,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
       throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
     }
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
     throw new ChatError("story-config", "Failed to read story configuration", 500);
   }
@@ -1041,7 +1042,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       }
     } catch (err: unknown) {
       if (!(err instanceof Deno.errors.NotFound)) {
-        log.error(`[chat] Failed to read system prompt: ${err instanceof Error ? err.message : String(err)}`);
+        log.error(`[chat] Failed to read system prompt: ${errorMessage(err)}`);
       }
       // NotFound is expected — proceed with default
     }
@@ -1137,7 +1138,7 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
       reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
       throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
     }
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
     throw new ChatError("story-config", "Failed to read story configuration", 500);
   }
@@ -1153,7 +1154,7 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
       }
     } catch (err: unknown) {
       if (!(err instanceof Deno.errors.NotFound)) {
-        log.error(`[chat] Failed to read system prompt: ${err instanceof Error ? err.message : String(err)}`);
+        log.error(`[chat] Failed to read system prompt: ${errorMessage(err)}`);
       }
       // NotFound is expected — proceed with default
     }

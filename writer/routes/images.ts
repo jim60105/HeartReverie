@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join } from "@std/path";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
@@ -87,7 +87,7 @@ export function registerImageRoutes(app: Hono, deps: Pick<AppDeps, "safePath">):
       return c.json({ images });
     } catch (err: unknown) {
       if (err instanceof Deno.errors.NotFound) return c.json({ images: [] });
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       log.error(`[GET /api/stories/:series/:name/image-metadata] ${message}`);
       return c.json(problemJson("Internal Server Error", 500, "Failed to read image metadata"), 500);
     }

@@ -31,6 +31,7 @@
   so we don't hijack Ctrl/Cmd-S on pages that do not implement save.
 -->
 <script setup lang="ts">
+import { errorMessage } from "@/lib/errors";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { EditorState, Compartment } from "@codemirror/state";
 import {
@@ -183,7 +184,7 @@ async function runLint(): Promise<void> {
       severity: "warning",
       line: 1,
       column: 1,
-      message: err instanceof Error ? err.message : String(err),
+      message: errorMessage(err),
     }];
     diagnostics.value = d;
     emit("lint", d);

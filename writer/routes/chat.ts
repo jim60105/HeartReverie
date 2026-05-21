@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson } from "../lib/errors.ts";
+import { problemJson, errorMessage } from "../lib/errors.ts";
 import { executeChat, executeContinue, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
@@ -51,7 +51,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       try {
         body = await c.req.json();
       } catch (err: unknown) {
-        log.warn(`[POST /api/chat] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+        log.warn(`[POST /api/chat] Malformed request body: ${errorMessage(err)}`);
         return c.json(problemJson("Bad Request", 400, "Invalid JSON in request body"), 400);
       }
       const message: unknown = body.message;
@@ -101,7 +101,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           const title = ERROR_TITLES[err.code] ?? "Internal Server Error";
           return c.json(problemJson(title, err.httpStatus, err.message), status);
         }
-        log.error("Unexpected chat error", { error: err instanceof Error ? err.message : String(err), path: c.req.path });
+        log.error("Unexpected chat error", { error: errorMessage(err), path: c.req.path });
         return c.json(problemJson("Internal Server Error", 500, "Failed to process chat request"), 500);
       }
     }
@@ -154,7 +154,7 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           const title = ERROR_TITLES[err.code] ?? "Internal Server Error";
           return c.json(problemJson(title, err.httpStatus, err.message), status);
         }
-        log.error("Unexpected continue error", { error: err instanceof Error ? err.message : String(err), path: c.req.path });
+        log.error("Unexpected continue error", { error: errorMessage(err), path: c.req.path });
         return c.json(problemJson("Internal Server Error", 500, "Failed to process continue request"), 500);
       }
     }

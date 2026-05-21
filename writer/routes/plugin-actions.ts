@@ -15,7 +15,7 @@
 
 import type { Hono } from "@hono/hono";
 import { join, resolve } from "@std/path";
-import { pluginActionProblems, problemJson } from "../lib/errors.ts";
+import { pluginActionProblems, problemJson, errorMessage } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { isValidParam } from "../lib/middleware.ts";
 import { isValidPluginName } from "../lib/plugin-manager.ts";
@@ -211,7 +211,7 @@ export async function runPluginActionWithDeps(
   } catch (err: unknown) {
     // Settings read failure is non-fatal: log and continue (defence-in-depth
     // shouldn't block the action when settings happen to be unreadable).
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     console.warn(`[plugin-actions] Failed to read settings for ${pluginName}: ${message}`);
   }
   const pluginDir = pluginManager.getPluginDir(pluginName);
@@ -326,7 +326,7 @@ export async function runPluginActionWithDeps(
     if (err instanceof Deno.errors.NotFound) {
       return { ok: false, aborted: false, problem: pluginActionProblems.promptFileNotFound(), status: 400 };
     }
-    log.warn(`[plugin-actions] Prompt file read error: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`[plugin-actions] Prompt file read error: ${errorMessage(err)}`);
     return { ok: false, aborted: false, problem: problemJson("Internal Server Error", 500, "Prompt file read failed"), status: 500 };
   }
 
@@ -493,7 +493,7 @@ export async function runPluginActionWithDeps(
         status: err.httpStatus,
       };
     }
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail = errorMessage(err);
     log.error("Plugin action failed", { plugin: pluginName, error: detail });
     return {
       ok: false,
@@ -519,7 +519,7 @@ export function registerPluginActionRoutes(
     try {
       body = await c.req.json();
     } catch (err: unknown) {
-      log.warn(`[POST /api/plugins/run-prompt] Malformed request body: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`[POST /api/plugins/run-prompt] Malformed request body: ${errorMessage(err)}`);
       return c.json(problemJson("Bad Request", 400, "Invalid JSON in request body"), 400);
     }
     const controller = new AbortController();
