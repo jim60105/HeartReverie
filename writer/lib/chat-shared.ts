@@ -224,6 +224,52 @@ export interface StreamLlmResult {
 }
 
 /**
+ * Resolve the target chapter file for a given `writeMode`.
+ *
+ * Non-mutating resolution — no filesystem writes. The caller is responsible
+ * for any mode-specific side effects (e.g., `mkdir` for `write-new-chapter`).
+ *
+ * Returns `{ targetNum: null, chapterPath: null }` for modes that don't
+ * touch a chapter file on disk (currently only `discard`).
+ *
+ * Throws `ChatError("no-chapter", …, 400)` when an append/replace mode is
+ * requested but no chapter file exists in `storyDir`.
+ */
+async function resolveChapterTarget(
+  writeMode: WriteMode,
+  storyDir: string,
+): Promise<{ targetNum: number | null; chapterPath: string | null }> {
+  switch (writeMode.kind) {
+    case "write-new-chapter":
+    case "continue-last-chapter": {
+      const targetNum = writeMode.targetChapterNumber;
+      const padded = String(targetNum).padStart(3, "0");
+      return { targetNum, chapterPath: join(storyDir, `${padded}.md`) };
+    }
+    case "append-to-existing-chapter":
+      return await resolveLastChapter(storyDir, "append");
+    case "replace-last-chapter":
+      return await resolveLastChapter(storyDir, "replace");
+    case "discard":
+      return { targetNum: null, chapterPath: null };
+  }
+}
+
+/** Locate the highest-numbered chapter file in `storyDir`. */
+async function resolveLastChapter(
+  storyDir: string,
+  action: "append" | "replace",
+): Promise<{ targetNum: number; chapterPath: string }> {
+  const chapterFiles = await listChapterFiles(storyDir);
+  if (chapterFiles.length === 0) {
+    const verb = action === "append" ? "append" : "replace";
+    throw new ChatError("no-chapter", `Cannot ${verb}: no existing chapter file in story directory`, 400);
+  }
+  const lastFile = chapterFiles[chapterFiles.length - 1]!;
+  return { targetNum: parseInt(lastFile, 10), chapterPath: join(storyDir, lastFile) };
+}
+
+/**
  * Stream the upstream LLM response and persist it according to `writeMode`.
  *
  * The caller is responsible for: validating the upstream API key, resolving
@@ -257,33 +303,9 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
   const llmLog = createLlmLogger().withContext({ correlationId });
 
   // ── Resolve target chapter info (mode-dependent) ──
-  let targetNum: number | null = null;
-  let chapterPath: string | null = null;
+  const { targetNum, chapterPath } = await resolveChapterTarget(writeMode, storyDir);
   if (writeMode.kind === "write-new-chapter") {
-    targetNum = writeMode.targetChapterNumber;
-    const padded = String(targetNum).padStart(3, "0");
     await Deno.mkdir(storyDir, { recursive: true, mode: 0o775 });
-    chapterPath = join(storyDir, `${padded}.md`);
-  } else if (writeMode.kind === "append-to-existing-chapter") {
-    const chapterFiles = await listChapterFiles(storyDir);
-    if (chapterFiles.length === 0) {
-      throw new ChatError("no-chapter", "Cannot append: no existing chapter file in story directory", 400);
-    }
-    const lastFile = chapterFiles[chapterFiles.length - 1]!;
-    targetNum = parseInt(lastFile, 10);
-    chapterPath = join(storyDir, lastFile);
-  } else if (writeMode.kind === "continue-last-chapter") {
-    targetNum = writeMode.targetChapterNumber;
-    const padded = String(targetNum).padStart(3, "0");
-    chapterPath = join(storyDir, `${padded}.md`);
-  } else if (writeMode.kind === "replace-last-chapter") {
-    const chapterFiles = await listChapterFiles(storyDir);
-    if (chapterFiles.length === 0) {
-      throw new ChatError("no-chapter", "Cannot replace: no existing chapter file in story directory", 400);
-    }
-    const lastFile = chapterFiles[chapterFiles.length - 1]!;
-    targetNum = parseInt(lastFile, 10);
-    chapterPath = join(storyDir, lastFile);
   }
 
   // ── Build upstream request body ──
