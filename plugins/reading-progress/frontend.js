@@ -402,18 +402,32 @@ function initLocalMode(hooks, settings) {
   hooks.register('chapter:dom:ready', (ctx) => {
     if (!ctx.series || !ctx.story) return;
 
+    const container = ctx.container;
+    if (!(container instanceof HTMLElement)) return;
+
+    // Idempotency guard: if we've already set up scroll-restore + listener
+    // for this same container + chapterIndex, skip. Streaming dispatches
+    // chapter:dom:ready on every chunk; without this guard each chunk would
+    // re-restore scroll back to the saved position, fighting the reader.
+    const existing = containerState.get(container);
+    if (existing && existing.chapterIndex === ctx.chapterIndex) {
+      // Just refresh identity in case ctx fields rotated.
+      currentIdentity = {
+        series: ctx.series,
+        story: ctx.story,
+        chapterIndex: ctx.chapterIndex,
+      };
+      return;
+    }
+
     currentIdentity = {
       series: ctx.series,
       story: ctx.story,
       chapterIndex: ctx.chapterIndex,
     };
 
-    const container = ctx.container;
-    if (!(container instanceof HTMLElement)) return;
-
-    // Idempotent: cleanup prior state
-    const prior = containerState.get(container);
-    if (prior) prior.cleanup();
+    // Cleanup prior state (different chapter on same container, or stale)
+    if (existing) existing.cleanup();
 
     // Restore from localStorage
     try {
@@ -444,6 +458,7 @@ function initLocalMode(hooks, settings) {
 
     window.addEventListener('scroll', onScroll, { passive: true });
     containerState.set(container, {
+      chapterIndex: ctx.chapterIndex,
       cleanup() {
         window.removeEventListener('scroll', onScroll);
       },
@@ -592,18 +607,32 @@ function initFileMode(hooks, context, settings) {
   hooks.register('chapter:dom:ready', (ctx) => {
     if (!ctx.series || !ctx.story) return;
 
+    const container = ctx.container;
+    if (!(container instanceof HTMLElement)) return;
+
+    // Idempotency guard: if we've already set up listener + restore for
+    // this same container + chapterIndex, skip. Streaming dispatches
+    // chapter:dom:ready on every chunk; without this guard each chunk would
+    // re-restore scroll back to the saved position (or trigger restoreScroll
+    // again — whose 1.5s ResizeObserver keeps fighting the user's scroll).
+    const existing = containerState.get(container);
+    if (existing && existing.chapterIndex === ctx.chapterIndex) {
+      currentIdentity = {
+        series: ctx.series,
+        story: ctx.story,
+        chapterIndex: ctx.chapterIndex,
+      };
+      return;
+    }
+
     currentIdentity = {
       series: ctx.series,
       story: ctx.story,
       chapterIndex: ctx.chapterIndex,
     };
 
-    const container = ctx.container;
-    if (!(container instanceof HTMLElement)) return;
-
-    // Idempotent: cleanup prior state
-    const prior = containerState.get(container);
-    if (prior) prior.cleanup();
+    // Cleanup prior state (different chapter on same container, or stale)
+    if (existing) existing.cleanup();
 
     const trackAnchor = settings.trackSelectionAnchor !== false;
 
@@ -639,6 +668,7 @@ function initFileMode(hooks, context, settings) {
 
     window.addEventListener('scroll', onScroll, { passive: true });
     containerState.set(container, {
+      chapterIndex: ctx.chapterIndex,
       cleanup() {
         window.removeEventListener('scroll', onScroll);
       },

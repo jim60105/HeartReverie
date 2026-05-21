@@ -67,16 +67,33 @@ watch(
       );
 
       if (panels.length > 0) {
-        const sidebarHasPanels =
-          sidebar.querySelector(".plugin-sidebar") !== null;
-        if (contentChanged || !sidebarHasPanels) {
+        const existingPanels = [
+          ...sidebar.querySelectorAll(".plugin-sidebar"),
+        ];
+        const sidebarHasPanels = existingPanels.length > 0;
+        // During streaming, the chapter text grows on every chunk so
+        // `contentChanged` is true, but the rendered sidebar panel HTML often
+        // stays identical (e.g. <status> block unchanged). Compare panel
+        // outerHTML against what's already in the sidebar; if identical, just
+        // drop the duplicates from content and leave the sidebar untouched.
+        // This avoids the height oscillation that drifts scroll mid-streaming.
+        const panelsKey = panels.map((p) => p.outerHTML).join("\u0000");
+        const existingKey = existingPanels.map((p) => p.outerHTML).join("\u0000");
+        const panelsUnchanged = sidebarHasPanels && panelsKey === existingKey;
+
+        if (panelsUnchanged) {
+          panels.forEach((panel) => panel.remove());
+        } else if (contentChanged || !sidebarHasPanels) {
           // Content changed or sidebar is empty — full relocation.
           sidebar.innerHTML = "";
           panels.forEach((panel) => sidebar.appendChild(panel));
         } else {
-          // Same content re-render produced duplicate panels while the sidebar
-          // already holds (possibly populated) panels. Remove the duplicates
-          // from content so the next watch trigger doesn't replace the sidebar.
+          // Same content re-render produced different panels while the sidebar
+          // already holds populated panels. This happens during transient
+          // re-render states (e.g. plugin frontend-render hasn't re-injected
+          // its full HTML yet). Drop the (possibly placeholder) candidates
+          // from content; the next watch trigger with the full re-render will
+          // either match (no-op) or be picked up by `contentChanged`.
           panels.forEach((panel) => panel.remove());
         }
       } else if (contentChanged) {

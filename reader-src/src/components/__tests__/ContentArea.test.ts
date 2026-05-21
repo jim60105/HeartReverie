@@ -227,4 +227,79 @@ describe("ContentArea", () => {
     expect(sidebar.findAll(".plugin-sidebar")).toHaveLength(1);
     expect(sidebar.text()).toContain("P");
   });
+
+  it("WHEN renderEpoch bumps with identical panel HTML THEN sidebar child node identity is preserved", async () => {
+    currentContentRef.value = "第 1 章內容";
+
+    const wrapper = mount(ContentArea, {
+      global: {
+        stubs: {
+          ChapterContent: {
+            props: ["rawMarkdown", "isLastChapter"],
+            template: `<div class='chapter-stub'><div class='plugin-sidebar'><span>status: idle</span></div></div>`,
+          },
+        },
+      },
+    });
+
+    await nextTick();
+    await nextTick();
+
+    const sidebar = wrapper.find(".sidebar").element as HTMLElement;
+    const initialPanel = sidebar.firstElementChild;
+    expect(initialPanel).not.toBeNull();
+    expect(initialPanel?.classList.contains("plugin-sidebar")).toBe(true);
+
+    // Simulate a streaming chunk: the content area gets the same panel HTML
+    // re-emitted (e.g. by plugin frontend-render re-running) and renderEpoch
+    // bumps. The sidebar's already-relocated panel node MUST be the exact
+    // same DOM node afterwards — no clear-and-re-append.
+    const stub = wrapper.find(".chapter-stub").element as HTMLElement;
+    stub.innerHTML = `<div class='plugin-sidebar'><span>status: idle</span></div>`;
+    renderEpochRef.value++;
+    await nextTick();
+    await nextTick();
+
+    const sidebarAfter = wrapper.find(".sidebar").element as HTMLElement;
+    expect(sidebarAfter.firstElementChild).toBe(initialPanel);
+    expect(sidebarAfter.querySelectorAll(".plugin-sidebar")).toHaveLength(1);
+    // Duplicate in content area should be removed.
+    expect(stub.querySelectorAll(".plugin-sidebar")).toHaveLength(0);
+  });
+
+  it("WHEN chapter text changes AND panel HTML changes THEN sidebar is cleared and the fresh panel is relocated", async () => {
+    currentContentRef.value = "第 1 章內容";
+
+    const wrapper = mount(ContentArea, {
+      global: {
+        stubs: {
+          ChapterContent: {
+            props: ["rawMarkdown", "isLastChapter"],
+            template: `<div class='chapter-stub'><div class='plugin-sidebar'><span>v1</span></div></div>`,
+          },
+        },
+      },
+    });
+
+    await nextTick();
+    await nextTick();
+
+    const sidebar = wrapper.find(".sidebar").element as HTMLElement;
+    const initialPanel = sidebar.firstElementChild;
+    expect(initialPanel?.textContent).toContain("v1");
+
+    // Chapter navigation: currentContent changes AND panel HTML changes.
+    currentContentRef.value = "第 2 章內容";
+    const stub = wrapper.find(".chapter-stub").element as HTMLElement;
+    stub.innerHTML = `<div class='plugin-sidebar'><span>v2</span></div>`;
+    renderEpochRef.value++;
+    await nextTick();
+    await nextTick();
+
+    const sidebarAfter = wrapper.find(".sidebar").element as HTMLElement;
+    expect(sidebarAfter.querySelectorAll(".plugin-sidebar")).toHaveLength(1);
+    expect(sidebarAfter.firstElementChild).not.toBe(initialPanel);
+    expect(sidebarAfter.textContent).toContain("v2");
+    expect(sidebarAfter.textContent).not.toContain("v1");
+  });
 });
