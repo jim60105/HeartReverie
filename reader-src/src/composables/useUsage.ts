@@ -14,7 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { ref } from "vue";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 import type {
   TokenUsageRecord,
   UsageTotals,
@@ -55,13 +55,12 @@ function recomputeTotals(): void {
 }
 
 async function load(series: string, story: string): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   const seq = ++loadSeq;
   const key = keyOf(series, story);
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/usage`,
-      { headers: { ...getAuthHeaders() } },
+      { throwOnError: false },
     );
     // Discard if a newer load was issued while awaiting
     if (seq !== loadSeq) return;

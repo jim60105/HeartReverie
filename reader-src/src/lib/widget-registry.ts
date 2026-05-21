@@ -35,16 +35,11 @@ export interface WidgetDescriptor {
   match: (schema: JsonSchema) => number;
 }
 
-export interface AuthHeadersFn {
-  (): Record<string, string>;
-}
-
 export interface FormContextValue {
   registry: WidgetRegistry;
   errors: ValidationError[];
   schemaMeta: SchemaMeta | null;
   basePath: string;
-  getAuthHeaders: AuthHeadersFn;
   rootModel: Record<string, unknown>;
 }
 

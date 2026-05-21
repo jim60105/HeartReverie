@@ -75,7 +75,7 @@ describe("useStoryLlmConfig", () => {
     expect(call[0]).toBe("/api/s/n/config");
     expect(call[1]!.method).toBe("PUT");
     expect(JSON.parse(call[1]!.body)).toEqual({ temperature: 0.9 });
-    expect(call[1]!.headers["Content-Type"]).toBe("application/json");
+    expect(new Headers(call[1]!.headers).get("Content-Type")).toBe("application/json");
     expect(result).toEqual({ temperature: 0.9 });
     expect(api.overrides.value).toEqual({ temperature: 0.9 });
   });

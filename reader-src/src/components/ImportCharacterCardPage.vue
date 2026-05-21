@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 import { parseCharacterCard } from "@/lib/character-card-parser";
 import {
   deriveLoreFilename,
@@ -13,7 +13,6 @@ import {
 import type { ParsedCharacterCard } from "@/types/character-card";
 
 const router = useRouter();
-const { getAuthHeaders } = useAuth();
 
 interface FormState {
   name: string;
@@ -301,9 +300,6 @@ function setTagsFromString(raw: string) {
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
 }
-function altsAsString(): string {
-  return form.alternateGreetings.join("\n");
-}
 
 function clearErrors() {
   for (const k of Object.keys(errors)) delete errors[k];
@@ -359,7 +355,7 @@ async function preflightExists(lorePath: string): Promise<boolean> {
   const url = `/api/lore/series/${encodeURIComponent(seriesName.value)}/${lorePath}`;
   let res: Response;
   try {
-    res = await fetch(url, { headers: { ...getAuthHeaders() } });
+    res = await apiFetch(url, { throwOnError: false });
   } catch (err) {
     throw new Error(
       `預檢篇章失敗：${err instanceof Error ? err.message : String(err)}`,
@@ -410,9 +406,9 @@ function buildWorldInfoMarkdown(): string {
 
 async function postInit(): Promise<{ created: boolean }> {
   const url = `/api/stories/${encodeURIComponent(seriesName.value)}/${encodeURIComponent(storyName.value)}/init`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: "POST",
-    headers: { ...getAuthHeaders() },
+    throwOnError: false,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -430,10 +426,11 @@ async function putLore(
   groupLabel: "角色篇章" | "世界篇章",
 ): Promise<void> {
   const url = `/api/lore/series/${encodeURIComponent(seriesName.value)}/${lorePath}`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ frontmatter, content }),
+    throwOnError: false,
   });
   if (!res.ok) {
     const rb = await res.json().catch(() => ({}));

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 import {
   deriveLoreFilename,
   ensureMdExtension,
@@ -10,7 +10,6 @@ import {
 } from "@/lib/lore-filename";
 
 const router = useRouter();
-const { getAuthHeaders } = useAuth();
 
 const seriesName = ref("");
 const storyName = ref("");
@@ -175,7 +174,7 @@ async function preflightExists(filename: string): Promise<boolean> {
   const url = `/api/lore/story/${encodeURIComponent(seriesName.value)}/${encodeURIComponent(storyName.value)}/${encodeURIComponent(filename)}`;
   let res: Response;
   try {
-    res = await fetch(url, { headers: { ...getAuthHeaders() } });
+    res = await apiFetch(url, { throwOnError: false });
   } catch (err) {
     throw new Error(
       `預檢篇章失敗：${err instanceof Error ? err.message : String(err)}`,
@@ -188,9 +187,9 @@ async function preflightExists(filename: string): Promise<boolean> {
 
 async function postInit(): Promise<{ created: boolean }> {
   const url = `/api/stories/${encodeURIComponent(seriesName.value)}/${encodeURIComponent(storyName.value)}/init`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: "POST",
-    headers: { ...getAuthHeaders() },
+    throwOnError: false,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -209,13 +208,14 @@ async function putLore(
 ): Promise<void> {
   const url = `/api/lore/story/${encodeURIComponent(seriesName.value)}/${encodeURIComponent(storyName.value)}/${encodeURIComponent(filename)}`;
   const content = `# ${displayName}\n\n${body}`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       frontmatter: { enabled: true, priority: 0 },
       content,
     }),
+    throwOnError: false,
   });
   if (!res.ok) {
     const rb = await res.json().catch(() => ({}));

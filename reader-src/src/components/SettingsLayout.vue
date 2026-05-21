@@ -3,13 +3,12 @@ import { computed, ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { settingsChildren } from "@/router";
 import { useLastReadingRoute } from "@/composables/useLastReadingRoute";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 import { useSidebarDrawer } from "@/composables/useSidebarDrawer";
 import AppHeader from "./AppHeader.vue";
 
 const router = useRouter();
 const { lastReadingRoute } = useLastReadingRoute();
-const { getAuthHeaders } = useAuth();
 
 const {
   isOpen,
@@ -48,7 +47,7 @@ const pluginTabs = ref<PluginTab[]>([]);
 
 onMounted(async () => {
   try {
-    const res = await fetch("/api/plugins", { headers: getAuthHeaders() as Record<string, string> });
+    const res = await apiFetch("/api/plugins", { throwOnError: false });
     if (res.ok) {
       const plugins = await res.json();
       pluginTabs.value = plugins
@@ -73,6 +72,10 @@ function goBack() {
 }
 
 const drawerClosedOnMobile = computed(() => isMobile.value && !isOpen.value);
+
+// Bindings consumed by template string refs (vue-tsc cannot detect string-ref usage).
+void triggerRef;
+void drawerRef;
 </script>
 
 <template>

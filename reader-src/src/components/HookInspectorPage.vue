@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 import { frontendHooks } from "@/lib/plugin-hooks";
 import {
   detectConflicts,
@@ -23,8 +23,6 @@ interface IntrospectionDump {
   generatedAt: string;
 }
 
-const { getAuthHeaders } = useAuth();
-
 const loading = ref(false);
 const errorMsg = ref<string | null>(null);
 const report = ref<HookInspectorReport | null>(null);
@@ -33,8 +31,8 @@ async function loadReport(): Promise<void> {
   loading.value = true;
   errorMsg.value = null;
   try {
-    const res = await fetch("/api/plugin-introspection/hooks", {
-      headers: getAuthHeaders() as Record<string, string>,
+    const res = await apiFetch("/api/plugin-introspection/hooks", {
+      throwOnError: false,
     });
     if (res.status === 401) {
       errorMsg.value = "通行碼錯誤或未提供，請先重新驗證通行碼後再試。";

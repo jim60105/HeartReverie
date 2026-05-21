@@ -23,3 +23,13 @@ declare module "node:path" {
   export function dirname(p: string): string;
   export function resolve(...paths: string[]): string;
 }
+
+declare module "diff" {
+  export function createPatch(
+    fileName: string,
+    oldStr: string,
+    newStr: string,
+    oldHeader?: string,
+    newHeader?: string,
+  ): string;
+}

@@ -18,6 +18,8 @@
 // never mutates the DOM: it registers Range objects on named Highlight
 // instances and lets `::highlight(name)` CSS rules paint them.
 
+import { createPluginLogger, getPluginSettings } from '../_shared/utils.js';
+
 const PAIRS = [
   // [openerChar, closerChar, suffix]
   ['"', '"', 'straight'],
@@ -195,11 +197,7 @@ function isHighlightApiAvailable() {
 }
 
 export function register(hooks, context) {
-  const logger = context && context.logger
-    ? context.logger
-    : {
-        info: (...args) => console.info('[dialogue-colorize]', ...args),
-      };
+  const logger = createPluginLogger(context, 'dialogue-colorize');
 
   if (!isHighlightApiAvailable()) {
     logger.info(
@@ -208,13 +206,13 @@ export function register(hooks, context) {
     return;
   }
 
-  const initialSettings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+  const initialSettings = getPluginSettings(hooks);
   applyPluginColorOverride(typeof initialSettings.dialogueColor === 'string' ? initialSettings.dialogueColor : '');
 
   hooks.register(
     'chapter:dom:ready',
     (ctx) => {
-      const settings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+      const settings = getPluginSettings(hooks);
       const enabled = settings.enabled !== false;
       if (!enabled) {
         clearAllHighlights();
@@ -242,7 +240,7 @@ export function register(hooks, context) {
   hooks.register(
     'chapter:dom:dispose',
     (ctx) => {
-      const settings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+      const settings = getPluginSettings(hooks);
       const container = ctx && ctx.container;
       if (!(container instanceof HTMLElement)) return;
       try {

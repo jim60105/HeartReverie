@@ -55,7 +55,7 @@ describe("HookInspectorPage", () => {
     expect(fetchMock).toHaveBeenCalled();
     const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe("/api/plugin-introspection/hooks");
-    expect(call[1]?.headers).toEqual({ "X-Passphrase": "test-pass" });
+    expect((call[1]?.headers as Headers).get("X-Passphrase")).toBe("test-pass");
 
     const html = wrapper.html();
     expect(html).toContain("post-response");

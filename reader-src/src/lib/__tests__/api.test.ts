@@ -29,7 +29,8 @@ describe("apiFetch", () => {
     await apiFetch("/api/test");
 
     const init = fetchSpy.mock.calls[0]![1] as RequestInit;
-    expect(init.headers).toMatchObject({ "X-Passphrase": "secret" });
+    const headers = init.headers as Headers;
+    expect(headers.get("X-Passphrase")).toBe("secret");
   });
 
   it("merges caller headers over auth headers", async () => {
@@ -42,10 +43,32 @@ describe("apiFetch", () => {
     });
 
     const init = fetchSpy.mock.calls[0]![1] as RequestInit;
-    expect(init.headers).toMatchObject({
-      "Content-Type": "application/json",
-      "X-Passphrase": "override",
+    const headers = init.headers as Headers;
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(headers.get("X-Passphrase")).toBe("override");
+  });
+
+  it("accepts Headers instance as caller headers", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 200 }),
+    );
+
+    await apiFetch("/api/test", {
+      headers: new Headers({ "Content-Type": "application/json" }),
     });
+
+    const init = fetchSpy.mock.calls[0]![1] as RequestInit;
+    const headers = init.headers as Headers;
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(headers.get("X-Passphrase")).toBe("secret");
+  });
+
+  it("falls back to a generic message when statusText is empty", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 500, statusText: "" }),
+    );
+
+    await expect(apiFetch("/api/blank")).rejects.toThrow("Request failed: /api/blank");
   });
 
   it("throws with body.detail on non-2xx", async () => {
@@ -72,6 +95,76 @@ describe("apiFetch", () => {
     const res = await apiFetch("/api/test", { throwOnError: false });
     expect(res.status).toBe(404);
   });
+
+  it("passes method, body, and signal through to fetch", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 200 }),
+    );
+    const controller = new AbortController();
+
+    await apiFetch("/api/test", {
+      method: "POST",
+      body: JSON.stringify({ x: 1 }),
+      signal: controller.signal,
+    });
+
+    const init = fetchSpy.mock.calls[0]![1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ x: 1 }));
+    expect(init.signal).toBe(controller.signal);
+  });
+
+  it("propagates AbortError when the signal aborts", async () => {
+    const controller = new AbortController();
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          controller.signal.addEventListener("abort", () => {
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        }),
+    );
+
+    const promise = apiFetch("/api/test", { signal: controller.signal });
+    controller.abort();
+
+    await expect(promise).rejects.toThrow("aborted");
+  });
+
+  it("prefers detail over errorMessage over statusText", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "from-body" }), {
+        status: 400,
+        statusText: "Bad Request",
+      }),
+    );
+
+    await expect(
+      apiFetch("/api/test", { errorMessage: "from-caller" }),
+    ).rejects.toThrow("from-body");
+  });
+
+  it("falls back to statusText when neither detail nor errorMessage is provided", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 503, statusText: "Service Unavailable" }),
+    );
+
+    await expect(apiFetch("/api/test")).rejects.toThrow("Service Unavailable");
+  });
+
+  it("handles non-JSON error body without crashing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>oops</html>", {
+        status: 500,
+        statusText: "Internal Server Error",
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+
+    await expect(
+      apiFetch("/api/test", { errorMessage: "boom" }),
+    ).rejects.toThrow("boom");
+  });
 });
 
 describe("apiFetchJson", () => {
@@ -86,5 +179,15 @@ describe("apiFetchJson", () => {
 
     const body = await apiFetchJson<{ ok: boolean; n: number }>("/api/test");
     expect(body).toEqual({ ok: true, n: 42 });
+  });
+
+  it("throws on non-2xx without attempting to parse a success body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "not found" }), { status: 404 }),
+    );
+
+    await expect(
+      apiFetchJson<{ ok: boolean }>("/api/test"),
+    ).rejects.toThrow("not found");
   });
 });

@@ -147,7 +147,7 @@ function syncFromOverrides(source: StoryLlmConfig): void {
  */
 function formatDefault(key: FieldKey, src: LlmDefaultsResponse | null): string {
   if (src === null) return "";
-  const v = (src as Record<string, unknown>)[key];
+  const v = (src as unknown as Record<string, unknown>)[key];
   if (v === undefined || v === null) return "";
   if (typeof v === "boolean") return v ? "true" : "false";
   return String(v);
@@ -314,7 +314,7 @@ function handleEnabledChange(key: FieldKey, next: boolean): void {
   if (defaults.value === null) return;
   const f = FIELDS.find((x) => x.key === key);
   if (!f) return;
-  const seed = (defaults.value as Record<string, unknown>)[key];
+  const seed = (defaults.value as unknown as Record<string, unknown>)[key];
   if (seed === undefined || seed === null) return;
   if (f.type === "boolean") {
     if (typeof seed === "boolean") booleanMap[key] = seed;

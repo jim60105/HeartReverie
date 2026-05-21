@@ -30,7 +30,6 @@ function mountWithContext(opts: {
       formats: ["path", "color", "url", "email", "uuid"],
     },
     basePath: "",
-    getAuthHeaders: () => ({}),
     rootModel,
   }) as unknown as FormContextValue;
 

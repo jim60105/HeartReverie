@@ -1,7 +1,7 @@
 import { effectScope, type EffectScope, ref, watch } from "vue";
 import router from "@/router";
 import type { UseStorySelectorReturn } from "@/types";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetchJson, apiFetch } from "@/lib/api";
 import { useUsage } from "@/composables/useUsage";
 
 const seriesList = ref<string[]>([]);
@@ -12,30 +12,23 @@ let initialized = false;
 let routeSyncScope: EffectScope | null = null;
 
 async function fetchSeries(): Promise<void> {
-  const { getAuthHeaders } = useAuth();
-  const res = await fetch("/api/stories", {
-    headers: { ...getAuthHeaders() },
+  seriesList.value = await apiFetchJson<string[]>("/api/stories", {
+    errorMessage: "Failed to load series",
   });
-  if (!res.ok) throw new Error("Failed to load series");
-  seriesList.value = await res.json();
 }
 
 async function fetchStories(series: string): Promise<void> {
-  const { getAuthHeaders } = useAuth();
-  const res = await fetch(`/api/stories/${encodeURIComponent(series)}`, {
-    headers: { ...getAuthHeaders() },
-  });
-  if (!res.ok) throw new Error("Failed to load stories");
-  storyList.value = await res.json();
+  storyList.value = await apiFetchJson<string[]>(
+    `/api/stories/${encodeURIComponent(series)}`,
+    { errorMessage: "Failed to load stories" },
+  );
 }
 
 async function createStory(series: string, name: string): Promise<void> {
-  const { getAuthHeaders } = useAuth();
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(name)}/init`,
-    { method: "POST", headers: { ...getAuthHeaders() } },
+    { method: "POST", errorMessage: "Failed to create story" },
   );
-  if (!res.ok) throw new Error("Failed to create story");
   await res.json();
 }
 

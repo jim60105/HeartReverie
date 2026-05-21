@@ -51,7 +51,8 @@ describe("useChapterActions", () => {
     expect(url).toBe("/api/stories/s/n/chapters/2");
     expect(init.method).toBe("PUT");
     expect(init.body).toBe(JSON.stringify({ content: "new" }));
-    expect((init.headers as Record<string, string>)["X-Passphrase"]).toBe("pw");
+    expect(init.headers).toBeInstanceOf(Headers);
+    expect((init.headers as Headers).get("X-Passphrase")).toBe("pw");
   });
 
   it("editChapter throws on error with server detail", async () => {

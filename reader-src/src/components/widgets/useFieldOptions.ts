@@ -1,12 +1,13 @@
 // Shared composable for resolving widget options:
-// - prefers `x-options-url` (fetched once on mount with passphrase header)
+// - prefers `x-options-url` (fetched once on mount via apiFetch with auth header)
 // - falls back to `enum` on failure or when no URL
 //
 // Returns reactive { options, loading, fetchError }.
 
 import { onMounted, ref } from "vue";
 import type { Ref } from "vue";
-import type { JsonSchema, AuthHeadersFn } from "@/lib/widget-registry";
+import type { JsonSchema } from "@/lib/widget-registry";
+import { apiFetch } from "@/lib/api";
 
 export interface ResolvedOption {
   value: string;
@@ -25,10 +26,7 @@ function enumOptions(schema: JsonSchema): ResolvedOption[] {
   return raw.map((v) => ({ value: String(v), label: String(v) }));
 }
 
-export function useFieldOptions(
-  schema: JsonSchema,
-  getAuthHeaders: AuthHeadersFn,
-): OptionResolverState {
+export function useFieldOptions(schema: JsonSchema): OptionResolverState {
   const options = ref<ResolvedOption[]>(enumOptions(schema));
   const loading = ref(false);
   const fetchError = ref<string | null>(null);
@@ -38,7 +36,7 @@ export function useFieldOptions(
     onMounted(async () => {
       loading.value = true;
       try {
-        const res = await fetch(url, { headers: getAuthHeaders() });
+        const res = await apiFetch(url, { throwOnError: false });
         if (!res.ok) {
           fetchError.value = `載入選項失敗（${res.status}）`;
           return;

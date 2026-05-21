@@ -87,7 +87,7 @@ async function handleExport(format: ExportFormat) {
   >
     <summary
       class="themed-btn selector-toggle"
-      :aria-label="selectedStory ? '故事選擇' : null"
+      :aria-label="selectedStory ? '故事選擇' : undefined"
     >
       <span aria-hidden="true">📖</span><span v-if="!selectedStory"> 故事選擇</span>
     </summary>

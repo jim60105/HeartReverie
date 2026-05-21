@@ -15,10 +15,10 @@
 
 /**
  * Typed HTTP client for the writer-side `/api/templates*` endpoints.
- * Adds `X-Passphrase` + `Content-Type: application/json` via `useAuth()`.
+ * Adds `X-Passphrase` + `Content-Type: application/json` via `apiFetch`.
  */
 
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 
 export type TemplateKind = "system" | "plugin-fragment" | "lore" | "prompt-message-body";
 export type LoreScope = "global" | "series" | "story";
@@ -166,13 +166,7 @@ export class TemplateApiError extends Error {
   }
 }
 
-function jsonHeaders(): Record<string, string> {
-  const { getAuthHeaders } = useAuth();
-  return {
-    "Content-Type": "application/json",
-    ...(getAuthHeaders() as Record<string, string>),
-  };
-}
+const JSON_HEADERS: Record<string, string> = { "Content-Type": "application/json" };
 
 async function parseError(res: Response): Promise<TemplateApiError> {
   let body: unknown = undefined;
@@ -202,7 +196,7 @@ export interface SourceResponse {
 
 export async function fetchTemplateSource(templatePath: string): Promise<SourceResponse> {
   const url = `/api/templates/source?templatePath=${encodeURIComponent(templatePath)}`;
-  const res = await fetch(url, { headers: jsonHeaders() });
+  const res = await apiFetch(url, { throwOnError: false });
   if (!res.ok) throw await parseError(res);
   return await res.json() as SourceResponse;
 }
@@ -215,7 +209,7 @@ export async function listTemplates(
   if (opts.story) params.set("story", opts.story);
   const qs = params.toString();
   const url = qs ? `/api/templates?${qs}` : "/api/templates";
-  const res = await fetch(url, { headers: jsonHeaders() });
+  const res = await apiFetch(url, { throwOnError: false });
   if (!res.ok) throw await parseError(res);
   return await res.json() as ListTemplatesResponse;
 }
@@ -230,36 +224,39 @@ export async function getVariables(
   if (opts.pluginName) params.set("pluginName", opts.pluginName);
   const qs = params.toString();
   const url = qs ? `/api/templates/variables?${qs}` : "/api/templates/variables";
-  const res = await fetch(url, { headers: jsonHeaders() });
+  const res = await apiFetch(url, { throwOnError: false });
   if (!res.ok) throw await parseError(res);
   return await res.json() as GetVariablesResponse;
 }
 
 export async function lintTemplate(body: LintBody): Promise<LintResponse> {
-  const res = await fetch("/api/templates/lint", {
+  const res = await apiFetch("/api/templates/lint", {
     method: "POST",
-    headers: jsonHeaders(),
+    headers: JSON_HEADERS,
     body: JSON.stringify(body),
+    throwOnError: false,
   });
   if (!res.ok) throw await parseError(res);
   return await res.json() as LintResponse;
 }
 
 export async function previewTemplate(body: PreviewBody): Promise<PreviewResponse> {
-  const res = await fetch("/api/templates/preview", {
+  const res = await apiFetch("/api/templates/preview", {
     method: "POST",
-    headers: jsonHeaders(),
+    headers: JSON_HEADERS,
     body: JSON.stringify(body),
+    throwOnError: false,
   });
   if (!res.ok) throw await parseError(res);
   return await res.json() as PreviewResponse;
 }
 
 export async function writeTemplate(body: WriteBody): Promise<WriteResponse> {
-  const res = await fetch("/api/templates", {
+  const res = await apiFetch("/api/templates", {
     method: "PUT",
-    headers: jsonHeaders(),
+    headers: JSON_HEADERS,
     body: JSON.stringify(body),
+    throwOnError: false,
   });
   if (!res.ok) throw await parseError(res);
   return await res.json() as WriteResponse;

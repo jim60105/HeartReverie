@@ -7,7 +7,7 @@ import { useFieldOptions } from "./useFieldOptions";
 const props = defineProps<WidgetProps>();
 const emit = defineEmits<(e: "update:modelValue", value: string) => void>();
 
-const { options, fetchError } = useFieldOptions(props.schema, props.context.getAuthHeaders);
+const { options, fetchError } = useFieldOptions(props.schema);
 
 const value = computed(() => {
   const v = props.modelValue;

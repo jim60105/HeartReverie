@@ -147,7 +147,7 @@ async function selectEntry(templatePath: string): Promise<void> {
     dirty.value = false;
   } catch (err: unknown) {
     const msg = err instanceof TemplateApiError ? err.message : String(err);
-    notify(`載入模板失敗：${msg}`, "error");
+    notify({ title: `載入模板失敗：${msg}`, level: "error" });
     editorSource.value = "";
     baselineSource.value = "";
     dirty.value = false;

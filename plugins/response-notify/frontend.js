@@ -15,9 +15,11 @@
 
 // Plugin: response-notify — Notify user when LLM generation completes
 
+import { getPluginSettings } from '../_shared/utils.js';
+
 export function register(hooks) {
   hooks.register('notification', (context) => {
-    const settings = typeof hooks.getSettings === 'function' ? hooks.getSettings() : {};
+    const settings = getPluginSettings(hooks);
     if (settings.enabled === false) return;
     if (context.event !== 'chat:done') return;
     if (typeof context.notify !== 'function') return;

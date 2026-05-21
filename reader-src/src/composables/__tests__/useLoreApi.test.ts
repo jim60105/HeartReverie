@@ -156,7 +156,7 @@ describe("useLoreApi", () => {
       frontmatter: fm,
       content: "content text",
     });
-    expect(call[1].headers["Content-Type"]).toBe("application/json");
+    expect((call[1].headers as Headers).get("Content-Type")).toBe("application/json");
   });
 
   // ── deletePassage ──

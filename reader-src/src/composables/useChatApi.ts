@@ -6,10 +6,10 @@ import type {
   RunPluginPromptOptions,
   RunPluginPromptResult,
 } from "@/types";
-import { useAuth } from "@/composables/useAuth";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useNotification } from "@/composables/useNotification";
 import { useUsage } from "@/composables/useUsage";
+import { apiFetch } from "@/lib/api";
 import { frontendHooks } from "@/lib/plugin-hooks";
 
 const isLoading = ref(false);
@@ -137,19 +137,19 @@ async function sendMessage(
   }
 
   // ── HTTP fallback ──
-  const { getAuthHeaders } = useAuth();
   httpAbortController = new AbortController();
 
   try {
     const body: Record<string, string> = { message: outgoingMessage };
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chat`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: httpAbortController.signal,
+        throwOnError: false,
       },
     );
 
@@ -275,14 +275,13 @@ async function resendMessage(
   }
 
   // ── HTTP fallback ──
-  const { getAuthHeaders } = useAuth();
   httpAbortController = new AbortController();
 
   try {
     // Delete last chapter
-    const delRes = await fetch(
+    const delRes = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/last`,
-      { method: "DELETE", headers: { ...getAuthHeaders() }, signal: httpAbortController.signal },
+      { method: "DELETE", signal: httpAbortController.signal, throwOnError: false },
     );
 
     if (!delRes.ok && delRes.status !== 404) {
@@ -294,13 +293,14 @@ async function resendMessage(
     // Re-send the message
     const body: Record<string, string> = { message: outgoingMessage };
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chat`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: httpAbortController.signal,
+        throwOnError: false,
       },
     );
 
@@ -418,16 +418,16 @@ async function continueLastChapter(
   }
 
   // ── HTTP fallback ──
-  const { getAuthHeaders } = useAuth();
   httpAbortController = new AbortController();
 
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chat/continue`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: { "Content-Type": "application/json" },
         signal: httpAbortController.signal,
+        throwOnError: false,
       },
     );
 
@@ -588,7 +588,6 @@ async function runPluginPrompt(
   }
 
   // ── HTTP fallback ──
-  const { getAuthHeaders } = useAuth();
   httpAbortController = new AbortController();
 
   try {
@@ -604,13 +603,14 @@ async function runPluginPrompt(
       body.extraVariables = opts.extraVariables;
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/plugins/${encodeURIComponent(pluginName)}/run-prompt`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: httpAbortController.signal,
+        throwOnError: false,
       },
     );
 

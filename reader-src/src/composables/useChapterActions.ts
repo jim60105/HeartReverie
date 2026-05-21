@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 import type {
   BranchResponse,
   ChapterEditResponse,
@@ -23,7 +23,7 @@ import type {
 
 /**
  * Throw an Error carrying the server-provided Problem Details `detail` when
- * available, otherwise the HTTP status text.
+ * available, otherwise the `title` field, then the HTTP status text.
  */
 async function throwFromResponse(res: Response): Promise<never> {
   let message = res.statusText;
@@ -38,23 +38,19 @@ async function throwFromResponse(res: Response): Promise<never> {
 }
 
 export function useChapterActions(): UseChapterActionsReturn {
-  const { getAuthHeaders } = useAuth();
-
   async function editChapter(
     series: string,
     story: string,
     num: number,
     content: string,
   ): Promise<ChapterEditResponse> {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/${num}`,
       {
         method: "PUT",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
+        throwOnError: false,
       },
     );
     if (!res.ok) await throwFromResponse(res);
@@ -66,12 +62,9 @@ export function useChapterActions(): UseChapterActionsReturn {
     story: string,
     num: number,
   ): Promise<ChapterRewindResponse> {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/after/${num}`,
-      {
-        method: "DELETE",
-        headers: { ...getAuthHeaders() },
-      },
+      { method: "DELETE", throwOnError: false },
     );
     if (!res.ok) await throwFromResponse(res);
     return await res.json() as ChapterRewindResponse;
@@ -85,15 +78,13 @@ export function useChapterActions(): UseChapterActionsReturn {
   ): Promise<BranchResponse> {
     const body: Record<string, unknown> = { fromChapter };
     if (newName) body.newName = newName;
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/branch`,
       {
         method: "POST",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        throwOnError: false,
       },
     );
     if (!res.ok) await throwFromResponse(res);

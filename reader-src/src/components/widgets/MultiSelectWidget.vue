@@ -12,10 +12,7 @@ const itemsSchema = computed(() => {
   return items && typeof items === "object" ? (items as Record<string, unknown>) : {};
 });
 
-const { options, fetchError } = useFieldOptions(
-  itemsSchema.value,
-  props.context.getAuthHeaders,
-);
+const { options, fetchError } = useFieldOptions(itemsSchema.value);
 
 const value = computed<string[]>(() => {
   const v = props.modelValue;

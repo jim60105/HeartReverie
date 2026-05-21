@@ -106,8 +106,8 @@ describe("useChapterNav coverage branches", () => {
 
   async function flushReactive() {
     await nextTick();
-    await Promise.resolve();
-    await Promise.resolve();
+    // apiFetch wrapper deepens the async chain by one tick beyond raw fetch.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
   }
 
   it("loadFromBackend handles empty chapter list and starts polling fallback", async () => {

@@ -18,7 +18,6 @@ export interface MountWidgetOpts {
   errors?: ValidationError[];
   path?: string;
   rootModel?: Record<string, unknown>;
-  authHeaders?: () => Record<string, string>;
   schemaMeta?: {
     schemaVersion: number;
     pathRoots: string[];
@@ -40,7 +39,6 @@ export function mountWidget(Widget: Component, opts: MountWidgetOpts): {
       formats: ["path", "color", "url", "email", "uuid"],
     },
     basePath: "",
-    getAuthHeaders: opts.authHeaders ?? (() => ({})),
     rootModel: opts.rootModel ?? {},
   }) as unknown as FormContextValue;
 

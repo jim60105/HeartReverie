@@ -1,5 +1,5 @@
 import { ref, shallowRef, type Ref } from "vue";
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 import {
   REASONING_EFFORTS,
   type LlmDefaultsResponse,
@@ -32,19 +32,12 @@ function buildUrl(series: string, name: string): string {
 }
 
 async function loadConfig(series: string, name: string): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   loading.value = true;
   error.value = null;
   try {
-    const res = await fetch(buildUrl(series, name), {
-      headers: { ...getAuthHeaders() },
+    const res = await apiFetch(buildUrl(series, name), {
+      errorMessage: "Failed to load story config",
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(
-        (body as { detail?: string }).detail ?? "Failed to load story config",
-      );
-    }
     overrides.value = (await res.json()) as StoryLlmConfig;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Unknown error";
@@ -134,13 +127,10 @@ function validateLlmDefaultsBody(body: unknown): LlmDefaultsResponse {
 }
 
 async function loadLlmDefaults(): Promise<void> {
-  const { getAuthHeaders } = useAuth();
   defaultsLoading.value = true;
   defaultsError.value = null;
   try {
-    const res = await fetch("/api/llm-defaults", {
-      headers: { ...getAuthHeaders() },
-    });
+    const res = await apiFetch("/api/llm-defaults", { throwOnError: false });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(
@@ -163,21 +153,15 @@ async function saveConfig(
   name: string,
   next: StoryLlmConfig,
 ): Promise<StoryLlmConfig> {
-  const { getAuthHeaders } = useAuth();
   saving.value = true;
   error.value = null;
   try {
-    const res = await fetch(buildUrl(series, name), {
+    const res = await apiFetch(buildUrl(series, name), {
       method: "PUT",
-      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(next),
+      errorMessage: "Failed to save story config",
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(
-        (body as { detail?: string }).detail ?? "Failed to save story config",
-      );
-    }
     const persisted = (await res.json()) as StoryLlmConfig;
     overrides.value = persisted;
     return persisted;

@@ -120,4 +120,18 @@ describe("useTheme", () => {
     expect(themes.value.length).toBe(2);
     expect(themes.value[0]!.id).toBe("default");
   });
+
+  it("listThemes leaves themes untouched when the server returns 500", async () => {
+    mockFetchSequence([
+      { status: 200, body: [{ id: "default", label: "預設" }] },
+      { status: 500, body: { title: "Boom" } },
+    ]);
+    const { listThemes, themes } = await getUseTheme();
+    await listThemes();
+    expect(themes.value.length).toBe(1);
+    // Second load fails — the previous list must survive.
+    await listThemes();
+    expect(themes.value.length).toBe(1);
+    expect(themes.value[0]!.id).toBe("default");
+  });
 });

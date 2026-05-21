@@ -38,6 +38,10 @@ function goBack() {
 }
 
 const drawerClosedOnMobile = computed(() => isMobile.value && !isOpen.value);
+
+// Bindings consumed by template string refs (vue-tsc cannot detect string-ref usage).
+void triggerRef;
+void drawerRef;
 </script>
 
 <template>

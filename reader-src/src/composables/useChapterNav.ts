@@ -7,8 +7,8 @@ import type {
   StorySwitchContext,
   ChapterChangeContext,
 } from "@/types";
-import { useAuth } from "@/composables/useAuth";
 import { useWebSocket } from "@/composables/useWebSocket";
+import { apiFetch, apiFetchJson } from "@/lib/api";
 import { frontendHooks } from "@/lib/plugin-hooks";
 import { renderDebug } from "@/lib/render-debug";
 
@@ -191,12 +191,11 @@ async function pollBackend(): Promise<void> {
   isPolling = true;
   const series = currentSeries;
   const story = currentStory;
-  const { getAuthHeaders } = useAuth();
 
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters`,
-      { headers: { ...getAuthHeaders() } },
+      { throwOnError: false },
     );
 
     // Discard if story changed during fetch
@@ -228,9 +227,9 @@ async function pollBackend(): Promise<void> {
     // Poll the last chapter's content for streaming updates
     if (nums.length > 0 && chapters.value.length > 0) {
       const lastNum = nums[nums.length - 1]!;
-      const chRes = await fetch(
+      const chRes = await apiFetch(
         `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/${lastNum}`,
-        { headers: { ...getAuthHeaders() } },
+        { throwOnError: false },
       );
       if (series !== currentSeries || story !== currentStory) return;
       if (!chRes.ok) return;
@@ -295,14 +294,10 @@ async function loadFromBackendInternal(
   series: string,
   story: string,
 ): Promise<void> {
-  const { getAuthHeaders } = useAuth();
-
-  const res = await fetch(
+  const loaded = await apiFetchJson<ChapterData[]>(
     `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters?include=content`,
-    { headers: { ...getAuthHeaders() } },
+    { errorMessage: "Failed to load chapters" },
   );
-  if (!res.ok) throw new Error("Failed to load chapters");
-  const loaded: ChapterData[] = await res.json();
 
   chapters.value = loaded;
 }

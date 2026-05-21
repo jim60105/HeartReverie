@@ -1,4 +1,4 @@
-import { useAuth } from "@/composables/useAuth";
+import { apiFetch } from "@/lib/api";
 
 export type ExportFormat = "md" | "json" | "txt";
 
@@ -23,13 +23,9 @@ export async function exportStory(
 ): Promise<void> {
   if (!series || !name) throw new Error("Missing series or story");
 
-  const { getAuthHeaders } = useAuth();
   const url = `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(name)}/export?format=${format}`;
 
-  const res = await fetch(url, {
-    method: "GET",
-    headers: { ...getAuthHeaders() },
-  });
+  const res = await apiFetch(url, { method: "GET", throwOnError: false });
   if (!res.ok) {
     throw new Error(`Export failed with status ${res.status}`);
   }
