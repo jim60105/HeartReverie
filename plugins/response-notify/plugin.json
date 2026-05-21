@@ -17,25 +17,25 @@
         "type": "boolean",
         "default": true,
         "title": "啟用回應通知",
-        "description": "關閉後本外掛將停用，等同未安裝外掛。"
+        "description": "關閉後此功能將停用。"
       },
       "notifyTitle": {
         "type": "string",
         "default": "故事生成完成",
         "title": "通知標題",
-        "description": "系統通知的標題文字。"
+        "description": "顯示在通知上的標題文字。"
       },
       "notifyBody": {
         "type": "string",
         "default": "新的章節已經寫入完成",
         "title": "通知內文",
-        "description": "系統通知的內文文字。"
+        "description": "顯示在通知上的內文文字。"
       },
       "notifyWhenVisible": {
         "type": "boolean",
         "default": true,
-        "title": "頁面可見時也通知",
-        "description": "預設開啟：頁面可見時以站內 toast 通知，隱藏時以系統通知通知。關閉後僅在頁面隱藏時通知。"
+        "title": "頁面開啟時也提醒",
+        "description": "開啟時，若您正在閱讀頁面，會以站內通知提示；頁面切換到背景時則改用系統通知。關閉後，只有頁面在背景時才會提醒。"
       },
       "notifyLevel": {
         "type": "string",
@@ -45,8 +45,8 @@
           "warning"
         ],
         "default": "success",
-        "title": "通知等級",
-        "description": "系統通知的視覺等級（info / success / warning）。"
+        "title": "通知樣式",
+        "description": "選擇通知顯示的樣式：一般訊息、成功、或警示。"
       }
     }
   }

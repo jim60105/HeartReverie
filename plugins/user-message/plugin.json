@@ -29,7 +29,7 @@
         "type": "boolean",
         "default": true,
         "title": "啟用使用者訊息標記",
-        "description": "關閉後本外掛將停用，等同未安裝外掛。"
+        "description": "關閉後此功能將停用。"
       }
     }
   }

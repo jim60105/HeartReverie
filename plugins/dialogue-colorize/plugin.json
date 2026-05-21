@@ -23,13 +23,13 @@
         "type": "boolean",
         "default": true,
         "title": "啟用對話上色",
-        "description": "關閉後本外掛將停用，等同未安裝外掛。"
+        "description": "關閉後此功能將停用。"
       },
       "dialogueColor": {
         "type": "string",
         "default": "",
         "title": "對話顏色",
-        "description": "套用至所有對話引號段落的 CSS 顏色值（例如 #aa5500 或 royalblue）。留空時使用佈景主題的 --text-name 顏色。"
+        "description": "套用至引號內對話文字的顏色，可填入色碼（例如 #aa5500）或顏色名稱（例如 royalblue）。留空則沿用目前佈景主題的預設顏色。"
       },
       "enabledQuoteStyles": {
         "type": "array",
@@ -41,8 +41,8 @@
           "corner-half",
           "book"
         ],
-        "title": "啟用的引號樣式",
-        "description": "選擇要上色的引號類型。取消勾選後，對應引號段落將不著色。",
+        "title": "要上色的引號樣式",
+        "description": "勾選要套用顏色的引號類型。未勾選的引號內文字將維持原本顏色。",
         "items": {
           "type": "string",
           "enum": [

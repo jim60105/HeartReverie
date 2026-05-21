@@ -14,49 +14,57 @@
       "enabled": {
         "type": "boolean",
         "default": true,
-        "title": "啟用閱讀進度同步"
+        "title": "啟用閱讀進度同步",
+        "description": "關閉後此功能將停用。"
       },
       "syncIntervalSeconds": {
         "type": "number",
         "minimum": 1,
         "maximum": 60,
         "default": 5,
-        "title": "捲動同步節流秒數"
+        "title": "進度更新間隔（秒）",
+        "description": "閱讀時每隔多少秒記錄一次目前的捲動位置。數字越小越即時，但會比較頻繁地存取資料。"
       },
       "storageBackend": {
         "type": "string",
         "enum": ["file", "local"],
         "default": "file",
-        "title": "儲存後端"
+        "title": "進度儲存位置",
+        "description": "選擇進度的儲存方式：「file」會存到伺服器，可跨裝置同步；「local」僅儲存在目前瀏覽器中。"
       },
       "pollOnFocus": {
         "type": "boolean",
         "default": true,
-        "title": "切回頁面時重新抓取"
+        "title": "切回頁面時更新進度",
+        "description": "開啟時，每當您切換回此分頁，會自動取得最新的閱讀進度。"
       },
       "pollIntervalMs": {
         "type": "number",
         "minimum": 0,
         "maximum": 600000,
         "default": 0,
-        "title": "輪詢間隔（毫秒）"
+        "title": "定時檢查進度間隔（毫秒）",
+        "description": "在背景定期檢查其他裝置的閱讀進度。設為 0 代表不會定時檢查；若上方「切回頁面時更新進度」開啟，切回分頁時仍會更新。"
       },
       "confirmRemoteJump": {
         "type": "boolean",
         "default": true,
-        "title": "跨裝置跳轉前確認"
+        "title": "跳轉前先詢問",
+        "description": "偵測到其他裝置有較新的閱讀進度時，先跳出確認視窗，避免直接跳走。"
       },
       "retainDays": {
         "type": "number",
         "minimum": 1,
         "maximum": 3650,
         "default": 90,
-        "title": "進度保留天數"
+        "title": "進度保留天數",
+        "description": "閱讀進度紀錄的保留時間，超過此天數的舊紀錄將會自動清除。"
       },
       "trackSelectionAnchor": {
         "type": "boolean",
         "default": true,
-        "title": "記錄文字錨點"
+        "title": "記住閱讀位置文字",
+        "description": "開啟時，會額外記住您閱讀到的那段文字內容，跨裝置同步時能更精準地回到原本位置。"
       }
     }
   }

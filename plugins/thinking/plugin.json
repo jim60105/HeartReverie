@@ -30,31 +30,31 @@
         "type": "boolean",
         "default": true,
         "title": "啟用思考摺疊",
-        "description": "關閉後本外掛將停用，等同未安裝外掛。"
+        "description": "關閉後此功能將停用。"
       },
       "injectInstruction": {
         "type": "boolean",
         "default": true,
-        "title": "注入思考指令",
-        "description": "關閉後不再在系統提示詞中要求模型回覆前先思考。"
+        "title": "要求 AI 先思考再回覆",
+        "description": "開啟時會請 AI 模型在回覆前先進行思考。關閉後將不再加入此項要求。"
       },
       "defaultCollapsed": {
         "type": "boolean",
         "default": true,
         "title": "預設收合思考區塊",
-        "description": "開啟時，完整的思考區塊預設以收合狀態顯示。"
+        "description": "開啟時，已完成的 AI 思考內容預設以收合狀態顯示，點擊即可展開；進行中的思考仍會展開顯示。"
       },
       "completeSummaryLabel": {
         "type": "string",
         "default": "思考過程",
-        "title": "完整思考標題",
-        "description": "已完成思考區塊的 summary 標題文字。"
+        "title": "思考完成標題",
+        "description": "AI 思考完成後，顯示在收合區塊上的標題文字。"
       },
       "streamingSummaryLabel": {
         "type": "string",
         "default": "思考中...",
-        "title": "串流思考標題",
-        "description": "尚未閉合的思考區塊所顯示的 summary 標題文字。"
+        "title": "思考進行中標題",
+        "description": "AI 正在思考、尚未完成時，顯示在區塊上的標題文字。"
       }
     }
   }

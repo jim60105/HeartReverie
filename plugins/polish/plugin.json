@@ -26,7 +26,7 @@
         "type": "boolean",
         "default": true,
         "title": "啟用文學潤飾",
-        "description": "關閉後本外掛將停用，等同未安裝外掛。"
+        "description": "關閉後此功能將停用。"
       }
     }
   }

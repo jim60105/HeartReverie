@@ -24,7 +24,7 @@
         "type": "boolean",
         "default": true,
         "title": "啟用開場提示",
-        "description": "關閉後本外掛將停用，等同未安裝外掛。"
+        "description": "關閉後此功能將停用。"
       }
     }
   }
