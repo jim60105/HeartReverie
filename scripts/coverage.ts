@@ -71,7 +71,7 @@ if (command === "merge") {
   if (args.length !== 3) {
     printUsage();
   }
-  const [backendPath, frontendPath, outputPath] = args;
+  const [backendPath, frontendPath, outputPath] = args as [string, string, string];
   const [backendLcov, frontendLcov] = await Promise.all([
     Deno.readTextFile(backendPath),
     Deno.readTextFile(frontendPath),
@@ -88,7 +88,7 @@ if (command === "summary") {
   if (args.length !== 1) {
     printUsage();
   }
-  const [lcovPath] = args;
+  const [lcovPath] = args as [string];
   const lcov = await Deno.readTextFile(lcovPath);
   const percent = getLineCoveragePercent(lcov);
   console.log(`Combined line coverage: ${percent.toFixed(2)}%`);
@@ -99,7 +99,7 @@ if (command === "gate") {
   if (args.length !== 2) {
     printUsage();
   }
-  const [lcovPath, thresholdRaw] = args;
+  const [lcovPath, thresholdRaw] = args as [string, string];
   const threshold = Number.parseFloat(thresholdRaw);
   if (!Number.isFinite(threshold)) {
     console.error(`Invalid threshold: ${thresholdRaw}`);
