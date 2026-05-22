@@ -18,8 +18,8 @@
  *
  * High-level inbound entrypoints for chat and continue-last-chapter
  * requests. Each function:
- *   1. Runs the shared preflight (API key, story dir, llm config,
- *      template override, generation lock) via `chat-preflight.ts`.
+ *   1. Runs the inline preflight helpers below (API key, story dir,
+ *      llm config, template override, generation lock).
  *   2. Mints a per-request `correlationId` at this inbound boundary so
  *      `prompt-assembly` (via `buildPromptFromStory…`) and
  *      `pre-llm-fetch` (inside `streamLlmAndPersist`) observe the same
@@ -33,6 +33,7 @@ import {
   resolveTargetChapterNumber,
 } from "./story.ts";
 import { createLogger } from "./logger.ts";
+import type { Logger } from "./logger.ts";
 import {
   ChatAbortError,
   ChatError,
@@ -47,13 +48,17 @@ import {
 } from "./chat-types.ts";
 import { normaliseAppendContent } from "./chat-chapter-io.ts";
 import { streamLlmAndPersist } from "./chat-stream-and-persist.ts";
+import { errorMessage } from "./errors.ts";
+import { readTemplate } from "../routes/prompt.ts";
+import type { LlmConfig } from "../types.ts";
 import {
-  ensureSafeStoryDir,
-  requireApiKey,
-  resolveLlmConfigOrThrow,
-  resolveTemplateOverride,
-  runUnderGenerationLock,
-} from "./chat-preflight.ts";
+  resolveStoryLlmConfig,
+  StoryConfigValidationError,
+} from "./story-config.ts";
+import {
+  clearGenerationActive,
+  tryMarkGenerationActive,
+} from "./generation-registry.ts";
 
 export {
   ChatAbortError,
@@ -74,6 +79,92 @@ export {
 export { normaliseAppendContent, streamLlmAndPersist };
 
 const log = createLogger("llm");
+
+// ---------------------------------------------------------------------------
+// Inline preflight helpers
+//
+// Not pure — these helpers log, hit the filesystem, mutate the in-memory
+// generation registry, and read environment variables. They each surface
+// failures by throwing `ChatError` so callers don't need to repeat the
+// try/catch boilerplate.
+// ---------------------------------------------------------------------------
+
+function requireApiKey(reqLog: Logger): void {
+  if (!Deno.env.get("LLM_API_KEY")) {
+    reqLog.error("LLM_API_KEY not configured");
+    throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
+  }
+}
+
+function ensureSafeStoryDir(
+  safePath: ChatOptions["safePath"],
+  series: string,
+  name: string,
+): string {
+  const storyDir = safePath(series, name);
+  if (!storyDir) {
+    throw new ChatError("bad-path", "Invalid path", 400);
+  }
+  return storyDir;
+}
+
+async function resolveLlmConfigOrThrow(
+  storyDir: string,
+  llmDefaults: ChatOptions["config"]["llmDefaults"],
+  reqLog: Logger,
+  series: string,
+  name: string,
+): Promise<LlmConfig> {
+  try {
+    return await resolveStoryLlmConfig(storyDir, llmDefaults);
+  } catch (err) {
+    if (err instanceof StoryConfigValidationError) {
+      reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
+      throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
+    }
+    const msg = errorMessage(err);
+    reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
+    throw new ChatError("story-config", "Failed to read story configuration", 500);
+  }
+}
+
+async function resolveTemplateOverride(
+  template: string | undefined,
+  config: ChatOptions["config"],
+  reqLog: Logger,
+): Promise<string | undefined> {
+  if (typeof template === "string") return template;
+  try {
+    const tpl = await readTemplate(config);
+    if (tpl.source === "custom") return tpl.content;
+  } catch (err: unknown) {
+    if (!(err instanceof Deno.errors.NotFound)) {
+      reqLog.error(`[chat] Failed to read system prompt: ${errorMessage(err)}`);
+    }
+    // NotFound is expected — proceed with default
+  }
+  return undefined;
+}
+
+/**
+ * Acquire the per-story generation lock, run `fn`, and ALWAYS release on
+ * success or failure. Throws `ChatError("concurrent", ...)` when another
+ * generation is already in progress for `(series, name)`.
+ */
+async function runUnderGenerationLock<T>(
+  series: string,
+  name: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!tryMarkGenerationActive(series, name)) {
+    throw new ChatError("concurrent", "Another generation is already in progress for this story", 409);
+  }
+  try {
+    return await fn();
+  } finally {
+    clearGenerationActive(series, name);
+  }
+}
 
 /**
  * Execute a chat request: resolve template, build prompt, call LLM with

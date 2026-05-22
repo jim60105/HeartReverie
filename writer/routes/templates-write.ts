@@ -27,9 +27,31 @@ import {
   parseTemplatePath,
   resolveTemplatePath,
 } from "./templates-path.ts";
-import { withWriteMutex } from "./templates-write-mutex.ts";
 
 const log = createLogger("template");
+
+// Per-target promise-chain mutex used to serialize concurrent writes to
+// the same resolved absolute filesystem path. Keyed by the resolved final
+// path so distinct files proceed in parallel while same-file writes queue.
+// Entries delete themselves once their queue drains.
+const WRITE_MUTEX = new Map<string, Promise<void>>();
+
+async function withWriteMutex<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = WRITE_MUTEX.get(key) ?? Promise.resolve();
+  let release: () => void;
+  const next = new Promise<void>((r) => { release = r; });
+  const chained = prev.then(() => next);
+  WRITE_MUTEX.set(key, chained);
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release!();
+    if (WRITE_MUTEX.get(key) === chained) {
+      WRITE_MUTEX.delete(key);
+    }
+  }
+}
 
 export function registerTemplateWriteRoutes(app: Hono, deps: AppDeps): void {
   // ── PUT /api/templates ────────────────────────────────────────

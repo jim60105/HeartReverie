@@ -17,28 +17,105 @@
  * @module hooks-runner
  *
  * Dispatch-time execution for `HookDispatcher`. Owns the serial/parallel
- * scheduling and dispatch metrics recording. Per-handler context-view
- * Proxies live in `hooks-runner-view.ts`; observability event emission
- * lives in `hooks-runner-events.ts`. Pure mechanics — no registry state.
- * The dispatcher passes in the already-priority-sorted handler list for
- * each stage.
+ * scheduling, per-handler observability event emission, and dispatch
+ * metrics recording. Per-handler context-view Proxies live in
+ * `hooks-runner-view.ts`. Pure mechanics — no registry state. The
+ * dispatcher passes in the already-priority-sorted handler list for each
+ * stage.
  */
 
 import { errorMessage } from "./errors.ts";
-import type { HookStage } from "../types.ts";
+import type { HandlerEvent, HookStage } from "../types.ts";
 import type { Logger } from "./logger.ts";
 import { computeTopoLayers, type HandlerEntry } from "./hooks-topo.ts";
 import type { DispatchMetric, HookMetricsCollector } from "./hooks-metrics.ts";
 import type { HandlerEventBus } from "./hooks-event-bus.ts";
+import { captureRefs, cloneAllowlistSnapshot } from "./hooks-snapshot.ts";
 import {
   deriveHandlerLogger,
   makeParallelView,
   makeSerialView,
 } from "./hooks-runner-view.ts";
-import {
-  emitHandlerEnd,
-  emitHandlerStart,
-} from "./hooks-runner-events.ts";
+
+interface HandlerStartState {
+  ctxBeforeRefs: Record<string, unknown>;
+  startTime: number;
+}
+
+/**
+ * Per-handler observability event helpers. Spec §D3 invariants:
+ * - `captureRefs` runs BEFORE `cloneAllowlistSnapshot` in start.
+ * - `captureRefs` is re-read BEFORE the post-handler clone in end.
+ * - Both helpers no-op (start returns `null`) when `eventBus` has no
+ *   subscribers, so the runner can skip ref capture + cloning entirely.
+ */
+function emitHandlerStart(
+  eventBus: HandlerEventBus,
+  stage: HookStage,
+  entry: HandlerEntry,
+  handlerIndex: number,
+  correlationId: string | undefined,
+  context: Record<string, unknown>,
+): HandlerStartState | null {
+  if (!eventBus.hasSubscribers()) return null;
+  // Capture live refs BEFORE structuredClone runs (spec D3).
+  const ctxBeforeRefs = captureRefs(stage, context);
+  const ctxBeforeSnapshot = cloneAllowlistSnapshot(stage, context);
+  const startTime = performance.now();
+  eventBus.emit({
+    kind: "handler-start",
+    stage,
+    plugin: entry.plugin,
+    priority: entry.priority,
+    handlerIndex,
+    correlationId,
+    timestamp: startTime,
+    ctxBeforeSnapshot,
+    ctxBeforeRefs,
+  });
+  return { ctxBeforeRefs, startTime };
+}
+
+function emitHandlerEnd(
+  eventBus: HandlerEventBus,
+  stage: HookStage,
+  entry: HandlerEntry,
+  handlerIndex: number,
+  correlationId: string | undefined,
+  context: Record<string, unknown>,
+  state: HandlerStartState,
+  handlerError: unknown,
+): void {
+  // Re-read live refs BEFORE the post-handler clone (spec D3).
+  const ctxAfterRefs = captureRefs(stage, context);
+  const reassigned: string[] = [];
+  for (const k of Object.keys(state.ctxBeforeRefs)) {
+    if (ctxAfterRefs[k] !== state.ctxBeforeRefs[k]) reassigned.push(k);
+  }
+  reassigned.sort();
+  const ctxAfterSnapshot = cloneAllowlistSnapshot(stage, context);
+  const endTime = performance.now();
+  const event: HandlerEvent = {
+    kind: "handler-end",
+    stage,
+    plugin: entry.plugin,
+    priority: entry.priority,
+    handlerIndex,
+    correlationId,
+    timestamp: endTime,
+    ctxAfterSnapshot,
+    ctxAfterRefs,
+    reassigned,
+    error: handlerError !== undefined
+      ? {
+          message: errorMessage(handlerError),
+          name: handlerError instanceof Error ? handlerError.name : "Error",
+        }
+      : undefined,
+    durationMs: endTime - state.startTime,
+  };
+  eventBus.emit(event);
+}
 
 export class HookRunner {
   readonly #log: Logger;

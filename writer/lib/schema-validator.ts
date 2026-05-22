@@ -21,17 +21,135 @@ import {
   type ValidateOptions,
   type ValidationError,
 } from "./schema-validator-types.ts";
-import {
-  deepEqual,
-  jsonTypeOf,
-  matchType,
-} from "./schema-validator-equality.ts";
 import { stringChecks } from "./schema-validator-string.ts";
-import { numericChecks } from "./schema-validator-numeric.ts";
 
 export type { ValidateOptions, ValidationError };
 
 const log = createLogger("plugin");
+
+// ---------------------------------------------------------------------------
+// Equality + type helpers (used by `const`, `enum`, `uniqueItems`, `type`).
+// ---------------------------------------------------------------------------
+
+/** Structural deep equality used by `const`, `enum`, and `uniqueItems`. */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  if (typeof a !== typeof b) return false;
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (typeof a === "object" && typeof b === "object") {
+    const ao = a as Record<string, unknown>;
+    const bo = b as Record<string, unknown>;
+    const ak = Object.keys(ao);
+    const bk = Object.keys(bo);
+    if (ak.length !== bk.length) return false;
+    for (const k of ak) {
+      if (!(k in bo)) return false;
+      if (!deepEqual(ao[k], bo[k])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+/** Match a JSON-Schema `type` string against a value. */
+function matchType(value: unknown, type: string): boolean {
+  switch (type) {
+    case "string":
+      return typeof value === "string";
+    case "number":
+      return typeof value === "number" && Number.isFinite(value);
+    case "integer":
+      return typeof value === "number" && Number.isInteger(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "array":
+      return Array.isArray(value);
+    case "object":
+      return value !== null && typeof value === "object" &&
+        !Array.isArray(value);
+    case "null":
+      return value === null;
+    default:
+      return true;
+  }
+}
+
+/** Report the JSON-Schema type name of a runtime value (for error params). */
+function jsonTypeOf(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  if (Number.isInteger(value)) return "integer";
+  return typeof value;
+}
+
+// ---------------------------------------------------------------------------
+// Numeric keyword checks (minimum/maximum/exclusive*/multipleOf).
+// ---------------------------------------------------------------------------
+
+function numericChecks(
+  schema: Record<string, unknown>,
+  value: number,
+  path: string,
+  ctx: InternalContext,
+): void {
+  if (typeof schema.minimum === "number" && value < schema.minimum) {
+    ctx.errors.push({
+      path,
+      keyword: "minimum",
+      messageKey: "minimum",
+      params: { minimum: schema.minimum },
+    });
+  }
+  if (typeof schema.maximum === "number" && value > schema.maximum) {
+    ctx.errors.push({
+      path,
+      keyword: "maximum",
+      messageKey: "maximum",
+      params: { maximum: schema.maximum },
+    });
+  }
+  if (
+    typeof schema.exclusiveMinimum === "number" &&
+    value <= schema.exclusiveMinimum
+  ) {
+    ctx.errors.push({
+      path,
+      keyword: "exclusiveMinimum",
+      messageKey: "exclusiveMinimum",
+      params: { exclusiveMinimum: schema.exclusiveMinimum },
+    });
+  }
+  if (
+    typeof schema.exclusiveMaximum === "number" &&
+    value >= schema.exclusiveMaximum
+  ) {
+    ctx.errors.push({
+      path,
+      keyword: "exclusiveMaximum",
+      messageKey: "exclusiveMaximum",
+      params: { exclusiveMaximum: schema.exclusiveMaximum },
+    });
+  }
+  if (typeof schema.multipleOf === "number" && schema.multipleOf > 0) {
+    const ratio = value / schema.multipleOf;
+    if (Math.abs(ratio - Math.round(ratio)) > 1e-9) {
+      ctx.errors.push({
+        path,
+        keyword: "multipleOf",
+        messageKey: "multipleOf",
+        params: { multipleOf: schema.multipleOf },
+      });
+    }
+  }
+}
+
 
 /**
  * Validate `value` against `schema`. Returns the collected errors in a stable
