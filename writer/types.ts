@@ -13,1037 +13,114 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import type { Context, Hono, Next } from "@hono/hono";
-import type { PluginManager } from "./lib/plugin-manager.ts";
-import type { HookDispatcher } from "./lib/hooks.ts";
-import type { Logger } from "./lib/logger.ts";
-
 /**
- * Single source of truth for the reasoning-effort enum. The frontend imports
- * the same module so backend and frontend cannot drift.
- */
-export const REASONING_EFFORTS = [
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-] as const;
-
-/** Reasoning effort tier accepted by OpenRouter / OpenAI-compatible reasoning models. */
-export type ReasoningEffort = typeof REASONING_EFFORTS[number];
-
-/**
- * Resolved per-request LLM configuration (camelCase). Matches the upstream
- * chat/completions sampler knobs; `*_penalty` fields are mapped to snake_case
- * exactly once when building the upstream fetch body.
- */
-export interface LlmConfig {
-  readonly model: string;
-  readonly temperature: number;
-  readonly frequencyPenalty: number;
-  readonly presencePenalty: number;
-  readonly topK: number;
-  readonly topP: number;
-  readonly repetitionPenalty: number;
-  readonly minP: number;
-  readonly topA: number;
-  readonly reasoningEnabled: boolean;
-  readonly reasoningEffort: ReasoningEffort;
-  /**
-   * Upper bound on tokens the LLM may generate (sent as `max_completion_tokens`
-   * in the OpenAI-compatible request body — covers reasoning + content combined
-   * for reasoning-capable models). Must be a positive safe integer, OR `null`
-   * meaning "no application-level limit; let the upstream provider decide" —
-   * in which case the `max_completion_tokens` key is omitted from the upstream
-   * request body entirely.
-   */
-  readonly maxCompletionTokens: number | null;
-}
-
-/**
- * Per-story override bag — every field is optional. Includes the optional
- * `reasoningEnabled` / `reasoningEffort` overrides.
- */
-export type StoryLlmConfigOverrides = Partial<LlmConfig>;
-
-/** Application configuration resolved from environment variables and defaults. */
-export interface AppConfig {
-  readonly ROOT_DIR: string;
-  readonly PLAYGROUND_DIR: string;
-  readonly READER_DIR: string;
-  readonly PLUGINS_DIR: string;
-  readonly PORT: number;
-  readonly LLM_API_URL: string;
-  readonly LLM_MODEL: string;
-  readonly LLM_TEMPERATURE: number;
-  readonly LLM_FREQUENCY_PENALTY: number;
-  readonly LLM_PRESENCE_PENALTY: number;
-  readonly LLM_TOP_K: number;
-  readonly LLM_TOP_P: number;
-  readonly LLM_REPETITION_PENALTY: number;
-  readonly LLM_MIN_P: number;
-  readonly LLM_TOP_A: number;
-  readonly LLM_REASONING_ENABLED: boolean;
-  readonly LLM_REASONING_EFFORT: ReasoningEffort;
-  readonly LLM_REASONING_OMIT: boolean;
-  readonly LLM_MAX_COMPLETION_TOKENS: number | null;
-  readonly THEME_DIR: string;
-  readonly PROMPT_FILE: string;
-  /** Defaults for per-story LLM overrides, assembled from the flat `LLM_*` env vars. */
-  readonly llmDefaults: LlmConfig;
-}
-
-/** Function that resolves path segments under the playground directory, returning null on traversal. */
-export type SafePathFn = (...segments: string[]) => string | null;
-
-/** Hono middleware handler signature. */
-export type MiddlewareHandler = (
-  c: Context,
-  next: Next,
-) => Promise<Response | void>;
-
-/** Function signature for buildPromptFromStory. */
-export type BuildPromptFn = (
-  series: string,
-  name: string,
-  storyDir: string,
-  message: string,
-  template?: string,
-  extraVariables?: Record<string, unknown>,
-  correlationId?: string,
-) => Promise<BuildPromptResult>;
-
-/** Function signature for buildContinuePromptFromStory. */
-export type BuildContinuePromptFn = (
-  series: string,
-  name: string,
-  storyDir: string,
-  template?: string,
-  correlationId?: string,
-) => Promise<ContinuePromptResult>;
-
-/** Top-level dependency bag passed to createApp and route registrars. */
-export interface AppDeps {
-  readonly config: AppConfig;
-  readonly safePath: SafePathFn;
-  readonly pluginManager: PluginManager;
-  readonly hookDispatcher: HookDispatcher;
-  readonly buildPromptFromStory: BuildPromptFn;
-  readonly buildContinuePromptFromStory: BuildContinuePromptFn;
-  readonly verifyPassphrase: MiddlewareHandler;
-  /**
-   * Vento template engine handle (created by `createTemplateEngine`). Exposed
-   * on `AppDeps` so the templates route can call `ventoEnv.compile()` /
-   * `runString()` directly without re-instantiating the engine. Always
-   * populated by `server.ts`; tests that mock `AppDeps` can leave it `null`
-   * when they don't exercise the templates route.
-   */
-  readonly templateEngine: TemplateEngine | null;
-}
-
-/** Plugin manifest schema parsed from plugin.json. */
-export interface PluginManifest {
-  readonly name: string;
-  readonly version?: string;
-  readonly description?: string;
-  readonly type?: string;
-  readonly tags?: readonly string[];
-  readonly backendModule?: string;
-  readonly frontendModule?: string;
-  readonly promptStripTags?: readonly string[];
-  readonly displayStripTags?: readonly string[];
-  readonly promptFragments?: readonly PromptFragment[];
-  readonly parameters?: readonly PluginParameter[];
-  /**
-   * Array of relative paths (from the plugin directory) to CSS files to inject
-   * into the frontend via `<link rel="stylesheet">`. Each entry must end with
-   * `.css`, must not be an absolute path, and must not contain `..` segments
-   * (no path traversal). Paths are resolved and contained within the plugin's
-   * directory at load time.
-   */
-  readonly frontendStyles?: readonly string[];
-  /**
-   * Optional declarative action-button contributions surfaced in the reader's
-   * `PluginActionBar`. Each entry must validate against
-   * `ActionButtonDescriptor`; invalid entries are dropped individually with a
-   * logged warning. Defaults to `[]` when absent.
-   */
-  readonly actionButtons?: readonly ActionButtonDescriptor[];
-  /**
-   * Optional JSON Schema (draft-07 compatible) describing plugin settings.
-   * Must be an object schema (`type: "object"`) with a `properties` record.
-   * Used by the settings I/O helpers to validate payloads and extract defaults.
-   */
-  readonly settingsSchema?: Record<string, unknown>;
-  /**
-   * Optional declarative hook subscriptions used by the engine to cross-check
-   * which stages the plugin actually registers at load time. Each entry names
-   * a stage (backend or frontend) plus optional metadata (`reads`, `writes`,
-   * `priority`, `note`) consumed by the hook-inspector developer tool.
-   *
-   * Constraints (enforced by `PluginManager.#validateManifest`):
-   * - `stage === "strip-tags"` is REJECTED. Use `promptStripTags` /
-   *   `displayStripTags` instead.
-   * - Duplicate `stage` values within the same array are REJECTED. The
-   *   engine guarantees at most one handler per `(plugin, stage)` pair.
-   * - Unknown stages (not in `KNOWN_BACKEND_STAGES ∪ KNOWN_FRONTEND_STAGES`)
-   *   log a warn but do NOT block load; they are excluded from the strict
-   *   declare-vs-register cross-check.
-   *
-   * When the field is absent, the plugin is treated as "undeclared" and the
-   * strict cross-check is skipped (legacy behaviour). An empty array (`[]`)
-   * is treated as "explicitly declares no hooks" and the cross-check still
-   * runs (any register call from such a plugin is a load error).
-   */
-  readonly hooks?: readonly PluginHookDeclaration[];
-}
-
-/**
- * Declarative hook subscription entry in `PluginManifest.hooks`.
+ * Barrel re-export of the writer type domains. Consumers import from
+ * `writer/types.ts` (or relatively as `../types.ts`) and remain agnostic of
+ * the per-domain modules under `writer/types/`.
  *
- * @property stage     Hook stage name. Backend and frontend stages share the
- *                     same namespace; the engine validates each entry against
- *                     `KNOWN_BACKEND_STAGES ∪ KNOWN_FRONTEND_STAGES`.
- * @property priority  Optional render order (lower runs first). Engine
- *                     defaults to 100 when the plugin's `register()` call
- *                     omits the priority.
- * @property reads     Optional list of context fields the handler reads.
- *                     Used by the hook-inspector C2 stale-read heuristic.
- * @property writes    Optional list of context fields the handler writes.
- *                     Used by the hook-inspector C1 multi-write heuristic.
- * @property note      Optional free-form note (≤ 200 chars) surfaced in the
- *                     inspector UI.
- */
-export interface PluginHookDeclaration {
-  readonly stage: string;
-  readonly priority?: number;
-  readonly reads?: readonly string[];
-  readonly writes?: readonly string[];
-  readonly note?: string;
-  readonly parallel?: boolean;
-  readonly readOnly?: boolean;
-  readonly concurrency?: number;
-  readonly dependsOn?: readonly string[];
-}
-
-/**
- * Visibility predicate enum for `ActionButtonDescriptor`. Values:
+ * Domain split:
+ * - `types/llm.ts`     — LLM config, reasoning enum, stream chunk, usage records
+ * - `types/story.ts`   — Story/template engines, chat message, render/prompt results, chapter & state-diff types, story-API payloads
+ * - `types/hooks.ts`   — Hook stages, payloads, handler events
+ * - `types/app.ts`     — App config, deps, middleware, RFC 9457 problem
+ * - `types/plugin.ts`  — Plugin manifest, register/route context, dynamic vars
+ * - `types/ws.ts`      — WebSocket protocol (client + server message unions)
  *
- * - `"last-chapter-backend"` (default): show only when the user is viewing
- *   the last chapter of a story.
- * - `"backend-only"`: show on every chapter (any chapter).
- *
- * The enum is kept at two values for forward-compat; additional visibility
- * predicates may be added as a non-breaking extension once their semantics
- * are pinned down.
+ * The only non-type runtime export is `REASONING_EFFORTS` from `llm.ts`.
  */
-export type ActionButtonVisibility = "last-chapter-backend" | "backend-only";
 
-/**
- * Plugin-declared action button surfaced in the reader UI. Resolved defaults
- * (`priority`, `visibleWhen`) are filled in by the manifest loader before
- * serialisation through `GET /api/plugins`.
- */
-export interface ActionButtonDescriptor {
-  /** Kebab-case identifier matching `^[a-z0-9-]+$`, unique within a plugin. */
-  readonly id: string;
-  /** Display label, 1..40 characters after trim. */
-  readonly label: string;
-  /** Optional emoji or short symbol prefix. */
-  readonly icon?: string;
-  /** Optional tooltip, ≤200 characters. */
-  readonly tooltip?: string;
-  /** Render order; lower first. Default 100. */
-  readonly priority: number;
-  /** Visibility predicate. Default `"last-chapter-backend"`. */
-  readonly visibleWhen: ActionButtonVisibility;
-}
-
-/** Request body for `POST /api/plugins/:pluginName/run-prompt`. */
-export interface PluginRunPromptRequest {
-  readonly series: string;
-  readonly name: string;
-  readonly promptFile: string;
-  readonly append?: boolean;
-  readonly appendTag?: string;
-  readonly replace?: boolean;
-  readonly extraVariables?: Record<string, string | number | boolean>;
-}
-
-/** Response body for `POST /api/plugins/:pluginName/run-prompt`. */
-export interface PluginRunPromptResponse {
-  readonly content: string;
-  readonly usage: TokenUsageRecord | null;
-  readonly chapterUpdated: boolean;
-  readonly chapterReplaced: boolean;
-  readonly appendedTag: string | null;
-}
-
-/** A prompt fragment declaration in a plugin manifest. */
-export interface PromptFragment {
-  readonly file: string;
-  readonly variable?: string;
-  readonly priority?: number;
-}
-
-/** A parameter declaration in a plugin manifest. */
-export interface PluginParameter {
-  readonly name: string;
-  readonly type?: string;
-  readonly description?: string;
-}
-
-/**
- * Context passed to plugin `getDynamicVariables()`.
- *
- * All fields are derived from data already materialized by
- * `buildPromptFromStory()` in `writer/lib/story.ts`. The object is a plain
- * serializable bag: no functions, file handles, streams, or `AppConfig`.
- */
-export interface DynamicVariableContext {
-  /** Series identifier for the current request. */
-  readonly series: string;
-  /** Story identifier for the current request. */
-  readonly name: string;
-  /** Absolute path to the story directory on disk. */
-  readonly storyDir: string;
-  /**
-   * Raw user message that triggered this prompt build. May be a large
-   * arbitrary string — plugin authors should scrub before persisting.
-   * Empty string when the caller omitted a message (e.g., preview route).
-   */
-  readonly userInput: string;
-  /**
-   * 1-based number of the chapter that a subsequent write would target,
-   * computed by `resolveTargetChapterNumber()`: reuse the trailing empty
-   * chapter file if any, otherwise `max(existing) + 1`, otherwise `1`.
-   */
-  readonly chapterNumber: number;
-  /**
-   * Unstripped content of the chapter immediately preceding `chapterNumber`.
-   * Empty string when no prior chapter exists. Can be large (tens of KB);
-   * plugins that forward it into other variables should summarize first.
-   */
-  readonly previousContent: string;
-  /** True when every existing chapter on disk is blank. */
-  readonly isFirstRound: boolean;
-  /** Total number of `NNN.md` chapter files on disk, including empty trailing files. */
-  readonly chapterCount: number;
-  /** Return this plugin's resolved settings (schema defaults merged with saved values). */
-  readonly getSettings?: () => Promise<Record<string, unknown>>;
-}
-
-/** Options for the register() overload accepting an options object. */
-export interface RegisterOptions {
-  readonly priority?: number;
-  readonly parallel?: boolean;
-  readonly readOnly?: boolean;
-  readonly dependsOn?: readonly string[];
-}
-
-/** Hook registration interface exposed to plugins (subset of HookDispatcher). */
-export interface PluginHooks {
-  register(stage: HookStage, handler: HookHandler, priorityOrOptions?: number | RegisterOptions): void;
-  /**
-   * Subscribe to per-handler `handler-start` events from the backend
-   * `HookDispatcher`. Returns an unsubscribe closure that is idempotent.
-   * Optional so plugin code can feature-detect with
-   * `typeof ctx.hooks.onHandlerStart === "function"`.
-   */
-  onHandlerStart?(cb: (event: HandlerEvent & { kind: "handler-start" }) => void): () => void;
-  /**
-   * Subscribe to per-handler `handler-end` events from the backend
-   * `HookDispatcher`. Returns an unsubscribe closure that is idempotent.
-   */
-  onHandlerEnd?(cb: (event: HandlerEvent & { kind: "handler-end" }) => void): () => void;
-}
-
-/** Context passed to plugin register() function. */
-export interface PluginRegisterContext {
-  readonly hooks: PluginHooks;
-  readonly logger: Logger;
-  readonly getSettings?: () => Promise<Record<string, unknown>>;
-}
-
-/** Interface for dynamically imported plugin backend modules. */
-export interface PluginModule {
-  register?: (context: PluginRegisterContext) => void | Promise<void>;
-  default?: (context: PluginRegisterContext) => void | Promise<void>;
-  getDynamicVariables?: (
-    context: DynamicVariableContext,
-  ) => Promise<Record<string, unknown>> | Record<string, unknown>;
-  registerRoutes?: (context: PluginRouteContext) => void | Promise<void>;
-}
-
-/** Context passed to plugin registerRoutes() function for mounting HTTP routes. */
-export interface PluginRouteContext {
-  readonly app: Hono;
-  readonly basePath: string;
-  readonly logger: Logger;
-  readonly getSettings: () => Promise<Record<string, unknown>>;
-  readonly saveSettings: (settings: Record<string, unknown>) => Promise<void>;
-  readonly config: AppConfig;
-}
-
-/** Backend stages eligible for parallel dispatch declarations in manifest hooks[]. */
-export type BackendParallelStage = "prompt-assembly" | "post-response" | "response-stream" | "pre-llm-fetch";
-
-/** Valid hook lifecycle stages. */
-export type HookStage =
-  | "prompt-assembly"
-  | "pre-llm-fetch"
-  | "response-stream"
-  | "pre-write"
-  | "post-response"
-  | "strip-tags";
-
-/**
- * Context payload dispatched for the `pre-llm-fetch` hook stage.
- *
- * Dispatched by `streamLlmAndPersist()` in `writer/lib/chat-shared.ts`
- * exactly once per upstream LLM request, immediately before the
- * `fetch(config.LLM_API_URL, ...)` call. Observation-only: mutating any
- * field SHALL NOT change the bytes posted upstream — the engine builds the
- * outgoing request body from local variables, not from this context.
- */
-export interface PreLlmFetchPayload {
-  /** Per-request correlation ID minted at the entry of `executeChat()` / `executeContinue()`. */
-  readonly correlationId: string;
-  /** Final messages array that will be serialised into `requestBody.messages`. */
-  readonly messages: ReadonlyArray<ChatMessage>;
-  /** Resolved upstream model name (`llmConfig.model`). */
-  readonly model: string;
-  /** Structured view of upstream sampler/control knobs (mirror of `requestBody` minus `messages`). */
-  readonly requestMetadata: Readonly<Record<string, unknown>>;
-  /** Absolute path to the story directory. */
-  readonly storyDir: string;
-  /** Series name under `playground/`. */
-  readonly series: string;
-  /** Story name under `playground/<series>/`. */
-  readonly name: string;
-  /** Discriminated write-mode tag (kind only is exposed; other fields stay internal). */
-  readonly writeMode: { readonly kind: string };
-  /** Logger injected by `HookDispatcher` at dispatch time. */
-  readonly logger?: unknown;
-}
-
-/**
- * Context payload dispatched for the `post-response` hook stage.
- *
- * Dispatched by `streamLlmAndPersist()` in `writer/lib/chat-shared.ts`
- * exactly once per successful generation, in each of the four success
- * branches (`write-new-chapter`, `append-to-existing-chapter`,
- * `continue-last-chapter`, `replace-last-chapter`). Subscribers receive
- * the token-usage record (when available) and the resolved upstream
- * endpoint URL so they can attribute cost without re-reading
- * `_usage.json` or re-deriving the URL.
- *
- * The fully-assembled payload is deep-frozen at dispatch
- * (`Object.isFrozen(payload) === true`, recursively across nested
- * values including `usage`). Every field is `readonly`. Both top-level
- * reassignment (`ctx.usage = null`, `ctx.content = "..."`, …) and
- * nested mutation (`ctx.usage.totalTokens = 0`, adding new keys) SHALL
- * throw `TypeError` under strict mode (Deno ESM modules are strict).
- * This generalises the field-scoped deep-freeze contract that
- * `pre-llm-fetch` already establishes for `messages` / `requestMetadata`.
- */
-export interface PostResponsePayload {
-  /** Per-request correlation ID minted on entry to `executeChat()` / `executeContinue()`. */
-  readonly correlationId: string;
-  /** Full chapter file content for plugin-action append, bare LLM response otherwise. */
-  readonly content: string;
-  /** Absolute path to the story directory. */
-  readonly storyDir: string;
-  /** Series name under `playground/`. */
-  readonly series: string;
-  /** Story name under `playground/<series>/`. */
-  readonly name: string;
-  /** Absolute path to the engine root directory. */
-  readonly rootDir: string;
-  /** The chapter number written or appended to. */
-  readonly chapterNumber: number;
-  /** Absolute path of the chapter file written or appended to. */
-  readonly chapterPath: string;
-  /**
-   * Discriminator for the originating success branch:
-   * - `"chat"` for `write-new-chapter`
-   * - `"continue"` for `continue-last-chapter`
-   * - `"plugin-action"` for `append-to-existing-chapter` and `replace-last-chapter`
-   */
-  readonly source: "chat" | "continue" | "plugin-action";
-  /** Set when `source === "plugin-action"`. */
-  readonly pluginName?: string;
-  /** Set when `source === "plugin-action"` and the run appended a wrapped block. */
-  readonly appendedTag?: string;
-  /**
-   * Resolved upstream LLM API URL used for this request (the same URL
-   * the engine `fetch()`-ed — sourced from `config.LLM_API_URL`). Plugins
-   * may key per-endpoint pricing (e.g. `models[endpoint][model]`) on
-   * this value without re-deriving it from environment state.
-   */
-  readonly endpoint: string;
-  /**
-   * Token-usage record for this completion, or `null` when the upstream
-   * LLM omitted token counts (or emitted a partial triple). When non-null
-   * the value is deep-frozen along with the surrounding payload, so
-   * neither nested mutation nor top-level reassignment is possible.
-   */
-  readonly usage: TokenUsageRecord | null;
-}
-
-/**
- * Per-handler observation event emitted by `HookDispatcher`'s
- * `subscribeHandlerEvents` / per-plugin `onHandlerStart` / `onHandlerEnd`
- * surfaces. See `openspec/specs/hook-observability/spec.md`.
- *
- * Subscribers receive raw events synchronously; throwing subscribers are
- * isolated from dispatch and auto-unsubscribed after two consecutive throws.
- *
- * `ctxBeforeSnapshot` / `ctxAfterSnapshot` are `structuredClone` deep copies
- * of a per-stage allowlist of context fields (empty `{}` for non-allowlisted
- * stages). `reassigned` is computed by reference comparison of the live
- * pre-clone refs (so reassignment of top-level slots is detected without
- * false positives from clone identity).
- */
-export type HandlerEvent =
-  | {
-      readonly kind: "handler-start";
-      readonly stage: HookStage;
-      readonly plugin: string | undefined;
-      readonly priority: number;
-      readonly handlerIndex: number;
-      readonly correlationId: string | undefined;
-      readonly timestamp: number;
-      readonly ctxBeforeSnapshot: unknown;
-      readonly ctxBeforeRefs: Readonly<Record<string, unknown>>;
-    }
-  | {
-      readonly kind: "handler-end";
-      readonly stage: HookStage;
-      readonly plugin: string | undefined;
-      readonly priority: number;
-      readonly handlerIndex: number;
-      readonly correlationId: string | undefined;
-      readonly timestamp: number;
-      readonly ctxAfterSnapshot: unknown;
-      readonly ctxAfterRefs: Readonly<Record<string, unknown>>;
-      readonly reassigned: ReadonlyArray<string>;
-      readonly error: { readonly message: string; readonly name: string } | undefined;
-      readonly durationMs: number;
-    };
-
-/** Subscriber callback for per-handler `HookDispatcher` events. */
-export type HandlerEventSubscriber = (event: HandlerEvent) => void;
-
-/**
- * Optional metadata recorded alongside a `subscribeHandlerEvents` registration
- * so introspection surfaces (`/api/_debug/hooks`,
- * `/api/plugin-introspection/hooks`) can attribute observer subscriptions back
- * to a plugin and to the kind(s) of events the subscriber filters.
- */
-export interface HandlerEventSubscriptionOptions {
-  /** Owning plugin name; surfaced in introspection. */
-  readonly plugin?: string;
-  /** Restricted event kind this subscriber observes ("handler-start" or "handler-end"). */
-  readonly kind?: "handler-start" | "handler-end";
-}
-
-/**
- * Context payload dispatched for the `response-stream` hook stage.
- *
- * Dispatched by `executeChat()` once per non-empty content delta parsed from
- * the LLM SSE stream, before the delta is persisted or emitted via `onDelta`.
- *
- * The `chunk` field is **mutable**: handlers MAY overwrite it to transform
- * the chunk (e.g., redaction, translation, censorship). Assigning `""` drops
- * the chunk entirely — no bytes are written to the chapter file, the
- * `aiContent` accumulator is not advanced, and `onDelta` is not invoked for
- * that delta. If `chunk` is not a string after dispatch (e.g., set to a
- * number, `undefined`, or deleted), it is coerced to `""` (drop).
- *
- * All other fields are read-only context for handlers; mutating them has no
- * effect on persistence.
- */
-export interface ResponseStreamPayload {
-  /** Per-request correlation ID shared with all loggers in this chat execution. */
-  readonly correlationId: string;
-  /** Mutable content delta text. Overwrite to transform; set to `""` to drop. */
-  chunk: string;
-  /** Series name under `playground/`. */
-  readonly series: string;
-  /** Story name under `playground/<series>/`. */
-  readonly name: string;
-  /** Absolute path to the story directory. */
-  readonly storyDir: string;
-  /** Absolute path to the chapter file being written. */
-  readonly chapterPath: string;
-  /** Target chapter number (1-based). */
-  readonly chapterNumber: number;
-  /** Logger injected by `HookDispatcher` at dispatch time. */
-  readonly logger?: unknown;
-}
-
-/** Hook handler function signature. */
-export type HookHandler = (context: Record<string, unknown>) => Promise<void>;
-
-/** Return type of createStoryEngine(). */
-export interface StoryEngine {
-  stripPromptTags: (content: string) => string;
-  buildPromptFromStory: BuildPromptFn;
-  buildContinuePromptFromStory: BuildContinuePromptFn;
-}
-
-/** Return type of createTemplateEngine(). */
-export interface TemplateEngine {
-  renderSystemPrompt: (
-    series: string,
-    story?: string,
-    options?: RenderOptions,
-  ) => Promise<RenderResult>;
-  validateTemplate: (templateStr: string) => string[];
-  ventoEnv: import("ventojs/core/environment").Environment;
-}
-
-/** Options for renderSystemPrompt. */
-export interface RenderOptions {
-  previousContext?: string[];
-  userInput?: string;
-  isFirstRound?: boolean;
-  templateOverride?: string;
-  storyDir?: string;
-  chapterNumber?: number;
-  previousContent?: string;
-  chapterCount?: number;
-  /**
-   * Additional Vento variables provided by callers (e.g. plugin-action
-   * `run-prompt` requests). Spread into the render context BEFORE the built-in
-   * variables so callers cannot override reserved names — collision detection
-   * is the route's responsibility.
-   */
-  extraVariables?: Record<string, unknown>;
-}
-
-/**
- * A single chat message belonging to the upstream LLM `messages` array.
- *
- * Roles are constrained to the OpenAI-compatible Chat Completions allow-list
- * supported by the `{{ message }}` Vento tag (`vento-message-tag` capability).
- */
-export interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
-
-/**
- * Discriminated union returned by `renderSystemPrompt()`.
- *
- * On success, `messages` is a non-empty array (assembly guarantees at least
- * one `user`-role message via `assertHasUserMessage`); on failure, `messages`
- * is empty and `error` carries an RFC 9457-shaped `VentoError`.
- */
-export type RenderResult =
-  | { messages: ChatMessage[]; error: null }
-  | { messages: []; error: VentoError };
-
-/**
- * Result of `buildPromptFromStory()`. The legacy `prompt: string` field has
- * been replaced by a fully assembled `messages` array — the template is now
- * the authoritative source of the upstream `messages` payload.
- */
-export interface BuildPromptResult {
-  messages: ChatMessage[];
-  previousContext: string[];
-  isFirstRound: boolean;
-  ventoError: VentoError | null;
-  chapterFiles: string[];
-  chapters: ChapterEntry[];
-}
-
-/**
- * Result of `buildContinuePromptFromStory()`. Carries the rendered
- * `messages` (with the optional trailing assistant prefill already
- * appended), plus the metadata required by `streamLlmAndPersist` to operate
- * on the existing latest chapter file (`targetChapterNumber`,
- * `existingContent` for the snapshot guard).
- *
- * On Vento failure `messages` is empty and `ventoError` carries the
- * RFC 9457-shaped error.
- */
-export interface ContinuePromptResult {
-  messages: ChatMessage[];
-  ventoError: VentoError | null;
-  targetChapterNumber: number;
-  /** Unstripped chapter-n bytes captured at parse time. */
-  existingContent: string;
-  userMessageText: string;
-  assistantPrefill: string;
-}
-
-/** A chapter entry with number and content. */
-export interface ChapterEntry {
-  number: number;
-  content: string;
-  stateDiff?: StateDiffPayload;
-}
-
-/** A single entry in a state diff between consecutive chapters. */
-export interface StateDiffEntry {
-  path: string;
-  kind: "added" | "removed" | "modified" | "truncated";
-  oldValue?: unknown;
-  newValue?: unknown;
-}
-
-/** Payload for per-chapter state diff data. */
-export interface StateDiffPayload {
-  generatedAt: string;
-  chapterNum: number;
-  entries: StateDiffEntry[];
-}
-
-/** Vento template error details. */
-export interface VentoError {
-  type?: string;
-  stage?: string;
-  message: string;
-  source?: string;
-  line?: number | null;
-  suggestion?: string | null;
-  title?: string;
-  detail?: string;
-  expressions?: string[];
-}
-
-/**
- * Story export payload shape emitted by `GET /api/stories/:series/:name/export?format=json`.
- *
- * Chapters are sorted by ascending `number`. Content is stripped of plugin
- * tags (both `promptStripTags` and `displayStripTags`) and empty entries
- * (after trim) are omitted from the array.
- */
-export interface StoryExportJson {
-  readonly series: string;
-  readonly name: string;
-  readonly exportedAt: string;
-  readonly chapters: readonly {
-    readonly number: number;
-    readonly content: string;
-  }[];
-}
-
-/**
- * Response payload for `GET /api/llm-defaults`. The route is contractually
- * obligated to return the full 12-key resolved-defaults snapshot (every field
- * populated from env or hard-coded fallback). The frontend's runtime
- * `validateLlmDefaultsBody` rejects partial responses, so making these fields
- * required here prevents drift between the route and the client contract.
- */
-export interface LlmDefaultsResponse {
-  readonly model: string;
-  readonly temperature: number;
-  readonly frequencyPenalty: number;
-  readonly presencePenalty: number;
-  readonly topK: number;
-  readonly topP: number;
-  readonly repetitionPenalty: number;
-  readonly minP: number;
-  readonly topA: number;
-  readonly reasoningEnabled: boolean;
-  readonly reasoningEffort: ReasoningEffort;
-  readonly maxCompletionTokens: number | null;
-}
-
-/** RFC 9457 Problem Details response shape. */
-export interface ProblemDetail {
-  type: string;
-  title: string;
-  status: number;
-  detail: string;
-  [key: string]: unknown;
-}
-
-// ── Chapter Edit / Rewind / Branch ──
-
-/** Request body for `PUT /api/stories/:series/:name/chapters/:number`. */
-export interface ChapterEditRequest {
-  readonly content: string;
-}
-
-/** Response body for `PUT /api/stories/:series/:name/chapters/:number`. */
-export interface ChapterEditResponse {
-  readonly number: number;
-  readonly content: string;
-}
-
-/** Response body for `DELETE /api/stories/:series/:name/chapters/after/:number`. */
-export interface ChapterRewindResponse {
-  readonly deleted: readonly number[];
-}
-
-/** Request body for `POST /api/stories/:series/:name/branch`. */
-export interface BranchRequest {
-  readonly fromChapter: number;
-  readonly newName?: string;
-}
-
-/** Response body for `POST /api/stories/:series/:name/branch`. */
-export interface BranchResponse {
-  readonly series: string;
-  readonly name: string;
-  readonly copiedChapters: readonly number[];
-}
-
-/** LLM SSE stream chunk shape (OpenAI-compatible format). */
-export interface LLMStreamChunk {
-  choices?: ReadonlyArray<{
-    delta?: {
-      content?: string;
-      /**
-       * OpenRouter reasoning text shortcut. Populated by reasoning-capable
-       * models when the upstream request includes `reasoning: { enabled: true }`.
-       * Treat as the next slice of human-readable scratchpad text.
-       */
-      reasoning?: string;
-      /**
-       * Structured reasoning items. Each entry MAY carry a string `text` field
-       * (extract those) plus opaque provider metadata such as `signature` or
-       * `format` (ignore those).
-       */
-      reasoning_details?: ReadonlyArray<{
-        type?: string;
-        text?: string;
-        signature?: string;
-        format?: string;
-      }>;
-    };
-    finish_reason?: string | null;
-  }>;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-    /**
-     * Upstream-billed cost in USD. Currently emitted by OpenRouter when the
-     * request body opts into usage accounting via `usage: { include: true }`.
-     * Other OpenAI-compatible providers ignore the opt-in and omit this field.
-     */
-    cost?: number;
-  };
-  /**
-   * OpenRouter mid-stream error envelope. After HTTP 200 has been sent, errors
-   * arrive as an SSE chunk with this top-level `error` field plus
-   * `choices[0].finish_reason === "error"`.
-   * See https://openrouter.ai/docs/api/reference/streaming#stream-cancellation.
-   */
-  error?: {
-    message?: string;
-    code?: number | string;
-  } | null;
-}
-
-/**
- * One token-usage record appended to `<storyDir>/_usage.json` after each
- * successful chat generation that reported usage numbers from the upstream
- * provider. All fields are required and finite; `timestamp` is ISO-8601.
- */
-export interface TokenUsageRecord {
-  readonly chapter: number;
-  readonly promptTokens: number;
-  readonly completionTokens: number;
-  readonly totalTokens: number;
-  readonly model: string;
-  readonly timestamp: string;
-  /**
-   * Upstream-billed cost in USD, when the LLM provider reports it
-   * (e.g. OpenRouter when the request opts into usage accounting).
-   * `null` (or missing) when the provider does not report a cost.
-   */
-  readonly upstreamCostUsd?: number | null;
-}
-
-/** Aggregated totals over a list of `TokenUsageRecord`. */
-export interface UsageTotals {
-  readonly promptTokens: number;
-  readonly completionTokens: number;
-  readonly totalTokens: number;
-  readonly count: number;
-}
-
-// ── WebSocket Message Types ──
-
-/** Client-to-server: authentication handshake. */
-export interface WsAuthMessage {
-  readonly type: "auth";
-  readonly passphrase: string;
-}
-
-/** Client-to-server: send a chat message. */
-export interface WsChatSendMessage {
-  readonly type: "chat:send";
-  readonly id: string;
-  readonly series: string;
-  readonly story: string;
-  readonly message: string;
-}
-
-/** Client-to-server: resend (delete last chapter + re-send). */
-export interface WsChatResendMessage {
-  readonly type: "chat:resend";
-  readonly id: string;
-  readonly series: string;
-  readonly story: string;
-  readonly message: string;
-}
-
-/** Client-to-server: subscribe to chapter updates for a story. */
-export interface WsSubscribeMessage {
-  readonly type: "subscribe";
-  readonly series: string;
-  readonly story: string;
-}
-
-/** Client-to-server: abort an active chat generation. */
-export interface WsChatAbortMessage {
-  readonly type: "chat:abort";
-  readonly id: string;
-}
-
-/** Client-to-server: invoke a plugin action prompt. */
-export interface WsPluginActionRunMessage {
-  readonly type: "plugin-action:run";
-  readonly correlationId: string;
-  readonly pluginName: string;
-  readonly series: string;
-  readonly name: string;
-  readonly promptFile: string;
-  readonly append?: boolean;
-  readonly appendTag?: string;
-  readonly extraVariables?: Record<string, string | number | boolean>;
-}
-
-/** Client-to-server: abort an in-flight plugin action run. */
-export interface WsPluginActionAbortMessage {
-  readonly type: "plugin-action:abort";
-  readonly correlationId: string;
-}
-
-/** All client-to-server message types. */
-export type WsClientMessage =
-  | WsAuthMessage
-  | WsChatSendMessage
-  | WsChatResendMessage
-  | WsChatAbortMessage
-  | WsSubscribeMessage
-  | WsPluginActionRunMessage
-  | WsPluginActionAbortMessage;
-
-/** Server-to-client: authentication successful. */
-export interface WsAuthOkMessage {
-  readonly type: "auth:ok";
-}
-
-/** Server-to-client: authentication failed. */
-export interface WsAuthErrorMessage {
-  readonly type: "auth:error";
-  readonly detail: string;
-}
-
-/** Server-to-client: streaming LLM delta chunk. */
-export interface WsChatDeltaMessage {
-  readonly type: "chat:delta";
-  readonly id: string;
-  readonly content: string;
-}
-
-/** Server-to-client: generation complete. */
-export interface WsChatDoneMessage {
-  readonly type: "chat:done";
-  readonly id: string;
-  readonly usage?: TokenUsageRecord | null;
-}
-
-/** Server-to-client: chat error. */
-export interface WsChatErrorMessage {
-  readonly type: "chat:error";
-  readonly id: string;
-  readonly detail: string;
-}
-
-/** Server-to-client: chapter count changed. */
-export interface WsChaptersUpdatedMessage {
-  readonly type: "chapters:updated";
-  readonly series: string;
-  readonly story: string;
-  readonly count: number;
-}
-
-/** Server-to-client: chapter content changed. */
-export interface WsChaptersContentMessage {
-  readonly type: "chapters:content";
-  readonly series: string;
-  readonly story: string;
-  readonly chapter: number;
-  readonly content: string;
-  readonly stateDiff?: StateDiffPayload;
-}
-
-/** Server-to-client: generic protocol error. */
-export interface WsErrorMessage {
-  readonly type: "error";
-  readonly detail: string;
-}
-
-/** Server-to-client: chat generation aborted. */
-export interface WsChatAbortedMessage {
-  readonly type: "chat:aborted";
-  readonly id: string;
-}
-
-/** Server-to-client: streaming plugin-action delta chunk. */
-export interface WsPluginActionDeltaMessage {
-  readonly type: "plugin-action:delta";
-  readonly correlationId: string;
-  readonly chunk: string;
-}
-
-/** Server-to-client: plugin action completed successfully. */
-export interface WsPluginActionDoneMessage {
-  readonly type: "plugin-action:done";
-  readonly correlationId: string;
-  readonly content: string;
-  readonly usage: TokenUsageRecord | null;
-  readonly chapterUpdated: boolean;
-  readonly chapterReplaced: boolean;
-  readonly appendedTag: string | null;
-}
-
-/** Server-to-client: plugin action error. Carries an RFC 9457 Problem Details body. */
-export interface WsPluginActionErrorMessage {
-  readonly type: "plugin-action:error";
-  readonly correlationId: string;
-  readonly problem: ProblemDetail;
-}
-
-/** Server-to-client: plugin action aborted by client. */
-export interface WsPluginActionAbortedMessage {
-  readonly type: "plugin-action:aborted";
-  readonly correlationId: string;
-}
-
-/** All server-to-client message types. */
-export type WsServerMessage =
-  | WsAuthOkMessage
-  | WsAuthErrorMessage
-  | WsChatDeltaMessage
-  | WsChatDoneMessage
-  | WsChatErrorMessage
-  | WsChatAbortedMessage
-  | WsChaptersUpdatedMessage
-  | WsChaptersContentMessage
-  | WsErrorMessage
-  | WsPluginActionDeltaMessage
-  | WsPluginActionDoneMessage
-  | WsPluginActionErrorMessage
-  | WsPluginActionAbortedMessage;
+export { REASONING_EFFORTS } from "./types/llm.ts";
+
+export type {
+  LLMStreamChunk,
+  LlmConfig,
+  LlmDefaultsResponse,
+  ReasoningEffort,
+  StoryLlmConfigOverrides,
+  TokenUsageRecord,
+  UsageTotals,
+} from "./types/llm.ts";
+
+export type {
+  BranchRequest,
+  BranchResponse,
+  BuildContinuePromptFn,
+  BuildPromptFn,
+  BuildPromptResult,
+  ChapterEditRequest,
+  ChapterEditResponse,
+  ChapterEntry,
+  ChapterRewindResponse,
+  ChatMessage,
+  ContinuePromptResult,
+  RenderOptions,
+  RenderResult,
+  StateDiffEntry,
+  StateDiffPayload,
+  StoryEngine,
+  StoryExportJson,
+  TemplateEngine,
+  VentoError,
+} from "./types/story.ts";
+
+export type {
+  BackendParallelStage,
+  HandlerEvent,
+  HandlerEventSubscriber,
+  HandlerEventSubscriptionOptions,
+  HookHandler,
+  HookStage,
+  PostResponsePayload,
+  PreLlmFetchPayload,
+  ResponseStreamPayload,
+} from "./types/hooks.ts";
+
+export type {
+  AppConfig,
+  AppDeps,
+  MiddlewareHandler,
+  ProblemDetail,
+  SafePathFn,
+} from "./types/app.ts";
+
+export type {
+  ActionButtonDescriptor,
+  ActionButtonVisibility,
+  DynamicVariableContext,
+  PluginHookDeclaration,
+  PluginHooks,
+  PluginManifest,
+  PluginModule,
+  PluginParameter,
+  PluginRegisterContext,
+  PluginRouteContext,
+  PluginRunPromptRequest,
+  PluginRunPromptResponse,
+  PromptFragment,
+  RegisterOptions,
+} from "./types/plugin.ts";
+
+export type {
+  WsAuthErrorMessage,
+  WsAuthMessage,
+  WsAuthOkMessage,
+  WsChaptersContentMessage,
+  WsChaptersUpdatedMessage,
+  WsChatAbortMessage,
+  WsChatAbortedMessage,
+  WsChatDeltaMessage,
+  WsChatDoneMessage,
+  WsChatErrorMessage,
+  WsChatResendMessage,
+  WsChatSendMessage,
+  WsClientMessage,
+  WsErrorMessage,
+  WsPluginActionAbortMessage,
+  WsPluginActionAbortedMessage,
+  WsPluginActionDeltaMessage,
+  WsPluginActionDoneMessage,
+  WsPluginActionErrorMessage,
+  WsPluginActionRunMessage,
+  WsServerMessage,
+  WsSubscribeMessage,
+} from "./types/ws.ts";
