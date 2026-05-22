@@ -14,7 +14,7 @@ import {
 import {
   computeHiddenPaths,
   excludeHiddenFromDiff,
-} from "../../../writer/lib/plugin-manager.ts";
+} from "../../../writer/lib/settings-diff.ts";
 
 Deno.test("path-allowlist: symlink to outside the root is rejected", async () => {
   const tmp = await Deno.makeTempDir({ prefix: "hr-allowlist-" });
