@@ -41,6 +41,7 @@ import {
   type SettingsAudit,
 } from "./plugin-settings-audit.ts";
 import { PluginSettingsService } from "./plugin-settings.ts";
+import { validateDependsOnDAG } from "./plugin-depends-on-dag.ts";
 
 const log = createLogger("plugin");
 
@@ -167,124 +168,7 @@ export class PluginManager {
     });
 
     // Global dependsOn DAG validation (task 2.8): run after ALL plugins loaded
-    this.#validateDependsOnDAG();
-  }
-
-  /**
-   * Validate the dependsOn DAG for each PARALLEL_ALLOWED stage across all
-   * loaded plugins. If a cycle or unknown plugin reference is detected for a
-   * given stage, ALL dependsOn declarations for that stage are dropped and
-   * an error is logged.
-   */
-  #validateDependsOnDAG(): void {
-    // Collect hook declarations per stage across all plugins
-    for (const stage of PARALLEL_ALLOWED) {
-      const edges = new Map<string, string[]>(); // plugin → dependsOn[]
-      const knownPlugins = new Set<string>();     // all plugins declaring this stage
-
-      for (const [pluginName, entry] of this.#plugins) {
-        if (!Array.isArray(entry.manifest.hooks)) continue;
-        for (const h of entry.manifest.hooks) {
-          const decl = h as Record<string, unknown>;
-          if (decl.stage !== stage) continue;
-          knownPlugins.add(pluginName);
-          const deps = decl.dependsOn as string[] | undefined;
-          if (deps?.length) {
-            edges.set(pluginName, [...deps]);
-          }
-        }
-      }
-
-      if (edges.size === 0) continue;
-
-      // Check for unknown plugin references
-      let invalid = false;
-      for (const [plugin, deps] of edges) {
-        for (const dep of deps) {
-          if (!knownPlugins.has(dep)) {
-            log.error(
-              "Plugin manifest: dependsOn references unknown plugin",
-              { plugin, stage, unknownDep: dep },
-            );
-            invalid = true;
-          }
-        }
-      }
-
-      // Check for cycles using Kahn's algorithm (topological sort)
-      if (!invalid) {
-        const inDegree = new Map<string, number>();
-        for (const node of knownPlugins) inDegree.set(node, 0);
-        for (const [, deps] of edges) {
-          for (const dep of deps) {
-            if (inDegree.has(dep)) {
-              inDegree.set(dep, (inDegree.get(dep) ?? 0) + 1);
-            }
-          }
-        }
-        // Wait — in dependsOn semantics, "A dependsOn B" means A must run
-        // AFTER B, so the edge is B → A. For Kahn's, count in-degree of
-        // each node where edges point TO the node.
-        // Re-build: edge direction = dependsOn[i] → plugin (dep must finish first)
-        const adj = new Map<string, string[]>();
-        const deg = new Map<string, number>();
-        for (const node of knownPlugins) {
-          adj.set(node, []);
-          deg.set(node, 0);
-        }
-        for (const [plugin, deps] of edges) {
-          for (const dep of deps) {
-            if (adj.has(dep)) {
-              adj.get(dep)!.push(plugin);
-              deg.set(plugin, (deg.get(plugin) ?? 0) + 1);
-            }
-          }
-        }
-
-        const queue: string[] = [];
-        for (const [node, d] of deg) {
-          if (d === 0) queue.push(node);
-        }
-        let processed = 0;
-        while (queue.length > 0) {
-          const node = queue.shift()!;
-          processed++;
-          for (const neighbor of adj.get(node) ?? []) {
-            const newDeg = (deg.get(neighbor) ?? 1) - 1;
-            deg.set(neighbor, newDeg);
-            if (newDeg === 0) queue.push(neighbor);
-          }
-        }
-
-        if (processed < knownPlugins.size) {
-          const cyclePlugins = [...deg.entries()]
-            .filter(([, d]) => d > 0)
-            .map(([n]) => n);
-          log.error(
-            "Plugin manifest: dependsOn cycle detected",
-            { stage, involvedPlugins: cyclePlugins },
-          );
-          invalid = true;
-        }
-      }
-
-      // Drop ALL dependsOn for this stage if invalid
-      if (invalid) {
-        for (const [, entry] of this.#plugins) {
-          if (!Array.isArray(entry.manifest.hooks)) continue;
-          for (const h of entry.manifest.hooks) {
-            const decl = h as Record<string, unknown>;
-            if (decl.stage === stage) {
-              decl.dependsOn = undefined;
-            }
-          }
-        }
-        log.warn(
-          "Plugin manifest: all dependsOn for stage dropped due to invalid DAG",
-          { stage },
-        );
-      }
-    }
+    validateDependsOnDAG(this.#plugins);
   }
 
   /**
