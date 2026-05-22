@@ -13,40 +13,43 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+/**
+ * Plugin-action HTTP route + shared runner.
+ *
+ * `runPluginActionWithDeps` is the single core runner used by both the
+ * Hono route below and the WebSocket handler. It coordinates three
+ * focused phases that live in sibling modules:
+ *
+ *  - {@link "./plugin-actions-preflight.ts"} — all pre-lock validation
+ *    (plugin gate, input shape, prompt-file read, LLM config, API key).
+ *  - lock acquisition via `tryMarkGenerationActive` — short-circuits to
+ *    409 when another generation is in flight.
+ *  - {@link "./plugin-actions-execute.ts"} — under-lock execution (Vento
+ *    render, `streamLlmAndPersist`, response shaping).
+ *
+ * The coordinator catch translates `ChatError` / `ChatAbortError` thrown
+ * by the execute phase. The `finally` always releases the lock.
+ */
+
 import type { Hono } from "@hono/hono";
-import { join } from "@std/path";
-import { errorMessage, pluginActionProblems, problemJson } from "../lib/errors.ts";
+import {
+  errorMessage,
+  pluginActionProblems,
+  problemJson,
+} from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
-import { isValidPluginName } from "../lib/plugin-manager.ts";
-import { listChapterFiles } from "../lib/story.ts";
 import {
   clearGenerationActive,
   tryMarkGenerationActive,
 } from "../lib/generation-registry.ts";
-import {
-  ChatAbortError,
-  ChatError,
-  streamLlmAndPersist,
-  type WriteMode,
-} from "../lib/chat-shared.ts";
-import {
-  resolveStoryLlmConfig,
-  StoryConfigValidationError,
-} from "../lib/story-config.ts";
-import type {
-  AppDeps,
-  PluginRunPromptResponse,
-} from "../types.ts";
+import { ChatAbortError, ChatError } from "../lib/chat-shared.ts";
+import type { AppDeps } from "../types.ts";
 import type {
   PluginActionOutcome,
   PluginActionRequestArgs,
 } from "./plugin-actions-shared.ts";
-import {
-  resolvePromptPath,
-  validateAndResolveStoryDir,
-  validateExtraVariables,
-  validateModeCombo,
-} from "./plugin-actions-validation.ts";
+import { runPreflight } from "./plugin-actions-preflight.ts";
+import { runUnderLock } from "./plugin-actions-execute.ts";
 
 export type { PluginActionOutcome, PluginActionRequestArgs };
 
@@ -69,204 +72,16 @@ export async function runPluginActionWithDeps(
     | "buildPromptFromStory"
   >,
 ): Promise<PluginActionOutcome> {
-  const {
-    pluginName,
-    series,
-    story,
-    promptPath,
-    mode,
-    appendTag,
-    replace,
-    extraVariables,
-    signal,
-    onDelta,
-  } = args;
-  const {
-    config,
-    safePath,
-    hookDispatcher,
-    pluginManager,
-    buildPromptFromStory,
-  } = deps;
-
-  if (!isValidPluginName(pluginName)) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: pluginActionProblems.invalidPluginName(),
-      status: 400,
-    };
-  }
-  if (!pluginManager.hasPlugin(pluginName)) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: pluginActionProblems.unknownPlugin(),
-      status: 404,
-    };
-  }
-  // Refuse to run actions when the plugin is disabled in settings.
-  // Frontend filters action buttons but a stale tab or direct API call could
-  // still reach this endpoint.
-  try {
-    const resolved = await pluginManager.getPluginSettings(pluginName);
-    if (resolved && (resolved as { enabled?: unknown }).enabled === false) {
-      return {
-        ok: false,
-        aborted: false,
-        problem: pluginActionProblems.pluginDisabled(),
-        status: 409,
-      };
-    }
-  } catch (err: unknown) {
-    // Settings read failure is non-fatal: log and continue (defence-in-depth
-    // shouldn't block the action when settings happen to be unreadable).
-    const message = errorMessage(err);
-    console.warn(
-      `[plugin-actions] Failed to read settings for ${pluginName}: ${message}`,
-    );
-  }
-  const pluginDir = pluginManager.getPluginDir(pluginName);
-  if (!pluginDir) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: pluginActionProblems.unknownPlugin(),
-      status: 404,
-    };
-  }
-
-  const storyResolution = await validateAndResolveStoryDir(
-    series,
-    story,
-    safePath,
-  );
-  if (!storyResolution.ok) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: storyResolution.problem,
-      status: storyResolution.status,
-    };
-  }
-  const {
-    series: validSeries,
-    story: validStory,
-    storyDir,
-  } = storyResolution;
-
-  if (typeof promptPath !== "string") {
-    return {
-      ok: false,
-      aborted: false,
-      problem: pluginActionProblems.invalidPromptPath(),
-      status: 400,
-    };
-  }
-  const promptResolution = await resolvePromptPath(pluginDir, promptPath);
-  if (!promptResolution.ok) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: promptResolution.problem,
-      status: promptResolution.problem.status,
-    };
-  }
-  const resolvedPromptPath = promptResolution.path;
-
-  const modeResolution = validateModeCombo(mode, appendTag, replace);
-  if (!modeResolution.ok) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: modeResolution.problem,
-      status: modeResolution.status,
-    };
-  }
-  const { mode: validatedMode, appendTag: validatedAppendTag } = modeResolution;
-
-  const extraResult = validateExtraVariables(extraVariables);
-  if (!extraResult.ok) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: extraResult.problem,
-      status: extraResult.problem.status,
-    };
-  }
-
-  let promptContent: string;
-  try {
-    promptContent = await Deno.readTextFile(resolvedPromptPath);
-  } catch (err: unknown) {
-    if (err instanceof Deno.errors.NotFound) {
-      return {
-        ok: false,
-        aborted: false,
-        problem: pluginActionProblems.promptFileNotFound(),
-        status: 400,
-      };
-    }
-    log.warn(`[plugin-actions] Prompt file read error: ${errorMessage(err)}`);
-    return {
-      ok: false,
-      aborted: false,
-      problem: problemJson(
-        "Internal Server Error",
-        500,
-        "Prompt file read failed",
-      ),
-      status: 500,
-    };
-  }
-
-  let llmConfig;
-  try {
-    llmConfig = await resolveStoryLlmConfig(storyDir, config.llmDefaults);
-  } catch (err) {
-    if (err instanceof StoryConfigValidationError) {
-      return {
-        ok: false,
-        aborted: false,
-        problem: problemJson(
-          "Unprocessable Entity",
-          422,
-          `Invalid _config.json: ${err.message}`,
-        ),
-        status: 422,
-      };
-    }
-    return {
-      ok: false,
-      aborted: false,
-      problem: problemJson(
-        "Internal Server Error",
-        500,
-        "Failed to read story configuration",
-      ),
-      status: 500,
-    };
-  }
-
-  if (!Deno.env.get("LLM_API_KEY")) {
-    return {
-      ok: false,
-      aborted: false,
-      problem: problemJson(
-        "Internal Server Error",
-        500,
-        "LLM_API_KEY is not configured",
-      ),
-      status: 500,
-    };
-  }
+  const preflight = await runPreflight(args, deps);
+  if (!preflight.ok) return preflight.outcome;
+  const { ctx } = preflight;
 
   // Acquire the per-story generation lock atomically BEFORE prompt render so
   // that replace mode can safely read the on-disk chapter under the lock and
   // inject it as the `draft` variable. For non-replace modes, the lock just
   // happens slightly earlier than before — semantically identical (the lock
   // is held for the entire LLM call regardless).
-  if (!tryMarkGenerationActive(validSeries, validStory)) {
+  if (!tryMarkGenerationActive(ctx.validSeries, ctx.validStory)) {
     return {
       ok: false,
       aborted: false,
@@ -276,135 +91,14 @@ export async function runPluginActionWithDeps(
   }
 
   try {
-    // Replace mode: load highest-numbered chapter under the lock, run through
-    // the plugin-manager's strip-tag patterns to scrub `<user_message>` and
-    // similar prompt envelopes, and inject as the reserved `draft` Vento
-    // variable. Done HERE (after lock, before prompt render) so the on-disk
-    // bytes the LLM sees are guaranteed to match the bytes we'll later
-    // overwrite atomically.
-    const renderVariables: Record<string, unknown> = { ...extraResult.value };
-    if (validatedMode === "replace-last-chapter") {
-      const chapterFiles = await listChapterFiles(storyDir);
-      if (chapterFiles.length === 0) {
-        return {
-          ok: false,
-          aborted: false,
-          problem: pluginActionProblems.noChapter(),
-          status: 400,
-        };
-      }
-      const lastFile = chapterFiles[chapterFiles.length - 1]!;
-      const lastChapterPath = join(storyDir, lastFile);
-      const rawDraft = await Deno.readTextFile(lastChapterPath);
-      const stripRegex = pluginManager.getStripTagPatterns();
-      const cleanDraft = stripRegex
-        ? rawDraft.replace(stripRegex, "").trim()
-        : rawDraft.trim();
-      renderVariables.draft = cleanDraft;
-    }
-
-    // Build messages via the shared prompt-assembly pipeline. Pass the plugin
-    // prompt content as `templateOverride` and the validated extras as
-    // `extraVariables`. Plugin actions render with empty user input — the
-    // prompt template is itself the user's intent.
-    const correlationId = crypto.randomUUID();
-    const buildResult = await buildPromptFromStory(
-      validSeries,
-      validStory,
-      storyDir,
-      "",
-      promptContent,
-      renderVariables,
-      correlationId,
-    );
-    if (buildResult.ventoError) {
-      const vErr = buildResult.ventoError;
-      if (vErr.type === "multi-message:no-user-message") {
-        return {
-          ok: false,
-          aborted: false,
-          problem: {
-            type: "multi-message:no-user-message",
-            title: vErr.title ?? "Missing User Message",
-            status: 422,
-            detail: vErr.message,
-            ventoError: vErr,
-          },
-          status: 422,
-        };
-      }
-      return {
-        ok: false,
-        aborted: false,
-        problem: problemJson(
-          "Unprocessable Entity",
-          422,
-          "Template rendering error",
-          { ventoError: vErr },
-        ),
-        status: 422,
-      };
-    }
-    if (buildResult.messages.length === 0) {
-      return {
-        ok: false,
-        aborted: false,
-        problem: problemJson(
-          "Internal Server Error",
-          500,
-          "Failed to generate prompt",
-        ),
-        status: 500,
-      };
-    }
-
-    let writeMode: WriteMode;
-    if (validatedMode === "append-to-existing-chapter") {
-      writeMode = {
-        kind: "append-to-existing-chapter",
-        appendTag: validatedAppendTag!,
-        pluginName,
-      };
-    } else if (validatedMode === "replace-last-chapter") {
-      writeMode = { kind: "replace-last-chapter", pluginName };
-    } else {
-      writeMode = { kind: "discard" };
-    }
-
-    const result = await streamLlmAndPersist({
-      messages: buildResult.messages,
-      llmConfig,
-      series: validSeries,
-      name: validStory,
-      storyDir,
-      rootDir: config.ROOT_DIR,
-      signal,
-      writeMode,
-      onDelta,
-      hookDispatcher,
-      config,
-      correlationId,
-    });
-
-    const response: PluginRunPromptResponse = {
-      content:
-        writeMode.kind === "append-to-existing-chapter" ||
-          writeMode.kind === "replace-last-chapter"
-          ? (result.chapterContentAfter ?? result.content)
-          : result.content,
-      usage: result.usage,
-      chapterUpdated: writeMode.kind === "append-to-existing-chapter",
-      chapterReplaced: writeMode.kind === "replace-last-chapter",
-      appendedTag: validatedAppendTag,
-    };
-    return { ok: true, response };
+    return await runUnderLock(args, deps, ctx);
   } catch (err) {
     if (err instanceof ChatAbortError) {
       return { ok: false, aborted: true };
     }
     if (err instanceof ChatError) {
       log.error("Plugin action chat error", {
-        plugin: pluginName,
+        plugin: args.pluginName,
         code: err.code,
         httpStatus: err.httpStatus,
         detail: err.message,
@@ -426,7 +120,10 @@ export async function runPluginActionWithDeps(
       };
     }
     const detail = errorMessage(err);
-    log.error("Plugin action failed", { plugin: pluginName, error: detail });
+    log.error("Plugin action failed", {
+      plugin: args.pluginName,
+      error: detail,
+    });
     return {
       ok: false,
       aborted: false,
@@ -438,7 +135,7 @@ export async function runPluginActionWithDeps(
       status: 500,
     };
   } finally {
-    clearGenerationActive(validSeries, validStory);
+    clearGenerationActive(ctx.validSeries, ctx.validStory);
   }
 }
 
@@ -527,7 +224,11 @@ export function registerPluginActionRoutes(
     }
     if (outcome.aborted) {
       return c.json(
-        problemJson("Client Closed Request", 499, "Generation aborted by client"),
+        problemJson(
+          "Client Closed Request",
+          499,
+          "Generation aborted by client",
+        ),
         499 as 400,
       );
     }
