@@ -44,8 +44,8 @@ const authLog = createLogger("auth");
 export class WsConnection {
   readonly deps: AppDeps;
   #authenticated = false;
-  #subscriptionIntervalId: number | null = null;
-  #idleTimer: number | null = null;
+  #subscriptionIntervalId: ReturnType<typeof setInterval> | null = null;
+  #idleTimer: ReturnType<typeof setTimeout> | null = null;
   #activeGenerations = 0;
   readonly #abortControllers = new Map<string, AbortController>();
   #disposed = false;
@@ -84,7 +84,7 @@ export class WsConnection {
     }
   }
 
-  setSubscriptionInterval(id: number): void {
+  setSubscriptionInterval(id: ReturnType<typeof setInterval>): void {
     if (this.#disposed) {
       clearInterval(id);
       return;
