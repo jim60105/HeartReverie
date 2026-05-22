@@ -20,10 +20,13 @@ import type { Logger } from "./logger.ts";
 import { KNOWN_BACKEND_STAGES, PARALLEL_ALLOWED, VALID_STAGES } from "./hooks-stages.ts";
 import { captureRefs as captureRefsFn, cloneAllowlistSnapshot as cloneAllowlistSnapshotFn } from "./hooks-snapshot.ts";
 import { computeTopoLayers as computeTopoLayersFn, type HandlerEntry } from "./hooks-topo.ts";
+import { type DispatchMetric, HookMetricsCollector } from "./hooks-metrics.ts";
 
 // Re-exported so existing importers (plugin-loader, plugin-validators,
-// plugin-depends-on-dag, tests) continue to work after the extraction.
+// plugin-depends-on-dag, tests, _debug-hooks route) continue to work after
+// the extraction.
 export { KNOWN_BACKEND_STAGES, PARALLEL_ALLOWED, VALID_STAGES };
+export type { DispatchMetric };
 
 const log = createLogger("plugin");
 
@@ -56,29 +59,9 @@ export interface HandlerIntrospection {
   readonly parallel: boolean;
 }
 
-/** Ring buffer entry emitted per dispatch() call. */
-export interface DispatchMetric {
-  stage: string;
-  dispatchPhase: "serial" | "parallel" | "mixed";
-  durationMs: number;
-  serialCount: number;
-  parallelCount: number;
-  plugins: Array<{ plugin: string; durationMs: number; errored: boolean }>;
-  timestamp: number;
-}
-
-const METRICS_BUFFER_CAP = 200;
-const SLIDING_WINDOW_SIZE = 50;
-const SLIDING_WINDOW_WARN_MS = 5;
-
 export class HookDispatcher {
   #handlers: Map<HookStage, HandlerEntry[]> = new Map();
-  #metricsBuffer: DispatchMetric[] = [];
-  #sseSubscribers: Set<(metric: DispatchMetric) => void> = new Set();
-  // response-stream sliding window: plugin → last N wall-times (ms)
-  #streamWallTimes: Map<string, number[]> = new Map();
-  // Track whether we've already warned for a given handler (reset on crossing back below threshold)
-  #streamWarnedSinceCrossing: Map<string, boolean> = new Map();
+  readonly #metrics = new HookMetricsCollector(log);
   // Per-handler observability event subscribers (opt-in, off by default).
   #handlerEventSubscribers: Set<HandlerEventSubscriber> = new Set();
   // Consecutive-throw counter per subscriber — reset on any clean invocation.
@@ -330,17 +313,17 @@ export class HookDispatcher {
 
   /** Return a shallow copy of the ring buffer. */
   getMetricsBuffer(): DispatchMetric[] {
-    return [...this.#metricsBuffer];
+    return this.#metrics.getMetricsBuffer();
   }
 
   /** Subscribe to per-dispatch SSE events. */
   subscribeSSE(cb: (metric: DispatchMetric) => void): void {
-    this.#sseSubscribers.add(cb);
+    this.#metrics.subscribeSSE(cb);
   }
 
   /** Unsubscribe from per-dispatch SSE events. */
   unsubscribeSSE(cb: (metric: DispatchMetric) => void): void {
-    this.#sseSubscribers.delete(cb);
+    this.#metrics.unsubscribeSSE(cb);
   }
 
   // ---------------------------------------------------------------------------
@@ -861,39 +844,12 @@ export class HookDispatcher {
   }
 
   /**
-   * Record wall-time for response-stream parallel handlers. When the
-   * sliding-window average exceeds 5 ms, emit a one-time soft warn.
+   * Record wall-time for response-stream parallel handlers. Delegates to
+   * `HookMetricsCollector`, which owns the sliding-window state and emits
+   * the one-time soft warn when the average exceeds 5 ms.
    */
   #recordStreamWallTime(stage: HookStage, entry: HandlerEntry, wallTimeMs: number): void {
-    if (stage !== "response-stream") return;
-    const key = entry.plugin ?? "<anonymous>";
-    let window = this.#streamWallTimes.get(key);
-    if (!window) {
-      window = [];
-      this.#streamWallTimes.set(key, window);
-    }
-    window.push(wallTimeMs);
-    if (window.length > SLIDING_WINDOW_SIZE) {
-      window.shift();
-    }
-
-    if (window.length === SLIDING_WINDOW_SIZE) {
-      const avg = window.reduce((a, b) => a + b, 0) / window.length;
-      if (avg > SLIDING_WINDOW_WARN_MS) {
-        if (!this.#streamWarnedSinceCrossing.get(key)) {
-          this.#streamWarnedSinceCrossing.set(key, true);
-          log.warn("response-stream parallel handler exceeds 5ms average wall-time", {
-            plugin: key,
-            stage: "response-stream",
-            avgMs: Math.round(avg * 100) / 100,
-            samples: SLIDING_WINDOW_SIZE,
-          });
-        }
-      } else {
-        // Reset warn flag when crossing back below threshold
-        this.#streamWarnedSinceCrossing.set(key, false);
-      }
-    }
+    this.#metrics.recordStreamWallTime(stage, entry.plugin, wallTimeMs);
   }
 
   /** Push a metric to the ring buffer and notify SSE subscribers. */
@@ -905,27 +861,14 @@ export class HookDispatcher {
     parallelCount: number,
     entries: HandlerEntry[],
   ): void {
-    const metric: DispatchMetric = {
+    this.#metrics.recordDispatch(
       stage,
       dispatchPhase,
       durationMs,
       serialCount,
       parallelCount,
-      plugins: entries.map((e) => ({
-        plugin: e.plugin ?? "<anonymous>",
-        durationMs: 0, // per-handler timing tracked separately for response-stream
-        errored: e.errorCount > 0,
-      })),
-      timestamp: Date.now(),
-    };
-
-    this.#metricsBuffer.push(metric);
-    if (this.#metricsBuffer.length > METRICS_BUFFER_CAP) {
-      this.#metricsBuffer.shift();
-    }
-
-    for (const cb of this.#sseSubscribers) {
-      try { cb(metric); } catch { /* subscriber error must not break dispatch */ }
-    }
+      entries.map((e) => ({ plugin: e.plugin, errored: e.errorCount > 0 })),
+    );
   }
 }
+
