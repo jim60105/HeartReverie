@@ -1,0 +1,430 @@
+// Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+//
+// You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * @module hooks-runner
+ *
+ * Dispatch-time execution for `HookDispatcher`. Owns the serial/parallel
+ * scheduling, per-handler Proxy context views, per-handler observability
+ * event emission, and dispatch metrics recording. Pure mechanics — no
+ * registry state. The dispatcher passes in the already-sorted handler list
+ * for each stage.
+ *
+ * Deps: a base `Logger`, a `HookMetricsCollector` for dispatch / stream
+ * timing metrics, and a `HandlerEventBus` for per-handler events. All
+ * dispatcher-internal context helpers (`captureRefs`,
+ * `cloneAllowlistSnapshot`, `computeTopoLayers`) are called directly from
+ * their owning modules — no indirection through this class.
+ */
+
+import { errorMessage } from "./errors.ts";
+import type { HookStage, HandlerEvent } from "../types.ts";
+import { createLogger, type Logger } from "./logger.ts";
+import { captureRefs, cloneAllowlistSnapshot } from "./hooks-snapshot.ts";
+import { computeTopoLayers, type HandlerEntry } from "./hooks-topo.ts";
+import type { DispatchMetric, HookMetricsCollector } from "./hooks-metrics.ts";
+import type { HandlerEventBus } from "./hooks-event-bus.ts";
+
+export class HookRunner {
+  readonly #log: Logger;
+  readonly #metrics: HookMetricsCollector;
+  readonly #eventBus: HandlerEventBus;
+
+  constructor(log: Logger, metrics: HookMetricsCollector, eventBus: HandlerEventBus) {
+    this.#log = log;
+    this.#metrics = metrics;
+    this.#eventBus = eventBus;
+  }
+
+  /**
+   * Execute every handler registered for `stage` against `context`. The
+   * caller supplies the already-priority-sorted handler list; the runner
+   * partitions it into serial then parallel buckets and records dispatch
+   * metrics once the serial pass + parallel scheduling completes.
+   *
+   * For `response-stream` the parallel bucket runs fire-and-forget so
+   * downstream streaming is not blocked by background readOnly observers.
+   */
+  async dispatch(
+    stage: HookStage,
+    handlers: readonly HandlerEntry[],
+    context: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    if (handlers.length === 0) return context;
+
+    const correlationId = typeof context.correlationId === "string"
+      ? context.correlationId
+      : undefined;
+    const startTime = performance.now();
+
+    // Split into serial / parallel buckets.
+    const serial: HandlerEntry[] = [];
+    const parallel: HandlerEntry[] = [];
+    for (const entry of handlers) {
+      (entry.parallel ? parallel : serial).push(entry);
+    }
+
+    // 1. Serial pass — shared base context (§3.11: empty parallel = legacy path)
+    for (let i = 0; i < serial.length; i++) {
+      await this.#runSerial(stage, serial[i]!, i, context, correlationId);
+    }
+
+    // 2. Parallel pass (if any)
+    if (parallel.length > 0) {
+      // Parallel entries start at handlerIndex = serial.length (sorted dispatch order).
+      const parallelBase = serial.length;
+      if (stage === "response-stream") {
+        // Fire-and-forget: don't await. Background promise handles logging.
+        this.#runParallelBucket(stage, parallel, parallelBase, context, correlationId, startTime)
+          .catch(() => { /* allSettled already handles individual errors */ });
+      } else {
+        await this.#runParallelBucket(stage, parallel, parallelBase, context, correlationId, startTime);
+      }
+    }
+
+    // Metrics + ring buffer + SSE emit
+    const durationMs = Math.round(performance.now() - startTime);
+    const dispatchPhase: DispatchMetric["dispatchPhase"] =
+      parallel.length === 0 ? "serial" : (serial.length === 0 ? "parallel" : "mixed");
+    this.#metrics.recordDispatch(
+      stage,
+      dispatchPhase,
+      durationMs,
+      serial.length,
+      parallel.length,
+      [...serial, ...parallel].map((e) => ({ plugin: e.plugin, errored: e.errorCount > 0 })),
+    );
+
+    this.#log.debug("Hook dispatch completed", {
+      stage,
+      serialCount: serial.length,
+      parallelCount: parallel.length,
+      dispatchPhase,
+      latencyMs: durationMs,
+    });
+    return context;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  #deriveLogger(entry: HandlerEntry, correlationId?: string): unknown {
+    const { plugin, baseLogger } = entry;
+    if (baseLogger) {
+      return correlationId ? baseLogger.withContext({ correlationId }) : baseLogger;
+    }
+    const baseData: Record<string, unknown> = {};
+    if (plugin) baseData.plugin = plugin;
+    return createLogger("plugin", {
+      ...(correlationId ? { correlationId } : {}),
+      baseData,
+    });
+  }
+
+  /**
+   * Run a single serial handler.
+   *
+   * The per-handler logger is injected via a `Proxy` view (NOT by mutating
+   * `context.logger`), so the underlying context object is left untouched.
+   * This lets the dispatcher accept frozen context objects (e.g. the
+   * fully-frozen `PostResponsePayload`) without throwing on logger
+   * injection. Mutations to any other property pass through to the real
+   * context so serial handlers continue to share state with their peers.
+   */
+  async #runSerial(
+    stage: HookStage,
+    entry: HandlerEntry,
+    handlerIndex: number,
+    context: Record<string, unknown>,
+    correlationId?: string,
+  ): Promise<void> {
+    const handlerLogger = this.#deriveLogger(entry, correlationId);
+    const view = new Proxy(context, {
+      get(target, prop, receiver) {
+        if (prop === "logger") return handlerLogger;
+        return Reflect.get(target, prop, receiver);
+      },
+      set(target, prop, value, receiver) {
+        if (prop === "logger") return true; // per-handler logger is immutable
+        return Reflect.set(target, prop, value, receiver);
+      },
+    });
+
+    const hasSubs = this.#eventBus.hasSubscribers();
+    let ctxBeforeRefs: Record<string, unknown> | undefined;
+    let startTime = 0;
+    if (hasSubs) {
+      // Capture live refs BEFORE structuredClone runs (spec D3).
+      ctxBeforeRefs = captureRefs(stage, context);
+      const ctxBeforeSnapshot = cloneAllowlistSnapshot(stage, context);
+      startTime = performance.now();
+      this.#eventBus.emit({
+        kind: "handler-start",
+        stage,
+        plugin: entry.plugin,
+        priority: entry.priority,
+        handlerIndex,
+        correlationId,
+        timestamp: startTime,
+        ctxBeforeSnapshot,
+        ctxBeforeRefs,
+      });
+    }
+
+    let handlerError: unknown = undefined;
+    try {
+      await entry.handler(view);
+    } catch (err: unknown) {
+      handlerError = err;
+      entry.errorCount++;
+      this.#log.error(`Hook error in stage '${stage}'`, {
+        stage,
+        plugin: entry.plugin,
+        dispatchPhase: "serial",
+        error: errorMessage(err),
+      });
+    }
+
+    if (hasSubs && ctxBeforeRefs) {
+      // Re-read live refs BEFORE the post-handler clone (spec D3).
+      const ctxAfterRefs = captureRefs(stage, context);
+      const reassigned: string[] = [];
+      for (const k of Object.keys(ctxBeforeRefs)) {
+        if (ctxAfterRefs[k] !== ctxBeforeRefs[k]) reassigned.push(k);
+      }
+      reassigned.sort();
+      const ctxAfterSnapshot = cloneAllowlistSnapshot(stage, context);
+      const endTime = performance.now();
+      this.#eventBus.emit({
+        kind: "handler-end",
+        stage,
+        plugin: entry.plugin,
+        priority: entry.priority,
+        handlerIndex,
+        correlationId,
+        timestamp: endTime,
+        ctxAfterSnapshot,
+        ctxAfterRefs,
+        reassigned,
+        error: handlerError !== undefined
+          ? {
+              message: errorMessage(handlerError),
+              name: handlerError instanceof Error ? handlerError.name : "Error",
+            }
+          : undefined,
+        durationMs: endTime - startTime,
+      });
+    }
+  }
+
+  /**
+   * Run a single parallel handler with a Proxy view of the context.
+   * The Proxy intercepts `logger` reads/writes and (under HOOK_DEBUG)
+   * logs any other writes as readOnly violations.
+   *
+   * Per-handler observability events are emitted around the handler call
+   * when `subscribeHandlerEvents` has at least one subscriber. Refs are
+   * captured from the underlying `context` (not the Proxy view) so identity
+   * comparison detects reassignment that bypasses the Proxy.
+   */
+  async #runParallel(
+    stage: HookStage,
+    entry: HandlerEntry,
+    handlerIndex: number,
+    context: Record<string, unknown>,
+    correlationId?: string,
+  ): Promise<void> {
+    const handlerLogger = this.#deriveLogger(entry, correlationId);
+    // Capture log into a local so the Proxy `set` trap (where `this` is the
+    // handler object literal, not the HookRunner) can still reach it.
+    const log = this.#log;
+    const view = new Proxy(context, {
+      get(target, prop, receiver) {
+        if (prop === "logger") return handlerLogger;
+        return Reflect.get(target, prop, receiver);
+      },
+      set(target, prop, value, receiver) {
+        if (prop === "logger") return true; // no-op — per-handler logger is immutable
+        if (Deno.env.get("HOOK_DEBUG") === "1") {
+          log.warn("Parallel handler violated readOnly contract", {
+            plugin: entry.plugin,
+            stage,
+            mutatedKey: String(prop),
+            dispatchPhase: "parallel",
+          });
+        }
+        return Reflect.set(target, prop, value, receiver);
+      },
+    });
+
+    const hasSubs = this.#eventBus.hasSubscribers();
+    let ctxBeforeRefs: Record<string, unknown> | undefined;
+    let startTime = 0;
+    if (hasSubs) {
+      ctxBeforeRefs = captureRefs(stage, context);
+      const ctxBeforeSnapshot = cloneAllowlistSnapshot(stage, context);
+      startTime = performance.now();
+      this.#eventBus.emit({
+        kind: "handler-start",
+        stage,
+        plugin: entry.plugin,
+        priority: entry.priority,
+        handlerIndex,
+        correlationId,
+        timestamp: startTime,
+        ctxBeforeSnapshot,
+        ctxBeforeRefs,
+      });
+    }
+
+    let handlerError: unknown;
+    try {
+      await entry.handler(view);
+    } catch (err: unknown) {
+      handlerError = err;
+      // Re-throw so the existing Promise.allSettled / parallel-bucket error
+      // accounting in #runParallelBucket continues to work unchanged.
+      if (hasSubs && ctxBeforeRefs) {
+        this.#emitParallelEnd(stage, entry, handlerIndex, correlationId, context, ctxBeforeRefs, startTime, handlerError);
+      }
+      throw err;
+    }
+
+    if (hasSubs && ctxBeforeRefs) {
+      this.#emitParallelEnd(stage, entry, handlerIndex, correlationId, context, ctxBeforeRefs, startTime, undefined);
+    }
+  }
+
+  /** Emit the `handler-end` event for a parallel handler. Internal helper. */
+  #emitParallelEnd(
+    stage: HookStage,
+    entry: HandlerEntry,
+    handlerIndex: number,
+    correlationId: string | undefined,
+    context: Record<string, unknown>,
+    ctxBeforeRefs: Record<string, unknown>,
+    startTime: number,
+    handlerError: unknown,
+  ): void {
+    const ctxAfterRefs = captureRefs(stage, context);
+    const reassigned: string[] = [];
+    for (const k of Object.keys(ctxBeforeRefs)) {
+      if (ctxAfterRefs[k] !== ctxBeforeRefs[k]) reassigned.push(k);
+    }
+    reassigned.sort();
+    const ctxAfterSnapshot = cloneAllowlistSnapshot(stage, context);
+    const endTime = performance.now();
+    const event: HandlerEvent = {
+      kind: "handler-end",
+      stage,
+      plugin: entry.plugin,
+      priority: entry.priority,
+      handlerIndex,
+      correlationId,
+      timestamp: endTime,
+      ctxAfterSnapshot,
+      ctxAfterRefs,
+      reassigned,
+      error: handlerError !== undefined
+        ? {
+            message: errorMessage(handlerError),
+            name: handlerError instanceof Error ? handlerError.name : "Error",
+          }
+        : undefined,
+      durationMs: endTime - startTime,
+    };
+    this.#eventBus.emit(event);
+  }
+
+  /** Execute the parallel bucket: topo layers × concurrency chunks. */
+  async #runParallelBucket(
+    stage: HookStage,
+    parallel: HandlerEntry[],
+    parallelBase: number,
+    context: Record<string, unknown>,
+    correlationId: string | undefined,
+    _startTime: number,
+  ): Promise<void> {
+    const layers = computeTopoLayers(parallel, this.#log, stage);
+    // Map each parallel entry to a stable handlerIndex (dispatch-sorted position).
+    const indexOf = new Map<HandlerEntry, number>();
+    parallel.forEach((e, i) => indexOf.set(e, parallelBase + i));
+
+    // Effective concurrency = min of all declared
+    const declaredConcurrencies = parallel
+      .filter((e) => e.concurrency !== undefined)
+      .map((e) => e.concurrency!);
+    const effectiveConcurrency = declaredConcurrencies.length > 0
+      ? Math.min(...declaredConcurrencies)
+      : undefined; // unbounded
+
+    for (const layer of layers) {
+      if (effectiveConcurrency === undefined) {
+        // Unbounded — single Promise.allSettled for whole layer
+        const results = await Promise.allSettled(
+          layer.map((entry) => {
+            const t0 = performance.now();
+            return this.#runParallel(stage, entry, indexOf.get(entry)!, context, correlationId).then(
+              () => { this.#metrics.recordStreamWallTime(stage, entry.plugin, performance.now() - t0); },
+              (err) => { this.#metrics.recordStreamWallTime(stage, entry.plugin, performance.now() - t0); throw err; },
+            );
+          }),
+        );
+        this.#handleParallelResults(stage, layer, results);
+      } else {
+        // Chunked by concurrency
+        for (let i = 0; i < layer.length; i += effectiveConcurrency) {
+          const chunk = layer.slice(i, i + effectiveConcurrency);
+          const results = await Promise.allSettled(
+            chunk.map((entry) => {
+              const t0 = performance.now();
+              return this.#runParallel(stage, entry, indexOf.get(entry)!, context, correlationId).then(
+                () => { this.#metrics.recordStreamWallTime(stage, entry.plugin, performance.now() - t0); },
+                (err) => { this.#metrics.recordStreamWallTime(stage, entry.plugin, performance.now() - t0); throw err; },
+              );
+            }),
+          );
+          this.#handleParallelResults(stage, chunk, results);
+        }
+      }
+    }
+  }
+
+  /** Log errors from parallel-bucket settlement. */
+  #handleParallelResults(
+    stage: HookStage,
+    entries: HandlerEntry[],
+    results: PromiseSettledResult<void>[],
+  ): void {
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!;
+      if (r.status === "rejected") {
+        const entry = entries[i]!;
+        entry.errorCount++;
+        const err = (r as PromiseRejectedResult).reason;
+        this.#log.error(`Hook error in stage '${stage}'`, {
+          stage,
+          plugin: entry.plugin,
+          dispatchPhase: "parallel",
+          error: {
+            message: errorMessage(err),
+            stack: err instanceof Error ? err.stack : undefined,
+          },
+        });
+      }
+    }
+  }
+}
