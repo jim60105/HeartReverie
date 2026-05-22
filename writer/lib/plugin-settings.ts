@@ -20,6 +20,12 @@
  * preservation, path-roots resolution, schema-version mismatch handling)
  * can be reasoned about independently of plugin discovery.
  *
+ * This file is the thin orchestrator. The heavy lifting is delegated to:
+ *  - {@link "./plugin-settings-validate.ts"} — the two-phase validation
+ *    pipeline as a pure function.
+ *  - {@link "./plugin-settings-helpers.ts"} — `applyPreviousNamesMigration`
+ *    and `mergeXLegacy` helpers, shared by validate and the read path.
+ *
  * Lifecycle: a single instance is created by `PluginManager` in its
  * constructor; it holds *references* to the live `#plugins` and
  * `#settingsAudit` maps owned by the manager so it always reads current
@@ -33,23 +39,21 @@ import {
   getHardcodedPathRoots,
   resolveDisplayRoots,
 } from "./path-allowlist.ts";
-import {
-  type ValidationError,
-  validate as validateSchema,
-} from "./schema-validator.ts";
+import type { ValidationError } from "./schema-validator.ts";
 import { createLogger } from "./logger.ts";
 import { extractSchemaDefaults } from "./plugin-validators.ts";
 import type { SettingsAudit } from "./plugin-settings-audit.ts";
+import { applyPreviousNamesMigration } from "./plugin-settings-helpers.ts";
 import {
-  computeDeepDiff,
-  computeHiddenPaths,
-  excludeHiddenFromDiff,
-  isPathInScope,
-  unionPaths,
-} from "./settings-diff.ts";
+  runValidateAndPrepare,
+  type ValidateAndPrepareResult,
+} from "./plugin-settings-validate.ts";
+import { validate as validateSchema } from "./schema-validator.ts";
 import type { PluginManifest } from "../types.ts";
 
 const log = createLogger("plugin");
+
+export type { ValidateAndPrepareResult };
 
 /**
  * Minimal shape of a plugin entry consumed by the settings service.
@@ -58,16 +62,6 @@ const log = createLogger("plugin");
  */
 export interface PluginSettingsEntry {
   readonly manifest: PluginManifest;
-}
-
-export interface ValidateAndPrepareResult {
-  errors: ValidationError[];
-  warnings: ValidationError[];
-  finalSettings: Record<string, unknown>;
-  changedPaths: string[];
-  durationMs: number;
-  malformedChangedPaths: boolean;
-  schemaVersionMismatch: boolean;
 }
 
 export interface SettingsForResponse {
@@ -130,7 +124,6 @@ export class PluginSettingsService {
       | undefined;
     const audit = this.#settingsAudit.get(name);
 
-    // If schema version mismatched, return schema defaults only.
     if (audit?.versionMismatch) {
       return extractSchemaDefaults(schema);
     }
@@ -142,7 +135,7 @@ export class PluginSettingsService {
     // leak past this method.
     delete (saved as Record<string, unknown>)["x-legacy"];
 
-    const renamed = this.#applyPreviousNamesMigration(saved, audit);
+    const renamed = applyPreviousNamesMigration(saved, audit);
 
     return { ...defaults, ...renamed };
   }
@@ -221,18 +214,8 @@ export class PluginSettingsService {
 
   /**
    * Two-phase validation + writeOnly short-circuit. Does not write to disk.
-   * Returns a structured envelope:
-   *   - `errors`: blocking errors (path ⊆ blocking scope)
-   *   - `warnings`: non-blocking errors (path outside scope)
-   *   - `finalSettings`: the value that SHOULD be passed to {@link commit}
-   *     if `errors.length === 0`. Has `_changedPaths` stripped and
-   *     `writeOnly` null short-circuits resolved.
-   *   - `changedPaths`: the union scope used to classify blocking vs warning.
-   *   - `durationMs`: validator wall-clock duration (for audit logging).
-   *   - `malformedChangedPaths`: true when caller-supplied `_changedPaths`
-   *     was non-array; the only error returned is the malformed marker.
-   *   - `schemaVersionMismatch`: true when this plugin's schema version is
-   *     unsupported; routes SHALL respond `409` in that case.
+   * See {@link ValidateAndPrepareResult} for the envelope shape and
+   * {@link "./plugin-settings-validate.ts"} for the algorithm.
    */
   async validateAndPrepare(
     name: string,
@@ -245,160 +228,16 @@ export class PluginSettingsService {
     const schema = entry.manifest.settingsSchema as
       | Record<string, unknown>
       | undefined;
-
-    if (audit?.versionMismatch) {
-      return {
-        errors: [{
-          path: "",
-          keyword: "schema_version_mismatch",
-          messageKey: "schema_version_mismatch",
-          params: { plugin: name },
-        }],
-        warnings: [],
-        finalSettings: {},
-        changedPaths: [],
-        durationMs: performance.now() - start,
-        malformedChangedPaths: false,
-        schemaVersionMismatch: true,
-      };
-    }
-
-    // Extract + validate caller-supplied _changedPaths.
-    const rawChanged = (body as Record<string, unknown>)["_changedPaths"];
-    let providedChangedPaths: string[] | null = null;
-    let malformed = false;
-    if (rawChanged !== undefined) {
-      if (
-        !Array.isArray(rawChanged) ||
-        !rawChanged.every((s) => typeof s === "string")
-      ) {
-        malformed = true;
-      } else {
-        providedChangedPaths = rawChanged.slice();
-      }
-    }
-
-    if (malformed) {
-      return {
-        errors: [{
-          path: "_changedPaths",
-          keyword: "type",
-          messageKey: "type",
-          params: { expected: "array<string>" },
-        }],
-        warnings: [],
-        finalSettings: {},
-        changedPaths: [],
-        durationMs: performance.now() - start,
-        malformedChangedPaths: true,
-        schemaVersionMismatch: false,
-      };
-    }
-
-    // Strip _changedPaths from the body that will be persisted.
-    const stripped: Record<string, unknown> = { ...body };
-    delete stripped["_changedPaths"];
-
-    // Resolve writeOnly short-circuits BEFORE validation. `null` ⇒ keep
-    // existing; `""` ⇒ clear; other ⇒ set+validate. Existing value may live
-    // under the current key OR an `x-previous-names` entry.
     const onDisk = await this.#readDiskConfig(name);
-    const diskNoLegacy: Record<string, unknown> = { ...onDisk };
-    const xLegacyExisting = diskNoLegacy["x-legacy"];
-    delete diskNoLegacy["x-legacy"];
-
-    if (audit) {
-      for (const k of audit.writeOnlyKeys) {
-        if (!(k in stripped)) continue;
-        const v = stripped[k];
-        if (v === null) {
-          // Keep existing: look at the current key first, then any
-          // x-previous-names alias.
-          if (k in diskNoLegacy) {
-            stripped[k] = diskNoLegacy[k];
-          } else {
-            // find a previous-name alias that maps to k
-            for (const [prev, current] of audit.previousNames.entries()) {
-              if (current === k && prev in diskNoLegacy) {
-                stripped[k] = diskNoLegacy[prev];
-                break;
-              }
-            }
-            if (stripped[k] === null) {
-              // Nothing on disk to keep — treat as "absent" by removing.
-              delete stripped[k];
-            }
-          }
-        } else if (v === "") {
-          // Explicit clear: remove key from saved settings.
-          delete stripped[k];
-        }
-      }
-    }
-
-    // Compute the diff between stripped body and on-disk (post-rename for
-    // disk side, so we don't mark renames as diffs).
-    const diskPostRename = this.#applyPreviousNamesMigration(diskNoLegacy, audit);
-    let actualDiffPaths = computeDeepDiff(diskPostRename, stripped);
-
-    // Spec: a field whose x-show-when evaluates false on the submitted body
-    // is hidden in the UI; pre-existing or transiently-invalid values at
-    // hidden paths must NOT be blocking (see conditional-field-visibility
-    // spec L61). The frontend strips these from _changedPaths, but the
-    // server's independent diff would otherwise re-enter the blocking
-    // scope. Exclude hidden paths from the diff contribution.
-    if (schema) {
-      const hidden = computeHiddenPaths(schema, stripped);
-      if (hidden.length > 0) {
-        actualDiffPaths = excludeHiddenFromDiff(actualDiffPaths, hidden);
-      }
-    }
-
-    const scope = unionPaths(providedChangedPaths ?? [], actualDiffPaths);
-
-    // Run validation.
-    let allErrors: ValidationError[] = [];
-    if (schema) {
-      const roots = this.#getEffectivePathRootsForPlugin(name);
-      const opts = roots
-        ? {
-          projectRoot: this.#projectRoot(),
-          hardcodedPathRoots: roots.display,
-          absolutePathRoots: roots.absolute,
-        }
-        : {};
-      const { errors } = await validateSchema(schema, stripped, opts);
-      allErrors = errors;
-    }
-
-    const blocking: ValidationError[] = [];
-    const warnings: ValidationError[] = [];
-    for (const e of allErrors) {
-      if (isPathInScope(e.path, scope)) blocking.push(e);
-      else warnings.push(e);
-    }
-
-    // If we are about to succeed, build finalSettings including the
-    // x-legacy namespace handling.
-    let finalSettings = stripped;
-    if (blocking.length === 0) {
-      finalSettings = this.#mergeXLegacy(
-        name,
-        stripped,
-        diskNoLegacy,
-        xLegacyExisting,
-      );
-    }
-
-    return {
-      errors: blocking,
-      warnings,
-      finalSettings,
-      changedPaths: scope,
-      durationMs: performance.now() - start,
-      malformedChangedPaths: false,
-      schemaVersionMismatch: false,
-    };
+    return runValidateAndPrepare(body, {
+      name,
+      schema,
+      audit,
+      onDisk,
+      projectRoot: this.#projectRoot(),
+      pathRoots: this.#getEffectivePathRootsForPlugin(name),
+      start,
+    });
   }
 
   /**
@@ -490,68 +329,5 @@ export class PluginSettingsService {
       }
     }
     return {};
-  }
-
-  /**
-   * Apply `x-previous-names`: for each (prev → current) mapping, if `prev`
-   * exists in `raw` AND `current` does NOT, copy the value over to `current`
-   * and drop `prev`. Returns a shallow-cloned object.
-   */
-  #applyPreviousNamesMigration(
-    raw: Record<string, unknown>,
-    audit: SettingsAudit | undefined,
-  ): Record<string, unknown> {
-    const out: Record<string, unknown> = { ...raw };
-    if (!audit) return out;
-    for (const [prev, current] of audit.previousNames.entries()) {
-      if (prev in out && !(current in out)) {
-        out[current] = out[prev];
-      }
-      // Drop the legacy key from the in-memory view regardless: GET response
-      // SHALL NOT echo the legacy key.
-      delete out[prev];
-    }
-    return out;
-  }
-
-  /**
-   * Merge orphan keys into the on-disk `x-legacy` namespace if the schema
-   * opted into legacy preservation. Orphans = keys present in the prior
-   * on-disk config that are NOT in `stripped` and NOT in the schema's
-   * declared properties NOR an `x-previous-names` source.
-   */
-  #mergeXLegacy(
-    name: string,
-    stripped: Record<string, unknown>,
-    priorDisk: Record<string, unknown>,
-    priorXLegacy: unknown,
-  ): Record<string, unknown> {
-    const entry = this.#plugins.get(name)!;
-    const audit = this.#settingsAudit.get(name);
-    const schema = entry.manifest.settingsSchema as
-      | Record<string, unknown>
-      | undefined;
-    if (!schema || !audit?.topLevelLegacy) return stripped;
-
-    const props = schema.properties as Record<string, unknown> | undefined;
-    const known = new Set(props ? Object.keys(props) : []);
-    const previousNamesSources = new Set(audit.previousNames.keys());
-
-    const carriedXLegacy: Record<string, unknown> =
-      priorXLegacy && typeof priorXLegacy === "object" &&
-        !Array.isArray(priorXLegacy)
-        ? { ...(priorXLegacy as Record<string, unknown>) }
-        : {};
-
-    for (const [k, v] of Object.entries(priorDisk)) {
-      if (k === "x-legacy") continue;
-      if (known.has(k)) continue;
-      if (previousNamesSources.has(k)) continue;
-      if (k in stripped) continue;
-      carriedXLegacy[k] = v;
-    }
-
-    if (Object.keys(carriedXLegacy).length === 0) return stripped;
-    return { ...stripped, "x-legacy": carriedXLegacy };
   }
 }
