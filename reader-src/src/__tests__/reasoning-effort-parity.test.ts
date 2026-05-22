@@ -1,6 +1,6 @@
 // Parity test: locks the frontend `REASONING_EFFORTS` tuple in
 // `reader-src/src/types/index.ts` against the backend tuple in
-// `writer/types.ts`. The two toolchains (Vite/TS vs Deno) cannot share a
+// `writer/types/llm.ts`. The two toolchains (Vite/TS vs Deno) cannot share a
 // literal import (the backend file uses Deno-flavored imports that won't
 // resolve under Vite). Instead, we read the backend source from disk and
 // regex-extract the tuple at test time.
@@ -14,14 +14,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 function extractBackendTuple(): readonly string[] {
-  const path = resolve(__dirname, "../../../writer/types.ts");
+  const path = resolve(__dirname, "../../../writer/types/llm.ts");
   const source = readFileSync(path, "utf8");
   const match = source.match(
     /export\s+const\s+REASONING_EFFORTS\s*=\s*\[([\s\S]*?)\]\s*as\s+const/,
   );
   if (!match) {
     throw new Error(
-      "Could not locate `export const REASONING_EFFORTS = [ ... ] as const` in writer/types.ts. " +
+      "Could not locate `export const REASONING_EFFORTS = [ ... ] as const` in writer/types/llm.ts. " +
         "The backend tuple must be declared so the parity test can verify it matches the frontend.",
     );
   }
@@ -34,7 +34,7 @@ function extractBackendTuple(): readonly string[] {
 }
 
 describe("REASONING_EFFORTS parity", () => {
-  it("frontend tuple matches backend tuple in writer/types.ts", () => {
+  it("frontend tuple matches backend tuple in writer/types/llm.ts", () => {
     const backend = extractBackendTuple();
     expect(JSON.stringify(backend)).toBe(JSON.stringify([...REASONING_EFFORTS]));
   });
