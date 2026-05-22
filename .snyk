@@ -1,0 +1,18 @@
+# Snyk (https://snyk.io) policy file
+version: v1.25.1
+ignore:
+  'snyk:lesson:javascript/PT':
+    - 'writer/routes/plugin-actions.ts':
+        reason: >
+          False positive. The flagged taint flows from the request body's
+          `series`/`story` fields to `Deno.readDir(storyDir)` inside
+          `writer/lib/story-chapter-io.ts:listChapterFiles`. The `storyDir`
+          is computed by `validateAndResolveStoryDir()` (writer/routes/
+          plugin-actions-validation.ts:138) which (a) requires both inputs to
+          satisfy `isValidParam` (strict kebab/segment regex) and (b) calls
+          `deps.safePath(series, story)` — the engine's containment-checked
+          path resolver that returns null when the resolved path escapes
+          the configured story root. Snyk's taint analysis does not recognise
+          `safePath()` as a sanitiser. The directory passed to `Deno.readDir`
+          is therefore provably inside the story root.
+        expires: 2099-01-01T00:00:00.000Z
