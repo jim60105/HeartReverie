@@ -13,23 +13,26 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { errorMessage } from "./errors.ts";
-import { readTemplate } from "../routes/prompt.ts";
-import type { LlmConfig, TokenUsageRecord } from "../types.ts";
+/**
+ * @module chat-shared
+ *
+ * High-level inbound entrypoints for chat and continue-last-chapter
+ * requests. Each function:
+ *   1. Runs the shared preflight (API key, story dir, llm config,
+ *      template override, generation lock) via `chat-preflight.ts`.
+ *   2. Mints a per-request `correlationId` at this inbound boundary so
+ *      `prompt-assembly` (via `buildPromptFromStory…`) and
+ *      `pre-llm-fetch` (inside `streamLlmAndPersist`) observe the same
+ *      UUID.
+ *   3. Builds the prompt + writeMode and delegates to
+ *      `streamLlmAndPersist` (re-exported here for other importers).
+ */
+
 import {
   ContinuePromptError,
   resolveTargetChapterNumber,
 } from "./story.ts";
-import {
-  resolveStoryLlmConfig,
-  StoryConfigValidationError,
-} from "./story-config.ts";
-import { createLlmLogger, createLogger } from "./logger.ts";
-import { buildRecord } from "./usage.ts";
-import {
-  clearGenerationActive,
-  tryMarkGenerationActive,
-} from "./generation-registry.ts";
+import { createLogger } from "./logger.ts";
 import {
   ChatAbortError,
   ChatError,
@@ -42,21 +45,15 @@ import {
   type StreamLlmResult,
   type WriteMode,
 } from "./chat-types.ts";
+import { normaliseAppendContent } from "./chat-chapter-io.ts";
+import { streamLlmAndPersist } from "./chat-stream-and-persist.ts";
 import {
-  buildLlmRequestBody,
-  dispatchPreLlmFetchHook,
-  logLlmRequest,
-  performLlmFetch,
-} from "./chat-llm-fetch.ts";
-import {
-  type ChapterTarget,
-  finalizeStreamMode,
-  normaliseAppendContent,
-  openChapterForStream,
-  resolveChapterTarget,
-  type StoryContext,
-} from "./chat-chapter-io.ts";
-import { consumeLlmStream } from "./chat-stream.ts";
+  ensureSafeStoryDir,
+  requireApiKey,
+  resolveLlmConfigOrThrow,
+  resolveTemplateOverride,
+  runUnderGenerationLock,
+} from "./chat-preflight.ts";
 
 export {
   ChatAbortError,
@@ -71,213 +68,12 @@ export {
   type WriteMode,
 };
 
-// Re-exported so existing callers/tests that imported it from this module
-// continue to work after the chapter-IO extraction. The implementation lives
-// in `chat-chapter-io.ts` alongside the other chapter-persistence helpers.
-export { normaliseAppendContent };
+// Re-exported so existing callers/tests that imported these from this
+// module continue to work after the chapter-IO and stream-and-persist
+// extractions. Their implementations live in sibling modules.
+export { normaliseAppendContent, streamLlmAndPersist };
 
 const log = createLogger("llm");
-const fileLog = createLogger("file");
-
-/**
- * Stream the upstream LLM response and persist it according to `writeMode`.
- *
- * The caller is responsible for: validating the upstream API key, resolving
- * `storyDir`, resolving `llmConfig`, building the `messages` array, and
- * acquiring/releasing the per-story generation lock. This helper focuses on
- * the OpenRouter request, SSE streaming, mode-specific persistence, and the
- * lifecycle hook dispatches associated with each mode.
- */
-export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLlmResult> {
-  const {
-    messages,
-    llmConfig,
-    series,
-    name,
-    storyDir,
-    rootDir,
-    signal,
-    writeMode,
-    onDelta,
-    hookDispatcher,
-    config,
-    correlationId: correlationIdInput,
-  } = args;
-
-  // Always have a non-empty correlationId for downstream hook contexts.
-  // Inbound chat/continue paths supply this; legacy/test paths fall back
-  // to a fresh UUID.
-  const correlationId = correlationIdInput ?? crypto.randomUUID();
-  const reqLog = log.withContext({ correlationId });
-  const reqFileLog = fileLog.withContext({ correlationId });
-  const llmLog = createLlmLogger().withContext({ correlationId });
-
-  // ── Resolve target chapter info (mode-dependent) ──
-  const { targetNum, chapterPath } = await resolveChapterTarget(writeMode, storyDir);
-  if (writeMode.kind === "write-new-chapter") {
-    await Deno.mkdir(storyDir, { recursive: true, mode: 0o775 });
-  }
-  const target: ChapterTarget = { chapterPath, targetNum };
-  const storyCtx: StoryContext = { storyDir, rootDir, series, name, correlationId };
-
-  // ── Build upstream request body ──
-  logLlmRequest({
-    reqLog,
-    llmLog,
-    writeMode,
-    llmConfig,
-    messages,
-    series,
-    name,
-    reasoningOmit: config.LLM_REASONING_OMIT,
-  });
-
-  const requestBody = buildLlmRequestBody(llmConfig, messages, config.LLM_REASONING_OMIT);
-
-  // Dispatch the `pre-llm-fetch` observation hook AFTER `requestBody` is
-  // fully constructed and BEFORE `fetch(config.LLM_API_URL, ...)` so handlers
-  // see the exact serialisation we are about to send.
-  await dispatchPreLlmFetchHook(
-    hookDispatcher,
-    {
-      correlationId,
-      model: llmConfig.model,
-      storyDir,
-      series,
-      name,
-      writeMode: { kind: writeMode.kind },
-    },
-    messages,
-    requestBody,
-  );
-
-  const llmStartTime = performance.now();
-  const apiResponse = await performLlmFetch({
-    apiUrl: config.LLM_API_URL,
-    requestBody,
-    signal,
-    llmStartTime,
-    model: llmConfig.model,
-    reqLog,
-    llmLog,
-  });
-
-  // ── Mode-specific persistence setup ──
-  const encoder = new TextEncoder();
-
-  const { file, preContent } = await openChapterForStream({
-    writeMode,
-    target,
-    storyCtx,
-    hookDispatcher,
-    reqFileLog,
-    encoder,
-  });
-
-  // ── Consume the SSE stream (takes ownership of `file`) ──
-  const { aiContent, sawModelContent, aborted, reasoningLength, tokenUsage } =
-    await consumeLlmStream({
-      apiResponse,
-      file,
-      encoder,
-      writeMode,
-      target,
-      storyCtx,
-      signal,
-      onDelta,
-      hookDispatcher,
-      reqLog,
-      llmLog,
-      llmStartTime,
-    });
-
-  // ── Abort handling ──
-  if (aborted) {
-    const latencyMs = Math.round(performance.now() - llmStartTime);
-    reqLog.warn("Generation aborted by client", { latencyMs, contentLength: aiContent.length });
-    llmLog.info("LLM response", {
-      type: "response",
-      response: preContent + aiContent,
-      latencyMs,
-      chapter: targetNum,
-      tokens: tokenUsage,
-      aborted: true,
-      partialLength: aiContent.length,
-      reasoningLength,
-    });
-    throw new ChatAbortError("Generation aborted by client");
-  }
-
-  if (!sawModelContent) {
-    const noContentLatency = Math.round(performance.now() - llmStartTime);
-    reqLog.error("No content in AI response", { model: llmConfig.model });
-    llmLog.info("LLM error", {
-      type: "error",
-      errorCode: "no-content",
-      latencyMs: noContentLatency,
-      model: llmConfig.model,
-      reasoningLength,
-    });
-    throw new ChatError("no-content", "No content in AI response", 502);
-  }
-
-  const fullContent = preContent + aiContent;
-  const latencyMs = Math.round(performance.now() - llmStartTime);
-  reqLog.info("LLM response completed", {
-    model: llmConfig.model,
-    latencyMs,
-    contentLength: fullContent.length,
-    chapter: targetNum,
-    mode: writeMode.kind,
-  });
-  reqLog.debug("LLM response content", { content: fullContent });
-  llmLog.info("LLM response", {
-    type: "response",
-    response: fullContent,
-    latencyMs,
-    chapter: targetNum,
-    tokens: tokenUsage,
-    reasoningLength,
-  });
-
-  // ── Build usage record (always, regardless of mode) ──
-  let usage: TokenUsageRecord | null = null;
-  if (tokenUsage.prompt !== null && tokenUsage.completion !== null && tokenUsage.total !== null) {
-    usage = buildRecord({
-      chapter: targetNum ?? 0,
-      promptTokens: tokenUsage.prompt,
-      completionTokens: tokenUsage.completion,
-      totalTokens: tokenUsage.total,
-      model: llmConfig.model,
-      upstreamCostUsd: tokenUsage.cost,
-    });
-  } else {
-    reqLog.debug("Usage unavailable from upstream", { chapter: targetNum, model: llmConfig.model });
-  }
-
-  // ── Mode-specific finalization ──
-  const chapterContentAfter = await finalizeStreamMode({
-    writeMode,
-    target,
-    aiContent,
-    fullContent,
-    usage,
-    endpoint: config.LLM_API_URL,
-    storyCtx,
-    hookDispatcher,
-    reqFileLog,
-    encoder,
-  });
-
-  return {
-    content: aiContent,
-    usage,
-    chapterPath,
-    chapterNumber: targetNum,
-    chapterContentAfter,
-    aborted: false,
-  };
-}
 
 /**
  * Execute a chat request: resolve template, build prompt, call LLM with
@@ -308,45 +104,10 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   // (inside streamLlmAndPersist) observe the same UUID.
   const correlationId = crypto.randomUUID();
 
-  if (!Deno.env.get("LLM_API_KEY")) {
-    reqLog.error("LLM_API_KEY not configured");
-    throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
-  }
-
-  const storyDir = safePath(series, name);
-  if (!storyDir) {
-    throw new ChatError("bad-path", "Invalid path", 400);
-  }
-
-  let llmConfig: LlmConfig;
-  try {
-    llmConfig = await resolveStoryLlmConfig(storyDir, config.llmDefaults);
-  } catch (err) {
-    if (err instanceof StoryConfigValidationError) {
-      reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
-      throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
-    }
-    const msg = errorMessage(err);
-    reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
-    throw new ChatError("story-config", "Failed to read story configuration", 500);
-  }
-
-  let templateOverride: string | undefined;
-  if (typeof template === "string") {
-    templateOverride = template;
-  } else {
-    try {
-      const tpl = await readTemplate(config);
-      if (tpl.source === "custom") {
-        templateOverride = tpl.content;
-      }
-    } catch (err: unknown) {
-      if (!(err instanceof Deno.errors.NotFound)) {
-        log.error(`[chat] Failed to read system prompt: ${errorMessage(err)}`);
-      }
-      // NotFound is expected — proceed with default
-    }
-  }
+  requireApiKey(reqLog);
+  const storyDir = ensureSafeStoryDir(safePath, series, name);
+  const llmConfig = await resolveLlmConfigOrThrow(storyDir, config.llmDefaults, reqLog, series, name);
+  const templateOverride = await resolveTemplateOverride(template, config, log);
 
   const {
     messages: templateMessages,
@@ -365,10 +126,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   const targetChapterNumber = resolveTargetChapterNumber(chapterFiles, chapters);
 
-  if (!tryMarkGenerationActive(series, name)) {
-    throw new ChatError("concurrent", "Another generation is already in progress for this story", 409);
-  }
-  try {
+  return await runUnderGenerationLock(series, name, async () => {
     const result = await streamLlmAndPersist({
       messages: templateMessages,
       llmConfig,
@@ -388,9 +146,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
       content: result.chapterContentAfter ?? result.content,
       usage: result.usage,
     };
-  } finally {
-    clearGenerationActive(series, name);
-  }
+  });
 }
 
 /**
@@ -420,45 +176,10 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
   // prompt-assembly and pre-llm-fetch.
   const correlationId = crypto.randomUUID();
 
-  if (!Deno.env.get("LLM_API_KEY")) {
-    reqLog.error("LLM_API_KEY not configured");
-    throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
-  }
-
-  const storyDir = safePath(series, name);
-  if (!storyDir) {
-    throw new ChatError("bad-path", "Invalid path", 400);
-  }
-
-  let llmConfig: LlmConfig;
-  try {
-    llmConfig = await resolveStoryLlmConfig(storyDir, config.llmDefaults);
-  } catch (err) {
-    if (err instanceof StoryConfigValidationError) {
-      reqLog.error("Invalid story _config.json", { series, story: name, error: err.message });
-      throw new ChatError("story-config", `Invalid _config.json: ${err.message}`, 422);
-    }
-    const msg = errorMessage(err);
-    reqLog.error("Failed to read story _config.json", { series, story: name, error: msg });
-    throw new ChatError("story-config", "Failed to read story configuration", 500);
-  }
-
-  let templateOverride: string | undefined;
-  if (typeof template === "string") {
-    templateOverride = template;
-  } else {
-    try {
-      const tpl = await readTemplate(config);
-      if (tpl.source === "custom") {
-        templateOverride = tpl.content;
-      }
-    } catch (err: unknown) {
-      if (!(err instanceof Deno.errors.NotFound)) {
-        log.error(`[chat] Failed to read system prompt: ${errorMessage(err)}`);
-      }
-      // NotFound is expected — proceed with default
-    }
-  }
+  requireApiKey(reqLog);
+  const storyDir = ensureSafeStoryDir(safePath, series, name);
+  const llmConfig = await resolveLlmConfigOrThrow(storyDir, config.llmDefaults, reqLog, series, name);
+  const templateOverride = await resolveTemplateOverride(template, config, log);
 
   let promptResult;
   try {
@@ -479,10 +200,7 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
     throw new ChatError("no-prompt", "Failed to generate prompt", 500);
   }
 
-  if (!tryMarkGenerationActive(series, name)) {
-    throw new ChatError("concurrent", "Another generation is already in progress for this story", 409);
-  }
-  try {
+  return await runUnderGenerationLock(series, name, async () => {
     const result = await streamLlmAndPersist({
       messages,
       llmConfig,
@@ -502,7 +220,5 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
       content: result.chapterContentAfter ?? "",
       usage: result.usage,
     };
-  } finally {
-    clearGenerationActive(series, name);
-  }
+  });
 }
