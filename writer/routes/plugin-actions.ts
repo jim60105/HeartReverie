@@ -91,6 +91,10 @@ export async function runPluginActionWithDeps(
   }
 
   try {
+    // deepcode ignore PT: storyDir is produced by validateAndResolveStoryDir
+    // which calls deps.safePath(series, story) — the engine's containment-
+    // checked path resolver. Snyk does not recognise safePath() as a
+    // sanitiser. False positive.
     return await runUnderLock(args, deps, ctx);
   } catch (err) {
     if (err instanceof ChatAbortError) {
