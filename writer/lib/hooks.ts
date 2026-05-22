@@ -21,6 +21,7 @@ import { KNOWN_BACKEND_STAGES, PARALLEL_ALLOWED, VALID_STAGES } from "./hooks-st
 import { captureRefs as captureRefsFn, cloneAllowlistSnapshot as cloneAllowlistSnapshotFn } from "./hooks-snapshot.ts";
 import { computeTopoLayers as computeTopoLayersFn, type HandlerEntry } from "./hooks-topo.ts";
 import { type DispatchMetric, HookMetricsCollector } from "./hooks-metrics.ts";
+import { HandlerEventBus } from "./hooks-event-bus.ts";
 
 // Re-exported so existing importers (plugin-loader, plugin-validators,
 // plugin-depends-on-dag, tests, _debug-hooks route) continue to work after
@@ -48,9 +49,6 @@ export function _resetThrottleWarnDedupForTesting(): void {
 
 export const HOOK_DEBUG = Deno.env.get("HOOK_DEBUG") === "1";
 
-/** Rate-limit window (ms) for warn logs about throwing subscriber callbacks. */
-const SUBSCRIBER_WARN_RATE_LIMIT_MS = 60_000;
-
 /** Per-stage handler info returned by `HookDispatcher.introspect()`. */
 export interface HandlerIntrospection {
   readonly plugin: string | undefined;
@@ -62,17 +60,7 @@ export interface HandlerIntrospection {
 export class HookDispatcher {
   #handlers: Map<HookStage, HandlerEntry[]> = new Map();
   readonly #metrics = new HookMetricsCollector(log);
-  // Per-handler observability event subscribers (opt-in, off by default).
-  #handlerEventSubscribers: Set<HandlerEventSubscriber> = new Set();
-  // Consecutive-throw counter per subscriber — reset on any clean invocation.
-  #subscriberThrowCount: WeakMap<HandlerEventSubscriber, number> = new WeakMap();
-  // Rate-limit map for subscriber-throw warn logs, keyed by hook stage.
-  #subscriberWarnLastMs: Map<HookStage, number> = new Map();
-  // Metadata (owning plugin, event kind) recorded alongside each subscription
-  // for introspection (`getHandlerEventSubscribers`). Untagged subscriptions
-  // are still tracked here with an empty options object so they appear in
-  // introspection under the synthetic plugin name "<anonymous>".
-  #handlerEventSubscriberMeta: Map<HandlerEventSubscriber, HandlerEventSubscriptionOptions> = new Map();
+  readonly #eventBus = new HandlerEventBus(log);
 
   /**
    * Register a handler for a given hook stage.
@@ -343,15 +331,12 @@ export class HookDispatcher {
    * check per handler.
    */
   subscribeHandlerEvents(cb: HandlerEventSubscriber, opts?: HandlerEventSubscriptionOptions): void {
-    this.#handlerEventSubscribers.add(cb);
-    this.#handlerEventSubscriberMeta.set(cb, opts ?? {});
+    this.#eventBus.subscribe(cb, opts);
   }
 
   /** Unsubscribe from per-handler events. Calling on an unknown cb is a no-op. */
   unsubscribeHandlerEvents(cb: HandlerEventSubscriber): void {
-    this.#handlerEventSubscribers.delete(cb);
-    this.#subscriberThrowCount.delete(cb);
-    this.#handlerEventSubscriberMeta.delete(cb);
+    this.#eventBus.unsubscribe(cb);
   }
 
   /**
@@ -367,81 +352,21 @@ export class HookDispatcher {
    * observing handler events without exposing subscriber payloads.
    */
   getHandlerEventSubscribers(): Record<string, Array<"handler-start" | "handler-end">> {
-    const out: Record<string, Set<"handler-start" | "handler-end">> = {};
-    for (const [, meta] of this.#handlerEventSubscriberMeta) {
-      const pluginName = meta.plugin ?? "<anonymous>";
-      let bucket = out[pluginName];
-      if (!bucket) {
-        bucket = new Set();
-        out[pluginName] = bucket;
-      }
-      if (meta.kind === "handler-start" || meta.kind === "handler-end") {
-        bucket.add(meta.kind);
-      } else {
-        bucket.add("handler-start");
-        bucket.add("handler-end");
-      }
-    }
-    const result: Record<string, Array<"handler-start" | "handler-end">> = {};
-    for (const [name, set] of Object.entries(out)) {
-      result[name] = [...set].sort();
-    }
-    return result;
+    return this.#eventBus.getSubscribersByPlugin();
   }
 
   /** True iff at least one subscriber is registered (used to gate snapshot work). */
   #hasHandlerEventSubscribers(): boolean {
-    return this.#handlerEventSubscribers.size > 0;
+    return this.#eventBus.hasSubscribers();
   }
 
   /**
-   * Fan a single event out to every subscriber, isolating throws.
-   *
-   * Returns nothing — failure modes (throwing subscriber, auto-unsubscribe,
-   * rate-limited warn) are handled internally so dispatch correctness is
-   * unaffected. Pre-existing dispatcher logs are NOT extended with event
-   * payloads (see hook-observability spec: "new surfaces SHALL NOT log
-   * payloads").
+   * Fan a single event out to every subscriber, isolating throws. Delegates
+   * to `HandlerEventBus` which owns the subscriber set, consecutive-throw
+   * counter, and per-stage warn rate-limit state.
    */
   #emitHandlerEvent(event: HandlerEvent): void {
-    if (this.#handlerEventSubscribers.size === 0) return;
-    // Snapshot the set so a subscriber that unsubscribes itself mid-fan-out
-    // does not perturb iteration.
-    const subscribers = [...this.#handlerEventSubscribers];
-    for (const cb of subscribers) {
-      try {
-        cb(event);
-        // Clean invocation — reset consecutive throw counter.
-        if (this.#subscriberThrowCount.has(cb)) {
-          this.#subscriberThrowCount.delete(cb);
-        }
-      } catch (err: unknown) {
-        const errMsg = errorMessage(err);
-        const prior = this.#subscriberThrowCount.get(cb) ?? 0;
-        const next = prior + 1;
-        this.#subscriberThrowCount.set(cb, next);
-
-        // Rate-limit warn logs: at most once per stage per 60 s.
-        const now = performance.now();
-        const lastWarn = this.#subscriberWarnLastMs.get(event.stage) ?? -Infinity;
-        if (now - lastWarn >= SUBSCRIBER_WARN_RATE_LIMIT_MS) {
-          this.#subscriberWarnLastMs.set(event.stage, now);
-          // NOTE: per spec, do NOT include event payload fields — only the
-          // subscriber error message and the originating stage are logged.
-          log.warn("Handler-event subscriber threw", {
-            stage: event.stage,
-            consecutiveThrows: next,
-            error: errMsg,
-          });
-        }
-
-        // Auto-unsubscribe after two consecutive throws.
-        if (next >= 2) {
-          this.#handlerEventSubscribers.delete(cb);
-          this.#subscriberThrowCount.delete(cb);
-        }
-      }
-    }
+    this.#eventBus.emit(event);
   }
 
   /**
