@@ -27,6 +27,7 @@ import type {
   VentoError,
   TokenUsageRecord,
   PostResponsePayload,
+  PreLlmFetchPayload,
 } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import {
@@ -37,6 +38,7 @@ import {
 } from "./story.ts";
 import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
 import { createLogger, createLlmLogger } from "./logger.ts";
+import type { Logger } from "./logger.ts";
 import { appendUsage, buildRecord } from "./usage.ts";
 import {
   tryMarkGenerationActive,
@@ -270,6 +272,164 @@ async function resolveLastChapter(
 }
 
 /**
+ * Build the upstream LLM request body from the resolved `llmConfig` and
+ * `messages`. Pure transformation — no I/O. `omitReasoning` mirrors the
+ * `config.LLM_REASONING_OMIT` flag (some upstreams reject the `reasoning`
+ * field entirely; setting this true omits it from the payload).
+ */
+function buildLlmRequestBody(
+  llmConfig: LlmConfig,
+  messages: ChatMessage[],
+  omitReasoning: boolean,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: llmConfig.model,
+    messages,
+    stream: true,
+    stream_options: { include_usage: true },
+    usage: { include: true },
+    temperature: llmConfig.temperature,
+    frequency_penalty: llmConfig.frequencyPenalty,
+    presence_penalty: llmConfig.presencePenalty,
+    top_k: llmConfig.topK,
+    top_p: llmConfig.topP,
+    repetition_penalty: llmConfig.repetitionPenalty,
+    min_p: llmConfig.minP,
+    top_a: llmConfig.topA,
+  };
+  if (llmConfig.maxCompletionTokens !== null) {
+    body.max_completion_tokens = llmConfig.maxCompletionTokens;
+  }
+  if (!omitReasoning) {
+    body.reasoning = llmConfig.reasoningEnabled
+      ? { enabled: true, effort: llmConfig.reasoningEffort }
+      : { enabled: false };
+  }
+  return body;
+}
+
+/**
+ * Dispatch the `pre-llm-fetch` observation hook. Derives `requestMetadata`
+ * (the request body minus `messages`) internally so the hook payload
+ * contract stays owned by this helper, not the caller.
+ *
+ * `messages` and `requestMetadata` are deep-cloned and deep-frozen, then
+ * attached as non-writable enumerable properties so handlers cannot
+ * reassign the outer keys (deep-freeze only protects the values; without
+ * `writable: false`, `ctx.messages = []` would succeed and peer observers
+ * in the parallel bucket would see the replaced reference).
+ *
+ * Per spec the upstream fetch proceeds regardless of dispatch failures;
+ * we log a warning and return rather than rethrow.
+ */
+async function dispatchPreLlmFetchHook(
+  hookDispatcher: HookDispatcher,
+  baseFields: Omit<PreLlmFetchPayload, "messages" | "requestMetadata" | "logger">,
+  messages: ChatMessage[],
+  requestBody: Record<string, unknown>,
+): Promise<void> {
+  const { messages: _omitMessages, ...requestMetadata } = requestBody;
+  const payload: Record<string, unknown> = { ...baseFields };
+  Object.defineProperty(payload, "messages", {
+    value: deepFreeze(structuredClone(messages)),
+    writable: false,
+    enumerable: true,
+    configurable: false,
+  });
+  Object.defineProperty(payload, "requestMetadata", {
+    value: deepFreeze(structuredClone(requestMetadata)),
+    writable: false,
+    enumerable: true,
+    configurable: false,
+  });
+  try {
+    await hookDispatcher.dispatch("pre-llm-fetch", payload);
+  } catch (err: unknown) {
+    log.warn("pre-llm-fetch dispatch failed", {
+      correlationId: baseFields.correlationId,
+      error: errorMessage(err),
+    });
+  }
+}
+
+/**
+ * POST the request body to the upstream LLM and return a streamable
+ * `Response`. Maps the `fetch` exception, abort signal, non-2xx status,
+ * and missing-body cases to `ChatError` / `ChatAbortError` and emits the
+ * structured `LLM error` log entry that the analytics consumer relies on.
+ *
+ * Failures during downstream stream consumption (e.g., abort during the
+ * non-OK body `.text()` read) bubble up unwrapped — same as the prior
+ * inline behaviour.
+ *
+ * Caller-supplied `llmStartTime` is used to compute `latencyMs` for the
+ * error logs (callers still need it for the downstream success path, so
+ * the timestamp stays outside).
+ */
+async function performLlmFetch(args: {
+  apiUrl: string;
+  requestBody: Record<string, unknown>;
+  signal: AbortSignal | undefined;
+  llmStartTime: number;
+  model: string;
+  reqLog: Logger;
+  llmLog: Logger;
+}): Promise<Response & { body: ReadableStream<Uint8Array> }> {
+  const { apiUrl, requestBody, signal, llmStartTime, model, reqLog, llmLog } = args;
+  let apiResponse: Response;
+  try {
+    apiResponse = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        ...LLM_APP_ATTRIBUTION_HEADERS,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal,
+    });
+  } catch (err: unknown) {
+    const latencyMs = Math.round(performance.now() - llmStartTime);
+    if (signal?.aborted === true) {
+      llmLog.info("LLM error", { type: "error", errorCode: "aborted", latencyMs });
+      throw new ChatAbortError("Generation aborted by client");
+    }
+    const errMsg = errorMessage(err);
+    reqLog.error("LLM fetch failed", { latencyMs, error: errMsg });
+    llmLog.info("LLM error", { type: "error", errorCode: "network", latencyMs, error: errMsg });
+    throw new ChatError("llm-api", "AI service request failed", 502);
+  }
+
+  if (!apiResponse.ok) {
+    const errorBody = await apiResponse.text();
+    const latencyMs = Math.round(performance.now() - llmStartTime);
+    reqLog.error("LLM API error", { status: apiResponse.status, latencyMs, model, errorBody });
+    llmLog.info("LLM error", {
+      type: "error",
+      errorCode: "llm-api",
+      httpStatus: apiResponse.status,
+      latencyMs,
+      errorBody,
+    });
+    const truncated = errorBody.length > 2000
+      ? `${errorBody.slice(0, 2000)}…[truncated]`
+      : errorBody;
+    const detailMessage = truncated.length > 0
+      ? `AI service request failed: ${truncated}`
+      : "AI service request failed";
+    throw new ChatError("llm-api", detailMessage, apiResponse.status);
+  }
+
+  if (!apiResponse.body) {
+    const noBodyLatency = Math.round(performance.now() - llmStartTime);
+    llmLog.info("LLM error", { type: "error", errorCode: "no-body", latencyMs: noBodyLatency });
+    throw new ChatError("no-body", "No response body from AI service", 502);
+  }
+
+  return apiResponse as Response & { body: ReadableStream<Uint8Array> };
+}
+
+/**
  * Stream the upstream LLM response and persist it according to `writeMode`.
  *
  * The caller is responsible for: validating the upstream API key, resolving
@@ -347,125 +507,35 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     roleCounts,
   });
 
-  const requestBody: Record<string, unknown> = {
-    model: llmConfig.model,
-    messages,
-    stream: true,
-    stream_options: { include_usage: true },
-    usage: { include: true },
-    temperature: llmConfig.temperature,
-    frequency_penalty: llmConfig.frequencyPenalty,
-    presence_penalty: llmConfig.presencePenalty,
-    top_k: llmConfig.topK,
-    top_p: llmConfig.topP,
-    repetition_penalty: llmConfig.repetitionPenalty,
-    min_p: llmConfig.minP,
-    top_a: llmConfig.topA,
-  };
-  if (llmConfig.maxCompletionTokens !== null) {
-    requestBody.max_completion_tokens = llmConfig.maxCompletionTokens;
-  }
-  if (!config.LLM_REASONING_OMIT) {
-    requestBody.reasoning = llmConfig.reasoningEnabled
-      ? { enabled: true, effort: llmConfig.reasoningEffort }
-      : { enabled: false };
-  }
+  const requestBody = buildLlmRequestBody(llmConfig, messages, config.LLM_REASONING_OMIT);
 
-  // Dispatch the `pre-llm-fetch` observation hook. This stage is observation-
-  // only: handlers receive deep clones of `messages` / `requestMetadata`
-  // that are then deeply frozen so even nested mutation throws (strict mode)
-  // and the bytes posted on the upstream `fetch()` below remain byte-for-byte
-  // unchanged. We dispatch AFTER `requestBody` is fully constructed and
-  // BEFORE `fetch(config.LLM_API_URL, ...)` so handlers see the exact
-  // serialisation we are about to send.
-  const { messages: _omitMessages, ...requestMetadata } = requestBody;
-  const preLlmFetchPayload: Record<string, unknown> = {
-    correlationId,
-    model: llmConfig.model,
-    storyDir,
-    series,
-    name,
-    writeMode: { kind: writeMode.kind },
-  };
-  // Define `messages` and `requestMetadata` as non-writable on the outer
-  // payload so handlers cannot reassign the keys (deep-freeze only protects
-  // the values; without this, `ctx.messages = []` would succeed and peer
-  // observers in the parallel bucket would see the replaced reference).
-  Object.defineProperty(preLlmFetchPayload, "messages", {
-    value: deepFreeze(structuredClone(messages)),
-    writable: false,
-    enumerable: true,
-    configurable: false,
-  });
-  Object.defineProperty(preLlmFetchPayload, "requestMetadata", {
-    value: deepFreeze(structuredClone(requestMetadata)),
-    writable: false,
-    enumerable: true,
-    configurable: false,
-  });
-  // Per spec: upstream fetch happens regardless of dispatch failures.
-  // The dispatcher already catches per-handler errors, but a dispatcher-level
-  // failure (or a snapshot/clone failure in the observability fan-out) MUST
-  // NOT block the request. Log and continue.
-  try {
-    await hookDispatcher.dispatch("pre-llm-fetch", preLlmFetchPayload);
-  } catch (err: unknown) {
-    log.warn("pre-llm-fetch dispatch failed", {
+  // Dispatch the `pre-llm-fetch` observation hook AFTER `requestBody` is
+  // fully constructed and BEFORE `fetch(config.LLM_API_URL, ...)` so handlers
+  // see the exact serialisation we are about to send.
+  await dispatchPreLlmFetchHook(
+    hookDispatcher,
+    {
       correlationId,
-      error: errorMessage(err),
-    });
-  }
+      model: llmConfig.model,
+      storyDir,
+      series,
+      name,
+      writeMode: { kind: writeMode.kind },
+    },
+    messages,
+    requestBody,
+  );
 
   const llmStartTime = performance.now();
-  let apiResponse: Response;
-  try {
-    apiResponse = await fetch(config.LLM_API_URL, {
-      method: "POST",
-      headers: {
-        ...LLM_APP_ATTRIBUTION_HEADERS,
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal,
-    });
-  } catch (err: unknown) {
-    const latencyMs = Math.round(performance.now() - llmStartTime);
-    if (signal?.aborted === true) {
-      llmLog.info("LLM error", { type: "error", errorCode: "aborted", latencyMs });
-      throw new ChatAbortError("Generation aborted by client");
-    }
-    const errMsg = errorMessage(err);
-    reqLog.error("LLM fetch failed", { latencyMs, error: errMsg });
-    llmLog.info("LLM error", { type: "error", errorCode: "network", latencyMs, error: errMsg });
-    throw new ChatError("llm-api", "AI service request failed", 502);
-  }
-
-  if (!apiResponse.ok) {
-    const errorBody = await apiResponse.text();
-    const latencyMs = Math.round(performance.now() - llmStartTime);
-    reqLog.error("LLM API error", { status: apiResponse.status, latencyMs, model: llmConfig.model, errorBody });
-    llmLog.info("LLM error", {
-      type: "error",
-      errorCode: "llm-api",
-      httpStatus: apiResponse.status,
-      latencyMs,
-      errorBody,
-    });
-    const truncated = errorBody.length > 2000
-      ? `${errorBody.slice(0, 2000)}…[truncated]`
-      : errorBody;
-    const detailMessage = truncated.length > 0
-      ? `AI service request failed: ${truncated}`
-      : "AI service request failed";
-    throw new ChatError("llm-api", detailMessage, apiResponse.status);
-  }
-
-  if (!apiResponse.body) {
-    const noBodyLatency = Math.round(performance.now() - llmStartTime);
-    llmLog.info("LLM error", { type: "error", errorCode: "no-body", latencyMs: noBodyLatency });
-    throw new ChatError("no-body", "No response body from AI service", 502);
-  }
+  const apiResponse = await performLlmFetch({
+    apiUrl: config.LLM_API_URL,
+    requestBody,
+    signal,
+    llmStartTime,
+    model: llmConfig.model,
+    reqLog,
+    llmLog,
+  });
 
   // ── Mode-specific persistence setup ──
   const encoder = new TextEncoder();
