@@ -13,11 +13,23 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { errorMessage } from "./errors.ts";
-import { join, relative } from "@std/path";
-import { createLogger } from "./logger.ts";
+/**
+ * @module lore
+ *
+ * Canonical types for the lore codex + the pure filter/sort/concat
+ * helpers, the Vento variable generator (`generateLoreVariables`), and
+ * the top-level `resolveLoreVariables` entrypoint called from
+ * `template.ts`.
+ *
+ * Frontmatter parsing lives in `lore-frontmatter.ts`; tag normalization /
+ * directory-as-tag / filename-as-tag helpers live in `lore-tags.ts`;
+ * filesystem traversal lives in `lore-collect.ts`. Their public surfaces
+ * are re-exported here so existing importers and tests don't need to
+ * change paths.
+ */
 
-const log = createLogger("lore");
+import { normalizeTag } from "./lore-tags.ts";
+import { collectAllPassages } from "./lore-collect.ts";
 
 // ── Types ──
 
@@ -57,302 +69,21 @@ export interface LoreResolution {
   readonly variables: LoreTemplateVars;
 }
 
+// ── Re-exports for backward compatibility (importers/tests use writer/lib/lore.ts) ──
+
+export { parseFrontmatter } from "./lore-frontmatter.ts";
+export {
+  computeEffectiveTags,
+  identifyScope,
+  normalizeTag,
+  resolveDirectoryTag,
+  resolveFilenameTag,
+} from "./lore-tags.ts";
+export { collectAllPassages, collectPassagesFromScope } from "./lore-collect.ts";
+
 // ── Constants ──
 
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
-const RESERVED_TAG_NAMES = new Set(["all", "tags"]);
 const SEPARATOR = "\n\n---\n\n";
-
-// ── Frontmatter Parser ──
-
-/**
- * Parse YAML frontmatter from a Markdown passage.
- * Returns parsed frontmatter + body content. Handles missing or malformed frontmatter gracefully.
- */
-export function parseFrontmatter(raw: string): { frontmatter: LoreFrontmatter; content: string } {
-  const match = FRONTMATTER_RE.exec(raw);
-  if (!match) {
-    return {
-      frontmatter: { tags: [], priority: 0, enabled: true },
-      content: raw.trim(),
-    };
-  }
-
-  const yamlBlock = match[1]!;
-  const content = match[2]!.trim();
-
-  // Lightweight YAML parsing (avoids heavy dependency — frontmatter is simple key-value)
-  const tags = parseYamlStringArray(yamlBlock, "tags");
-  const priority = parseYamlNumber(yamlBlock, "priority", 0);
-  const enabled = parseYamlBoolean(yamlBlock, "enabled", true);
-
-  return {
-    frontmatter: { tags, priority, enabled },
-    content,
-  };
-}
-
-/** Extract a string array from a YAML block for the given key. */
-function parseYamlStringArray(yaml: string, key: string): string[] {
-  // Match inline array: tags: [a, b, c]
-  const inlineMatch = new RegExp(`^${key}\\s*:\\s*\\[([^\\]]*)\\]`, "m").exec(yaml);
-  if (inlineMatch) {
-    return inlineMatch[1]!
-      .split(",")
-      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-      .filter((s) => s.length > 0);
-  }
-
-  // Match block array:
-  // tags:
-  //   - a
-  //   - b
-  const blockMatch = new RegExp(`^${key}\\s*:\\s*$`, "m").exec(yaml);
-  if (blockMatch) {
-    const afterKey = yaml.slice(blockMatch.index! + blockMatch[0].length);
-    const items: string[] = [];
-    for (const line of afterKey.split("\n")) {
-      const itemMatch = /^\s+-\s+(.+)$/.exec(line);
-      if (itemMatch) {
-        items.push(itemMatch[1]!.trim().replace(/^["']|["']$/g, ""));
-      } else if (line.trim() && !/^\s+-/.test(line)) {
-        break; // End of list
-      }
-    }
-    return items;
-  }
-
-  return [];
-}
-
-/** Extract a number from a YAML block for the given key. */
-function parseYamlNumber(yaml: string, key: string, defaultValue: number): number {
-  const match = new RegExp(`^${key}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, "m").exec(yaml);
-  if (!match) return defaultValue;
-  const parsed = Number(match[1]);
-  return Number.isFinite(parsed) ? parsed : defaultValue;
-}
-
-/** Extract a boolean from a YAML block for the given key. */
-function parseYamlBoolean(yaml: string, key: string, defaultValue: boolean): boolean {
-  const match = new RegExp(`^${key}\\s*:\\s*(true|false)`, "m").exec(yaml);
-  if (!match) return defaultValue;
-  return match[1] === "true";
-}
-
-// ── Tag Normalization ──
-
-/**
- * Normalize a tag name into a valid Vento template variable suffix.
- * Lowercase, hyphens/spaces → underscores, strip non-alphanumeric/underscore characters.
- * Returns null if the result is empty or a reserved name.
- */
-export function normalizeTag(tag: string): string | null {
-  const normalized = tag
-    .toLowerCase()
-    .replace(/[-\s]+/g, "_")
-    .replace(/[^a-z0-9_]/g, "");
-
-  if (!normalized || RESERVED_TAG_NAMES.has(normalized)) return null;
-  return normalized;
-}
-
-// ── Scope Identification ──
-
-/**
- * Determine the scope of a passage from its path relative to the lore root.
- * Returns null if the path doesn't match a known scope structure.
- * @deprecated Scope is now passed explicitly by the caller. Retained for backward compatibility.
- */
-export function identifyScope(relPath: string): { scope: LoreScope; series?: string; story?: string } | null {
-  const parts = relPath.split("/").filter(Boolean);
-  if (parts.length < 2) return null; // At minimum: scope/file.md
-
-  const scopePrefix = parts[0];
-  if (scopePrefix === "global") {
-    return { scope: "global" };
-  }
-  if (scopePrefix === "series" && parts.length >= 3) {
-    return { scope: "series", series: parts[1] };
-  }
-  if (scopePrefix === "story" && parts.length >= 4) {
-    return { scope: "story", series: parts[1], story: parts[2] };
-  }
-  return null;
-}
-
-// ── Directory-as-Tag Resolution ──
-
-/**
- * Compute the directory-implicit tag from a scope-relative passage path.
- * The path must be relative to the `_lore/` directory (e.g., "characters/alice.md" or "rules.md").
- * Returns the immediate parent directory name if the passage is NOT at the scope root level.
- */
-export function resolveDirectoryTag(scopeRelPath: string): string | null {
-  const parts = scopeRelPath.split("/").filter(Boolean);
-
-  // A scope-relative path with ≤1 part is at the scope root (e.g., "rules.md")
-  // A path with 2+ parts has a directory tag (e.g., "characters/alice.md" → "characters")
-  if (parts.length < 2) return null;
-
-  // The immediate parent directory is parts[parts.length - 2]
-  return parts[parts.length - 2]!;
-}
-
-/**
- * Compute effective tags: union of frontmatter tags + directory-implicit tag + filename-implicit tag.
- * All tags are fully normalized (same transform as template variable names) and duplicates are removed.
- */
-export function computeEffectiveTags(
-  frontmatterTags: string[],
-  directoryTag: string | null,
-  filenameTag: string | null = null,
-): string[] {
-  const allTags = [...frontmatterTags];
-  if (directoryTag) allTags.push(directoryTag);
-  if (filenameTag) allTags.push(filenameTag);
-
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const tag of allTags) {
-    const norm = normalizeTag(tag);
-    if (norm && !seen.has(norm)) {
-      seen.add(norm);
-      result.push(norm);
-    }
-  }
-  return result;
-}
-
-/**
- * Resolve the filename-implicit tag from a passage filename.
- * Strips the `.md` extension, passes the stem through `normalizeTag()`.
- * Returns null if the stem normalizes to empty or a reserved name.
- */
-export function resolveFilenameTag(filename: string): string | null {
-  const stem = filename.replace(/\.md$/i, "");
-  return normalizeTag(stem);
-}
-
-// ── Scope Collection (Retrieval Engine) ──
-
-/**
- * Scan a scope directory and collect all .md passages.
- * Scans root level and immediate tag subdirectories only (one level deep).
- * The scope is passed explicitly by the caller.
- */
-export async function collectPassagesFromScope(
-  scopeDir: string,
-  scope: LoreScope,
-): Promise<LorePassage[]> {
-  const passages: LorePassage[] = [];
-
-  try {
-    const entries: Deno.DirEntry[] = [];
-    for await (const entry of Deno.readDir(scopeDir)) {
-      entries.push(entry);
-    }
-
-    // Process .md files at scope root
-    for (const entry of entries) {
-      if (entry.isFile && entry.name.endsWith(".md")) {
-        const filepath = join(scopeDir, entry.name);
-        const passage = await readPassage(filepath, scopeDir, scope);
-        if (passage) passages.push(passage);
-      }
-    }
-
-    // Process immediate subdirectories (tag directories)
-    for (const entry of entries) {
-      if (entry.isDirectory && !entry.name.startsWith(".")) {
-        const subDir = join(scopeDir, entry.name);
-        try {
-          for await (const subEntry of Deno.readDir(subDir)) {
-            if (subEntry.isFile && subEntry.name.endsWith(".md")) {
-              const filepath = join(subDir, subEntry.name);
-              const passage = await readPassage(filepath, scopeDir, scope);
-              if (passage) passages.push(passage);
-            }
-          }
-        } catch (err: unknown) {
-          if (err instanceof Deno.errors.NotFound) continue;
-          throw err;
-        }
-      }
-    }
-  } catch (err: unknown) {
-    if (err instanceof Deno.errors.NotFound) return [];
-    throw err;
-  }
-
-  return passages;
-}
-
-/** Read and parse a single passage file. scopeDir is the _lore/ directory for this scope. */
-async function readPassage(
-  filepath: string,
-  scopeDir: string,
-  scope: LoreScope,
-): Promise<LorePassage | null> {
-  try {
-    const raw = await Deno.readTextFile(filepath);
-    const { frontmatter, content } = parseFrontmatter(raw);
-    // Scope-relative path (relative to _lore/ directory): e.g. "characters/hero.md" or "rules.md"
-    const scopeRelPath = relative(scopeDir, filepath);
-    const directoryTag = resolveDirectoryTag(scopeRelPath);
-    const filenameTag = resolveFilenameTag(scopeRelPath.split("/").filter(Boolean).pop()!);
-    const effectiveTags = computeEffectiveTags(frontmatter.tags, directoryTag, filenameTag);
-    const parts = scopeRelPath.split("/").filter(Boolean);
-    const filename = parts[parts.length - 1]!;
-    const directory = parts.length > 1 ? parts.slice(0, -1).join("/") : "";
-
-    return {
-      filename,
-      filepath,
-      relativePath: scopeRelPath,
-      scope,
-      directory,
-      frontmatter,
-      effectiveTags,
-      content,
-    };
-  } catch (err: unknown) {
-    if (!(err instanceof Deno.errors.NotFound)) {
-      log.warn(`[lore:readPassage] Failed to read ${filepath}: ${errorMessage(err)}`);
-    }
-    return null;
-  }
-}
-
-// ── Multi-Scope Collection ──
-
-/**
- * Collect all passages applicable to a given series/story context.
- * Scans global (_lore/), series (<series>/_lore/), and story (<series>/<story>/_lore/) scopes.
- */
-export async function collectAllPassages(
-  playgroundDir: string,
-  series?: string,
-  story?: string,
-): Promise<LorePassage[]> {
-  const tasks: Promise<LorePassage[]>[] = [];
-
-  // Always include global
-  tasks.push(collectPassagesFromScope(join(playgroundDir, "_lore"), "global"));
-
-  // Series scope
-  if (series) {
-    tasks.push(collectPassagesFromScope(join(playgroundDir, series, "_lore"), "series"));
-  }
-
-  // Story scope
-  if (series && story) {
-    tasks.push(collectPassagesFromScope(join(playgroundDir, series, story, "_lore"), "story"));
-  }
-
-  const results = await Promise.all(tasks);
-  return results.flat();
-}
 
 // ── Filtering & Ordering ──
 
@@ -435,8 +166,8 @@ export function generateLoreVariables(passages: LorePassage[]): LoreTemplateVars
   }
 
   for (const [normTag, tagPasses] of tagPassages) {
-    // Passages are already sorted from the global sort
-    // But we need to deduplicate since a passage may appear under multiple tags
+    // Passages are already sorted from the global sort.
+    // Deduplicate since a passage may appear under multiple tags.
     const uniquePasses = deduplicatePassages(tagPasses);
     vars[`lore_${normTag}`] = concatenateContent(uniquePasses);
   }
