@@ -17,33 +17,56 @@ import { errorMessage } from "./errors.ts";
 import { join } from "@std/path";
 import { readTemplate } from "../routes/prompt.ts";
 import type {
-  AppConfig,
   ChatMessage,
   LlmConfig,
-  SafePathFn,
-  BuildPromptFn,
-  BuildContinuePromptFn,
   LLMStreamChunk,
-  VentoError,
-  TokenUsageRecord,
   PostResponsePayload,
   PreLlmFetchPayload,
+  TokenUsageRecord,
 } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import {
-  resolveTargetChapterNumber,
-  listChapterFiles,
   atomicWriteChapter,
   ContinuePromptError,
+  listChapterFiles,
+  resolveTargetChapterNumber,
 } from "./story.ts";
-import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
-import { createLogger, createLlmLogger } from "./logger.ts";
+import {
+  resolveStoryLlmConfig,
+  StoryConfigValidationError,
+} from "./story-config.ts";
+import { createLlmLogger, createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";
 import { appendUsage, buildRecord } from "./usage.ts";
 import {
-  tryMarkGenerationActive,
   clearGenerationActive,
+  tryMarkGenerationActive,
 } from "./generation-registry.ts";
+import {
+  ChatAbortError,
+  ChatError,
+  type ChatErrorCode,
+  type ChatOptions,
+  type ChatResult,
+  type ContinueOptions,
+  type ContinueResult,
+  type StreamLlmArgs,
+  type StreamLlmResult,
+  type WriteMode,
+} from "./chat-types.ts";
+
+export {
+  ChatAbortError,
+  ChatError,
+  type ChatErrorCode,
+  type ChatOptions,
+  type ChatResult,
+  type ContinueOptions,
+  type ContinueResult,
+  type StreamLlmArgs,
+  type StreamLlmResult,
+  type WriteMode,
+};
 
 const log = createLogger("llm");
 const fileLog = createLogger("file");
@@ -87,143 +110,6 @@ const LLM_APP_ATTRIBUTION_HEADERS: Readonly<Record<string, string>> = Object.fre
   "X-OpenRouter-Categories": "roleplay,creative-writing",
 });
 
-/** Options for executing a chat request. */
-export interface ChatOptions {
-  readonly series: string;
-  readonly name: string;
-  readonly message: string;
-  readonly template?: string;
-  readonly config: AppConfig;
-  readonly safePath: SafePathFn;
-  readonly hookDispatcher: HookDispatcher;
-  readonly buildPromptFromStory: BuildPromptFn;
-  readonly onDelta?: (content: string) => void;
-  readonly signal?: AbortSignal;
-}
-
-/** Successful chat result. */
-export interface ChatResult {
-  readonly chapter: number;
-  readonly content: string;
-  readonly usage: TokenUsageRecord | null;
-}
-
-/** Options for `executeContinue` — continues the latest chapter file. */
-export interface ContinueOptions {
-  readonly series: string;
-  readonly name: string;
-  readonly template?: string;
-  readonly config: AppConfig;
-  readonly safePath: SafePathFn;
-  readonly hookDispatcher: HookDispatcher;
-  readonly buildContinuePromptFromStory: BuildContinuePromptFn;
-  readonly onDelta?: (content: string) => void;
-  readonly signal?: AbortSignal;
-}
-
-/** Successful continue result. */
-export interface ContinueResult {
-  readonly chapter: number;
-  /** Full chapter content after the continue stream completes. */
-  readonly content: string;
-  readonly usage: TokenUsageRecord | null;
-}
-
-/** Error thrown when a chat generation is aborted by the client. */
-export class ChatAbortError extends Error {
-  override readonly name = "ChatAbortError";
-}
-
-/** Error thrown when chat execution encounters a known failure. */
-export class ChatError extends Error {
-  override readonly name = "ChatError";
-  constructor(
-    public readonly code: "api-key" | "bad-path" | "vento" | "no-prompt" | "llm-api" | "llm-stream" | "no-body" | "no-content" | "story-config" | "no-chapter" | "concurrent" | "conflict",
-    message: string,
-    public readonly httpStatus: number = 500,
-    public readonly ventoError?: VentoError,
-  ) {
-    super(message);
-  }
-}
-
-/** Discriminated union describing how `streamLlmAndPersist` should persist
- * the LLM stream output:
- *
- * - `write-new-chapter`: existing chat behaviour — open the next chapter file,
- *   dispatch `pre-write`, write each delta after `response-stream` hook
- *   transformation, and dispatch `post-response` with `source: "chat"`.
- * - `append-to-existing-chapter`: plugin-action append mode — accumulate the
- *   stream in memory, on success normalise wrapper layers and atomically
- *   append `\n<{appendTag}>\n…\n</{appendTag}>\n` to the highest-numbered
- *   chapter file, then re-read that file and dispatch `post-response` with
- *   `source: "plugin-action"`. `pre-write` and `response-stream` are NOT
- *   dispatched.
- * - `discard`: plugin-action discard mode — accumulate the stream in memory
- *   and return it; no chapter mutation, no hook dispatches.
- * - `continue-last-chapter`: continue mode — append streaming bytes to an
- *   already-existing chapter file (specified by `targetChapterNumber`).
- *   Re-uses the per-chunk `response-stream` hook + `<think>` framing from
- *   `write-new-chapter`, but does NOT dispatch `pre-write` (no new user
- *   message exists), opens the file with `append: true` (no truncate, no
- *   create), and on entry verifies the on-disk bytes still match
- *   `existingContent` (snapshot guard against external editors racing the
- *   per-story lock — throws `ChatError("conflict", …, 409)` on mismatch).
- *   Finalisation re-reads the chapter file to compute `chapterContentAfter`
- *   and dispatches `post-response` with `source: "continue"`.
- */
-export type WriteMode =
-  | { readonly kind: "write-new-chapter"; readonly userMessage: string; readonly targetChapterNumber: number }
-  | { readonly kind: "append-to-existing-chapter"; readonly appendTag: string; readonly pluginName: string }
-  | { readonly kind: "discard" }
-  | { readonly kind: "continue-last-chapter"; readonly targetChapterNumber: number; readonly existingContent: string }
-  /**
-   * `replace-last-chapter`: a plugin-action mode that atomically overwrites
-   * the highest-numbered chapter file with the LLM's full response after
-   * the stream completes. Used by the bundled `polish` plugin. Streaming
-   * deltas are accumulated in memory only — no file is opened during the
-   * stream, so an aborted/errored generation leaves the on-disk chapter
-   * untouched (byte-for-byte preservation). Finalisation calls
-   * `atomicWriteChapter` with `aiContent.trimEnd() + "\n"`, re-reads the
-   * file, appends one usage record (if available), and dispatches
-   * `post-response` with `source: "plugin-action"` and `pluginName`.
-   * Neither `pre-write` nor `response-stream` hooks fire in this mode.
-   */
-  | { readonly kind: "replace-last-chapter"; readonly pluginName: string };
-
-/** Arguments for `streamLlmAndPersist`. */
-export interface StreamLlmArgs {
-  readonly messages: ChatMessage[];
-  readonly llmConfig: LlmConfig;
-  readonly series: string;
-  readonly name: string;
-  readonly storyDir: string;
-  readonly rootDir: string;
-  readonly signal?: AbortSignal;
-  readonly writeMode: WriteMode;
-  readonly onDelta?: (chunk: string) => void;
-  readonly hookDispatcher: HookDispatcher;
-  readonly config: AppConfig;
-  /**
-   * Per-request correlation id. Minted at the inbound request boundary
-   * (e.g. `executeChat` / `executeContinue`) and threaded through both the
-   * `prompt-assembly` hook (via the prompt builders) and the `pre-llm-fetch`
-   * + `response-stream` + `post-response` hooks. When omitted, a fresh
-   * UUID is minted inside `streamLlmAndPersist` so the hook context always
-   * observes a non-empty value (legacy callers / tests).
-   */
-  readonly correlationId?: string;
-}
-
-/** Result of `streamLlmAndPersist`. */
-export interface StreamLlmResult {
-  readonly content: string;
-  readonly usage: TokenUsageRecord | null;
-  readonly chapterPath: string | null;
-  readonly chapterNumber: number | null;
-  readonly chapterContentAfter: string | null;
-  readonly aborted: boolean;
-}
 
 /**
  * Resolve the target chapter file for a given `writeMode`.
