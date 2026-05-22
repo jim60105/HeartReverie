@@ -17,15 +17,15 @@ import { errorMessage } from "./errors.ts";
 import type { HookStage, HookHandler, RegisterOptions, HandlerEvent, HandlerEventSubscriber, HandlerEventSubscriptionOptions } from "../types.ts";
 import { createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";
+import { KNOWN_BACKEND_STAGES, PARALLEL_ALLOWED, VALID_STAGES } from "./hooks-stages.ts";
+import { captureRefs as captureRefsFn, cloneAllowlistSnapshot as cloneAllowlistSnapshotFn } from "./hooks-snapshot.ts";
+import { computeTopoLayers as computeTopoLayersFn, type HandlerEntry } from "./hooks-topo.ts";
+
+// Re-exported so existing importers (plugin-loader, plugin-validators,
+// plugin-depends-on-dag, tests) continue to work after the extraction.
+export { KNOWN_BACKEND_STAGES, PARALLEL_ALLOWED, VALID_STAGES };
 
 const log = createLogger("plugin");
-
-export const PARALLEL_ALLOWED: ReadonlySet<string> = new Set([
-  "prompt-assembly",
-  "post-response",
-  "response-stream",
-  "pre-llm-fetch",
-]);
 
 // Module-scoped suppression set for register-time throttle warnings.
 // Key format: `${stage}::${plugin ?? "<anonymous>"}::${concurrency ?? "none"}`.
@@ -44,55 +44,6 @@ export function _resetThrottleWarnDedupForTesting(): void {
 }
 
 export const HOOK_DEBUG = Deno.env.get("HOOK_DEBUG") === "1";
-
-interface HandlerEntry {
-  readonly handler: HookHandler;
-  readonly priority: number;
-  readonly plugin?: string;
-  readonly baseLogger?: Logger;
-  readonly parallel: boolean;
-  readonly readOnly: boolean;
-  readonly concurrency?: number;
-  readonly dependsOn?: readonly string[];
-  errorCount: number;
-}
-
-/**
- * Backend hook stages registered via `HookDispatcher.register()`.
- * Note: `strip-tags` is intentionally NOT in this set — it is a declarative
- * manifest field (`promptStripTags` / `displayStripTags`), not a runtime hook.
- */
-export const KNOWN_BACKEND_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
-  "prompt-assembly",
-  "pre-llm-fetch",
-  "response-stream",
-  "pre-write",
-  "post-response",
-]);
-
-export const VALID_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
-  "prompt-assembly",
-  "pre-llm-fetch",
-  "response-stream",
-  "pre-write",
-  "post-response",
-  "strip-tags",
-]);
-
-/**
- * Per-stage allowlist of context fields snapshotted into `HandlerEvent`
- * `ctxBeforeSnapshot` / `ctxAfterSnapshot`. Stages not listed here produce
- * empty `{}` snapshots — `handler-start`/`handler-end` events still fire so
- * subscribers can attribute timing and errors.
- *
- * The allowlist is intentionally narrow to keep `structuredClone` cost
- * bounded on the hot path and to avoid copying function-valued fields like
- * `logger` which `structuredClone` cannot handle.
- */
-const SNAPSHOT_ALLOWLIST: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  "prompt-assembly": Object.freeze(["previousContext", "rawChapters"]) as readonly string[],
-  "pre-llm-fetch": Object.freeze(["messages", "model", "requestMetadata"]) as readonly string[],
-});
 
 /** Rate-limit window (ms) for warn logs about throwing subscriber callbacks. */
 const SUBSCRIBER_WARN_RATE_LIMIT_MS = 60_000;
@@ -516,12 +467,7 @@ export class HookDispatcher {
    * detect reassignment via `===` after the handler returns.
    */
   #captureRefs(stage: HookStage, context: Record<string, unknown>): Record<string, unknown> {
-    const fields = SNAPSHOT_ALLOWLIST[stage] ?? [];
-    const refs: Record<string, unknown> = {};
-    for (const field of fields) {
-      refs[field] = (context as Record<string, unknown>)[field];
-    }
-    return refs;
+    return captureRefsFn(stage, context);
   }
 
   /**
@@ -529,22 +475,7 @@ export class HookDispatcher {
    * object snapshot. Stages not in the allowlist produce `{}`.
    */
   #cloneAllowlistSnapshot(stage: HookStage, context: Record<string, unknown>): Record<string, unknown> {
-    const fields = SNAPSHOT_ALLOWLIST[stage] ?? [];
-    const out: Record<string, unknown> = {};
-    // Per-field try/catch: a prior handler may have stashed a non-cloneable
-    // value (function, Proxy, WeakRef, etc.) on an allowlisted field. We
-    // MUST NOT let one bad field break the dispatch — store a sentinel and
-    // keep going so subscribers still see the rest of the snapshot.
-    for (const field of fields) {
-      const value = (context as Record<string, unknown>)[field];
-      try {
-        out[field] = structuredClone(value);
-      } catch (err: unknown) {
-        const msg = errorMessage(err);
-        out[field] = { __snapshotError: msg };
-      }
-    }
-    return out;
+    return cloneAllowlistSnapshotFn(stage, context);
   }
 
   // ---------------------------------------------------------------------------
@@ -842,81 +773,12 @@ export class HookDispatcher {
 
   /**
    * Compute topological layers from dependsOn within a parallel bucket.
-   * Returns arrays of entries grouped by layer. Within each layer entries
-   * are sorted by priority ascending.
-   *
-   * If any dependsOn is invalid (references a plugin not in the bucket),
-   * falls back to a single layer sorted by priority.
+   * Delegates to the pure helper in `hooks-topo.ts`; the dispatcher only
+   * supplies its module-scoped logger so error-path messages still appear
+   * under the `plugin` log category.
    */
   #computeTopoLayers(parallel: HandlerEntry[], stage?: HookStage): HandlerEntry[][] {
-    // Check if any entry actually has dependsOn
-    const hasDeps = parallel.some((e) => e.dependsOn && e.dependsOn.length > 0);
-    if (!hasDeps) return [parallel]; // already priority-sorted
-
-    // Build name → entry map (by plugin name within this bucket)
-    const byPlugin = new Map<string, HandlerEntry>();
-    for (const e of parallel) {
-      if (e.plugin) byPlugin.set(e.plugin, e);
-    }
-
-    // Validate all dependsOn references
-    for (const e of parallel) {
-      if (!e.dependsOn) continue;
-      for (const dep of e.dependsOn) {
-        if (!byPlugin.has(dep)) {
-          log.error("dependsOn references unknown plugin; falling back to priority-only", {
-            plugin: e.plugin, unknownDep: dep, stage,
-          });
-          return [parallel];
-        }
-      }
-    }
-
-    // Compute in-degree map
-    const inDegree = new Map<HandlerEntry, number>();
-    const successors = new Map<HandlerEntry, HandlerEntry[]>();
-    for (const e of parallel) {
-      inDegree.set(e, 0);
-      successors.set(e, []);
-    }
-    for (const e of parallel) {
-      if (!e.dependsOn) continue;
-      for (const dep of e.dependsOn) {
-        const depEntry = byPlugin.get(dep)!;
-        successors.get(depEntry)!.push(e);
-        inDegree.set(e, (inDegree.get(e) ?? 0) + 1);
-      }
-    }
-
-    // Kahn's algorithm — produce layers
-    const layers: HandlerEntry[][] = [];
-    let remaining = new Set(parallel);
-
-    while (remaining.size > 0) {
-      const layer: HandlerEntry[] = [];
-      for (const e of remaining) {
-        if ((inDegree.get(e) ?? 0) === 0) layer.push(e);
-      }
-      if (layer.length === 0) {
-        // Cycle detected — fall back to priority-only
-        const cyclePlugins = [...remaining].map(e => e.plugin).filter(Boolean);
-        log.error("dependsOn cycle detected in parallel bucket; falling back to priority-only", {
-          plugins: cyclePlugins, stage,
-        });
-        return [parallel];
-      }
-      layer.sort((a, b) => a.priority - b.priority);
-      layers.push(layer);
-
-      for (const e of layer) {
-        remaining.delete(e);
-        for (const s of successors.get(e) ?? []) {
-          inDegree.set(s, (inDegree.get(s) ?? 0) - 1);
-        }
-      }
-    }
-
-    return layers;
+    return computeTopoLayersFn(parallel, log, stage);
   }
 
   /** Execute the parallel bucket: topo layers × concurrency chunks. */
