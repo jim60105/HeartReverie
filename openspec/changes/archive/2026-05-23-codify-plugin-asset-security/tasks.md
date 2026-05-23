@@ -57,5 +57,5 @@
 
 ## 9. Documentation follow-up (after archive)
 
-- [ ] 9.1 Update `heartreverie-create-plugin` SKILL.md to document the `frontendImports` manifest field
+- [x] 9.1 Update `heartreverie-create-plugin` SKILL.md to document the `frontendImports` manifest field
 - [ ] 9.2 Sync deltas into `openspec/specs/` via `openspec archive`

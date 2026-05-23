@@ -42,6 +42,7 @@
 | `backendModule` | `string` | Path to backend module (relative to plugin dir), e.g., `"./handler.js"` or `"./handler.ts"` |
 | `frontendModule` | `string` | Path to frontend ES module, relative to plugin dir. The backend resolves the declared path inside the plugin directory and serves it at `/plugins/<name>/<path>`. **However, the reader currently auto-imports `/plugins/<name>/frontend.js`** — so for the frontend module to actually load you must use `"./frontend.js"`. The declared path field is honored by the static server but not yet by the auto-loader. |
 | `frontendStyles` | `array<string>` | Relative paths to CSS files injected into the frontend `<head>` as `<link rel="stylesheet">` elements. Each entry must end with `.css`, must not be absolute, and must not contain `..` segments. |
+| `frontendImports` | `array<string>` | Relative paths to sibling `.js` modules that `frontendModule` statically imports. Required for the static-server allowlist: the wildcard `.js` route only serves files declared in `frontendModule` ∪ `frontendImports`. See [Frontend Imports (allowlist)](#frontend-imports-allowlist). |
 | `tags` | `array<string>` | XML tag names managed by this plugin (used for metadata/API response) |
 | `promptStripTags` | `array` | Tags/regex to strip from `previousContext` when building prompts |
 | `displayStripTags` | `array` | Tags/regex to strip from frontend display |
@@ -144,6 +145,41 @@ Example:
   "frontendStyles": ["./styles/panel.css", "./styles/toast.css"]
 }
 ```
+
+## Frontend Imports (allowlist)
+
+The `frontendImports` array declares **every sibling `.js` module** that `frontendModule` (or any module reachable from it) statically `import`s. The server consults this list — together with `frontendModule` — to build a per-plugin allowlist consumed by the wildcard route `GET /plugins/:plugin/:path{.+\.js}`. Any `.js` file that physically exists in the plugin directory but is **not** declared here returns `404` instead of being served as `application/javascript`.
+
+- **Format**: Array of paths relative to the plugin directory (forward slashes, e.g. `"./lightbox.js"` or `"sub/helper.js"`). The validator normalizes entries to forward-slash form with no leading `./`.
+- **When to declare**: Any time `frontend.js` (or a file it imports) contains `import ... from './something.js'`, add `"./something.js"` here. Imports from `/plugins/_shared/*` do **not** need to be declared (the shared route is independent of this allowlist).
+- **Validation** (entries that fail any check are logged with `log.warn` and silently dropped; the plugin still loads):
+  - Must be a non-empty string ending in `.js` (case-insensitive)
+  - Must not be absolute
+  - Must not contain `..` segments (under `/` or `\`)
+  - Must not contain `\`, `#`, `?`, or `%`
+  - Must not contain dotfile segments (segments starting with `.`)
+  - Must resolve to an existing regular file inside the plugin directory
+  - Symlinks whose `realPath` lies outside the plugin directory are rejected
+- **Deduplication**: Entries resolving to the same absolute path are collapsed.
+
+Example:
+
+```json
+{
+  "name": "image-gen",
+  "frontendModule": "./frontend.js",
+  "frontendImports": ["./frontend-lightbox.js", "./util/exif.js"]
+}
+```
+
+In `frontend.js`:
+
+```js
+import { openLightbox } from './frontend-lightbox.js';
+import { readExif } from './util/exif.js';
+```
+
+Without the `frontendImports` declaration, the browser's `import` request for `/plugins/image-gen/frontend-lightbox.js` would return `404` and the module would fail to load.
 
 ## Parameters
 
@@ -345,7 +381,7 @@ All file paths (`promptFragments[].file`, `backendModule`, `frontendModule`) are
 
 ### Frontend Module Access
 
-The `/plugins/:name/:file` route only serves files declared as `frontendModule` in the manifest. Arbitrary files in the plugin directory are not accessible.
+The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files that appear in the per-plugin allowlist — the normalized union of `frontendModule` and each validated entry in `frontendImports`. Any `.js` file physically present in the plugin directory but not declared in the manifest returns `404` without touching disk. Request paths containing a literal backslash, dotfile segments, or `..` traversal are also rejected before any filesystem access. See [Frontend Imports (allowlist)](#frontend-imports-allowlist).
 
 ---
 

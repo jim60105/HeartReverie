@@ -239,7 +239,8 @@ Key points:
   });
   ```
 - Use unique placeholder names that include the plugin name to avoid collisions.
-- Shared utilities live under `/plugins/_shared/`. Import them via relative paths (e.g. `import { escapeHtml } from '../_shared/utils.js';`); the server only serves files under `_shared/` and each plugin's declared `frontendModule` / `frontendStyles`.
+- Shared utilities live under `/plugins/_shared/`. Import them via relative paths (e.g. `import { escapeHtml } from '../_shared/utils.js';`); the server only serves files under `_shared/` and each plugin's declared `frontendModule` / `frontendStyles` / `frontendImports`.
+- **Sibling `.js` imports must be declared in `manifest.frontendImports`.** If `frontend.js` does `import { foo } from './helper.js';`, add `"./helper.js"` to `frontendImports` or the browser request for `/plugins/<name>/helper.js` returns `404`. Imports from `../_shared/*` do not need to be declared. See [`references/manifest-schema.md`](./references/manifest-schema.md#frontend-imports-allowlist) for the validator rules.
 - Frontend code style: ESM, **single quotes**, no build step, no framework — plugins ship as raw JS even though the reader itself is a Vue 3 + Vite SPA.
 
 ### Frontend Hook Stages (quick reference)
