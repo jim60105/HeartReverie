@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { relative, resolve, SEPARATOR } from "@std/path";
+import { resolve, SEPARATOR } from "@std/path";
 import { problemJson, errorMessage } from "../lib/errors.ts";
 import { resolveLoreVariables } from "../lib/lore.ts";
 import { createLogger } from "../lib/logger.ts";
@@ -143,44 +143,57 @@ export function registerPluginRoutes(
     }
   });
 
-  // Serve plugin frontend modules
-  for (const plugin of pluginManager.getPlugins()) {
-    if (plugin.frontendModule) {
-      const pluginDir = pluginManager.getPluginDir(plugin.name);
-      if (!pluginDir) continue;
-      const modulePath = resolve(pluginDir, plugin.frontendModule);
-      // Containment check: frontendModule must stay inside plugin directory
-      if (!modulePath.startsWith(pluginDir + SEPARATOR)) {
-        log.warn("Plugin frontendModule escapes plugin directory — skipping", {
-          plugin: plugin.name,
-          path: modulePath,
-        });
-        continue;
-      }
-      // Use normalized relative path for route (strip ./ prefix from manifest values)
-      const routePath = relative(pluginDir, modulePath);
-      app.get(`/plugins/${plugin.name}/${routePath}`, async (c) => {
-        try {
-          const content = await Deno.readTextFile(modulePath);
-          return new Response(content, {
-            headers: { "Content-Type": "application/javascript" },
-          });
-        } catch (err: unknown) {
-          if (err instanceof Deno.errors.NotFound) {
-            return c.json(problemJson("Not Found", 404, "Not found"), 404);
-          }
-          const message = errorMessage(err);
-          log.warn(
-            `[GET /plugins/:plugin/module] File serving error: ${message}`,
-          );
-          return c.json(
-            problemJson("Internal Server Error", 500, "Internal server error"),
-            500,
-          );
-        }
-      });
+  // Serve plugin JS modules: the declared frontendModule *and* any sibling
+  // `.js` files it statically imports (e.g. helper modules split out of a
+  // larger frontend.js). A single wildcard route covers all .js files under
+  // a plugin's directory, with the same containment / dotfile / canonical-
+  // path guarantees as the _shared route.
+  app.get("/plugins/:plugin/:path{.+\\.js}", async (c) => {
+    const pluginName = c.req.param("plugin");
+    const reqPath = c.req.param("path");
+
+    // _shared has its own handler registered above; don't shadow it.
+    if (pluginName === "_shared") {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
     }
-  }
+    // Reject dotfile segments (e.g. ".env", "..", ".git").
+    if (reqPath.split("/").some((seg) => seg.startsWith("."))) {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+    const pluginDir = pluginManager.getPluginDir(pluginName);
+    if (!pluginDir) {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+    const filePath = resolve(pluginDir, reqPath);
+    // Raw-path containment check (cheap, runs before any FS call).
+    if (!filePath.startsWith(pluginDir + SEPARATOR)) {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+    try {
+      // Symlink-safe canonicalization.
+      const realPluginDir = await Deno.realPath(pluginDir);
+      const realFile = await Deno.realPath(filePath);
+      if (!realFile.startsWith(realPluginDir + SEPARATOR)) {
+        return c.json(problemJson("Not Found", 404, "Not found"), 404);
+      }
+      const content = await Deno.readTextFile(realFile);
+      return new Response(content, {
+        headers: { "Content-Type": "application/javascript" },
+      });
+    } catch (err: unknown) {
+      if (err instanceof Deno.errors.NotFound) {
+        return c.json(problemJson("Not Found", 404, "Not found"), 404);
+      }
+      const message = errorMessage(err);
+      log.warn(
+        `[GET /plugins/:plugin/:path] File serving error: ${message}`,
+      );
+      return c.json(
+        problemJson("Internal Server Error", 500, "Internal server error"),
+        500,
+      );
+    }
+  });
 
   // Serve plugin CSS files declared in manifest.frontendStyles
   for (const plugin of pluginManager.getPlugins()) {

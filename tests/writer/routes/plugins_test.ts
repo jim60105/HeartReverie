@@ -355,6 +355,105 @@ Deno.test({
       },
     );
 
+    await t.step(
+      "GET /plugins/:name/:path serves sibling .js files imported by the frontend module",
+      async () => {
+        // Regression: a plugin whose frontend.js statically imports a sibling
+        // file (e.g. './frontend-lightbox.js') must be able to fetch that
+        // sibling — the route is not restricted to the declared frontendModule.
+        const siblingDir = join(tmpDir, "sibling-plugin");
+        await Deno.mkdir(siblingDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(siblingDir, "frontend.js"),
+          "export {};",
+        );
+        await Deno.writeTextFile(
+          join(siblingDir, "frontend-lightbox.js"),
+          "export const createLightbox = () => ({});",
+        );
+
+        const app = createApp({
+          config: {
+            READER_DIR: "/nonexistent-reader",
+            PLAYGROUND_DIR: "/nonexistent-playground",
+            ROOT_DIR: "/nonexistent-root",
+          } as unknown as AppConfig,
+          safePath: () => null,
+          pluginManager: {
+            getPlugins: () => [
+              {
+                name: "sibling-plugin",
+                version: "1.0.0",
+                description: "Plugin with sibling import",
+                type: "utility",
+                frontendModule: "frontend.js",
+              },
+            ],
+            getPluginDir: (name: string) =>
+              name === "sibling-plugin" ? siblingDir : null,
+            getBuiltinDir: () => "/nonexistent-plugins",
+            getParameters: () => [],
+            getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+            getStripTagPatterns: () => null,
+            getPluginStyles: () => [],
+            getPluginActionButtons: () => [],
+          } as unknown as PluginManager,
+          hookDispatcher: new HookDispatcher(),
+          buildPromptFromStory: async () =>
+            ({}) as unknown as BuildPromptResult,
+          buildContinuePromptFromStory: (async () => ({
+            messages: [],
+            ventoError: null,
+            targetChapterNumber: 0,
+            existingContent: "",
+            userMessageText: "",
+            assistantPrefill: "",
+          })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+          templateEngine: null,
+          verifyPassphrase,
+        } as AppDeps);
+
+        const res = await app.fetch(
+          new Request(
+            "http://localhost/plugins/sibling-plugin/frontend-lightbox.js",
+            { headers: { "x-passphrase": "test-pass" } },
+          ),
+        );
+        assertEquals(res.status, 200);
+        assertEquals(res.headers.get("content-type"), "application/javascript");
+        const text = await res.text();
+        assertEquals(text, "export const createLightbox = () => ({});");
+
+        // Unknown plugin name → 404.
+        const res2 = await makeRequest(
+          app,
+          "GET",
+          "/plugins/unknown-plugin/anything.js",
+        );
+        assertEquals(res2.status, 404);
+
+        // Non-.js path → not matched by the route at all → 404.
+        const res3 = await makeRequest(
+          app,
+          "GET",
+          "/plugins/sibling-plugin/secret.env",
+        );
+        assertEquals(res3.status, 404);
+
+        // Dotfile segment → rejected.
+        await Deno.writeTextFile(
+          join(siblingDir, ".hidden.js"),
+          "export {};",
+        );
+        const res4 = await makeRequest(
+          app,
+          "GET",
+          "/plugins/sibling-plugin/.hidden.js",
+        );
+        assertEquals(res4.status, 404);
+      },
+    );
+
     await t.step("frontendModule path escape is skipped", async () => {
       const escapedDir = join(tmpDir, "escape-plugin");
       await Deno.mkdir(escapedDir, { recursive: true });
