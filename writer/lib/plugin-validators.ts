@@ -20,6 +20,7 @@
  * - `plugin-validators-hooks.ts`           — `validateHookDeclarations`
  * - `plugin-validators-action-buttons.ts`  — `validateActionButtons`
  * - `plugin-validators-frontend-styles.ts` — `validateFrontendStyles`
+ * - `plugin-validators-frontend-imports.ts` — `validateFrontendImports`
  * - `plugin-validators-schema.ts`          — `extractSchemaDefaults`
  *
  * Consumers inside the package import from this barrel; the per-domain
@@ -29,4 +30,5 @@
 export { validateHookDeclarations } from "./plugin-validators-hooks.ts";
 export { validateActionButtons } from "./plugin-validators-action-buttons.ts";
 export { validateFrontendStyles } from "./plugin-validators-frontend-styles.ts";
+export { validateFrontendImports } from "./plugin-validators-frontend-imports.ts";
 export { extractSchemaDefaults } from "./plugin-validators-schema.ts";

@@ -50,6 +50,7 @@ import { createLogger } from "./logger.ts";
 import { HookDispatcher } from "./hooks.ts";
 import {
   validateActionButtons,
+  validateFrontendImports,
   validateFrontendStyles,
   validateHookDeclarations,
 } from "./plugin-validators.ts";
@@ -79,6 +80,14 @@ export interface PluginEntry {
   readonly source: string;
   readonly validatedStyles: string[];
   readonly validatedActionButtons: ActionButtonDescriptor[];
+  /**
+   * Normalized relative paths (forward-slash, no leading "./") of `.js`
+   * files declared in `manifest.frontendImports`. The HTTP route serving
+   * `/plugins/:plugin/:path{.+\.js}` uses this set, together with the
+   * normalized `manifest.frontendModule`, as the exclusive allowlist of
+   * files it will serve as executable JavaScript.
+   */
+  readonly validatedImports: string[];
   registerRoutes?: (
     context: PluginRouteContext,
   ) => void | Promise<void>;
@@ -195,6 +204,12 @@ export class PluginLoader {
         pluginDir,
       );
 
+      // Validate and normalize frontendImports (allowlist for /plugins/:p/:path.js)
+      const validatedImports = await validateFrontendImports(
+        manifest,
+        pluginDir,
+      );
+
       // Validate and normalize actionButtons
       const validatedActionButtons = validateActionButtons(manifest);
 
@@ -219,6 +234,7 @@ export class PluginLoader {
         dir: pluginDir,
         source,
         validatedStyles,
+        validatedImports,
         validatedActionButtons,
       });
     }

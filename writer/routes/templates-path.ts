@@ -97,9 +97,21 @@ export function parseTemplatePath(
       return { ok: false, err: { status: 400, detail: "Invalid lore templatePath" } };
     }
     const scope = parts[1];
+    // Defensive: lore writes/reads contract is `.md` passages only. Reject
+    // any other extension and any segment that starts with '.' so a
+    // compromised caller cannot land a `.html`, `.svg`, `.js`, `.htaccess`,
+    // or hidden file under `playground/_lore/` via the templates route.
+    const isValidLoreRelative = (rel: string): boolean => {
+      if (!rel) return false;
+      if (!rel.toLowerCase().endsWith(".md")) return false;
+      if (rel.split(/[\\/]/).some((s) => s === "" || s.startsWith("."))) return false;
+      return true;
+    };
     if (scope === "global") {
       const rel = parts.slice(2).join(":");
-      if (!rel) return { ok: false, err: { status: 400, detail: "Missing lore relative path" } };
+      if (!isValidLoreRelative(rel)) {
+        return { ok: false, err: { status: 400, detail: "Lore relative path must be a .md file with no dotfile segments" } };
+      }
       return { ok: true, value: { kind: "lore", loreScope: "global", relativeFile: rel } };
     }
     if (scope === "series") {
@@ -111,7 +123,9 @@ export function parseTemplatePath(
       if (!isValidSegment(series)) {
         return { ok: false, err: { status: 400, detail: "Invalid series segment" } };
       }
-      if (!rel) return { ok: false, err: { status: 400, detail: "Missing lore relative path" } };
+      if (!isValidLoreRelative(rel)) {
+        return { ok: false, err: { status: 400, detail: "Lore relative path must be a .md file with no dotfile segments" } };
+      }
       return { ok: true, value: { kind: "lore", loreScope: "series", series, relativeFile: rel } };
     }
     if (scope === "story") {
@@ -124,7 +138,9 @@ export function parseTemplatePath(
       if (!isValidSegment(series) || !isValidSegment(story)) {
         return { ok: false, err: { status: 400, detail: "Invalid series/story segment" } };
       }
-      if (!rel) return { ok: false, err: { status: 400, detail: "Missing lore relative path" } };
+      if (!isValidLoreRelative(rel)) {
+        return { ok: false, err: { status: 400, detail: "Lore relative path must be a .md file with no dotfile segments" } };
+      }
       return { ok: true, value: { kind: "lore", loreScope: "story", series, story, relativeFile: rel } };
     }
     return { ok: false, err: { status: 400, detail: `Unknown lore scope: ${scope}` } };
@@ -148,6 +164,23 @@ export function resolveTemplatePath(
     }
     if (parsed.relativeFile.includes("..")) {
       return { ok: false, err: { status: 400, detail: "Plugin path contains .." } };
+    }
+    // Defense-in-depth: even though `PUT /api/templates` rejects plugin:*
+    // up-front with 403, the resolver must refuse executable extensions so
+    // that any future caller of `resolveTemplatePath` for a plugin target
+    // cannot land a `.js`/`.mjs`/`.cjs`/`.html`/`.svg` file under a plugin
+    // directory (which would then be served as code by the wildcard
+    // `/plugins/:plugin/:path{.+\.js}` route or by the SPA static handler).
+    const lowered = parsed.relativeFile.toLowerCase();
+    const FORBIDDEN_PLUGIN_EXTS = [".js", ".mjs", ".cjs", ".html", ".htm", ".svg"];
+    if (FORBIDDEN_PLUGIN_EXTS.some((ext) => lowered.endsWith(ext))) {
+      return {
+        ok: false,
+        err: { status: 400, detail: "Plugin fragment extension is not permitted" },
+      };
+    }
+    if (parsed.relativeFile.split(/[\\/]/).some((s) => s.startsWith("."))) {
+      return { ok: false, err: { status: 400, detail: "Plugin path contains dotfile segment" } };
     }
     const dir = pluginManager.getPluginDir(parsed.pluginName);
     if (!dir) {

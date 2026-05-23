@@ -41,6 +41,27 @@ export interface PluginManifest {
    */
   readonly frontendStyles?: readonly string[];
   /**
+   * Array of relative paths (from the plugin directory) to additional `.js`
+   * files that the declared `frontendModule` statically imports as siblings
+   * (e.g. helper modules split out of a larger `frontend.js`). Each entry
+   * MUST:
+   * - end with `.js`,
+   * - be relative (no leading `/`),
+   * - contain no `..` segments,
+   * - not contain `\`, `#`, `?`, `%`.
+   *
+   * Acts as an explicit allowlist for the
+   * `GET /plugins/:plugin/:path{.+\\.js}` static-asset route: only the
+   * declared `frontendModule` and these declared sibling files are served.
+   * Files present on disk under the plugin directory but not declared here
+   * are 404'd by the HTTP route — they are still importable by the backend
+   * loader (`backendModule`) via `file://` because that path does not go
+   * through the HTTP route. This is a defense-in-depth gate against a
+   * future regression in any write endpoint dropping attacker-controlled
+   * `.js` bytes into a plugin directory and them being served as code.
+   */
+  readonly frontendImports?: readonly string[];
+  /**
    * Optional declarative action-button contributions surfaced in the reader's
    * `PluginActionBar`. Each entry must validate against
    * `ActionButtonDescriptor`; invalid entries are dropped individually with a

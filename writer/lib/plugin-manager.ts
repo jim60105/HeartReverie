@@ -301,6 +301,34 @@ export class PluginManager {
   }
 
   /**
+   * Returns the per-plugin allowlist of `.js` files that may be served as
+   * executable code by `GET /plugins/:plugin/:path{.+\.js}`. The set is the
+   * union of:
+   *
+   * - the normalized `manifest.frontendModule` (if declared and `.js`),
+   * - the validated `manifest.frontendImports` entries.
+   *
+   * Paths are normalized to forward-slash, no leading "./". Returns an empty
+   * `Set` for unknown plugins. Callers must compare requested URL paths
+   * using the same normalization before membership check.
+   */
+  getPluginAllowedJsFiles(name: string): Set<string> {
+    const entry = this.#plugins.get(name);
+    if (!entry) return new Set();
+    const allowed = new Set<string>(entry.validatedImports);
+    const fm = entry.manifest.frontendModule;
+    if (typeof fm === "string" && fm.toLowerCase().endsWith(".js")) {
+      let n = fm;
+      while (n.startsWith("./")) n = n.slice(2);
+      // The route already rejects backslashes and dotfile segments; we just
+      // normalize to forward-slash for membership comparison.
+      n = n.replace(/\\/g, "/");
+      allowed.add(n);
+    }
+    return allowed;
+  }
+
+  /**
    * Returns the validated, default-filled list of `ActionButtonDescriptor`s
    * declared in a plugin's `actionButtons` manifest field. Returns an empty
    * array for unknown plugins or plugins that did not declare the field.

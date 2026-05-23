@@ -144,10 +144,13 @@ export function registerPluginRoutes(
   });
 
   // Serve plugin JS modules: the declared frontendModule *and* any sibling
-  // `.js` files it statically imports (e.g. helper modules split out of a
-  // larger frontend.js). A single wildcard route covers all .js files under
-  // a plugin's directory, with the same containment / dotfile / canonical-
-  // path guarantees as the _shared route.
+  // `.js` files explicitly declared in manifest.frontendImports. The route
+  // enforces a manifest-driven allowlist on top of the path-containment /
+  // dotfile / canonical-path checks: any `.js` file under a plugin
+  // directory that is *not* declared returns 404, even if it exists on
+  // disk. This is a defense-in-depth gate so that if a write endpoint ever
+  // regresses and drops attacker-controlled bytes into a plugin directory,
+  // those bytes still cannot be served as executable code.
   app.get("/plugins/:plugin/:path{.+\\.js}", async (c) => {
     const pluginName = c.req.param("plugin");
     const reqPath = c.req.param("path");
@@ -164,7 +167,24 @@ export function registerPluginRoutes(
     if (!pluginDir) {
       return c.json(problemJson("Not Found", 404, "Not found"), 404);
     }
-    const filePath = resolve(pluginDir, reqPath);
+
+    // Manifest-driven allowlist: only serve declared frontend assets.
+    // Reject literal backslashes outright so the normalization below cannot
+    // hide a POSIX filename containing `\` behind an allowlisted slash-form
+    // entry. The validator already rejects `\` in manifest entries.
+    if (reqPath.includes("\\")) {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+    // Normalize reqPath to match the form returned by
+    // getPluginAllowedJsFiles (forward-slash, no leading "./").
+    let normReq = reqPath;
+    while (normReq.startsWith("./")) normReq = normReq.slice(2);
+    const allowed = pluginManager.getPluginAllowedJsFiles(pluginName);
+    if (!allowed.has(normReq)) {
+      return c.json(problemJson("Not Found", 404, "Not found"), 404);
+    }
+
+    const filePath = resolve(pluginDir, normReq);
     // Raw-path containment check (cheap, runs before any FS call).
     if (!filePath.startsWith(pluginDir + SEPARATOR)) {
       return c.json(problemJson("Not Found", 404, "Not found"), 404);

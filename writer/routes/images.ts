@@ -56,6 +56,10 @@ export function registerImageRoutes(app: Hono, deps: Pick<AppDeps, "safePath">):
         headers: {
           "Content-Type": contentType,
           "Cache-Control": "public, immutable",
+          // Prevent the browser from MIME-sniffing a non-image payload (e.g.
+          // attacker-controlled bytes that slipped through a PNG re-encode
+          // bypass) into an executable/script context.
+          "X-Content-Type-Options": "nosniff",
         },
       });
     } catch {

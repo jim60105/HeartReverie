@@ -96,6 +96,7 @@ Deno.test({
         getStripTagPatterns: () => null,
         getPluginStyles: () => [],
         getPluginActionButtons: () => [],
+        getPluginAllowedJsFiles: () => new Set<string>(),
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -221,6 +222,7 @@ Deno.test({
             getStripTagPatterns: () => null,
             getPluginStyles: () => [],
             getPluginActionButtons: () => [],
+            getPluginAllowedJsFiles: () => new Set<string>(),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
           buildPromptFromStory: async () =>
@@ -271,6 +273,8 @@ Deno.test({
             getStripTagPatterns: () => null,
             getPluginStyles: () => [],
             getPluginActionButtons: () => [],
+            getPluginAllowedJsFiles: (name: string) =>
+              name === "my-plugin" ? new Set(["ui.js"]) : new Set<string>(),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
           buildPromptFromStory: async () =>
@@ -330,6 +334,10 @@ Deno.test({
             getStripTagPatterns: () => null,
             getPluginStyles: () => [],
             getPluginActionButtons: () => [],
+            getPluginAllowedJsFiles: (name: string) =>
+              name === "missing-plugin"
+                ? new Set(["nonexistent.js"])
+                : new Set<string>(),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
           buildPromptFromStory: async () =>
@@ -360,7 +368,11 @@ Deno.test({
       async () => {
         // Regression: a plugin whose frontend.js statically imports a sibling
         // file (e.g. './frontend-lightbox.js') must be able to fetch that
-        // sibling — the route is not restricted to the declared frontendModule.
+        // sibling — provided the sibling is declared in
+        // manifest.frontendImports. An undeclared sibling that physically
+        // exists on disk under the plugin directory MUST be 404'd: this is
+        // the defense-in-depth gate against an attacker landing arbitrary
+        // bytes inside a plugin dir and them being served as executable JS.
         const siblingDir = join(tmpDir, "sibling-plugin");
         await Deno.mkdir(siblingDir, { recursive: true });
         await Deno.writeTextFile(
@@ -370,6 +382,12 @@ Deno.test({
         await Deno.writeTextFile(
           join(siblingDir, "frontend-lightbox.js"),
           "export const createLightbox = () => ({});",
+        );
+        // An *undeclared* sibling file on disk — exists but must NOT be
+        // served because it is not in manifest.frontendImports.
+        await Deno.writeTextFile(
+          join(siblingDir, "undeclared.js"),
+          "/* must not be served */",
         );
 
         const app = createApp({
@@ -387,6 +405,7 @@ Deno.test({
                 description: "Plugin with sibling import",
                 type: "utility",
                 frontendModule: "frontend.js",
+                frontendImports: ["frontend-lightbox.js"],
               },
             ],
             getPluginDir: (name: string) =>
@@ -397,6 +416,10 @@ Deno.test({
             getStripTagPatterns: () => null,
             getPluginStyles: () => [],
             getPluginActionButtons: () => [],
+            getPluginAllowedJsFiles: (name: string) =>
+              name === "sibling-plugin"
+                ? new Set(["frontend.js", "frontend-lightbox.js"])
+                : new Set<string>(),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
           buildPromptFromStory: async () =>
@@ -413,6 +436,16 @@ Deno.test({
           verifyPassphrase,
         } as AppDeps);
 
+        // Declared frontendModule → served.
+        const resMod = await app.fetch(
+          new Request(
+            "http://localhost/plugins/sibling-plugin/frontend.js",
+            { headers: { "x-passphrase": "test-pass" } },
+          ),
+        );
+        assertEquals(resMod.status, 200);
+
+        // Declared frontendImports sibling → served.
         const res = await app.fetch(
           new Request(
             "http://localhost/plugins/sibling-plugin/frontend-lightbox.js",
@@ -423,6 +456,14 @@ Deno.test({
         assertEquals(res.headers.get("content-type"), "application/javascript");
         const text = await res.text();
         assertEquals(text, "export const createLightbox = () => ({});");
+
+        // Undeclared sibling .js that exists on disk → 404 (allowlist gate).
+        const resUndeclared = await makeRequest(
+          app,
+          "GET",
+          "/plugins/sibling-plugin/undeclared.js",
+        );
+        assertEquals(resUndeclared.status, 404);
 
         // Unknown plugin name → 404.
         const res2 = await makeRequest(
@@ -483,6 +524,7 @@ Deno.test({
           getStripTagPatterns: () => null,
           getPluginStyles: () => [],
           getPluginActionButtons: () => [],
+          getPluginAllowedJsFiles: () => new Set<string>(),
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -545,6 +587,7 @@ Deno.test({
           getStripTagPatterns: () => null,
           getPluginStyles: () => [],
           getPluginActionButtons: () => [],
+          getPluginAllowedJsFiles: () => new Set<string>(),
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -665,6 +708,7 @@ Deno.test({
         getStripTagPatterns: () => null,
         getPluginStyles: () => [],
         getPluginActionButtons: () => [],
+        getPluginAllowedJsFiles: () => new Set<string>(),
       } as unknown as PluginManager,
       hookDispatcher: new HookDispatcher(),
       buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
@@ -786,6 +830,7 @@ Deno.test({
           getPluginStyles: (name: string) =>
             name === "styled-plugin" ? [...validatedStyles] : [],
           getPluginActionButtons: () => [],
+          getPluginAllowedJsFiles: () => new Set<string>(),
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
