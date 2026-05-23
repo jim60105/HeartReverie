@@ -24,7 +24,7 @@
 | `storageBackend` | string | `"file"` | 儲存後端，可選 `"file"` 或 `"local"` |
 | `pollOnFocus` | boolean | `true` | 切回頁面時重新抓取伺服器進度 |
 | `pollIntervalMs` | number | `0` | 輪詢間隔（毫秒），`0` 表示停用（0–600000） |
-| `confirmRemoteJump` | boolean | `true` | 跨裝置跳轉前顯示確認對話框 |
+| `confirmRemoteJump` | boolean | `true` | 跨裝置跳轉前顯示確認對話框（僅於頁面載入時觸發一次；在站內導航至新章節時不會跳出，避免打斷生成下一章的流程） |
 | `retainDays` | number | `90` | 進度保留天數（1–3650） |
 | `trackSelectionAnchor` | boolean | `true` | 記錄 W3C Text Fragment 文字錨點 |
 

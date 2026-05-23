@@ -1,0 +1,41 @@
+## 1. Code changes
+
+- [x] 1.1 In `HeartReverie/plugins/reading-progress/frontend.js` inside `initFileMode`, add a `let crossChapterCheckUsed = false;` flag scoped to the IIFE/closure (above the `registerIdempotentChapterReady` call site).
+- [x] 1.2 Register a `hooks.on('story:switch', ...)` handler inside `initFileMode` that sets `crossChapterCheckUsed = false`. Ensure the handler is added before the existing `chapter:dom:ready` registration so it cannot race a same-tick reset.
+- [x] 1.3 **In the outer body of the `onFreshChapter` callback (around current line 654, BEFORE the `queueMicrotask` call at line 674), capture `const wasFirstCheck = !crossChapterCheckUsed;` and then `crossChapterCheckUsed = true;` — both synchronous, before any `await` / `queueMicrotask` boundary.** Pass `wasFirstCheck` into the microtask via closure.
+- [x] 1.4 Inside the microtask, gate the cross-chapter branch (`if (saved.chapterIndex !== ctx.chapterIndex)` at line 679) on `wasFirstCheck`. When `wasFirstCheck` is `false`, skip the `handleCrossChapter` call AND skip the same-chapter restore block — `return` after refreshing in-memory identity (assign `cachedRevision = saved.revision` and update `currentIdentity` if applicable, then return). When `saved.chapterIndex !== ctx.chapterIndex` AND `!wasFirstCheck`, the function must NOT fall through into the same-chapter restore block (because the saved chapter does not match).
+- [x] 1.5 In `checkRemoteConflict()` at `frontend.js` line 639, change `if (remote.chapterIndex !== chapterIndex)` to `if (remote.chapterIndex > chapterIndex)`. The `else` branch (same-chapter scroll-divergence hint via `showScrollHint`) becomes the path for both `===` AND `<` cases, which is correct — the `Math.abs(...) > 0.1` guard inside `else` already prevents spurious hints when remote and local are in different chapters with arbitrary scroll ratios. To be extra safe, change the `else` block to `else if (remote.chapterIndex === chapterIndex)` so we only check scroll-divergence when chapters truly match; do nothing when `remote.chapterIndex < chapterIndex` (server behind local, expected post-generation).
+- [x] 1.6 Add a brief inline comment block above the `crossChapterCheckUsed` declaration explaining the semantic ("Per-story-load guard…") and pointing readers to the spec requirement "Scroll restoration on mount".
+
+## 2. Tests
+
+- [x] 2.1 Locate the existing reading-progress tests directory. If `HeartReverie/tests/plugins/reading-progress/` exists, place new tests there following the existing harness; otherwise create the directory and a minimal `frontend_cross_chapter_guard_test.ts` that imports `frontend.js` with a stubbed `ctx` (hooks, fetch, dom-utils, `getProgress` spy).
+- [x] 2.2 Test case (first-mount prompt fires): simulate `story:switch` → first fresh `chapter:dom:ready` with `saved.chapterIndex !== ctx.chapterIndex`. Assert the dialog DOM element (`.reading-progress-conflict-dialog` or equivalent) appears OR — with `confirmRemoteJump: false` — `ctx.navigate` (or the equivalent navigation effect) is called exactly once.
+- [x] 2.3 Test case (subsequent in-app navigation suppressed): same setup, then dispatch a second fresh `chapter:dom:ready` for a different `chapterIndex` (still mismatched against `saved.chapterIndex`). Assert NO dialog appears AND no navigation occurs.
+- [x] 2.4 Test case (guard resets on story-switch): same setup, then dispatch `story:switch` for a different `(series, story)`, then a fresh `chapter:dom:ready` with `saved.chapterIndex !== ctx.chapterIndex`. Assert the dialog/navigation effect fires again.
+- [x] 2.5 Test case (failed GET consumes guard): `story:switch` → first fresh `chapter:dom:ready`, but make `getProgress` return `null` (simulated network failure). Then dispatch a second fresh `chapter:dom:ready` with a successful `getProgress` that returns a mismatched `saved.chapterIndex`. Assert NO dialog/navigation on the second dispatch (guard was consumed synchronously by the first dispatch).
+- [x] 2.6 Test case (race between two pre-resolution fresh mounts): make `getProgress` return a pending promise. Dispatch fresh `chapter:dom:ready` #1 (GET pending). Dispatch fresh `chapter:dom:ready` #2 for a different chapter (its GET also returned via the same stub). Now resolve GET #2 first (with a mismatched `saved.chapterIndex`), then GET #1 (with a mismatched `saved.chapterIndex`). Assert: exactly ONE dialog/navigation effect was produced (from dispatch #1, since its `wasFirstCheck` was captured synchronously as `true` before #2 fired).
+- [x] 2.7 Test case (same-chapter restore unaffected): `story:switch` → first fresh `chapter:dom:ready` with `saved.chapterIndex === ctx.chapterIndex` and `scrollRatio: 0.5`. Assert scroll restoration runs (e.g. assert `document.scrollingElement.scrollTop` was set, or that `restoreScroll` was called). Then dispatch a second fresh `chapter:dom:ready` for a different chapter where `saved.chapterIndex === ctx.chapterIndex` (server has independently updated). Assert scroll restoration runs again (guard does not block same-chapter restore).
+- [x] 2.8 Test case (polling path strict-ahead): construct `checkRemoteConflict` scenario with `local.chapterIndex = 5`, `remote.chapterIndex = 3`, `remote.revision > cachedRevision`. Invoke `checkRemoteConflict()`. Assert NO dialog appears, NO navigation occurs, and `showScrollHint` is NOT called (chapters do not match in the new `else if` branch).
+- [x] 2.9 Test case (polling path same chapter scroll divergence): `local.chapterIndex = 4`, `remote.chapterIndex = 4`, `remote.scrollRatio = 0.8`, `localRatio = 0.1`. Invoke `checkRemoteConflict()`. Assert `showScrollHint` IS called and NO cross-chapter dialog.
+- [x] 2.10 Test case (polling path remote ahead — preserve existing): `local.chapterIndex = 2`, `remote.chapterIndex = 5`, `remote.revision > cachedRevision`. Invoke `checkRemoteConflict()`. Assert cross-chapter dialog appears or navigation occurs per `confirmRemoteJump`.
+- [x] 2.11 Run `deno task test` (or the existing project test command per `HeartReverie/AGENTS.md` and `deno.json`). All tests SHALL pass with no regressions in the existing reading-progress test suite.
+
+## 3. Container integration verification (mandatory per AGENTS.md)
+
+- [x] 3.1 Run `HeartReverie/scripts/podman-build-run.sh` from the workspace root. Build SHALL complete without errors.
+- [x] 3.2 `podman logs heartreverie 2>&1 | grep -iE 'error|warn'` SHALL be clean (no plugin-load errors, no Vue warnings from the reading-progress frontend).
+- [x] 3.3 Open the reader UI at http://localhost:8080/ (passphrase as configured). Open a story with at least 2 chapters where the server-stored progress for that story is at chapter 0. Generate the next chapter via the engine's regenerate / next-chapter UI. Assert: NO cross-chapter modal appears after the new chapter mounts.
+- [x] 3.4 With the same browser tab open, reload the page (Ctrl+R) on a chapter that differs from the server-stored progress. Assert: cross-chapter modal DOES appear (or auto-nav fires if `confirmRemoteJump: false`).
+- [x] 3.5 Switch to a different story via the sidebar where server-stored progress points to a chapter other than the one initially mounted. Assert: cross-chapter modal appears for the newly-opened story.
+- [x] 3.6 Polling-path manual check: with `pollOnFocus: true`, generate chapter N+1, click out to a different browser tab, then click back. Assert: NO cross-chapter modal appears (server is behind local, strict-ahead gate prevents prompt).
+
+## 4. Documentation
+
+- [x] 4.1 Update `HeartReverie/plugins/reading-progress/README.md` (if it documents this UX) to describe the new "first-mount-per-story-load" semantic and link to the spec requirement.
+- [x] 4.2 No changes needed to `HeartReverie/AGENTS.md` (no architectural shift). No changes needed to `HeartReverie/docs/plugin-system.md` (no contract change).
+
+## 5. Spec sync
+
+- [x] 5.1 After implementation and tests pass, run `openspec sync-specs --change gate-cross-chapter-prompt-to-page-load` (or follow the project's spec-sync workflow) so the main `openspec/specs/reading-progress/spec.md` reflects both modified requirements.
+- [x] 5.2 Run `openspec status --change gate-cross-chapter-prompt-to-page-load` and confirm `isComplete: true` before archiving.

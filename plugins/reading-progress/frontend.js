@@ -545,6 +545,16 @@ function initFileMode(hooks, context, settings) {
   let chapters = [];
   let pollTimer = null;
 
+  // Per-story-load guard for the cross-chapter prompt on `chapter:dom:ready`.
+  // The cross-chapter "jump back?" dialog SHALL fire at most once per
+  // story-load session — only on the first fresh `chapter:dom:ready` after a
+  // `story:switch` (initial page load or opening a different story). Reset
+  // happens in the `story:switch` handler below. Set synchronously in the
+  // outer `onFreshChapter` body (before any `queueMicrotask` / `await`) so
+  // back-to-back fresh mounts cannot both observe `false`. See spec:
+  // openspec/specs/reading-progress/spec.md → "Scroll restoration on mount".
+  let crossChapterCheckUsed = false;
+
   // Late-bound identity accessors; assigned after registerIdempotentChapterReady below.
   let getIdentity = () => null;
   let setIdentity = () => {};
@@ -636,9 +646,9 @@ function initFileMode(hooks, context, settings) {
 
     const confirmRemoteJump = settings.confirmRemoteJump !== false;
 
-    if (remote.chapterIndex !== chapterIndex) {
+    if (remote.chapterIndex > chapterIndex) {
       handleCrossChapter(remote.chapterIndex, series, story, confirmRemoteJump);
-    } else {
+    } else if (remote.chapterIndex === chapterIndex) {
       // Same chapter: check scroll divergence
       const localEntry = lastEntryByIndex.get(chapterIndex);
       const localRatio = localEntry ? localEntry.scrollRatio : 0;
@@ -646,6 +656,8 @@ function initFileMode(hooks, context, settings) {
         showScrollHint(null);
       }
     }
+    // remote.chapterIndex < chapterIndex: server behind local (e.g. just
+    // generated a new chapter locally before the PUT flushed). No prompt.
   }
 
   // -- 4.3 — chapter:dom:ready (idempotent) --
@@ -670,6 +682,14 @@ function initFileMode(hooks, context, settings) {
 
     window.addEventListener('scroll', onScroll, { passive: true });
 
+    // Capture the per-story-load cross-chapter guard SYNCHRONOUSLY here, before
+    // the queueMicrotask boundary. Two back-to-back fresh `chapter:dom:ready`
+    // dispatches must not both observe `crossChapterCheckUsed === false`.
+    // A failed/null GET still consumes the guard (desired: a transient blip on
+    // page load must not defer the first-check to later in-app navigation).
+    const wasFirstCheck = !crossChapterCheckUsed;
+    crossChapterCheckUsed = true;
+
     // Fire-and-forget: GET progress and attempt restore or cross-chapter prompt
     queueMicrotask(async () => {
       const saved = await getProgress(ctx.series, ctx.story);
@@ -677,6 +697,23 @@ function initFileMode(hooks, context, settings) {
       cachedRevision = saved.revision;
 
       if (saved.chapterIndex !== ctx.chapterIndex) {
+        if (!wasFirstCheck) {
+          // Cross-chapter mismatch on a subsequent in-app fresh mount within
+          // the same story-load session — suppress the prompt entirely.
+          // Skip the same-chapter restore block too (chapters do not match).
+          return;
+        }
+        // Guard against stale GET: if the user navigated / switched story
+        // while this GET was in-flight, suppress the prompt for the obsolete
+        // ctx. Without this check, a slow first-mount GET could fire the
+        // cross-chapter dialog targeting a chapter the user already left.
+        const identityX = getId();
+        if (
+          !identityX ||
+          identityX.series !== ctx.series ||
+          identityX.story !== ctx.story ||
+          identityX.chapterIndex !== ctx.chapterIndex
+        ) return;
         const confirmRemoteJump = settings.confirmRemoteJump !== false;
         handleCrossChapter(saved.chapterIndex, ctx.series, ctx.story, confirmRemoteJump);
         return;
@@ -738,6 +775,9 @@ function initFileMode(hooks, context, settings) {
     lastEntryByIndex.clear();
     cachedRevision = 0;
     chapters = Array.isArray(ctx.chapters) ? ctx.chapters : [];
+    // Reset per-story-load cross-chapter prompt guard so the next fresh
+    // `chapter:dom:ready` for the newly-opened story can prompt once.
+    crossChapterCheckUsed = false;
   }, 50);
 
   // -- 4.6 — Visibility / lifecycle --
