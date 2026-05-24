@@ -12,7 +12,7 @@
 |------|------|------|
 | L0 | `<story_summary>` | 所有非 L2 章節的摘要串接，作為全局故事摘要 |
 | L1 | 回退原文 | 沒有 `<chapter_summary>` 標籤的舊章節保留原文 |
-| L2 | 近期原文 | 最近 N 章保持全文（`<chapter_summary>` 已由 `stripPromptTags` 移除） |
+| L2 | 近期原文 | 最近 N 章保持全文（`<chapter_summary>` 已由 manifest 的 `promptStripTags` 清除） |
 
 ## 設定
 
@@ -79,7 +79,7 @@ enabled: true
 
 `chapter-summary-instruction.md` 是 [Vento](https://vento.js.org/) 範本，引擎會在渲染時注入動態變數：
 
-- `chapter_number`：由目標章節的檔名解析而來（例如 `0042.md` → `42`），確保摘要使用正確的章節編號。
+- `chapter_number`：由目標章節的檔名解析而來（例如 `0042.md` → `42`），讓摘要對應到正確的章節編號。
 
 若範本渲染失敗，引擎會記錄警告並回退至原始內容。
 
@@ -92,7 +92,6 @@ plugins/context-compaction/
 ├── config.ts                         # 設定載入
 ├── extractor.ts                      # 章節摘要提取
 ├── compactor.ts                      # 三層脈絡組裝
-├── frontend.js                       # 前端摘要標籤過濾
 ├── chapter-summary-instruction.md    # 提示詞片段
 └── README.md
 ```

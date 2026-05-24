@@ -16,6 +16,7 @@
 | `context-compaction` | `[{ "stage": "prompt-assembly", "writes": ["previousContext"] }]` |
 | `dialogue-colorize` | `[{ "stage": "chapter:dom:ready" }, { "stage": "chapter:dom:dispose" }]` |
 | `polish` | `[{ "stage": "action-button:click" }]` |
+| `reading-progress` | `[]`（前端 hook 不需在 manifest 宣告） |
 | `response-notify` | `[{ "stage": "notification" }]` |
 | `start-hints` | `[]`（純 prompt-only） |
 | `thinking` | `[{ "stage": "frontend-render", "reads": ["text"], "writes": ["text", "placeholderMap"] }]` |

@@ -63,7 +63,7 @@ deno task build:reader
 | `LLM_API_KEY` | ✅ | — | LLM 提供者 API 金鑰 |
 | `PASSPHRASE` | ✅ | — | 前端驗證用通關密語 |
 | `PORT` | — | `8080` | 監聽埠號 |
-| `LLM_MODEL` | — | `deepseek/deepseek-v3.2` | LLM 模型 |
+| `LLM_MODEL` | — | `deepseek/deepseek-v4-pro` | LLM 模型 |
 | `LLM_API_URL` | — | `https://openrouter.ai/api/v1/chat/completions` | LLM 聊天完成端點 |
 | `LLM_TEMPERATURE` | — | `0.1` | 取樣溫度 |
 | `LLM_FREQUENCY_PENALTY` | — | `0.13` | 頻率懲罰 |
@@ -74,12 +74,16 @@ deno task build:reader
 | `LLM_MIN_P` | — | `0` | Min-P 取樣 |
 | `LLM_TOP_A` | — | `1` | Top-A 取樣 |
 | `LLM_MAX_COMPLETION_TOKENS` | — | （未設定 = 不限制） | 每次回應的 token 上限（傳給上游 `max_completion_tokens`）。留空表示不設應用層上限，由模型供應商決定；若要設定，必須為正整數 |
+| `LLM_REASONING_ENABLED` | — | `true` | 是否在請求中附帶 `reasoning` 區塊 |
+| `LLM_REASONING_EFFORT` | — | `xhigh` | `reasoning.effort` 等級（例如 `low`、`medium`、`high`、`xhigh`） |
+| `LLM_REASONING_OMIT` | — | `false` | 設為 `true` 時完全省略 `reasoning` 區塊，適用於嚴格 OpenAI 相容後端 |
 | `PLUGIN_DIR` | — | — | 外部外掛目錄（絕對路徑） |
 | `PLAYGROUND_DIR` | — | `./playground` | 故事資料根目錄 |
 | `READER_DIR` | — | `./reader-dist` | 前端靜態檔案根目錄 |
 | `THEME_DIR` | — | `./themes/` | 主題檔案目錄 |
 | `LOG_LEVEL` | — | `info` | 日誌等級：debug、info、warn、error |
-| `LOG_FILE` | — | — | JSON Lines 日誌檔案路徑（啟用檔案日誌與自動輪替） |
+| `LOG_FILE` | — | `playground/_logs/audit.jsonl` | 稽核日誌 JSON Lines 檔案路徑（空字串停用檔案日誌） |
+| `LLM_LOG_FILE` | — | `playground/_logs/llm.jsonl` | LLM 互動日誌檔案路徑（完整紀錄請求與回應；空字串停用） |
 | `PROMPT_FILE` | — | `playground/_prompts/system.md` | 自訂提示詞模板檔案路徑 |
 
 ### 主題系統
@@ -113,7 +117,7 @@ text-main = "rgba(220, 220, 215, 1)"
 
 ## 🔌 外掛系統
 
-每個外掛是一個資料夾加上一份 `plugin.json`，宣告它要做的事。系統有六層擴展點：
+每個外掛是一個資料夾加上一份 `plugin.json`，宣告它要做的事。系統提供下列擴展點：
 
 1. **提示詞注入**：`promptFragments` 把 Markdown 檔案映射成 Vento 模板變數，渲染時自動塞進提示詞
 2. **提示詞標籤移除**：`promptStripTags` 告訴引擎在組建提示詞時從 previousContext（已儲存章節內容）中移除哪些 XML 標籤
@@ -131,7 +135,7 @@ text-main = "rgba(220, 220, 215, 1)"
 |------|------|
 | `context-compaction` | 多層上下文壓縮策略，控制送入 LLM 的歷史章節數量 |
 | `dialogue-colorize` | CSS Custom Highlight API 對話引號高亮，不修改 DOM |
-| `reading-progress` | 跨裝置閱讀進度同步——捲動位置追蹤、文字錨點書籤、跨章節恢復提示 |
+| `reading-progress` | 跨裝置閱讀進度同步：捲動位置追蹤、文字錨點書籤、跨章節恢復提示 |
 | `polish` | 潤稿模式——對最後一章進行語法與文風修正 |
 | `response-notify` | LLM 回應完成通知（Tab 隱藏時發送系統通知） |
 | `start-hints` | 首輪對話引導提示 |

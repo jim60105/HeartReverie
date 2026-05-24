@@ -15,7 +15,7 @@
 
 此包裹後的區塊寫入章節 `.md` 檔案的開頭，後接 LLM 回覆內容。
 
-透過 `promptStripTags` 與 `displayStripTags` 宣告，`<user_message>` 標籤在下一輪提示詞組裝時被移除（避免重複傳送），在前端顯示時也不會呈現。
+透過 `promptStripTags` 與 `displayStripTags` 宣告，`<user_message>` 包裹標籤會在下一輪提示詞組裝時被剝除，模型只讀到內層文字而不會看到 XML 雜訊；前端章節閱讀畫面也不會重複呈現使用者輸入（聊天介面自己已經顯示過一次）。
 
 ## 檔案結構
 
