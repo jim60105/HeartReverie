@@ -45,8 +45,8 @@ const remountToken = ref(0);
 const folderName = ref("");
 
 // Private state
-let currentSeries: string | null = null;
-let currentStory: string | null = null;
+const currentSeries = ref<string | null>(null);
+const currentStory = ref<string | null>(null);
 let previousSeries: string | null = null;
 let previousStory: string | null = null;
 let pollIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -104,15 +104,15 @@ function dispatchChapterChange(
   nextIndex: number,
 ): void {
   if (prevIndex === nextIndex) return;
-  if (!currentSeries || !currentStory) return;
+  if (!currentSeries.value || !currentStory.value) return;
   const chapterNumber =
     chapters.value[nextIndex]?.number ?? nextIndex + 1;
   const ctx: ChapterChangeContext = {
     previousIndex: prevIndex,
     index: nextIndex,
     chapter: chapterNumber,
-    series: currentSeries,
-    story: currentStory,
+    series: currentSeries.value,
+    story: currentStory.value,
   };
   frontendHooks.dispatch("chapter:change", ctx);
 }
@@ -164,8 +164,8 @@ function commitContent(next: string): void {
   // cause v-for remount of ChapterContent's token list.
   renderEpoch.value += 1;
   renderDebug("chapter-content-committed", {
-    series: currentSeries,
-    story: currentStory,
+    series: currentSeries.value,
+    story: currentStory.value,
     chapterIndex: currentIndex.value,
     contentLength: next.length,
     renderEpoch: renderEpoch.value,
@@ -186,11 +186,11 @@ function restartPollInterval(interval: number): void {
 }
 
 async function pollBackend(): Promise<void> {
-  if (!currentSeries || !currentStory) return;
+  if (!currentSeries.value || !currentStory.value) return;
   if (isPolling) return;
   isPolling = true;
-  const series = currentSeries;
-  const story = currentStory;
+  const series = currentSeries.value;
+  const story = currentStory.value;
 
   try {
     const res = await apiFetch(
@@ -199,7 +199,7 @@ async function pollBackend(): Promise<void> {
     );
 
     // Discard if story changed during fetch
-    if (series !== currentSeries || story !== currentStory) return;
+    if (series !== currentSeries.value || story !== currentStory.value) return;
 
     if (res.status === 429) {
       const backoff = Math.min(currentPollInterval * 2, POLL_INTERVAL_MAX);
@@ -215,11 +215,24 @@ async function pollBackend(): Promise<void> {
     const cachedLen = chapters.value.length;
 
     if (nums.length !== cachedLen) {
-      // New chapters detected — reload all and navigate to last
-      await loadFromBackendInternal(series, story);
-      if (series !== currentSeries || story !== currentStory) return;
-      if (chapters.value.length > 0) {
-        navigateTo(chapters.value.length - 1);
+      // New chapters detected — reload all and navigate to last atomically.
+      const loaded = await loadFromBackendInternal(series, story);
+      if (series !== currentSeries.value || story !== currentStory.value) return;
+      const prev = currentIndex.value;
+      if (loaded.length > 0) {
+        const lastIdx = loaded.length - 1;
+        // Atomic: assign currentIndex first, then chapters, so default-flush
+        // consumers and plugin hooks never see (length=N_new, index=stale).
+        currentIndex.value = lastIdx;
+        chapters.value = loaded;
+        commitContent(loaded[lastIdx]?.content ?? "");
+        dispatchChapterChange(prev, lastIdx);
+      } else {
+        // Atomic: reset index + content together with the empty array so
+        // consumers never see a stale-high index against a zero-length array.
+        currentIndex.value = 0;
+        chapters.value = loaded;
+        commitContent("");
       }
       return;
     }
@@ -231,7 +244,7 @@ async function pollBackend(): Promise<void> {
         `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/${lastNum}`,
         { throwOnError: false },
       );
-      if (series !== currentSeries || story !== currentStory) return;
+      if (series !== currentSeries.value || story !== currentStory.value) return;
       if (!chRes.ok) return;
       const { content, stateDiff } = (await chRes.json()) as { content: string; stateDiff?: import("@/types").StateDiffPayload };
       const lastIdx = chapters.value.length - 1;
@@ -251,13 +264,13 @@ async function pollBackend(): Promise<void> {
 
 /** Push the current chapter to the URL. */
 function syncRoute(): void {
-  if (!currentSeries || !currentStory) return;
+  if (!currentSeries.value || !currentStory.value) return;
   if (chapters.value.length === 0) return;
   router.replace({
     name: "chapter",
     params: {
-      series: currentSeries,
-      story: currentStory,
+      series: currentSeries.value,
+      story: currentStory.value,
       chapter: String(currentIndex.value + 1),
     },
   });
@@ -293,13 +306,13 @@ function goToLast(): void {
 async function loadFromBackendInternal(
   series: string,
   story: string,
-): Promise<void> {
+): Promise<ChapterData[]> {
   const loaded = await apiFetchJson<ChapterData[]>(
     `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters?include=content`,
     { errorMessage: "Failed to load chapters" },
   );
 
-  chapters.value = loaded;
+  return loaded;
 }
 
 async function loadFromBackend(
@@ -310,8 +323,8 @@ async function loadFromBackend(
 ): Promise<void> {
   clearPolling();
   const token = ++loadToken;
-  currentSeries = series;
-  currentStory = story;
+  currentSeries.value = series;
+  currentStory.value = story;
   folderName.value = `${series} / ${story}`;
 
   // Dispatch story:switch only for real transitions (different series/story).
@@ -321,26 +334,35 @@ async function loadFromBackend(
   // pre-sets currentSeries before this call completes.
   const isTransition = previousSeries !== series || previousStory !== story;
 
-  await loadFromBackendInternal(series, story);
+  const loaded = await loadFromBackendInternal(series, story);
   // Discard stale result if a newer load was triggered
   if (token !== loadToken) return;
 
-  if (chapters.value.length === 0) {
-    commitContent("");
+  if (loaded.length === 0) {
+    // Atomic: clear both refs together before any hook / commit.
     currentIndex.value = 0;
+    chapters.value = loaded;
+    commitContent("");
     startPollingIfNeeded();
     return;
   }
+
+  const startIdx = startChapter
+    ? Math.max(0, Math.min(startChapter - 1, loaded.length - 1))
+    : 0;
+
+  // Atomic update: assign currentIndex and chapters in the same synchronous
+  // block (no await, no nextTick) BEFORE any plugin-hook dispatch, so that
+  // default-flush consumers (e.g. `showChatInput`) and plugin hooks never
+  // observe (chapters.length=N_new, currentIndex=stale_high).
+  currentIndex.value = startIdx;
+  chapters.value = loaded;
 
   if (isTransition) {
     dispatchStorySwitch(series, story);
   }
 
-  const startIdx = startChapter
-    ? Math.max(0, Math.min(startChapter - 1, chapters.value.length - 1))
-    : 0;
-  currentIndex.value = startIdx;
-  commitContent(chapters.value[startIdx]?.content ?? "");
+  commitContent(loaded[startIdx]?.content ?? "");
   if (isTransition) {
     dispatchChapterChange(null, startIdx);
   }
@@ -353,22 +375,28 @@ async function loadFromBackend(
 }
 
 async function reloadToLast(): Promise<void> {
-  if (!currentSeries || !currentStory) return;
+  if (!currentSeries.value || !currentStory.value) return;
   clearPolling();
   const token = ++loadToken;
 
-  await loadFromBackendInternal(currentSeries, currentStory);
+  const loaded = await loadFromBackendInternal(currentSeries.value, currentStory.value);
   if (token !== loadToken) return;
 
-  if (chapters.value.length === 0) {
+  if (loaded.length === 0) {
+    // Atomic: reset index + content together with the empty array.
+    currentIndex.value = 0;
+    chapters.value = loaded;
+    commitContent("");
     startPollingIfNeeded();
     return;
   }
 
   const prevIdx = currentIndex.value;
-  const lastIdx = chapters.value.length - 1;
+  const lastIdx = loaded.length - 1;
+  // Atomic update before any plugin-hook dispatch.
   currentIndex.value = lastIdx;
-  commitContent(chapters.value[lastIdx]?.content ?? "");
+  chapters.value = loaded;
+  commitContent(loaded[lastIdx]?.content ?? "");
   dispatchChapterChange(prevIdx, lastIdx);
 
   syncRoute();
@@ -383,15 +411,16 @@ async function reloadToLast(): Promise<void> {
  * `chapter:render:after` re-fires.
  */
 async function refreshAfterEdit(targetChapter: number): Promise<void> {
-  if (!currentSeries || !currentStory) return;
+  if (!currentSeries.value || !currentStory.value) return;
   clearPolling();
   const token = ++loadToken;
 
-  await loadFromBackendInternal(currentSeries, currentStory);
+  const loaded = await loadFromBackendInternal(currentSeries.value, currentStory.value);
   if (token !== loadToken) return;
 
-  if (chapters.value.length === 0) {
+  if (loaded.length === 0) {
     currentIndex.value = 0;
+    chapters.value = loaded;
     commitContent("");
     startPollingIfNeeded();
     return;
@@ -399,11 +428,13 @@ async function refreshAfterEdit(targetChapter: number): Promise<void> {
 
   const targetIdx = Math.max(
     0,
-    Math.min(targetChapter - 1, chapters.value.length - 1),
+    Math.min(targetChapter - 1, loaded.length - 1),
   );
   const prevIdx = currentIndex.value;
+  // Atomic update before any plugin-hook dispatch.
   currentIndex.value = targetIdx;
-  commitContent(chapters.value[targetIdx]?.content ?? "");
+  chapters.value = loaded;
+  commitContent(loaded[targetIdx]?.content ?? "");
   if (prevIdx !== targetIdx) dispatchChapterChange(prevIdx, targetIdx);
 
   syncRoute();
@@ -416,18 +447,18 @@ function getBackendContext(): {
   isBackendMode: boolean;
 } {
   return {
-    series: currentSeries,
-    story: currentStory,
-    isBackendMode: currentSeries !== null && currentStory !== null,
+    series: currentSeries.value,
+    story: currentStory.value,
+    isBackendMode: currentSeries.value !== null && currentStory.value !== null,
   };
 }
 
 /** Send a subscribe message if WebSocket is connected and authenticated. */
 function sendSubscribeIfConnected(): void {
-  if (!currentSeries || !currentStory) return;
+  if (!currentSeries.value || !currentStory.value) return;
   const { isConnected, isAuthenticated, send } = useWebSocket();
   if (isConnected.value && isAuthenticated.value) {
-    send({ type: 'subscribe', series: currentSeries, story: currentStory });
+    send({ type: 'subscribe', series: currentSeries.value, story: currentStory.value });
   }
 }
 
@@ -472,7 +503,7 @@ function initRouteSync(): void {
       if (!newSeries || !newStory) return;
       const s = newSeries as string;
       const st = newStory as string;
-      if (s === currentSeries && st === currentStory) return;
+      if (s === currentSeries.value && st === currentStory.value) return;
       const chapterParam = route.params.chapter;
       const startChapter = chapterParam
         ? parseInt(chapterParam as string, 10)
@@ -487,17 +518,42 @@ function initRouteSync(): void {
 
   // chapters:updated — reload chapters when count changes
   wsOnMessage('chapters:updated', async (msg) => {
-    if (msg.series !== currentSeries || msg.story !== currentStory) return;
+    if (msg.series !== currentSeries.value || msg.story !== currentStory.value) return;
     const prevLen = chapters.value.length;
-    await loadFromBackendInternal(msg.series, msg.story);
-    if (chapters.value.length > prevLen) {
-      navigateTo(chapters.value.length - 1);
+    const loaded = await loadFromBackendInternal(msg.series, msg.story);
+    if (msg.series !== currentSeries.value || msg.story !== currentStory.value) return;
+    if (loaded.length > prevLen && loaded.length > 0) {
+      // Atomic update: jump to the new last chapter without leaving a
+      // (chapters.length=N+k, currentIndex=stale) window for default-flush
+      // consumers (e.g. `showChatInput`) or plugin hooks.
+      const lastIdx = loaded.length - 1;
+      const prev = currentIndex.value;
+      currentIndex.value = lastIdx;
+      chapters.value = loaded;
+      commitContent(loaded[lastIdx]?.content ?? "");
+      dispatchChapterChange(prev, lastIdx);
+    } else if (loaded.length === 0) {
+      // Atomic: reset index + content alongside the empty array so stale-high
+      // currentIndex never lingers against a now-empty chapters array.
+      currentIndex.value = 0;
+      chapters.value = loaded;
+      commitContent("");
+    } else {
+      // Shrink (still non-empty): clamp currentIndex into the new range
+      // BEFORE swapping the array so consumers never observe a stale-high
+      // index against the shorter chapters list.
+      const clampedIdx = Math.min(currentIndex.value, loaded.length - 1);
+      if (clampedIdx !== currentIndex.value) {
+        currentIndex.value = clampedIdx;
+      }
+      chapters.value = loaded;
+      commitContent(loaded[clampedIdx]?.content ?? "");
     }
   });
 
   // chapters:content — update chapter content in-place
   wsOnMessage('chapters:content', (msg) => {
-    if (msg.series !== currentSeries || msg.story !== currentStory) return;
+    if (msg.series !== currentSeries.value || msg.story !== currentStory.value) return;
     const lastIdx = chapters.value.length - 1;
     if (lastIdx < 0) return;
     if (msg.chapter !== chapters.value[lastIdx]!.number) return;
@@ -518,7 +574,7 @@ function initRouteSync(): void {
       clearPolling();
       sendSubscribeIfConnected();
     } else {
-      if (!pollIntervalId && currentSeries && currentStory) {
+      if (!pollIntervalId && currentSeries.value && currentStory.value) {
         pollIntervalId = setInterval(pollBackend, POLL_INTERVAL_BASE);
       }
     }
