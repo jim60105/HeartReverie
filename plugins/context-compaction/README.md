@@ -1,10 +1,16 @@
 # context-compaction
 
-透過 LLM 產生的章節摘要，將 `previous_context` 從全量章節原文壓縮為三層結構，降低 token 消耗。
+故事愈寫愈長，舊章節全文塞進提示詞會吃掉大量 token，也容易撞到模型的脈絡上限。這個外掛讓 LLM 在每章結尾順手寫一段摘要，往後回顧時舊章節就以摘要登場，最近的幾章維持原文，整體脈絡保得住，token 卻省下不少。
+
+## 我會看到什麼？
+
+- 模型寫完章節後，章節 `.md` 檔尾端會多一段 `<chapter_summary>` 區塊（提示詞與閱讀畫面都會自動藏起來，只存在於檔案裡）。
+- 下次組裝提示詞時，舊章節以摘要傳給模型，近期 N 章保留全文。
+- 不需要額外的 API 呼叫，也不會多出任何檔案。
 
 ## 運作原理
 
-外掛透過 `promptFragments` 注入提示詞指令，要求 LLM 在每次回覆的故事內容後附上 `<chapter_summary>` 標籤。摘要內嵌在章節 `.md` 檔案中，不產生額外檔案，也不需要額外的 API 呼叫。
+外掛透過 `promptFragments` 注入提示詞指令，要求 LLM 在每次回覆的故事內容後附上 `<chapter_summary>` 標籤。摘要內嵌在章節 `.md` 檔案中。
 
 在 `prompt-assembly` hook 階段，外掛從各章原始內容提取摘要，將 `previous_context` 陣列重組為三層結構：
 
@@ -48,7 +54,7 @@ enabled: true
 
 外掛 manifest 透過 `settingsSchema` 宣告了上述兩個欄位，引擎會在閱讀器設定頁自動產生對應的表單。打開閱讀器 → 設定 → 外掛 → `context-compaction`，即可調整 `recentChapters` 和 `enabled`。儲存後寫入 `playground/_plugins/context-compaction/config.json`，下一次對話即生效，無需重啟後端。
 
-注意：UI 設定屬於 **全域**（影響整個安裝），若要針對個別故事或系列設定，請使用對應的 `compaction-config.yaml`。
+注意：UI 設定屬於 **全域**（影響整個站台），若要針對個別故事或系列設定，請使用對應的 `compaction-config.yaml`。
 
 #### 範例：YAML 與 UI 並用
 
@@ -59,7 +65,7 @@ enabled: true
 
 ## 回退行為
 
-- 章節沒有 `<chapter_summary>` 標籤時，保留全文（與未安裝外掛時相同）
+- 章節沒有 `<chapter_summary>` 標籤時，保留全文（行為和外掛關掉時一樣）
 - 所有章節都沒有摘要標籤時，`previous_context` 內容不變
 - 章節總數不超過 `recentChapters` 時，不進行壓縮
 

@@ -9,13 +9,13 @@
   <img src="assets/heart.webp"/>
 </section>
 
-面向開發者的 AI 互動小說引擎，以 Markdown 檔案與外掛系統為核心。
+HeartReverie 浮心夜夢 是一套 AI 互動小說引擎，把「讀小說」與「寫小說」綁在一起。你輸入幾句話來引導劇情走向，AI 接著把故事寫進章節檔案，你再像翻書一樣繼續往下讀。
 
-HeartReverie 以「發展故事」為主軸，有別於 [SillyTavern][sillytavern] 以「對話」為核心的設計。你的輸入作為引導故事走向的指示，本身不會寫入故事內容。
+與 [SillyTavern][sillytavern] 以「對話」為核心的設計不同，HeartReverie 的主軸是「發展故事」，你的輸入只作為引導，並不會直接寫進章節內容。
 
-整個專案圍繞純文字檔案設計，故事內容、提示詞、典籍系統等全部以 `.md` 檔案儲存，適合習慣 VSCode 等編輯器的開發者。提示詞骨架是一個 [Vento][vento] 模板 [`system.md`][system-md]，可注入 Markdown 片段作為模板變數，所有客製化皆可透過外掛系統完成。提供 [Agent Skill](#撰寫自訂外掛)，讓你用 AI 代理全自動產生外掛程式。
+故事、提示詞、典籍系統全部以 `.md` 檔案儲存，可以用 VSCode 等熟悉的編輯器直接編輯、用 Git 做版本控制，適合喜歡掌控檔案的讀者與作者。客製化全部走外掛系統，搭配 [Agent Skill](#撰寫自訂外掛) 還能讓 AI 代理替你寫出整份外掛程式碼。
 
-前端是 [Vue 3][vue]；後端使用 [Hono][hono]，串接 OpenAI 相容 API，將回應逐步寫入章節檔案。
+技術棧上，前端使用 [Vue 3][vue]、後端使用 [Hono][hono]，串接任何 OpenAI 相容的 LLM API，將回應逐字寫入章節檔案；提示詞骨架是一份 [Vento][vento] 模板 [`system.md`][system-md]，外掛可以注入 Markdown 片段作為模板變數。
 
 ## 🚀 快速開始
 
@@ -34,6 +34,14 @@ podman run -d --name heartreverie \
   -v ./playground:/app/playground:z \
   ghcr.io/jim60105/heartreverie:latest
 ```
+
+預建置映像檔發佈於 GitHub Container Registry；如需從原始碼自行建置：
+
+```bash
+podman build -t heartreverie:latest .
+```
+
+建置完成後沿用上方的 `podman run` 指令，將映像檔名稱換成 `heartreverie:latest` 即可啟動本地映像。
 
 ### 本地部署
 
@@ -200,25 +208,6 @@ npx skills add https://github.com/jim60105/HeartReverie -s heartreverie-create-p
 deno task test                                    # 全部
 deno task test:backend                            # 僅後端
 deno task test:frontend                           # 僅前端
-```
-
-## 🐳 容器部署
-
-預建置映像檔發佈於 GitHub Container Registry：
-
-```bash
-podman run -d --name heartreverie \
-  -p 8080:8080 \
-  -e LLM_API_KEY=your-api-key \
-  -e PASSPHRASE=your-passphrase \
-  -v ./playground:/app/playground:z \
-  ghcr.io/jim60105/heartreverie:latest
-```
-
-如需從原始碼自行建置：
-
-```bash
-podman build -t heartreverie:latest .
 ```
 
 ## ☸️ Helm 部署
