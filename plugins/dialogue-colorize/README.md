@@ -1,16 +1,22 @@
 # dialogue-colorize
 
-為章節中的對話引號區段著色。透過瀏覽器原生的 CSS Custom Highlight API 在不修改 DOM 與不替換引號字元的前提下繪製顏色，因此複製貼上、匯出、提示詞、磁碟內容皆與原稿完全一致。
+閱讀章節時，把對話用顏色標出來，敘述和對白一眼可分。著色完全發生在瀏覽器端，引號字元和原文一字不改，複製貼上、匯出檔案、送進提示詞時，看到的都是原稿。
 
-## 運作原理
+## 如何使用
 
-此外掛為純前端模組，註冊於 `chapter:dom:ready` 階段。每次 `ChapterContent.vue` 完成 v-html 提交後，模組會：
+預設啟用後，章節中的引號自動上色，色調跟著當前主題的角色名顏色走。想換顏色，可以到 **設定 → 外掛 → dialogue-colorize** 自訂；也可以挑要上色的引號種類（直引號、彎引號、書名號等等）。
 
-1. 走訪章節容器內的文字節點（跳過 `<code>`、`<pre>`、`<kbd>`、`<samp>` 子節點）。
-2. 以六組支援的引號正規表達式蒐集候選區段，採「最左最長」原則去重疊。
-3. 為每個保留的區段建立 `Range` 並加入對應的 `Highlight`，由 `::highlight(...)` CSS 規則上色。
+## 設定項目
 
-每次重新派發時，先以 `WeakMap` 紀錄的舊 `Range` 從 `Highlight` 中移除，再加入新的，避免累積失效節點。
+| 設定 | 預設 | 說明 |
+|------|------|------|
+| `enabled` | `true` | 關掉後外掛不啟用，章節維持原樣不上色。 |
+| `dialogueColor` | `""` | 自訂 CSS 顏色字串，例如 `#aa5500` 或 `royalblue`。留空代表沿用目前主題。 |
+| `enabledQuoteStyles` | 全部六種 | 控制哪些引號樣式會被加入 highlight。未勾選的樣式不會上色。 |
+
+`dialogueColor` 會在瀏覽器端以 `CSS.supports("color", value)` 驗證。無效或空白時，外掛會移除 `#plugin-dialogue-color-override`，讓主題的 `#theme-highlight-override` 繼續生效。
+
+優先序為：核心樣式 → 主題 `#theme-highlight-override` → 外掛 `#plugin-dialogue-color-override`。外掛覆寫會插在主題覆寫之後，不使用 `!important`。
 
 ## 支援的引號配對
 
@@ -23,7 +29,8 @@
 | `｢` (U+FF62) | `｣` (U+FF63) | `corner-half` | `dialogue-quote-corner-half` |
 | `《` (U+300A) | `》` (U+300B) | `book` | `dialogue-quote-book` |
 
-未支援（後續版本再評估）：
+目前未支援的情境（後續版本再評估）：
+
 - `„` （U+201E，無明確收尾字元）
 - `『…』`（白方括號）
 - 跨段落或跨 HTML 元素的對話
@@ -42,6 +49,16 @@
 
 需要支援 CSS Custom Highlight API 的瀏覽器：Chrome 105+、Safari 17.2+、Firefox 140+。瀏覽器若未支援，外掛會於載入時記錄一筆 info 訊息並完全跳過註冊；章節仍可正常顯示，只是不上色。
 
+## 運作原理
+
+此外掛為純前端模組，註冊於 `chapter:dom:ready` 階段。每次 `ChapterContent.vue` 完成 v-html 提交後，模組會：
+
+1. 走訪章節容器內的文字節點（跳過 `<code>`、`<pre>`、`<kbd>`、`<samp>` 子節點）。
+2. 以六組支援的引號正規表達式蒐集候選區段，採「最左最長」原則去重疊。
+3. 為每個保留的區段建立 `Range` 並加入對應的 `Highlight`，由 `::highlight(...)` CSS 規則上色。
+
+每次重新派發時，先以 `WeakMap` 紀錄的舊 `Range` 從 `Highlight` 中移除，再加入新的，避免累積失效節點。
+
 ## 檔案結構
 
 ```
@@ -51,15 +68,3 @@ plugins/dialogue-colorize/
 ├── styles.css     # ::highlight() CSS 規則
 └── README.md
 ```
-
-## 設定項目
-
-| 設定 | 預設 | 說明 |
-|------|------|------|
-| `enabled` | `true` | 關閉後本外掛將停用，等同未安裝外掛。 |
-| `dialogueColor` | `""` | 自訂 CSS 顏色字串，例如 `#aa5500` 或 `royalblue`。空字串代表沿用目前主題。 |
-| `enabledQuoteStyles` | 全部六種 | 控制哪些引號樣式會被加入 highlight。未勾選的樣式不會上色。 |
-
-`dialogueColor` 會在瀏覽器端以 `CSS.supports("color", value)` 驗證。無效或空白時，外掛會移除 `#plugin-dialogue-color-override`，讓主題的 `#theme-highlight-override` 繼續生效。
-
-優先序為：核心樣式 → 主題 `#theme-highlight-override` → 外掛 `#plugin-dialogue-color-override`。外掛覆寫會插在主題覆寫之後，不使用 `!important`。

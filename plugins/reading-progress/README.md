@@ -1,20 +1,12 @@
 # reading-progress
 
-## 概述
+在手機讀到一半，回到桌機接著看，捲動位置自動跟過來。這個外掛把目前讀到的章節、捲動位置與一小段文字錨點記在伺服器上，多裝置之間隨時同步。
 
-單使用者、跨裝置的閱讀進度同步外掛。記錄 **章節索引（chapter index）**、**捲動比例（scroll ratio）** 與 **W3C Text Fragment 文字錨點**，透過伺服器端 JSON 檔案進行同步。
+## 如何使用
 
-## 功能特色
+預設開啟後，閱讀章節時捲動位置會自動上傳（節流間隔可調）。切到別的裝置打開同一個故事，外掛會抓回最新進度並跳到對應位置；若伺服器版本比本地更新，會跳出對話框讓讀者決定要套用遠端版本還是保留本地版本。
 
-- 節流式捲動同步（throttled scroll sync），依 `syncIntervalSeconds` 設定控制上傳頻率
-- 原子檔案寫入（atomic file write），避免寫入中途損毀
-- 嚴格遞增修訂號（strict-monotonic revision），讓多裝置衝突可被偵測
-- 捲動還原搭配 `ResizeObserver` 穩定化，等待版面完成再套用位置
-- 章節頂端自動對齊：當儲存的進度位於章節最上方時，重新載入會維持 `scrollTop = 0`，工具列直接落在置頂頁首下方，不會被任何文字錨點覆寫
-- W3C Text Fragment 文字錨點定位，精確回到上次閱讀段落
-- 多裝置衝突偵測與行內對話框（inline dialog）讓使用者選擇保留版本
-- localStorage 進度匯入，可將舊的本地端進度遷移至伺服器
-- 設定面板管理所有外掛選項
+到 **設定 → 外掛 → reading-progress** 可以調整同步頻率、是否在頁面切回時重新抓取、是否記錄文字錨點等選項。
 
 ## 設定欄位
 
@@ -28,6 +20,18 @@
 | `confirmRemoteJump` | boolean | `true` | 跨裝置跳轉前顯示確認對話框（僅於頁面載入時觸發一次；在站內導航至新章節時不會跳出，避免打斷生成下一章的流程） |
 | `retainDays` | number | `90` | 進度保留天數（1–3650） |
 | `trackSelectionAnchor` | boolean | `true` | 記錄 W3C Text Fragment 文字錨點 |
+
+## 功能特色
+
+- 節流式捲動同步，依 `syncIntervalSeconds` 設定控制上傳頻率
+- 原子檔案寫入，避免寫入中途損毀
+- 嚴格遞增修訂號（strict-monotonic revision），讓多裝置衝突可被偵測
+- 捲動還原搭配 `ResizeObserver` 穩定化，等待版面完成再套用位置
+- 章節頂端自動對齊：當儲存的進度位於章節最上方時，重新載入會維持 `scrollTop = 0`，工具列直接落在置頂頁首下方，不會被任何文字錨點覆寫
+- W3C Text Fragment 文字錨點定位，回到上次閱讀段落
+- 多裝置衝突偵測與行內對話框，讓讀者選擇保留版本
+- localStorage 進度匯入，可將舊的本地端進度遷移至伺服器
+- 設定面板管理所有外掛選項
 
 ## 隱私聲明
 
@@ -55,7 +59,7 @@
 
 1. 每次成功寫入，伺服器端 `revision` 加 1。
 2. 客戶端上傳時附帶 `cachedRevision`；若與伺服器端 `revision` 不符，回應將包含 `conflict: true` 與當前的 `serverRevision`。
-3. **客戶端收到 `conflict: true` 時，必須將本地的 `cachedRevision` 更新為 `serverRevision`**，再由使用者決定是否覆蓋。
+3. **客戶端收到 `conflict: true` 時，必須將本地的 `cachedRevision` 更新為 `serverRevision`**，再由讀者決定是否覆蓋。
 
 此合約讓任何裝置都無法在未察覺衝突的情況下靜默覆蓋其他裝置的進度。
 
@@ -73,19 +77,6 @@ interface TextFragmentAnchor {
 ```
 
 其中 `textStart` 為必填欄位，其餘為選填。此結構可直接對應至 URL 的 `#:~:text=[prefix-,]textStart[,textEnd][,-suffix]` 語法。
-
-## manifest 欄位說明
-
-| 欄位 | 說明 |
-| --- | --- |
-| `name` | 外掛名稱，必須與目錄名稱一致 |
-| `version` | 語意化版本號 |
-| `description` | 外掛功能描述 |
-| `type` | 外掛類型：`"full-stack"` 表示同時包含前端與後端模組 |
-| `frontendModule` | 前端模組進入點的相對路徑 |
-| `backendModule` | 後端模組進入點的相對路徑 |
-| `hooks` | 要掛載的 hook 階段列表（本外掛使用 `registerRoutes`，故為空陣列） |
-| `settingsSchema` | JSON Schema 格式的設定欄位定義 |
 
 ## 檔案說明
 
