@@ -285,13 +285,6 @@ Paragraph text in the prose content area SHALL have a `text-shadow` using `--sha
 - **WHEN** paragraph text is rendered inside `#content`
 - **THEN** the paragraphs SHALL have `text-shadow: var(--shadow-width) var(--shadow-width) 4px var(--shadow-color)` applied
 
-### Requirement: Hidden sidebar scrollbar
-The `#sidebar` element SHALL hide its scrollbar while remaining scrollable, using `scrollbar-width: none` for standards-compliant browsers and `::-webkit-scrollbar { display: none }` for WebKit-based browsers. The sidebar content SHALL remain fully accessible via scroll gestures or mouse wheel.
-
-#### Scenario: Sidebar scrollbar is visually hidden
-- **WHEN** the sidebar content exceeds the visible viewport height on desktop
-- **THEN** the `#sidebar` element SHALL not display a visible scrollbar, but the user SHALL still be able to scroll through the sidebar content using scroll gestures, mouse wheel, or keyboard navigation
-
 ### Requirement: Option button styling
 Each option button SHALL be visually styled as a clickable button with clear borders, padding, and readable text. The option number SHALL be displayed alongside or within the button. The buttons SHALL have hover and active visual states defined entirely in CSS using `:hover` and `:active` pseudo-classes. No inline `onmouseover` or `onmouseout` event handlers SHALL be used.
 
@@ -388,13 +381,17 @@ Specifically:
 
 1. **Chapter toolbar top margin** — The `.chapter-toolbar` element rendered by `reader-src/src/components/ChapterContent.vue` SHALL declare `margin-top: 1rem` (in addition to its existing `margin-bottom: 1rem`). This SHALL apply uniformly to every toolbar instance, including the first chapter's toolbar (the rule SHALL NOT be scoped behind a `:not(:first-child)` or sibling combinator).
 
-2. **Sidebar non-pinning sticky position** — The `.sidebar` element rendered by `reader-src/src/components/Sidebar.vue` SHALL retain `position: sticky` but SHALL NOT declare any of `top`, `right`, `bottom`, or `left` in its default (desktop) state. Per the CSS Positioned Layout specification, a `position: sticky` element with no anchor edge does not pin to the viewport during scroll, so the sidebar SHALL scroll with the chapter column. The `max-height: calc(100vh - var(--header-height) - 16px)` cap SHALL remain so tall plugin-stuffed sidebars still produce an internal scrollbar.
+2. **Sidebar non-pinning sticky position** — The `.sidebar` element rendered by `reader-src/src/components/Sidebar.vue` SHALL retain `position: sticky` but SHALL NOT declare any of `top`, `right`, `bottom`, or `left` in its default (desktop) state. Per the CSS Positioned Layout specification, a `position: sticky` element with no anchor edge does not pin to the viewport during scroll, so the sidebar SHALL scroll with the chapter column.
 
-3. **Mobile breakpoint unaffected** — `reader-src/src/components/Sidebar.vue` SHALL retain its existing `<style scoped>` `@media (max-width: 767px)` override block, which sets `.sidebar { position: static; max-height: none; overflow-y: visible; }` and `.sidebar.sidebar--hidden-during-stream { display: none; }`. The non-pinning rule in (2) above applies only to the default desktop state where `position: sticky` is in effect.
+3. **Sidebar has no desktop viewport-height cap** — The `.sidebar` element rendered by `reader-src/src/components/Sidebar.vue` SHALL NOT declare `max-height: calc(100vh - var(--header-height) - 16px)` or any equivalent viewport-relative `max-height` cap in its default (desktop) state. Tall relocated `.plugin-sidebar` panels SHALL be allowed to increase the document height and scroll with the page. A plugin that needs a bounded internal scroll region SHALL define that bound within the plugin panel itself rather than relying on the host `<aside>`.
 
-4. **Dead legacy CSS removed** — `reader-src/src/styles/base.css` SHALL no longer contain the inert `#sidebar`, `#sidebar::-webkit-scrollbar`, `#sidebar:empty`, `.content-wrapper:has(#sidebar:empty)`, or `@media (max-width: 767px) { #sidebar { … } }` rule blocks. No element in the codebase carries `id="sidebar"`, and these blocks encode the same 42px sticky offset this requirement eliminates from the live `.sidebar` selector; leaving them would risk silently re-pinning the sidebar at higher specificity if an `id="sidebar"` were ever added to the `<aside>` for accessibility or anchor-link purposes. The surrounding `.content-wrapper` rule and the mobile `.content-wrapper { grid-template-columns: 1fr; }` declaration SHALL remain intact (they govern the live grid layout and are unrelated to the dead sidebar block).
+4. **Mobile breakpoint unaffected** — `reader-src/src/components/Sidebar.vue` SHALL retain its existing `<style scoped>` `@media (max-width: 767px)` override block, which sets `.sidebar { position: static; max-height: none; overflow-y: visible; }` and `.sidebar.sidebar--hidden-during-stream { display: none; }`. The non-pinning rule in (2) and the no-cap rule in (3) apply only to the default desktop state.
 
-5. **No behavioural side-effects** — The hide-during-stream class toggle (`.sidebar--hidden-during-stream`), the empty-collapse rule (`.sidebar:empty { display: none; }`), the scrollbar-hiding rules, the plugin relocation `watchPostEffect` in `ContentArea.vue`, and all template structure SHALL be preserved without modification by this requirement.
+5. **Dead legacy CSS removed** — `reader-src/src/styles/base.css` SHALL no longer contain the inert `#sidebar`, `#sidebar::-webkit-scrollbar`, `#sidebar:empty`, `.content-wrapper:has(#sidebar:empty)`, or `@media (max-width: 767px) { #sidebar { … } }` rule blocks. No element in the codebase carries `id="sidebar"`, and these blocks encode the same 42px sticky offset previously eliminated from the live `.sidebar` selector; leaving them would risk silently re-pinning the sidebar at higher specificity if an `id="sidebar"` were ever added to the `<aside>` for accessibility or anchor-link purposes. The surrounding `.content-wrapper` rule and the mobile `.content-wrapper { grid-template-columns: 1fr; }` declaration SHALL remain intact (they govern the live grid layout and are unrelated to the dead sidebar block).
+
+6. **No `overflow-y` or scrollbar declarations on desktop sidebar** — The `.sidebar` default (desktop) state SHALL NOT declare `overflow-y`, `scrollbar-width`, or a `::webkit-scrollbar` rule. Without a height cap, these declarations are dead code and, critically, `overflow-y: auto/scroll/hidden` establishes a new scroll container and Block Formatting Context that would silently prevent any descendant `position: sticky` element from sticking relative to the viewport. If a future layout restores a height constraint and needs scroll behavior, the `overflow-y` and scrollbar rules SHALL be added back at that time alongside the constraint.
+
+7. **No behavioural side-effects** — The hide-during-stream class toggle (`.sidebar--hidden-during-stream`), the empty-collapse rule (`.sidebar:empty { display: none; }`), the plugin relocation `watchPostEffect` in `ContentArea.vue`, and all template structure SHALL be preserved without modification by this requirement.
 
 #### Scenario: Chapter toolbar has 1rem top margin on first chapter
 
@@ -413,19 +410,25 @@ Specifically:
 - **WHEN** inspecting the `.sidebar` selector in `reader-src/src/components/Sidebar.vue`'s `<style scoped>` block
 - **THEN** `position: sticky` SHALL be present
 - **AND** `top`, `right`, `bottom`, and `left` SHALL all be absent from the selector's declaration block
-- **AND** `max-height: calc(100vh - var(--header-height) - 16px)` SHALL still be present
+
+#### Scenario: Sidebar has no desktop max-height cap
+
+- **WHEN** inspecting the default `.sidebar` selector in `reader-src/src/components/Sidebar.vue`'s `<style scoped>` block
+- **THEN** `max-height: calc(100vh - var(--header-height) - 16px)` SHALL be absent
+- **AND** no other viewport-relative `max-height` declaration SHALL replace it in that default selector
 
 #### Scenario: Sidebar scrolls with content on desktop
 
-- **WHEN** a desktop user (viewport ≥ 768px) scrolls a long chapter
-- **THEN** the `<aside class="sidebar">` element SHALL scroll out of view together with the chapter content rather than pinning at a fixed viewport offset
+- **WHEN** a desktop user (viewport ≥ 768px) scrolls a long chapter with relocated sidebar panels
+- **THEN** the `<aside class="sidebar">` element SHALL scroll with the chapter content rather than pinning at a fixed viewport offset
+- **AND** tall sidebar content SHALL increase the page's scrollable document height instead of being clipped by a host-sidebar max-height cap
 - **AND** the chapter column SHALL not shift horizontally as a result of any sidebar layout change
 
-#### Scenario: Sidebar respects max-height cap
+#### Scenario: Plugin-owned scroll regions remain possible
 
-- **WHEN** the relocated `.plugin-sidebar` panels' total intrinsic height exceeds `calc(100vh - var(--header-height) - 16px)`
-- **THEN** the `<aside class="sidebar">` element SHALL render an internal scrollbar (visually hidden via `scrollbar-width: none` and `::-webkit-scrollbar { display: none; }`, per the existing rules)
-- **AND** the sidebar SHALL NOT extend beyond the cap
+- **WHEN** a relocated `.plugin-sidebar` panel defines its own internal scroll container
+- **THEN** that plugin-owned scroll container MAY scroll independently inside the panel
+- **AND** the host `<aside class="sidebar">` SHALL NOT be the component imposing the removed viewport-relative height cap
 
 #### Scenario: Mobile layout unchanged
 
@@ -439,8 +442,15 @@ Specifically:
 - **THEN** no `#sidebar` selector SHALL appear in the file (no `#sidebar { … }`, `#sidebar::-webkit-scrollbar`, `#sidebar:empty`, `.content-wrapper:has(#sidebar:empty)`, or `@media … { #sidebar { … } }` rule blocks)
 - **AND** the `.content-wrapper` rule and the mobile `@media (max-width: 767px) { .content-wrapper { grid-template-columns: 1fr; } }` declaration SHALL remain
 
+#### Scenario: Desktop sidebar has no overflow-y or scrollbar rules
+
+- **WHEN** inspecting the default `.sidebar` selector in `reader-src/src/components/Sidebar.vue`'s `<style scoped>` block
+- **THEN** `overflow-y` SHALL be absent from the declaration block
+- **AND** `scrollbar-width` SHALL be absent from the declaration block
+- **AND** no `::webkit-scrollbar` rule SHALL target `.sidebar` outside of a `@media (max-width: 767px)` block
+
 #### Scenario: Hide-during-stream behaviour preserved
 
 - **WHEN** an LLM streaming request is in flight and `useChatApi().isLoading === true` (per the existing "Sidebar transient hide during LLM streaming" requirement)
 - **THEN** the `.sidebar--hidden-during-stream` class SHALL still be toggled on `<aside class="sidebar">` exactly as before
-- **AND** the absence of the `top` declaration SHALL NOT affect the hide-then-restore behaviour
+- **AND** the absence of desktop `top`, `max-height`, and `overflow-y` declarations SHALL NOT affect the hide-then-restore behaviour
