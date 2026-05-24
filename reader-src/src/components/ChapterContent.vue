@@ -263,6 +263,7 @@ async function handleBranch(): Promise<void> {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  margin-top: 1rem;
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
   border-block-end: 1px dashed var(--border-inner);

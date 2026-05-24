@@ -16,7 +16,6 @@ const { isLoading } = useChatApi();
 <style scoped>
 .sidebar {
   position: sticky;
-  top: calc(var(--header-height) + 8px);
   max-height: calc(100vh - var(--header-height) - 16px);
   overflow-y: auto;
   scrollbar-width: none;
