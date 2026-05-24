@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-24
+
+### Added
+
+- **Mobile drawer navigation**: Reader gains a slide-out drawer for series, stories, and chapters on small screens, with in-place story loading so switching stories no longer triggers a full reload.
+- **Independent scrolling for settings and tools layouts**: The settings page and tools menu each keep their own scroll position, so navigating between long panels no longer resets the user's place.
+
+### Changed
+
+- **Reactive chat-input visibility across transitions**: Chat input visibility now reacts to series, story, and backend-mode state changes, fixing the input bar getting stuck visible or hidden after deeplinks, single-chapter selector picks, multi-chapter goToLast jumps, navigate-away events, and new-story flows.
+- **Reading-area vertical spacing**: Chapter toolbar gains a 1rem top margin for breathing room and the sidebar no longer pins below the page header — it scrolls with the chapter column instead.
+- **Reading-progress at-top behavior**: When the saved scroll position is essentially zero, restore now snaps the chapter to the top of the content area instead of pulling the toolbar behind the sticky header.
+- **Cross-chapter resume prompt**: Only shown on the initial page load; it no longer interrupts subsequent in-session chapter navigation.
+- **Chapter rendering during streaming**: The reader preserves the chapter's rendered DOM across stream updates, eliminating flicker and scroll drift while the LLM is writing.
+- **Plugin settings copy**: Built-in plugin settings descriptions rewritten for end-user readability.
+- **Documentation refresh**: Engine README, plugin-system / prompt-template / lore-codex docs, and every built-in plugin README audited for drift, polished for clarity, and aligned with the project's Traditional Chinese writing guideline.
+
+### Fixed
+
+- **Scroll drift during LLM streaming**: The reader no longer jumps mid-stream when content is appended to the active chapter.
+- **Sibling `.js` modules**: Plugin frontend modules can again import sibling `.js` files that are listed in the manifest's asset allowlist.
+- **Reading-progress local/file mode parity**: Local-storage mode now applies the same at-top snap rule as file mode, and the file-mode caller correctly clears `applyingRemote` when no programmatic scroll fires.
+
+### Security
+
+- **Manifest-driven plugin asset policy**: Plugin static assets are now restricted to a manifest-declared `.js` allowlist; lore documents are limited to `.md` files; uploaded PNG images are re-encoded server-side to strip embedded payloads. See the `codify-plugin-asset-security` change for the full policy.
+
 ## [0.7.0] - 2026-05-18
 
 ### Added
@@ -225,7 +252,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/jim60105/HeartReverie/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jim60105/HeartReverie/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jim60105/HeartReverie/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jim60105/HeartReverie/compare/v0.4.0...v0.5.0

@@ -16,4 +16,4 @@ version: 0.2.0
 # This is the version number of the application being deployed. It tracks the
 # HeartReverie release captured in CHANGELOG.md and is used as the default
 # image tag's reference value (the actual default tag is `latest`).
-appVersion: '0.7.0'
+appVersion: '0.8.0'
