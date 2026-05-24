@@ -14,15 +14,12 @@ const { isLoading } = useChatApi();
 </template>
 
 <style scoped>
+/* position: sticky with no anchor edge scrolls with the document rather than
+   pinning to the viewport. overflow-y and scrollbar rules are intentionally
+   absent: without a height cap they would be dead code and overflow-y would
+   create a BFC scroll container that silently breaks descendant sticky elements. */
 .sidebar {
   position: sticky;
-  max-height: calc(100vh - var(--header-height) - 16px);
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.sidebar::-webkit-scrollbar {
-  display: none;
 }
 
 .sidebar:empty {
@@ -47,4 +44,3 @@ const { isLoading } = useChatApi();
   }
 }
 </style>
-
