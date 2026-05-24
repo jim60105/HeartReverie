@@ -8,8 +8,9 @@
 
 - 節流式捲動同步（throttled scroll sync），依 `syncIntervalSeconds` 設定控制上傳頻率
 - 原子檔案寫入（atomic file write），避免寫入中途損毀
-- 嚴格遞增修訂號（strict-monotonic revision），確保多裝置衝突可偵測
+- 嚴格遞增修訂號（strict-monotonic revision），讓多裝置衝突可被偵測
 - 捲動還原搭配 `ResizeObserver` 穩定化，等待版面完成再套用位置
+- 章節頂端自動對齊：當儲存的進度位於章節最上方時，重新載入會維持 `scrollTop = 0`，工具列直接落在置頂頁首下方，不會被任何文字錨點覆寫
 - W3C Text Fragment 文字錨點定位，精確回到上次閱讀段落
 - 多裝置衝突偵測與行內對話框（inline dialog）讓使用者選擇保留版本
 - localStorage 進度匯入，可將舊的本地端進度遷移至伺服器
@@ -56,7 +57,7 @@
 2. 客戶端上傳時附帶 `cachedRevision`；若與伺服器端 `revision` 不符，回應將包含 `conflict: true` 與當前的 `serverRevision`。
 3. **客戶端收到 `conflict: true` 時，必須將本地的 `cachedRevision` 更新為 `serverRevision`**，再由使用者決定是否覆蓋。
 
-此合約確保任何裝置都不會在未察覺衝突的情況下靜默覆蓋其他裝置的進度。
+此合約讓任何裝置都無法在未察覺衝突的情況下靜默覆蓋其他裝置的進度。
 
 ## selectionAnchor 結構
 

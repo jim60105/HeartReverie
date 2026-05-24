@@ -35,4 +35,4 @@ plugins/thinking/
 | `completeSummaryLabel` | `思考過程` | 完整思考區塊的 `<summary>` 標題。 |
 | `streamingSummaryLabel` | `思考中...` | 未閉合思考區塊的 `<summary>` 標題。 |
 
-`injectInstruction` 由 `handler.ts` 的 `getDynamicVariables()` 動態提供，因此儲存設定後下一次提示詞組裝就會生效。
+`injectInstruction` 由 `handler.ts` 的 `getDynamicVariables()` 動態提供，儲存設定後下一次提示詞組裝就會生效，不必重啟後端。
