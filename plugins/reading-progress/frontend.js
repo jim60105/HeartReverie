@@ -206,6 +206,10 @@ function makeThrottledSync(waitMs, putFn) {
 
 function captureTextFragmentAnchor(container) {
   const scrollEl = getScrollElement();
+  // At absolute document top, no anchor is semantically meaningful; persisting
+  // a toolbar-button text node here would pull the toolbar behind the sticky
+  // header on the next restore.
+  if (scrollEl.scrollTop === 0) return null;
   const viewportTop = scrollEl.scrollTop;
   const viewportBottom = viewportTop + window.innerHeight;
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
@@ -390,17 +394,17 @@ function showScrollHint(onDismiss) {
 // ---------------------------------------------------------------------------
 
 function restoreScroll(container, saved, settings, chapters, currentIdentity, putProgressFn) {
-  if (!saved || !container) return;
+  if (!saved || !container) return false;
 
   // retainDays expiry check
   const retainDays = settings.retainDays ?? 90;
   if (saved.lastReadAt) {
     const age = (Date.now() - new Date(saved.lastReadAt).getTime()) / (1000 * 60 * 60 * 24);
-    if (age > retainDays) return;
+    if (age > retainDays) return false;
   }
 
   // Identity guard
-  if (!currentIdentity) return;
+  if (!currentIdentity) return false;
 
   // 5.4 — Chapter out-of-bounds clamping
   let targetIndex = saved.chapterIndex;
@@ -413,9 +417,20 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
   }
 
   // Only restore if we are on the matching chapter
-  if (targetIndex !== currentIdentity.chapterIndex) return;
+  if (targetIndex !== currentIdentity.chapterIndex) return false;
 
   const scrollEl = getScrollElement();
+
+  // "At the top" snap: when the saved entry decodes to a sub-pixel scroll
+  // target, leave scrollTop untouched so the chapter container sits flush
+  // beneath the sticky header (the natural scrollY === 0 state). Skips the
+  // anchor lookup entirely so a legacy toolbar-button anchor saved alongside
+  // scrollRatio: 0 cannot pull the toolbar behind the header. Returns false
+  // so the caller knows no programmatic scroll event will fire (the
+  // applyingRemote flag must not be set in that case).
+  const maxScrollForSnap = Math.max(1, scrollEl.scrollHeight - window.innerHeight);
+  const savedTop = (typeof saved.scrollRatio === 'number' ? saved.scrollRatio : 0) * maxScrollForSnap;
+  if (savedTop < 1) return false;
 
   // Try text fragment anchor first, then scrollRatio fallback
   let targetTop = null;
@@ -488,6 +503,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
 
   // 1.5s max stabilization window
   stabilizeTimer = setTimeout(cleanup, 1500);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -508,7 +524,12 @@ function initLocalMode(hooks, settings) {
         if (saved.chapterIndex === ctx.chapterIndex && typeof saved.scrollRatio === 'number') {
           const scrollEl = getScrollElement();
           const maxScroll = Math.max(1, scrollEl.scrollHeight - window.innerHeight);
-          scrollEl.scrollTop = saved.scrollRatio * maxScroll;
+          const targetTop = saved.scrollRatio * maxScroll;
+          // Mirror restoreScroll()'s "at the top" snap: skip mutation when the
+          // decoded target is sub-pixel.
+          if (targetTop >= 1) {
+            scrollEl.scrollTop = targetTop;
+          }
         }
       }
     } catch { /* corrupt data */ }
@@ -731,7 +752,7 @@ function initFileMode(hooks, context, settings) {
       ) return;
 
       applyingRemote = true;
-      restoreScroll(
+      const didRestore = restoreScroll(
         container,
         saved,
         settings,
@@ -739,6 +760,10 @@ function initFileMode(hooks, context, settings) {
         identity,
         (corrected) => putProgress(corrected),
       );
+      // If restoreScroll snapped (no scrollTop mutation), no programmatic
+      // scroll event will fire to consume the applyingRemote sentinel. Clear
+      // it immediately so the next genuine user scroll is observed and saved.
+      if (!didRestore) applyingRemote = false;
     });
 
     return () => window.removeEventListener('scroll', onScroll);
