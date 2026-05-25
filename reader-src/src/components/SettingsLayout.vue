@@ -40,6 +40,7 @@ const developerToolsTabs = computed(() =>
 
 interface PluginTab {
   pluginName: string;
+  /** Sourced from the plugin manifest's `displayName` (zh-TW label), not the slug. */
   label: string;
 }
 
@@ -54,7 +55,7 @@ onMounted(async () => {
         .filter((p: Record<string, unknown>) => p.hasSettings)
         .map((p: Record<string, unknown>) => ({
           pluginName: p.name as string,
-          label: (p.name as string),
+          label: (p.displayName as string),
         }));
     }
   } catch (err) {

@@ -1,5 +1,6 @@
 {
   "name": "user-message",
+  "displayName": "使用者訊息",
   "version": "1.0.0",
   "description": "User message lifecycle: wrap input in tags, strip from context and display",
   "type": "full-stack",

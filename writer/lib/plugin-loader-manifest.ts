@@ -80,6 +80,21 @@ export async function parseManifestFile(
     return null;
   }
 
+  if (!manifest.displayName || typeof manifest.displayName !== "string") {
+    log.warn("Plugin missing required 'displayName' field — skipping", {
+      dir: pluginDir,
+    });
+    return null;
+  }
+
+  if (manifest.displayName.trim().length === 0) {
+    log.warn(
+      "Plugin 'displayName' field is empty or whitespace-only — skipping",
+      { dir: pluginDir },
+    );
+    return null;
+  }
+
   // Require manifest name matches directory name to prevent impersonation.
   if (manifest.name !== dirName) {
     log.warn("Plugin manifest.name does not match directory — skipping", {

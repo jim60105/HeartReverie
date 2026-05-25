@@ -30,6 +30,12 @@ export interface TemplateRef {
   templatePath: string;
   kind: TemplateKind;
   pluginName?: string;
+  /**
+   * zh-TW label sourced from the plugin manifest's `displayName`. Present
+   * only for `kind === "plugin-fragment"` entries; frontend falls back to
+   * `pluginName` (slug) when absent.
+   */
+  pluginDisplayName?: string;
   variable?: string;
   loreScope?: LoreScope;
   editable: boolean;

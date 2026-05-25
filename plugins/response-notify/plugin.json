@@ -1,5 +1,6 @@
 {
   "name": "response-notify",
+  "displayName": "回應通知",
   "version": "1.0.0",
   "description": "Browser notification when LLM response generation completes",
   "type": "frontend-only",

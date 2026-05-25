@@ -1,5 +1,6 @@
 {
   "name": "polish",
+  "displayName": "文字潤飾",
   "version": "1.0.0",
   "description": "One-click literary polish for the last chapter — atomic rewrite via replace mode",
   "type": "full-stack",

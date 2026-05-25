@@ -35,7 +35,7 @@ Deno.test({
     hookDispatcher.register("post-response", async () => {}, 100, "demo-plugin");
 
     const pluginManager = {
-      getPlugins: () => [{ name: "demo-plugin", version: "1.0.0" }],
+      getPlugins: () => [{ name: "demo-plugin", displayName: "demo-plugin", version: "1.0.0" }],
       getStripTagDeclarations: () => [
         { plugin: "demo-plugin", scope: "prompt", patterns: ["foo"] },
       ],

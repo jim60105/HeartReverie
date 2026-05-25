@@ -37,6 +37,7 @@ Deno.test({
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "watcher",
+          displayName: "watcher",
           version: "1.0.0",
           backendModule: "./backend.ts",
         }),

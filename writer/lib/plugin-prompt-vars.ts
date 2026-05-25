@@ -289,12 +289,14 @@ export function enumerateFragmentRefs(
   plugins: ReadonlyMap<string, PromptVarsEntry>,
 ): Array<{
   plugin: string;
+  pluginDisplayName: string;
   file: string;
   variable?: string;
   priority?: number;
 }> {
   const refs: Array<{
     plugin: string;
+    pluginDisplayName: string;
     file: string;
     variable?: string;
     priority?: number;
@@ -305,6 +307,7 @@ export function enumerateFragmentRefs(
       if (!frag.file) continue;
       refs.push({
         plugin: manifest.name,
+        pluginDisplayName: manifest.displayName,
         file: frag.file,
         variable: frag.variable,
         priority: typeof frag.priority === "number" ? frag.priority : undefined,

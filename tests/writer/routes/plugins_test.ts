@@ -66,6 +66,7 @@ Deno.test({
     const testPlugins = [
       {
         name: "test-plugin",
+        displayName: "測試外掛",
         version: "1.0.0",
         description: "A test plugin",
         type: "utility",
@@ -85,6 +86,7 @@ Deno.test({
         getParameters: () => [
           {
             name: "scenario",
+            displayName: "scenario",
             type: "string",
             description: "Scenario content",
             source: "core",
@@ -118,6 +120,12 @@ Deno.test({
       assert(Array.isArray(res.body));
       assertEquals(res.body.length, 1);
       assertEquals(res.body[0].name, "test-plugin");
+      assertEquals(res.body[0].displayName, "測試外掛");
+      // `name` (slug) and `displayName` (zh-TW label) are independent: the
+      // route never derives one from the other, so a label distinct from the
+      // slug must round-trip unchanged.
+      assertEquals(typeof res.body[0].displayName, "string");
+      assert(res.body[0].name !== res.body[0].displayName);
       assertEquals(res.body[0].hasFrontendModule, false);
     });
 
@@ -141,6 +149,7 @@ Deno.test({
           pluginManager: {
             getPlugins: () => [{
               name: "disabled-plugin",
+              displayName: "停用的外掛",
               actionButtons: [{ id: "do-it", label: "Do it" }],
             }],
             getParameters: () => [],
@@ -208,6 +217,7 @@ Deno.test({
             getPlugins: () => [
               {
                 name: "my-plugin",
+                displayName: "我的外掛",
                 version: "1.0.0",
                 description: "Plugin with frontend",
                 type: "utility",
@@ -259,6 +269,7 @@ Deno.test({
             getPlugins: () => [
               {
                 name: "my-plugin",
+                displayName: "我的外掛",
                 version: "1.0.0",
                 description: "Plugin with frontend",
                 type: "utility",
@@ -320,6 +331,7 @@ Deno.test({
             getPlugins: () => [
               {
                 name: "missing-plugin",
+                displayName: "缺檔外掛",
                 version: "1.0.0",
                 description: "Plugin with missing file",
                 type: "utility",
@@ -401,6 +413,7 @@ Deno.test({
             getPlugins: () => [
               {
                 name: "sibling-plugin",
+                displayName: "兄弟外掛",
                 version: "1.0.0",
                 description: "Plugin with sibling import",
                 type: "utility",
@@ -510,6 +523,7 @@ Deno.test({
           getPlugins: () => [
             {
               name: "escape-plugin",
+              displayName: "逃逸外掛",
               version: "1.0.0",
               description: "Plugin with path escape",
               type: "utility",
@@ -697,6 +711,7 @@ Deno.test({
         getParameters: () => [
           {
             name: "previous_context",
+            displayName: "previous_context",
             type: "array",
             description: "Previous chapters",
             source: "core",
@@ -815,6 +830,7 @@ Deno.test({
           getPlugins: () => [
             {
               name: "styled-plugin",
+              displayName: "樣式外掛",
               version: "1.0.0",
               description: "Plugin with styles",
               type: "utility",

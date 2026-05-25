@@ -41,6 +41,7 @@ async function setupApp(
     join(pluginsDir, name, "plugin.json"),
     JSON.stringify({
       name,
+      displayName: name,
       version: "1.0.0",
       settingsSchema: { "x-schema-version": 1, ...schema },
     }),

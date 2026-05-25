@@ -39,11 +39,14 @@ Create `plugins/<name>/plugin.json` with required fields:
 ```json
 {
   "name": "<name>",
+  "displayName": "<人類可讀名稱>",
   "version": "1.0.0",
   "description": "Brief description",
   "type": "<type>"
 }
 ```
+
+`name` is the slug (must match directory name); `displayName` is the label rendered in the reader sidebar and settings page heading. Both are **required** — a plugin missing or with a blank `displayName` is rejected during load.
 
 Then add type-appropriate optional fields per the patterns below.
 
@@ -52,6 +55,7 @@ Then add type-appropriate optional fields per the patterns below.
 ```json
 {
   "name": "my-plugin",
+  "displayName": "我的外掛",
   "version": "1.0.0",
   "description": "My prompt instructions",
   "type": "prompt-only",
@@ -66,6 +70,7 @@ Then add type-appropriate optional fields per the patterns below.
 ```json
 {
   "name": "my-plugin",
+  "displayName": "我的外掛",
   "version": "1.0.0",
   "description": "My full-stack plugin",
   "type": "full-stack",
@@ -87,6 +92,7 @@ Then add type-appropriate optional fields per the patterns below.
 ```json
 {
   "name": "my-plugin",
+  "displayName": "我的外掛",
   "version": "1.0.0",
   "description": "My processing plugin",
   "type": "full-stack",
@@ -107,6 +113,7 @@ Then add type-appropriate optional fields per the patterns below.
 ```json
 {
   "name": "my-plugin",
+  "displayName": "我的外掛",
   "version": "1.0.0",
   "description": "My backend hook plugin",
   "type": "hook-only",
@@ -117,7 +124,7 @@ Then add type-appropriate optional fields per the patterns below.
 }
 ```
 
-**Critical**: The `name` field must match the directory name exactly.
+**Critical**: The `name` field must match the directory name exactly. The `displayName` field is the user-facing label (any non-empty Unicode string after trim); UI surfaces such as the reader sidebar and `/settings/plugins/<name>` heading render `displayName` rather than the slug.
 
 **`hooks` is mandatory for new plugins.** Enumerate every `hooks.register("<stage>", ...)` call in `register()` here. The loader compares manifest vs runtime registration on startup and **rolls back the plugin load with a `declaredOnly`/`registeredOnly` error** on mismatch. The check also powers the Hook Inspector page (`/settings/hook-inspector`) and the `deno task introspect:hooks` CLI. Use `reads`/`writes` to participate in conflict detection (C1: two plugins writing the same field; C2: read with no writer). Omitting `hooks` entirely puts the plugin in legacy mode (no validation) — only use this for unmaintained third-party plugins during migration.
 

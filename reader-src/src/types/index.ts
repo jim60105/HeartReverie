@@ -37,6 +37,14 @@ export interface AuthHeaders {
 
 export interface PluginDescriptor {
   name: string;
+  /**
+   * zh-TW human-readable label sourced from the plugin manifest's
+   * `displayName` field. Always present and non-empty in `/api/plugins`
+   * responses because the backend manifest loader rejects manifests
+   * without a valid `displayName`. UI surfaces (sidebar tab, settings
+   * page heading, save notification) render this instead of the slug.
+   */
+  displayName: string;
   hasFrontendModule: boolean;
   displayStripTags?: string[];
   frontendStyles?: string[];

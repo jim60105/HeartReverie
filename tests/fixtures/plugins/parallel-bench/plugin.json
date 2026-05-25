@@ -1,5 +1,6 @@
 {
   "name": "parallel-bench",
+  "displayName": "Parallel Bench Fixture",
   "version": "1.0.0",
   "description": "Fixture: parallel readOnly post-response handler for integration testing",
   "type": "hook-only",

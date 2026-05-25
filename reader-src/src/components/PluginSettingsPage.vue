@@ -35,6 +35,7 @@ const router = useRouter();
 const { notify } = useNotification();
 
 const pluginName = computed(() => route.params.pluginName as string);
+const pluginDisplayName = ref<string>("");
 
 const registry = markRaw(createDefaultWidgetRegistry());
 
@@ -159,11 +160,33 @@ async function loadSchemaMeta(): Promise<void> {
   }
 }
 
+async function loadDisplayName(): Promise<void> {
+  try {
+    const res = await apiFetch(`/api/plugins`, { throwOnError: false });
+    if (!res.ok) return;
+    const list = (await res.json()) as Array<Record<string, unknown>>;
+    const match = list.find((p) => p.name === pluginName.value);
+    if (match && typeof match.displayName === "string" && match.displayName.length > 0) {
+      pluginDisplayName.value = match.displayName;
+    }
+  } catch (err) {
+    console.warn(
+      "[PluginSettingsPage] failed to resolve displayName for",
+      pluginName.value,
+      err,
+    );
+  }
+}
+
 async function loadAll(): Promise<void> {
   loading.value = true;
   errors.value = [];
   warnings.value = [];
-  await Promise.all([loadSchema(), loadSettings(), loadSchemaMeta()]);
+  // Reset displayName BEFORE the fetch so a route change from plugin A → B
+  // never leaves A's label visible. If /api/plugins fails or omits B, the
+  // heading falls back to the slug via `pluginDisplayName || pluginName`.
+  pluginDisplayName.value = "";
+  await Promise.all([loadSchema(), loadSettings(), loadSchemaMeta(), loadDisplayName()]);
   loading.value = false;
 }
 
@@ -211,7 +234,7 @@ async function save(): Promise<void> {
     if (res.ok) {
       notify({
         title: "設定已儲存",
-        body: `${pluginName.value} 設定更新成功`,
+        body: `${pluginDisplayName.value || pluginName.value} 設定更新成功`,
         level: "success",
       });
       originalSettings.value = JSON.parse(JSON.stringify(settings.value));
@@ -323,7 +346,7 @@ watch(pluginName, () => {
 
 <template>
   <div class="plugin-settings-page">
-    <h2 class="page-title">{{ pluginName }} 設定</h2>
+    <h2 class="page-title">{{ pluginDisplayName || pluginName }} 設定</h2>
 
     <p v-if="loading" class="status-message">載入中…</p>
     <p v-else-if="generalError" class="status-message error-message">{{ generalError }}</p>

@@ -19,6 +19,7 @@
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | `string` | Unique identifier. **Must match directory name exactly.** |
+| `displayName` | `string` | Human-readable label rendered in the reader sidebar and `/settings/plugins/<name>` heading. Any non-empty Unicode string (trim must not yield `""`). The loader rejects manifests where `displayName` is missing, non-string, or whitespace-only. |
 | `version` | `string` | Semver (e.g., `"1.0.0"`) |
 | `description` | `string` | Brief description of the plugin's purpose |
 | `type` | `string` | One of: `prompt-only`, `full-stack`, `hook-only`, `frontend-only` |
@@ -167,6 +168,7 @@ Example:
 ```json
 {
   "name": "image-gen",
+  "displayName": "圖片生成",
   "frontendModule": "./frontend.js",
   "frontendImports": ["./frontend-lightbox.js", "./util/exif.js"]
 }
@@ -288,6 +290,7 @@ Both 200 and 400 responses share the shape `{ errors: ValidationError[], warning
 ```json
 {
   "name": "sd-webui-image-gen",
+  "displayName": "SD WebUI 配圖",
   "version": "1.0.0",
   "description": "Generate scene images via Automatic1111 / Stable Diffusion WebUI",
   "type": "full-stack",
@@ -358,6 +361,7 @@ Example:
 ```json
 {
   "name": "my-analytics",
+  "displayName": "分析儀",
   "version": "1.0.0",
   "description": "Post-response analytics via external API",
   "type": "hook-only",
@@ -392,6 +396,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "de-robotization",
+  "displayName": "去機械化",
   "version": "1.0.0",
   "description": "De-robotization prompt fragment",
   "type": "prompt-only",
@@ -406,6 +411,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "writestyle",
+  "displayName": "寫作風格",
   "version": "1.0.0",
   "description": "Writing style instructions for the LLM",
   "type": "prompt-only",
@@ -421,6 +427,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "t-task",
+  "displayName": "質感任務",
   "version": "1.0.0",
   "description": "T-task prompt fragment with frontend tag stripping",
   "type": "prompt-only",
@@ -439,6 +446,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "options",
+  "displayName": "選項面板",
   "version": "1.0.0",
   "description": "Options panel extraction, rendering, and prompt fragment",
   "type": "full-stack",
@@ -456,6 +464,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "state",
+  "displayName": "狀態追蹤",
   "version": "1.0.0",
   "description": "A complete state tracking system.",
   "type": "full-stack",
@@ -474,6 +483,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "user-message",
+  "displayName": "使用者訊息",
   "version": "1.0.0",
   "description": "User message lifecycle: wrap input in tags, strip from context and display",
   "type": "full-stack",
@@ -489,6 +499,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "response-notify",
+  "displayName": "回應通知",
   "version": "1.0.0",
   "description": "Browser notification when LLM response generation completes",
   "type": "frontend-only",
@@ -501,6 +512,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "context-compaction",
+  "displayName": "上下文壓縮",
   "version": "1.0.0",
   "description": "Tiered context compaction via inline chapter summaries",
   "type": "full-stack",

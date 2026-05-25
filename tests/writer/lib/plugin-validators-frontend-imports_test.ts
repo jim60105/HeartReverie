@@ -11,6 +11,7 @@ function manifest(
 ): PluginManifest {
   return {
     name,
+    displayName: name,
     version: "1.0.0",
     description: "test",
     type: "utility",

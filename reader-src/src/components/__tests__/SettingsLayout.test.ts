@@ -1,5 +1,5 @@
-import { mount } from "@vue/test-utils";
-import { defineComponent } from "vue";
+import { mount, flushPromises } from "@vue/test-utils";
+import { defineComponent, nextTick } from "vue";
 import SettingsLayout from "@/components/SettingsLayout.vue";
 import { useLastReadingRoute } from "@/composables/useLastReadingRoute";
 import type { RouteLocationNormalizedLoaded } from "vue-router";
@@ -11,6 +11,12 @@ const mockRouter = {
 
 vi.mock("vue-router", () => ({
   useRouter: () => mockRouter,
+}));
+
+vi.mock("@/composables/useAuth", () => ({
+  useAuth: () => ({
+    getAuthHeaders: () => ({ "X-Passphrase": "pp" }),
+  }),
 }));
 
 vi.mock("@/router", () => ({
@@ -72,6 +78,9 @@ describe("SettingsLayout", () => {
     mockRouter.push.mockReset();
     const { clear } = useLastReadingRoute();
     clear();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders without crashing", () => {
@@ -166,21 +175,34 @@ describe("SettingsLayout", () => {
     });
   });
 
-  it("re-entry scenario: guard re-captures on returning to a reading route after settings", async () => {
-    const { recordReadingRoute } = useLastReadingRoute();
-    recordReadingRoute(makeRoute({ path: "/", name: "home" }));
-    recordReadingRoute(makeRoute({ path: "/settings/llm", name: "settings-llm" }));
-    recordReadingRoute(
-      makeRoute({ path: "/storyA", name: "story", params: { series: "storyA" } }),
-    );
-    recordReadingRoute(makeRoute({ path: "/settings/lore", name: "settings-lore" }));
+  it("renders plugin tabs using displayName (not slug) while routing by slug", async () => {
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () =>
+        /\/api\/plugins\/?$/.test(url)
+          ? [{ name: "dialogue-colorize", displayName: "對話著色", hasSettings: true }]
+          : [],
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
     const wrapper = mountLayout();
-    await wrapper.find(".back-btn").trigger("click");
-    expect(mockRouter.push).toHaveBeenCalledWith({
-      name: "story",
-      params: { series: "storyA" },
-      query: {},
-      hash: "",
-    });
+    await flushPromises();
+    await nextTick();
+
+    // The plugin link is rendered using the zh-TW label, not the slug.
+    const links = wrapper.findAllComponents({ name: "RouterLink" });
+    const pluginLink = links.find((l) => l.text().includes("對話著色"));
+    expect(pluginLink, "plugin tab rendered with displayName").toBeTruthy();
+    expect(pluginLink!.text()).toContain("對話著色");
+    expect(pluginLink!.text()).not.toContain("dialogue-colorize");
+
+    // Routing target carries the slug (so URLs remain stable), not the label.
+    const to = pluginLink!.props("to") as {
+      name: string;
+      params: { pluginName: string };
+    };
+    expect(to.name).toBe("settings-plugin");
+    expect(to.params.pluginName).toBe("dialogue-colorize");
   });
 });

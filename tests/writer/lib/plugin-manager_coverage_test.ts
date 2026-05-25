@@ -50,7 +50,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
       await Deno.mkdir(dotDir, { recursive: true });
       await Deno.writeTextFile(
         join(dotDir, "plugin.json"),
-        JSON.stringify({ name: ".hidden", version: "1.0.0" }),
+        JSON.stringify({ name: ".hidden", displayName: ".hidden", version: "1.0.0" }),
       );
       const pm = new PluginManager(pluginDir, undefined, new HookDispatcher(), Deno.makeTempDirSync());
       await pm.init();
@@ -154,6 +154,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "abna",
+            displayName: "abna",
             version: "1.0.0",
             actionButtons: "nope",
           }),
@@ -179,6 +180,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "p",
+            displayName: "p",
             version: "1.0.0",
             actionButtons: [
               null, // non-object
@@ -232,6 +234,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "p",
+            displayName: "p",
             version: "1.0.0",
             frontendStyles: [
               42, // non-string
@@ -268,6 +271,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "p",
+            displayName: "p",
             version: "1.0.0",
             frontendStyles: ["stylesDir.css"],
           }),
@@ -311,6 +315,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
             join(pDir, "plugin.json"),
             JSON.stringify({
               name: "p",
+              displayName: "p",
               version: "1.0.0",
               frontendStyles: ["linked.css"],
             }),
@@ -346,6 +351,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "p",
+            displayName: "p",
             version: "1.0.0",
             promptStripTags: [42, "", "real_tag"],
           }),
@@ -373,6 +379,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "p",
+            displayName: "p",
             version: "1.0.0",
             // "/foo" — only one slash; lastSlash <= 0 → reject
             promptStripTags: ["/foo"],
@@ -405,6 +412,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "p",
+            displayName: "p",
             version: "1.0.0",
             promptStripTags: [123, "alpha"],
             displayStripTags: [{}, "beta"],
@@ -435,6 +443,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "p",
+            displayName: "p",
             version: "1.0.0",
             promptFragments: [{ variable: "v" }, {}],
           }),
@@ -462,6 +471,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pDir, "plugin.json"),
           JSON.stringify({
             name: "meta-plugin",
+            displayName: "meta-plugin",
             version: "1.0.0",
             promptFragments: [
               { file: "named.md", variable: "myVar" },
@@ -506,6 +516,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pFirst, "plugin.json"),
           JSON.stringify({
             name: "first",
+            displayName: "first",
             version: "1.0.0",
             backendModule: "i.js",
           }),
@@ -525,6 +536,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pNullish, "plugin.json"),
           JSON.stringify({
             name: "nullish",
+            displayName: "nullish",
             version: "1.0.0",
             backendModule: "i.js",
           }),
@@ -540,6 +552,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pConflict, "plugin.json"),
           JSON.stringify({
             name: "conflict",
+            displayName: "conflict",
             version: "1.0.0",
             backendModule: "i.js",
           }),
@@ -555,6 +568,7 @@ Deno.test("PluginManager – uncovered branches", async (t) => {
           join(pThrower, "plugin.json"),
           JSON.stringify({
             name: "thrower",
+            displayName: "thrower",
             version: "1.0.0",
             backendModule: "i.js",
           }),

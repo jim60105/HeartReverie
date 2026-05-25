@@ -126,7 +126,7 @@ describe("usePlugins readiness gate", () => {
     // /plugins/<name>/frontend.js which does not exist in the test
     // resolver — this is the canonical per-plugin import failure path.
     mockFetchOnce([
-      { name: "broken-plugin", hasFrontendModule: true },
+      { name: "broken-plugin", displayName: "Broken Plugin", hasFrontendModule: true },
     ]);
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 

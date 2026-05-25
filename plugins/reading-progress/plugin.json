@@ -1,5 +1,6 @@
 {
   "name": "reading-progress",
+  "displayName": "閱讀進度",
   "version": "1.0.0",
   "description": "Single-user, multi-device reading progress sync (chapter index + scroll ratio + text fragment anchor)",
   "type": "full-stack",

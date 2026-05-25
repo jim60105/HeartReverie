@@ -23,9 +23,10 @@ import {
 function fakePM(overrides: Partial<any> = {}): any {
   return {
     getParameters: overrides.getParameters ?? (() => [
-      { name: "core_param", type: "string", source: "core" },
+      { name: "core_param", displayName: "core_param", type: "string", source: "core" },
       {
         name: "plug_param",
+        displayName: "plug_param",
         type: "number",
         source: "my-plugin",
         description: "from plugin",

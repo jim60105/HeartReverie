@@ -56,20 +56,33 @@ const loreEntries = computed(() => props.entries.filter((e) => e.kind === "lore"
 
 interface PluginGroup {
   pluginName: string;
+  /** zh-TW label from plugin manifest; falls back to the slug if missing. */
+  pluginDisplayName: string;
   items: TemplateRef[];
 }
 
 const pluginGroups = computed<PluginGroup[]>(() => {
-  const map = new Map<string, TemplateRef[]>();
+  const map = new Map<string, { displayName: string; items: TemplateRef[] }>();
   for (const entry of pluginEntries.value) {
     const name = entry.pluginName ?? "unknown";
-    const arr = map.get(name) ?? [];
-    arr.push(entry);
-    map.set(name, arr);
+    const bucket = map.get(name) ?? {
+      displayName: entry.pluginDisplayName ?? name,
+      items: [],
+    };
+    // First non-empty displayName seen wins; defensive against partial payloads.
+    if (!bucket.displayName && entry.pluginDisplayName) {
+      bucket.displayName = entry.pluginDisplayName;
+    }
+    bucket.items.push(entry);
+    map.set(name, bucket);
   }
   return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([pluginName, items]) => ({ pluginName, items }));
+    .sort(([, a], [, b]) => a.displayName.localeCompare(b.displayName))
+    .map(([pluginName, { displayName, items }]) => ({
+      pluginName,
+      pluginDisplayName: displayName,
+      items,
+    }));
 });
 
 interface LoreGroup {
@@ -141,8 +154,8 @@ function onSelect(entry: TemplateRef): void {
       </button>
       <div v-if="isExpanded('plugins')">
         <div v-for="group in pluginGroups" :key="group.pluginName" class="plugin-group">
-          <div class="section-sub-header section-sub-header--label">
-            <span>{{ group.pluginName }}</span>
+          <div class="section-sub-header section-sub-header--label" :title="group.pluginName">
+            <span>{{ group.pluginDisplayName }}</span>
           </div>
           <ul class="tree-list">
             <li v-for="entry in group.items" :key="entry.templatePath">

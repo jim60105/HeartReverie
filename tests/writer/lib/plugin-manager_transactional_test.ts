@@ -40,6 +40,7 @@ Deno.test("PluginManager — transactional registration", async (t) => {
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "ok-plugin",
+          displayName: "ok-plugin",
           version: "1.0.0",
           backendModule: "backend.js",
           hooks: [{ stage: "post-response" }],
@@ -69,6 +70,7 @@ Deno.test("PluginManager — transactional registration", async (t) => {
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "decl-plugin",
+          displayName: "decl-plugin",
           version: "1.0.0",
           backendModule: "backend.js",
           hooks: [{ stage: "post-response" }],
@@ -105,6 +107,7 @@ Deno.test("PluginManager — transactional registration", async (t) => {
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "reg-plugin",
+          displayName: "reg-plugin",
           version: "1.0.0",
           backendModule: "backend.js",
           hooks: [{ stage: "post-response" }],
@@ -129,6 +132,7 @@ Deno.test("PluginManager — transactional registration", async (t) => {
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "strip-plugin",
+          displayName: "strip-plugin",
           version: "1.0.0",
           hooks: [{ stage: "strip-tags" }],
         }),
@@ -155,6 +159,7 @@ Deno.test("PluginManager — transactional registration", async (t) => {
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "dup-plugin",
+          displayName: "dup-plugin",
           version: "1.0.0",
           hooks: [
             { stage: "post-response" },
@@ -183,6 +188,7 @@ Deno.test("PluginManager — transactional registration", async (t) => {
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "legacy-plugin",
+          displayName: "legacy-plugin",
           version: "1.0.0",
           backendModule: "backend.js",
         }),

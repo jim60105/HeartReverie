@@ -22,6 +22,19 @@ import type { HandlerEvent, HookHandler, HookStage } from "./hooks.ts";
 /** Plugin manifest schema parsed from plugin.json. */
 export interface PluginManifest {
   readonly name: string;
+  /**
+   * Short zh-TW human-readable label used by the reader UI for navigation
+   * (sidebar tabs, drawer menus, settings page heading, save notifications).
+   *
+   * Distinct from `name` (the kebab-case slug — URL parameter, settings
+   * storage key, and impersonation guard against the plugin directory name)
+   * and from `description` (a paragraph-shaped blurb).
+   *
+   * REQUIRED: the manifest loader rejects plugins whose manifest omits this
+   * field, supplies a non-string value, or supplies a value whose `.trim()`
+   * is empty. Surfaced verbatim via `GET /api/plugins`.
+   */
+  readonly displayName: string;
   readonly version?: string;
   readonly description?: string;
   readonly type?: string;

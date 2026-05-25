@@ -70,6 +70,7 @@ async function buildApp(opts?: { withPlugin?: boolean }) {
       join(plugDir, "plugin.json"),
       JSON.stringify({
         name: "test-plugin",
+        displayName: "測試外掛",
         version: "1.0.0",
         promptFragments: [{ file: "frag.md", variable: "test_var" }],
       }),
@@ -216,6 +217,11 @@ Deno.test({
         const pluginEntry = entries.find((e) => e.kind === "plugin-fragment");
         assertExists(pluginEntry, "Plugin fragment not found in listing");
         assertEquals(pluginEntry.pluginName, "test-plugin");
+        assertEquals(
+          pluginEntry.pluginDisplayName,
+          "測試外掛",
+          "GET /api/templates must surface the plugin's manifest displayName so the tree can render zh-TW labels instead of slugs",
+        );
         assertEquals(pluginEntry.editable, false);
         assertEquals(pluginEntry.variable, "test_var");
       });

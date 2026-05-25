@@ -24,6 +24,7 @@ async function writePlugin(
     join(pDir, "plugin.json"),
     JSON.stringify({
       name,
+      displayName: name,
       version: "1.0.0",
       promptFragments: [{ file: "frag.md", variable: `${name}_frag` }],
     }),

@@ -69,6 +69,7 @@ export function registerTemplateReadRoutes(app: Hono, deps: AppDeps): void {
             templatePath: tp,
             kind: "plugin-fragment",
             pluginName: ref.plugin,
+            pluginDisplayName: ref.pluginDisplayName,
             variable: ref.variable,
             editable: false,
             sizeBytes: 0,

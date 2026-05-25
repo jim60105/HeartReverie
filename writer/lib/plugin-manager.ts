@@ -264,6 +264,7 @@ export class PluginManager {
    */
   enumerateFragmentRefs(): Array<{
     plugin: string;
+    pluginDisplayName: string;
     file: string;
     variable?: string;
     priority?: number;

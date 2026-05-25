@@ -70,7 +70,7 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<Scenario> {
   await Deno.mkdir(join(pluginDir, "prompts"), { recursive: true });
   await Deno.writeTextFile(
     join(pluginDir, "plugin.json"),
-    JSON.stringify({ name: "tester", version: "1.0.0" }),
+    JSON.stringify({ name: "tester", displayName: "tester", version: "1.0.0" }),
   );
   await Deno.writeTextFile(
     join(pluginDir, "prompts", "summary.md"),

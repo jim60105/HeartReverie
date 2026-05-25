@@ -55,6 +55,7 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<{
   await Deno.mkdir(join(pluginDir, "prompts"), { recursive: true });
   const manifest: Record<string, unknown> = {
     name: "tester",
+    displayName: "tester",
     version: "1.0.0",
   };
   if (opts.actionButtons !== undefined) {

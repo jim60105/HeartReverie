@@ -26,6 +26,7 @@ Deno.test("PluginManager.getStripTagDeclarations", async (t) => {
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "both-plugin",
+          displayName: "both-plugin",
           version: "1.0.0",
           promptStripTags: ["foo"],
           displayStripTags: ["bar"],
@@ -48,6 +49,7 @@ Deno.test("PluginManager.getStripTagDeclarations", async (t) => {
         join(pDir, "plugin.json"),
         JSON.stringify({
           name: "p-plugin",
+          displayName: "p-plugin",
           version: "1.0.0",
           promptStripTags: ["hidden"],
         }),
@@ -66,7 +68,7 @@ Deno.test("PluginManager.getStripTagDeclarations", async (t) => {
       await Deno.mkdir(pDir, { recursive: true });
       await Deno.writeTextFile(
         join(pDir, "plugin.json"),
-        JSON.stringify({ name: "n-plugin", version: "1.0.0" }),
+        JSON.stringify({ name: "n-plugin", displayName: "n-plugin", version: "1.0.0" }),
       );
       const hd = new HookDispatcher();
       const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());

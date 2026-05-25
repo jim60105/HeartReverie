@@ -1,5 +1,6 @@
 {
   "name": "start-hints",
+  "displayName": "開場提示",
   "version": "1.0.0",
   "description": "First-round opening instructions for chapter start guidance",
   "type": "prompt-only",

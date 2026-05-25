@@ -36,7 +36,10 @@ async function makePluginDirs(
   await Deno.mkdir(pDir, { recursive: true });
   await Deno.writeTextFile(
     join(pDir, "plugin.json"),
-    JSON.stringify({ name, version: "1.0.0", ...manifest }),
+    JSON.stringify({
+      name,
+      displayName: name,
+      version: "1.0.0", ...manifest }),
   );
   return { pluginsDir, playgroundDir };
 }

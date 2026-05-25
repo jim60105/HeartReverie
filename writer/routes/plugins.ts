@@ -37,6 +37,7 @@ export function registerPluginRoutes(
         }
         return {
           name: p.name,
+          displayName: p.displayName,
           version: p.version,
           description: p.description,
           type: p.type,
