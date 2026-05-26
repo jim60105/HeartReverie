@@ -1,4 +1,4 @@
-# dev-tooling-format-lint Specification
+# code-style-tooling Specification
 
 ## Purpose
 TBD - created by archiving change setup-fmt-lint-config. Update Purpose after archive.

@@ -13,7 +13,7 @@ The repository has **no `fmt` or `lint` configuration** in `deno.json` and **no 
 ## Capabilities
 
 ### New Capabilities
-- `dev-tooling-format-lint`: Repository-wide formatting and lint policy — what `deno fmt`/`deno lint` cover, how they are configured, and how they are enforced (locally via `deno task` and in CI).
+- `code-style-tooling`: Repository-wide formatting and lint policy — what `deno fmt`/`deno lint` cover, how they are configured, and how they are enforced (locally via `deno task` and in CI).
 
 ### Modified Capabilities
 <!-- None. This is a tooling/DX addition; no existing functional spec changes its requirements. -->
