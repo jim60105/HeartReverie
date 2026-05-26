@@ -10,39 +10,80 @@
 system.md                 # Main Vento prompt template (entry point for LLM system prompt)
 scripts/
   serve.sh                # Dev startup script (sets umask 0002, execs deno run)
+  podman-build-run.sh     # Mandatory container-verification helper (build + run + tail logs)
+  coverage.ts             # LCOV merge / summary / gate CLI used by deno task coverage:*
+  introspect-hooks.ts     # Offline plugin-introspection dump
+  check-vento-helpers.ts  # Vento helper consistency check
+  __tests__/              # Tests for the scripts directory
 writer/                   # Backend server (Hono, TypeScript ESM, Deno)
   app.ts                  # Hono app setup: middleware, route registration, static serving
   server.ts               # Server entry: plain HTTP listener startup
   types.ts                # Shared TypeScript interfaces and types
   vendor/
     ventojs.d.ts          # Ambient type declarations for ventojs
-  lib/
-    plugin-manager.ts     # PluginManager: discovery, loading, manifest validation
-    hooks.ts              # HookDispatcher: backend lifecycle hook system
+  lib/                    # Backend libraries — many focused modules (see below)
     config.ts             # Environment variable loading and validation
     errors.ts             # RFC 9457 Problem Details helpers
+    middleware.ts         # Auth, rate limiting, secure headers
+    logger*.ts            # Logger types + console/file sinks
+    plugin-manager.ts     # PluginManager: discovery, loading, manifest validation
+    plugin-loader*.ts     # Manifest + staging loader (split for testability)
+    plugin-validators*.ts # Per-aspect manifest validators (schema, hooks, action-buttons, frontend imports/styles)
+    plugin-settings*.ts   # Per-plugin settings persistence + audit + validation helpers
+    plugin-strip-tags.ts  # promptStripTags / displayStripTags processing
+    plugin-prompt-vars.ts # Collects plugin-contributed prompt variables
+    plugin-depends-on-dag.ts # Plugin dependency DAG resolver
+    hooks.ts              # HookDispatcher: backend lifecycle hook system (entry point)
+    hooks-*.ts            # Stages, register, runner, runner-view, topology, metrics, event-bus, snapshot, pipeline fields
+    chat-shared.ts        # Shared chat execution logic (HTTP + WebSocket)
+    chat-llm-fetch.ts     # Upstream LLM fetch + attribution headers
+    chat-stream*.ts       # Streaming + per-chunk persistence
+    chat-chapter-*.ts     # Chapter I/O and finalization helpers
+    chat-types.ts         # Shared chat types
+    story.ts              # Story/chapter file operations
+    story-chapter-io.ts   # Chapter file read/write primitives
+    story-prompt-builder.ts # buildPromptFromStory()
+    story-config.ts       # Per-story LLM config: read/write/validate/resolve + STORY_LLM_CONFIG_KEYS whitelist
     generation-registry.ts # In-memory refcounted registry marking stories with active LLM generation (guards edit/rewind/branch)
     lore.ts               # Lore codex library (passage storage, retrieval, tag system, template variable generation)
-    middleware.ts         # Auth, rate limiting, secure headers
-    story.ts              # Story/chapter file operations
-    export.ts             # Story export renderers (Markdown/JSON/plain text) + RFC 5987 filename encoding
+    lore-collect.ts / lore-frontmatter.ts / lore-tags.ts # Lore codex sub-modules
     template.ts           # Vento template rendering engine
+    template-preview.ts   # Preview-prompt route helper
+    template-lint*.ts     # Vento template static checks (catalog, check, top-level wrapper)
+    vento-helpers.ts      # Custom Vento filters / globals (introspection-friendly)
+    vento-message-tag.ts  # `{{ message }}` tag implementation for multi-message rendering
+    introspection-dump.ts # Plugin introspection payload builder
+    schema-validator*.ts  # JSON-schema-flavoured validator used by settingsSchema
+    settings-diff.ts      # Per-plugin settings diff for the settings UI
+    themes.ts             # Theme TOML loader
     usage.ts              # Token usage persistence: _usage.json reader/writer with per-story async lock
-    chat-shared.ts        # Shared chat execution logic (HTTP + WebSocket)
-  routes/
+    export.ts             # Story export renderers (Markdown/JSON/plain text) + RFC 5987 filename encoding
+    path-allowlist.ts / path-safety.ts # Path-traversal-safe helpers (isValidParam, safePath, isPathContained, isValidPluginName)
+  routes/                 # Route handlers — split per concern (see below)
     auth.ts               # POST /api/auth — passphrase verification
     branch.ts             # POST /api/stories/:series/:name/branch — fork a story at a chapter
     chapters.ts           # GET/PUT/DELETE chapters — read, edit, rewind chapter content
     chat.ts               # POST chat — LLM streaming proxy (HTTP fallback)
-    config.ts             # GET /api/config — public configuration (background image)
+    config.ts             # GET /api/config — public configuration (background image, theme list)
+    _debug-hooks.ts       # Dev-only hook-inspector dump (gated by HEARTREVERIE_DEV)
+    export.ts             # GET /api/stories/:series/:name/export — bundled story download (md/json/txt)
+    images.ts             # POST /api/images — backend image upload (Sharp-based decode + sanitization, requires --allow-ffi)
+    llm-defaults.ts       # GET /api/llm-defaults — resolved server-side LLM defaults
     lore.ts               # Lore codex API routes (CRUD for passages)
     plugins.ts            # GET plugins — frontend module discovery
-    plugin-actions.ts     # POST /api/plugins/:pluginName/run-prompt — plugin action button LLM round (path-traversal-safe, optional atomic append)
+    plugin-introspect.ts  # GET /api/plugins/introspect — full plugin metadata (auth-gated)
+    plugin-settings.ts    # GET/PUT /api/plugins/:name/settings — per-plugin user settings
+    plugin-actions*.ts    # Plugin action button LLM round (path-traversal-safe, optional atomic append) — split into execute / preflight / validation / shared
     prompt.ts             # GET/POST prompt — template preview and file persistence
     stories.ts            # GET stories — series/story listing
-    export.ts             # GET /api/stories/:series/:name/export — bundled story download (md/json/txt)
+    story-config.ts       # GET/PUT /api/:series/:name/config — per-story LLM overrides
+    templates.ts          # GET/PUT /api/templates — generic template file read/write
+    templates-path.ts     # Template-path parser/resolver (system / plugin-fragment / lore)
+    templates-read.ts / templates-write.ts / templates-validate.ts / templates-lore-enum.ts # Templates split routes
+    themes.ts             # GET /api/themes — theme list + active theme palette
     usage.ts              # GET /api/stories/:series/:name/usage — token usage records + totals
-    ws.ts                 # WebSocket upgrade handler and message dispatching
+    ws.ts                 # WebSocket upgrade handler entry point
+    ws-auth.ts / ws-chat.ts / ws-connection.ts / ws-error-log.ts / ws-plugin-action.ts / ws-subscribe.ts # WebSocket message handlers split per envelope
 reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
   vite.config.ts          # Vite build configuration
   tsconfig.json           # TypeScript configuration
@@ -54,88 +95,73 @@ reader-src/               # Frontend SPA source (Vue 3, TypeScript, Vite)
       index.ts            # Vue Router with HTML5 history mode (exports settingsChildren, toolsChildren)
       isReadingRoute.ts   # Predicate excluding /settings and /tools from "last reading route" tracking
     components/
-      AppHeader.vue       # Navigation header (mounts ToolsMenu beside ⚙️)
-      MainLayout.vue      # Main reading layout
-      ContentArea.vue     # Chapter content display area
-      ChapterContent.vue  # Chapter content rendering
-      Sidebar.vue         # Sidebar component
+      AppHeader.vue / MainLayout.vue / Sidebar.vue / ContentArea.vue / ChapterContent.vue
       ChatInput.vue       # Chat message input and submission
-      PluginActionBar.vue # Renders plugin-contributed action buttons (between UsagePanel and ChatInput)
       StorySelector.vue   # Series/story selection UI
-      PromptEditor.vue    # System prompt template editor (cards mode + raw-text fallback)
-      PromptEditorPage.vue # Prompt editor page wrapper
-      PromptEditorMessageCard.vue # Single message card (role select + body textarea + insert-variable helper + reorder/delete)
-      PromptPreview.vue   # Rendered prompt preview
-      UsagePanel.vue      # Collapsible token-usage summary + recent records table
-      PassphraseGate.vue  # Authentication gate
-      SettingsLayout.vue  # Settings page with sidebar navigation
-      ToolsLayout.vue     # /tools page sidebar layout (mirrors SettingsLayout)
-      ToolsMenu.vue       # 🧰 header dropdown listing toolsChildren
-      QuickAddPage.vue    # /tools/new-series — series+story+optional lore quick-create form
-      ImportCharacterCardPage.vue # /tools/import-character-card — SillyTavern PNG card importer
-      VentoErrorCard.vue  # Vento template error display component
-    components/lore/
-      LoreCodexPage.vue   # Lore codex page wrapper
-      LoreBrowser.vue     # Lore passage browser and filter UI
-      LoreEditor.vue      # Lore passage editor (frontmatter + content)
+      PluginActionBar.vue # Renders plugin-contributed action buttons (between UsagePanel and ChatInput)
+      PromptEditor.vue / PromptEditorPage.vue / PromptEditorMessageCard.vue / PromptPreview.vue
+      TemplateEditorPage.vue / TemplateFileTree.vue / VentoCodeEditor.vue / VentoErrorCard.vue
+      LlmSettingsPage.vue / PluginSettingsPage.vue / ThemeSettingsPage.vue
+      SchemaField.vue / schema-field-helpers.ts # JSON-schema-driven field renderer (settings UI)
+      widgets/            # SchemaField widget set (text, number, range, select, combobox, checkbox, color, tags, multi-select, masked-secret, repeater, object-fieldset, path-picker)
+      lore/               # LoreCodexPage / LoreBrowser / LoreEditor
+      hook-inspector/     # StageBlock / HandlerRow row components
+      HookInspectorPage.vue # /settings/hook-inspector — live hook-dispatch inspector page
+      QuickAddPage.vue / ImportCharacterCardPage.vue # /tools/* tools pages
+      UsagePanel.vue / PassphraseGate.vue / ToastContainer.vue
+      SettingsLayout.vue / ToolsLayout.vue / ToolsMenu.vue
     composables/
-      useAuth.ts          # Authentication state management
-      useBackground.ts    # Background image configuration
-      useChapterActions.ts # Edit / rewind / branch chapter REST API client
-      useChapterNav.ts    # Chapter navigation and polling
-      useChatApi.ts       # Chat API (WebSocket with HTTP fallback)
-      useLastReadingRoute.ts # Tracks the last reading route (skips /settings + /tools via isReadingRoute)
-      useLoreApi.ts       # Lore codex API client
-      useMarkdownRenderer.ts  # Markdown rendering pipeline
-      usePlugins.ts       # Plugin loading and hook management
-      usePluginActions.ts # Plugin action-button visibility filter + click dispatch
-      usePromptEditor.ts  # Prompt editor state (MessageCard[] + parse/serialize, raw fallback toggle, originalRawSource snapshot, lossy-strip flag, pre-save validity guard)
-      useStorySelector.ts # Story selector state
-      useStoryExport.ts   # Story export download (Markdown/JSON/TXT)
-      useTools.ts         # Tools dropdown state (open/close, click-outside, Escape)
-      useUsage.ts         # Token-usage state: load records, push on chat:done, reset on story change
-      useWebSocket.ts     # WebSocket connection management
+      useAuth.ts / useTheme.ts / useNotification.ts / useMediaQuery.ts / useSidebarDrawer.ts / useAutoresize.ts
+      useChapterNav.ts / useChapterActions.ts / useChapterEditor.ts
+      useChatApi.ts / useWebSocket.ts
+      useLastReadingRoute.ts / useLoreApi.ts / useMarkdownRenderer.ts
+      usePlugins.ts / usePluginActions.ts
+      usePromptEditor.ts / useStorySelector.ts / useStoryExport.ts / useStoryLlmConfig.ts
+      useTools.ts / useUsage.ts
     lib/
+      api.ts / template-api.ts # Typed REST clients
+      event-bus.ts          # Typed plugin event bus (mitt-like)
+      hook-inspector.ts     # Hook-inspector state model
+      widget-registry.ts    # SchemaField widget registry
+      validation-i18n.ts    # JSON-schema validation messages → zh-TW
+      cm-vento.ts / cm-vento-complete.ts # CodeMirror Vento highlight + completion
       character-card-parser.ts # SillyTavern V2/V3 PNG tEXt chunk parser → ParsedCharacterCard
-      file-utils.ts       # File utility functions
-      lore-filename.ts    # Slug derivation, validation, and tag sanitiser shared by tools
-      markdown-pipeline.ts # Markdown processing pipeline
-      plugin-hooks.ts     # Frontend hook dispatcher
-      string-utils.ts     # String utilities (Levenshtein, escaping)
-    types/
-      character-card.ts   # TavernCardV2/V3 + ParsedCharacterCard types
-      template-parser.ts  # Hand-rolled scanner for system.md: parseSystemTemplate() ↔ serializeMessageCards() (cards mode load/save)
+      file-utils.ts / lore-filename.ts / markdown-pipeline.ts / plugin-hooks.ts / string-utils.ts / template-parser.ts / template.ts / errors.ts / render-debug.ts
       parsers/
         vento-error-parser.ts  # Vento error parsing
     types/
-      index.ts            # Frontend TypeScript type definitions
+      character-card.ts / hook-inspector.ts / index.ts
     styles/
-      base.css            # Base styles
-      theme.css           # Theme styles
+      base.css / theme.css
 reader-dist/              # Built frontend output (gitignored, run `deno task build:reader`)
 plugins/                  # Built-in plugins (manifest-driven) + shared utils
   _shared/
     utils.js              # Shared utilities (escapeHtml) used by frontend modules
   context-compaction/     # Tiered context compaction via inline chapter summaries
   dialogue-colorize/      # Colourise dialogue quote runs via CSS Custom Highlight API (no DOM mutation)
-  imgthink/               # Strip imgthink tags from display
+  polish/                 # One-click literary polish rewrite (replace mode, action button)
+  reading-progress/       # Single-user, multi-device reading-progress sync (chapter + scroll + text anchor)
+  response-notify/        # Toast notification system for backend → frontend messages
   start-hints/            # First-round chapter opening guidance
   thinking/               # Fold <thinking>/<think> tags into collapsible details
   user-message/           # User message lifecycle: wrap, strip from context/display
-  response-notify/        # Toast notification system for backend → frontend messages
-  polish/                 # One-click literary polish rewrite (replace mode, action button)
 tests/                    # Backend tests (Deno)
+  fixtures/               # Shared test fixtures (plugins, stories, themes)
   writer/
     lib/                  # Backend library tests (*_test.ts)
     routes/               # Backend route handler tests (*_test.ts)
-  plugins/                # Plugin tests
-    context-compaction/
-    user-message/
+  plugins/                # Plugin tests (context-compaction, user-message, …)
+  themes/                 # Theme loader tests
 playground/               # Story data directory (series/stories/chapters)
-                          # Underscore-prefixed dirs (_lore/) are system-reserved
+                          # Underscore-prefixed dirs (_lore/, _logs/, _prompts/, _config.json, _usage.json) are system-reserved
 openspec/                 # Spec-driven workflow: specs, changes, archives
-docs/                     # Documentation (Traditional Chinese)
+docs/                     # Documentation (Traditional Chinese): plugin-system, prompt-template, lore-codex, helm-deployment, ci-cross-repo-trigger, migration-hook-inspector
+helm/                     # Helm chart for Kubernetes deployment
+themes/                   # Built-in theme TOMLs (default, light, dark) + user-provided themes
 .agents/                  # Copilot agent skills (e.g., heartreverie-create-plugin)
+.github/
+  skills/                 # OpenSpec workflow skills (apply / propose / archive / verify / sync / explore / …)
+  workflows/              # ci.yaml (fmt-lint + test), release.yaml, docker-publish-latest.yaml, copilot-setup-steps.yaml
 assets/                   # Static assets (images)
 ```
 
@@ -285,7 +311,7 @@ CI runs both via `deno fmt --check` and `deno lint` in the `fmt-lint` job (`.git
 
 ### Plugin System
 
-The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 7 built-in plugins plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
+The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 8 built-in plugins (`context-compaction`, `dialogue-colorize`, `polish`, `reading-progress`, `response-notify`, `start-hints`, `thinking`, `user-message`) plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
 
 Key classes:
 - `PluginManager` (`writer/lib/plugin-manager.ts`) — scans `plugins/` and optional `PLUGIN_DIR`, validates manifests, loads modules
