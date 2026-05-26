@@ -2,7 +2,7 @@
   "name": "dialogue-colorize",
   "displayName": "對話著色",
   "version": "1.0.0",
-  "description": "Colourise dialogue runs (matched quote pairs) via the CSS Custom Highlight API without modifying the DOM",
+  "description": "透過 CSS 自訂醒目標示 API，為對話文字區段（配對成功的引號對）加上色彩，而不修改 DOM。",
   "type": "frontend-only",
   "frontendModule": "./frontend.js",
   "hooks": [
@@ -23,14 +23,14 @@
       "enabled": {
         "type": "boolean",
         "default": true,
-        "title": "啟用對話上色",
+        "title": "啟用對話著色",
         "description": "關閉後此功能將停用。"
       },
       "dialogueColor": {
         "type": "string",
         "default": "",
         "title": "對話顏色",
-        "description": "套用至引號內對話文字的顏色，可填入色碼（例如 #aa5500）或顏色名稱（例如 royalblue）。留空則沿用目前佈景主題的預設顏色。"
+        "description": "套用至引號內對話文字的顏色，可填入色碼（例如 #aa5500）或顏色名稱（例如 blue）。留空則沿用目前佈景主題的預設顏色。"
       },
       "enabledQuoteStyles": {
         "type": "array",

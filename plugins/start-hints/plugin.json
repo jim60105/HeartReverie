@@ -2,7 +2,7 @@
   "name": "start-hints",
   "displayName": "開場提示",
   "version": "1.0.0",
-  "description": "First-round opening instructions for chapter start guidance",
+  "description": "章節開始引導的第一輪開場說明",
   "type": "prompt-only",
   "promptFragments": [
     {

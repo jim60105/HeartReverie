@@ -328,7 +328,7 @@ const result = await ventoEnv.runString(systemTemplate, {
 
 ## 典籍篇章的 Vento 渲染
 
-典籍篇章的本體（Markdown 部分）支援使用 Vento 語法。這使得篇章可以引用其他篇章的內容或利用上下文變數（如 `series_name`、`story_name`）來動態產生內容。
+典籍篇章的本體（Markdown 部分）支援使用 Vento 語法。這使得篇章可以引用其他篇章的內容或利用脈絡變數（如 `series_name`、`story_name`）來動態產生內容。
 
 ### 可用變數
 

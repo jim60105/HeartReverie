@@ -1,8 +1,8 @@
 {
   "name": "thinking",
-  "displayName": "思考鏈",
+  "displayName": "思維鏈",
   "version": "1.0.0",
-  "description": "Think-before-reply prompt instruction and collapsible thinking tag rendering",
+  "description": "回覆前思考提示指令與可折疊思考標籤渲染",
   "type": "full-stack",
   "frontendModule": "./frontend.js",
   "hooks": [
@@ -30,7 +30,7 @@
       "enabled": {
         "type": "boolean",
         "default": true,
-        "title": "啟用思考摺疊",
+        "title": "啟用思維鏈",
         "description": "關閉後此功能將停用。"
       },
       "injectInstruction": {

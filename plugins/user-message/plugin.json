@@ -2,7 +2,7 @@
   "name": "user-message",
   "displayName": "使用者訊息",
   "version": "1.0.0",
-  "description": "User message lifecycle: wrap input in tags, strip from context and display",
+  "description": "使用者訊息生命週期：將輸入包裝於標籤中、從上下文中移除並顯示",
   "type": "full-stack",
   "backendModule": "./handler.ts",
   "hooks": [

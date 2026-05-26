@@ -1,8 +1,8 @@
 {
   "name": "polish",
-  "displayName": "文字潤飾",
+  "displayName": "文學潤飾",
   "version": "1.0.0",
-  "description": "One-click literary polish for the last chapter — atomic rewrite via replace mode",
+  "description": "脈絡一鍵文學潤飾：透過替換模式進行原子級改寫",
   "type": "full-stack",
   "frontendModule": "./frontend.js",
   "hooks": [

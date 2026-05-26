@@ -20,7 +20,7 @@ const entries: TemplateRef[] = [
     templatePath: "plugin:thinking:fragments/think.md",
     kind: "plugin-fragment",
     pluginName: "thinking",
-    pluginDisplayName: "思考鏈",
+    pluginDisplayName: "思維鏈",
     editable: false,
     sizeBytes: 0,
   },
@@ -100,12 +100,12 @@ describe("TemplateFileTree", () => {
   it("renders the plugin group header using pluginDisplayName, not slug", () => {
     const w = mount(TemplateFileTree, { props: { entries, selected: null } });
     // zh-TW label is shown
-    expect(w.text()).toContain("思考鏈");
+    expect(w.text()).toContain("思維鏈");
     // slug is NOT shown as the header text (it remains in the title attribute
     // for identification; we check the visible header span explicitly)
     const headers = w.findAll(".section-sub-header--label span");
     const headerTexts = headers.map((h) => h.text());
-    expect(headerTexts).toContain("思考鏈");
+    expect(headerTexts).toContain("思維鏈");
     expect(headerTexts).not.toContain("thinking");
   });
 

@@ -50,13 +50,13 @@ _(none — extends existing manifest schema and existing sidebar nav)_
   - Tests under `reader-src/src/components/__tests__/SettingsLayout*.test.ts` and `PluginSettingsPage*.test.ts` SHALL be updated to assert the rendered link text, page heading, and save-notification body all come from `displayName`.
 
 - **Affected bundled core plugin manifests** (this proposal):
-  - `plugins/context-compaction/plugin.json` — add `"displayName": "上下文壓縮"`.
+  - `plugins/context-compaction/plugin.json` — add `"displayName": "脈絡壓縮"`.
   - `plugins/dialogue-colorize/plugin.json` — add `"displayName": "對話著色"`.
-  - `plugins/polish/plugin.json` — add `"displayName": "文字潤飾"`.
+  - `plugins/polish/plugin.json` — add `"displayName": "文學潤飾"`.
   - `plugins/reading-progress/plugin.json` — add `"displayName": "閱讀進度"`.
   - `plugins/response-notify/plugin.json` — add `"displayName": "回應通知"`.
   - `plugins/start-hints/plugin.json` — add `"displayName": "開場提示"`.
-  - `plugins/thinking/plugin.json` — add `"displayName": "思考鏈"`.
+  - `plugins/thinking/plugin.json` — add `"displayName": "思維鏈"`.
   - `plugins/user-message/plugin.json` — add `"displayName": "使用者訊息"`.
 
 - **Affected authoring documentation**:

@@ -141,7 +141,7 @@ text-main = "rgba(220, 220, 215, 1)"
 
 | 外掛 | 說明 |
 |------|------|
-| `context-compaction` | 多層上下文壓縮策略，控制送入 LLM 的歷史章節數量 |
+| `context-compaction` | 多層脈絡壓縮策略，控制送入 LLM 的歷史章節數量 |
 | `dialogue-colorize` | CSS Custom Highlight API 對話引號高亮，不修改 DOM |
 | `reading-progress` | 跨裝置閱讀進度同步：捲動位置追蹤、文字錨點書籤、跨章節恢復提示 |
 | `polish` | 潤稿模式——對最後一章進行語法與文風修正 |
@@ -156,7 +156,7 @@ text-main = "rgba(220, 220, 215, 1)"
 
 > [!TIP]
 > **強烈建議搭配 [HeartReverie_Plugins][heartreverie-plugins] 使用。**  
-> 這組選用外掛提供變數狀態追蹤、角色狀態面板、行動選項面板、破限等進階功能，能大幅提升互動體驗與故事品質。外掛獨立於主專案維護，使用者可依需求自由搭配。
+> 這組選用外掛提供變數狀態追蹤、角色狀態面板、選項面板、破限等進階功能，能大幅提升互動體驗與故事品質。外掛獨立於主專案維護，使用者可依需求自由搭配。
 
 ```bash
 git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git

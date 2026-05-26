@@ -47,22 +47,22 @@ The 8 plugin manifests under `HeartReverie/plugins/*/plugin.json` MUST be update
 
 | Slug (`name`) | New `displayName` | Rationale |
 |---|---|---|
-| `context-compaction` | `上下文壓縮` | Compacts old chapters into inline summaries to save tokens; README's lead sentence describes context size reduction. |
+| `context-compaction` | `脈絡壓縮` | Compacts old chapters into inline summaries to save tokens; README's lead sentence describes context size reduction. |
 | `dialogue-colorize` | `對話著色` | Colourises matched quote pairs in the reader view; README title and lead match. |
-| `polish` | `文字潤飾` | One-click literary polish of the last chapter; the toolbar button itself is labelled `✨ 潤飾`. |
+| `polish` | `文學潤飾` | One-click literary polish of the last chapter; the toolbar button itself is labelled `✨ 潤飾`. |
 | `reading-progress` | `閱讀進度` | Multi-device reading progress sync (chapter index + scroll ratio); README field name is `閱讀進度同步`. |
 | `response-notify` | `回應通知` | Browser/in-app notification when LLM response generation completes; README's setting title uses `回應通知`. |
 | `start-hints` | `開場提示` | First-round opening writing-guidance injection; README emphasises 「開場」 throughout. |
-| `thinking` | `思考鏈` | Chain-of-thought think-before-reply with collapsible `<thinking>` rendering; conveys both the prompt instruction and the rendered chain. |
+| `thinking` | `思維鏈` | Chain-of-thought think-before-reply with collapsible `<thinking>` rendering; conveys both the prompt instruction and the rendered chain. |
 | `user-message` | `使用者訊息` | Wraps user input in `<user_message>` tags and strips on read; matches the tag and feature name. |
 
-- [x] 7.1 Update `plugins/context-compaction/plugin.json` to add `"displayName": "上下文壓縮"` immediately after `"name"`.
+- [x] 7.1 Update `plugins/context-compaction/plugin.json` to add `"displayName": "脈絡壓縮"` immediately after `"name"`.
 - [x] 7.2 Update `plugins/dialogue-colorize/plugin.json` to add `"displayName": "對話著色"` immediately after `"name"`.
-- [x] 7.3 Update `plugins/polish/plugin.json` to add `"displayName": "文字潤飾"` immediately after `"name"`.
+- [x] 7.3 Update `plugins/polish/plugin.json` to add `"displayName": "文學潤飾"` immediately after `"name"`.
 - [x] 7.4 Update `plugins/reading-progress/plugin.json` to add `"displayName": "閱讀進度"` immediately after `"name"`.
 - [x] 7.5 Update `plugins/response-notify/plugin.json` to add `"displayName": "回應通知"` immediately after `"name"`.
 - [x] 7.6 Update `plugins/start-hints/plugin.json` to add `"displayName": "開場提示"` immediately after `"name"`.
-- [x] 7.7 Update `plugins/thinking/plugin.json` to add `"displayName": "思考鏈"` immediately after `"name"`.
+- [x] 7.7 Update `plugins/thinking/plugin.json` to add `"displayName": "思維鏈"` immediately after `"name"`.
 - [x] 7.8 Update `plugins/user-message/plugin.json` to add `"displayName": "使用者訊息"` immediately after `"name"`.
 - [x] 7.9 After §7.1–§7.8, rebuild the container and confirm `curl -H "X-Passphrase: $PASSPHRASE" http://localhost:8080/api/plugins | jq '.[] | select(.name | test("context-compaction|dialogue-colorize|polish|reading-progress|response-notify|start-hints|thinking|user-message")) | { name, displayName }'` returns all 8 records with the labels above. (This subsumes §5.3 for the bundled subset; §5.4 still verifies the SPA rendering.)
 

@@ -512,7 +512,7 @@ The wildcard `.js` route `GET /plugins/:plugin/:path{.+\.js}` only serves files 
 ```json
 {
   "name": "context-compaction",
-  "displayName": "上下文壓縮",
+  "displayName": "脈絡壓縮",
   "version": "1.0.0",
   "description": "Tiered context compaction via inline chapter summaries",
   "type": "full-stack",

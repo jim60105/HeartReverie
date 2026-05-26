@@ -1,8 +1,8 @@
 {
   "name": "context-compaction",
-  "displayName": "上下文壓縮",
+  "displayName": "脈絡壓縮",
   "version": "1.0.0",
-  "description": "Tiered context compaction via inline chapter summaries",
+  "description": "透過內嵌章節摘要進行分層式脈絡壓縮",
   "type": "full-stack",
   "promptFragments": [
     {
@@ -33,7 +33,7 @@
       "enabled": {
         "type": "boolean",
         "default": true,
-        "title": "啟用情境壓縮",
+        "title": "啟用脈絡壓縮",
         "description": "關閉後本外掛將停用，等同未安裝外掛。"
       },
       "recentChapters": {
@@ -41,7 +41,7 @@
         "minimum": 1,
         "default": 3,
         "title": "保留原文的章節數",
-        "description": "保留最近幾個章節的完整原文，更早的章節會自動壓縮成摘要以節省字數。設大一點可保留更多原文細節，但模型讀取量會增加。最少 1 章。"
+        "description": "保留最近幾個章節的完整原文，更早的章節會自動壓縮成摘要以節省字數。設大一點可保留更多原文細節，但模型讀取量會增加。最少一章。"
       }
     }
   }

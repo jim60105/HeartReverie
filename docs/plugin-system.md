@@ -1187,7 +1187,7 @@ export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
 [
   {
     "name": "thinking",
-    "displayName": "思考鏈",
+    "displayName": "思維鏈",
     "version": "1.0.0",
     "description": "Think before reply and fold thinking tags",
     "type": "full-stack",

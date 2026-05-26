@@ -69,10 +69,10 @@
 
 ```typescript
 interface TextFragmentAnchor {
-  prefix?: string;   // 錨點前方的上下文文字
+  prefix?: string;   // 錨點前方的脈絡文字
   textStart: string;  // 錨定文字的起始片段
   textEnd?: string;   // 錨定文字的結束片段（範圍選取時使用）
-  suffix?: string;    // 錨點後方的上下文文字
+  suffix?: string;    // 錨點後方的脈絡文字
 }
 ```
 

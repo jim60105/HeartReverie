@@ -2,7 +2,7 @@
   "name": "reading-progress",
   "displayName": "閱讀進度",
   "version": "1.0.0",
-  "description": "Single-user, multi-device reading progress sync (chapter index + scroll ratio + text fragment anchor)",
+  "description": "單一使用者、多裝置閱讀進度同步（章節索引＋捲動比例＋文字片段錨點）",
   "type": "full-stack",
   "frontendModule": "./frontend.js",
   "backendModule": "./backend.ts",
