@@ -108,7 +108,8 @@ export function useAutoresize(
 
   const raf: (cb: FrameRequestCallback) => number = typeof requestAnimationFrame === "function"
     ? requestAnimationFrame
-    : ((cb: FrameRequestCallback) => setTimeout(() => cb(performance.now()), 16) as unknown as number);
+    : ((cb: FrameRequestCallback) =>
+      setTimeout(() => cb(performance.now()), 16) as unknown as number);
   const caf: (id: number) => void = typeof cancelAnimationFrame === "function"
     ? cancelAnimationFrame
     : ((id: number) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>));
@@ -179,7 +180,7 @@ export function useAutoresize(
       fontsReady.then(() => {
         if (isUnmounted) return;
         recompute();
-      }).catch(() => { /* font loading failure is non-fatal */ });
+      }).catch(() => {/* font loading failure is non-fatal */});
     }
   });
 

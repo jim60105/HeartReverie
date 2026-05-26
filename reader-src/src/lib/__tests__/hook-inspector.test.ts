@@ -1,11 +1,7 @@
 // Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
 import { detectConflicts, mergeFrontendDeclarations } from "@/lib/hook-inspector";
-import type {
-  HandlerInfo,
-  ManifestDeclarations,
-  PipelineFieldRef,
-} from "@/types";
+import type { HandlerInfo, ManifestDeclarations, PipelineFieldRef } from "@/types";
 
 const pipeline: readonly PipelineFieldRef[] = Object.freeze([
   { stage: "response-stream", field: "chunk" },

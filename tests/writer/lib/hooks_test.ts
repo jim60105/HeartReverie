@@ -116,9 +116,13 @@ Deno.test("HookDispatcher", async (t) => {
     const hd = new HookDispatcher();
     const order: string[] = [];
     // Register with default priority (100) first
-    hd.register("prompt-assembly", async () => { order.push("default"); });
+    hd.register("prompt-assembly", async () => {
+      order.push("default");
+    });
     // Register with explicit priority 50 second
-    hd.register("prompt-assembly", async () => { order.push("fifty"); }, 50);
+    hd.register("prompt-assembly", async () => {
+      order.push("fifty");
+    }, 50);
 
     await hd.dispatch("prompt-assembly", {});
     assertEquals(order, ["fifty", "default"]);
@@ -127,9 +131,15 @@ Deno.test("HookDispatcher", async (t) => {
   await t.step("same priority maintains registration order", async () => {
     const hd = new HookDispatcher();
     const order: string[] = [];
-    hd.register("post-response", async () => { order.push("first"); }, 100);
-    hd.register("post-response", async () => { order.push("second"); }, 100);
-    hd.register("post-response", async () => { order.push("third"); }, 100);
+    hd.register("post-response", async () => {
+      order.push("first");
+    }, 100);
+    hd.register("post-response", async () => {
+      order.push("second");
+    }, 100);
+    hd.register("post-response", async () => {
+      order.push("third");
+    }, 100);
 
     await hd.dispatch("post-response", {});
     assertEquals(order, ["first", "second", "third"]);
@@ -187,9 +197,14 @@ Deno.test("HookDispatcher", async (t) => {
   await t.step("injects logger into context when correlationId is present", async () => {
     const hd = new HookDispatcher();
     let receivedLogger: unknown = undefined;
-    hd.register("post-response", async (ctx) => {
-      receivedLogger = ctx.logger;
-    }, 100, "test-plugin");
+    hd.register(
+      "post-response",
+      async (ctx) => {
+        receivedLogger = ctx.logger;
+      },
+      100,
+      "test-plugin",
+    );
 
     await hd.dispatch("post-response", { correlationId: "abc-123" });
     // Logger should be injected
@@ -201,9 +216,14 @@ Deno.test("HookDispatcher", async (t) => {
   await t.step("injects logger even without correlationId", async () => {
     const hd = new HookDispatcher();
     let receivedLogger: unknown = "sentinel";
-    hd.register("post-response", async (ctx) => {
-      receivedLogger = ctx.logger;
-    }, 100, "test-plugin");
+    hd.register(
+      "post-response",
+      async (ctx) => {
+        receivedLogger = ctx.logger;
+      },
+      100,
+      "test-plugin",
+    );
 
     await hd.dispatch("post-response", {});
     // Logger should always be injected (per spec)
@@ -223,9 +243,15 @@ Deno.test("HookDispatcher", async (t) => {
     const pluginLogger = createLogger("plugin", { baseData: { plugin: "derive-test" } });
 
     let receivedLogger: unknown = undefined;
-    hd.register("post-response", async (ctx) => {
-      receivedLogger = ctx.logger;
-    }, 100, "derive-test", pluginLogger);
+    hd.register(
+      "post-response",
+      async (ctx) => {
+        receivedLogger = ctx.logger;
+      },
+      100,
+      "derive-test",
+      pluginLogger,
+    );
 
     await hd.dispatch("post-response", { correlationId: "req-xyz" });
     // Logger should be derived from baseLogger (has info, debug, withContext methods)
@@ -250,9 +276,15 @@ async function withSilencedConsole<T>(
   const logCalls: unknown[][] = [];
   const warnCalls: unknown[][] = [];
   const errorCalls: unknown[][] = [];
-  const logStub = stub(console, "log", (...args: unknown[]) => { logCalls.push(args); });
-  const warnStub = stub(console, "warn", (...args: unknown[]) => { warnCalls.push(args); });
-  const errorStub = stub(console, "error", (...args: unknown[]) => { errorCalls.push(args); });
+  const logStub = stub(console, "log", (...args: unknown[]) => {
+    logCalls.push(args);
+  });
+  const warnStub = stub(console, "warn", (...args: unknown[]) => {
+    warnCalls.push(args);
+  });
+  const errorStub = stub(console, "error", (...args: unknown[]) => {
+    errorCalls.push(args);
+  });
   try {
     return await fn({ logCalls, warnCalls, errorCalls });
   } finally {
@@ -269,46 +301,62 @@ function countCallsContaining(calls: unknown[][], substr: string): number {
 
 Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
   // 5.1 Mixed bucket ordering
-  await t.step("5.1 serial handlers run in priority order, parallel after serial completes", async () => {
-    await withSilencedConsole(async () => {
-      const hd = new HookDispatcher();
-      const events: { id: string; time: number }[] = [];
+  await t.step(
+    "5.1 serial handlers run in priority order, parallel after serial completes",
+    async () => {
+      await withSilencedConsole(async () => {
+        const hd = new HookDispatcher();
+        const events: { id: string; time: number }[] = [];
 
-      // 3 serial handlers (priority 50, 100, 150)
-      hd.register("post-response", async () => {
-        events.push({ id: "s50", time: performance.now() });
-      }, 50);
-      hd.register("post-response", async () => {
-        events.push({ id: "s100", time: performance.now() });
-      }, 100);
-      hd.register("post-response", async () => {
-        await new Promise((r) => setTimeout(r, 10));
-        events.push({ id: "s150", time: performance.now() });
-      }, 150);
+        // 3 serial handlers (priority 50, 100, 150)
+        hd.register("post-response", async () => {
+          events.push({ id: "s50", time: performance.now() });
+        }, 50);
+        hd.register("post-response", async () => {
+          events.push({ id: "s100", time: performance.now() });
+        }, 100);
+        hd.register("post-response", async () => {
+          await new Promise((r) => setTimeout(r, 10));
+          events.push({ id: "s150", time: performance.now() });
+        }, 150);
 
-      // 2 parallel handlers
-      hd.register("post-response", async () => {
-        events.push({ id: "p1", time: performance.now() });
-      }, { parallel: true, readOnly: true, priority: 200 }, "p1-plugin");
-      hd.register("post-response", async () => {
-        events.push({ id: "p2", time: performance.now() });
-      }, { parallel: true, readOnly: true, priority: 210 }, "p2-plugin");
+        // 2 parallel handlers
+        hd.register(
+          "post-response",
+          async () => {
+            events.push({ id: "p1", time: performance.now() });
+          },
+          { parallel: true, readOnly: true, priority: 200 },
+          "p1-plugin",
+        );
+        hd.register(
+          "post-response",
+          async () => {
+            events.push({ id: "p2", time: performance.now() });
+          },
+          { parallel: true, readOnly: true, priority: 210 },
+          "p2-plugin",
+        );
 
-      await hd.dispatch("post-response", {});
+        await hd.dispatch("post-response", {});
 
-      // Serial order: 50 → 100 → 150
-      const serialEvents = events.filter((e) => e.id.startsWith("s"));
-      assertEquals(serialEvents.map((e) => e.id), ["s50", "s100", "s150"]);
+        // Serial order: 50 → 100 → 150
+        const serialEvents = events.filter((e) => e.id.startsWith("s"));
+        assertEquals(serialEvents.map((e) => e.id), ["s50", "s100", "s150"]);
 
-      // Parallel handlers start AFTER serial-150 completes
-      const s150Time = events.find((e) => e.id === "s150")!.time;
-      const parallelEvents = events.filter((e) => e.id.startsWith("p"));
-      for (const pe of parallelEvents) {
-        assertEquals(pe.time >= s150Time, true,
-          `Parallel ${pe.id} started before serial-150 completed`);
-      }
-    });
-  });
+        // Parallel handlers start AFTER serial-150 completes
+        const s150Time = events.find((e) => e.id === "s150")!.time;
+        const parallelEvents = events.filter((e) => e.id.startsWith("p"));
+        for (const pe of parallelEvents) {
+          assertEquals(
+            pe.time >= s150Time,
+            true,
+            `Parallel ${pe.id} started before serial-150 completed`,
+          );
+        }
+      });
+    },
+  );
 
   // 5.2 Priority semantics change
   await t.step("5.2 parallel p10 does NOT preempt serial p150", async () => {
@@ -320,58 +368,77 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
         await new Promise((r) => setTimeout(r, 20));
         events.push({ id: "serial-150", time: performance.now() });
       }, 150);
-      hd.register("post-response", async () => {
-        events.push({ id: "parallel-10", time: performance.now() });
-      }, { parallel: true, readOnly: true, priority: 10 }, "fast-plugin");
+      hd.register(
+        "post-response",
+        async () => {
+          events.push({ id: "parallel-10", time: performance.now() });
+        },
+        { parallel: true, readOnly: true, priority: 10 },
+        "fast-plugin",
+      );
 
       await hd.dispatch("post-response", {});
 
       const serialTime = events.find((e) => e.id === "serial-150")!.time;
       const parallelTime = events.find((e) => e.id === "parallel-10")!.time;
-      assertEquals(parallelTime >= serialTime, true,
-        "Parallel handler with lower priority should NOT preempt serial handler");
+      assertEquals(
+        parallelTime >= serialTime,
+        true,
+        "Parallel handler with lower priority should NOT preempt serial handler",
+      );
     });
   });
 
   // 5.3 Parallel error isolation
-  await t.step("5.3 parallel errors: all 5 settle, 2 errors logged, dispatch resolves", async () => {
-    await withSilencedConsole(async ({ errorCalls }) => {
-      const hd = new HookDispatcher();
-      const settled: string[] = [];
+  await t.step(
+    "5.3 parallel errors: all 5 settle, 2 errors logged, dispatch resolves",
+    async () => {
+      await withSilencedConsole(async ({ errorCalls }) => {
+        const hd = new HookDispatcher();
+        const settled: string[] = [];
 
-      for (let i = 0; i < 5; i++) {
-        const id = `h${i}`;
-        const shouldThrow = i === 1 || i === 3;
-        hd.register("post-response", async () => {
-          settled.push(id);
-          if (shouldThrow) throw new Error(`fail-${id}`);
-        }, { parallel: true, readOnly: true, priority: 100 + i }, `plugin-${id}`);
-      }
+        for (let i = 0; i < 5; i++) {
+          const id = `h${i}`;
+          const shouldThrow = i === 1 || i === 3;
+          hd.register(
+            "post-response",
+            async () => {
+              settled.push(id);
+              if (shouldThrow) throw new Error(`fail-${id}`);
+            },
+            { parallel: true, readOnly: true, priority: 100 + i },
+            `plugin-${id}`,
+          );
+        }
 
-      await hd.dispatch("post-response", {});
+        await hd.dispatch("post-response", {});
 
-      // All 5 settled
-      assertEquals(settled.length, 5);
-      // log.error called 2x with dispatchPhase: "parallel"
-      const parallelErrors = countCallsContaining(errorCalls, '"parallel"');
-      assertEquals(parallelErrors, 2);
-    });
-  });
+        // All 5 settled
+        assertEquals(settled.length, 5);
+        // log.error called 2x with dispatchPhase: "parallel"
+        const parallelErrors = countCallsContaining(errorCalls, '"parallel"');
+        assertEquals(parallelErrors, 2);
+      });
+    },
+  );
 
   // 5.4 Serial mutator regression
-  await t.step("5.4 serial handler mutates context.preContent, same reference returned", async () => {
-    await withSilencedConsole(async () => {
-      const hd = new HookDispatcher();
-      hd.register("pre-write", async (ctx) => {
-        ctx.preContent = "<user_message>test</user_message>";
-      });
+  await t.step(
+    "5.4 serial handler mutates context.preContent, same reference returned",
+    async () => {
+      await withSilencedConsole(async () => {
+        const hd = new HookDispatcher();
+        hd.register("pre-write", async (ctx) => {
+          ctx.preContent = "<user_message>test</user_message>";
+        });
 
-      const ctx: Record<string, unknown> = { preContent: "" };
-      const result = await hd.dispatch("pre-write", ctx);
-      assertEquals(result.preContent, "<user_message>test</user_message>");
-      assertStrictEquals(result, ctx);
-    });
-  });
+        const ctx: Record<string, unknown> = { preContent: "" };
+        const result = await hd.dispatch("pre-write", ctx);
+        assertEquals(result.preContent, "<user_message>test</user_message>");
+        assertStrictEquals(result, ctx);
+      });
+    },
+  );
 
   // 5.5 Logger isolation (parallel)
   await t.step("5.5 parallel handlers receive isolated loggers with own plugin name", async () => {
@@ -379,12 +446,22 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const hd = new HookDispatcher();
       const loggers: unknown[] = [];
 
-      hd.register("post-response", async (ctx) => {
-        loggers.push(ctx.logger);
-      }, { parallel: true, readOnly: true }, "plugin-alpha");
-      hd.register("post-response", async (ctx) => {
-        loggers.push(ctx.logger);
-      }, { parallel: true, readOnly: true }, "plugin-beta");
+      hd.register(
+        "post-response",
+        async (ctx) => {
+          loggers.push(ctx.logger);
+        },
+        { parallel: true, readOnly: true },
+        "plugin-alpha",
+      );
+      hd.register(
+        "post-response",
+        async (ctx) => {
+          loggers.push(ctx.logger);
+        },
+        { parallel: true, readOnly: true },
+        "plugin-beta",
+      );
 
       const baseCtx: Record<string, unknown> = {};
       await hd.dispatch("post-response", baseCtx);
@@ -398,61 +475,85 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
   });
 
   // 5.6 Allowlist enforcement
-  await t.step("5.6a pre-write parallel:true readOnly:true → coerced to serial + warn", async () => {
-    await withSilencedConsole(async ({ warnCalls }) => {
-      const hd = new HookDispatcher();
-      const ran: string[] = [];
+  await t.step(
+    "5.6a pre-write parallel:true readOnly:true → coerced to serial + warn",
+    async () => {
+      await withSilencedConsole(async ({ warnCalls }) => {
+        const hd = new HookDispatcher();
+        const ran: string[] = [];
 
-      hd.register("pre-write", async () => { ran.push("serial-first"); }, 50);
-      hd.register("pre-write", async () => { ran.push("coerced"); },
-        { parallel: true, readOnly: true, priority: 60 }, "coerced-plugin");
+        hd.register("pre-write", async () => {
+          ran.push("serial-first");
+        }, 50);
+        hd.register(
+          "pre-write",
+          async () => {
+            ran.push("coerced");
+          },
+          { parallel: true, readOnly: true, priority: 60 },
+          "coerced-plugin",
+        );
 
-      await hd.dispatch("pre-write", {});
+        await hd.dispatch("pre-write", {});
 
-      // Coerced to serial: runs in priority order
-      assertEquals(ran, ["serial-first", "coerced"]);
-      // Warn about PARALLEL_ALLOWED
-      assertEquals(countCallsContaining(warnCalls, "PARALLEL_ALLOWED") >= 1, true);
-    });
-  });
+        // Coerced to serial: runs in priority order
+        assertEquals(ran, ["serial-first", "coerced"]);
+        // Warn about PARALLEL_ALLOWED
+        assertEquals(countCallsContaining(warnCalls, "PARALLEL_ALLOWED") >= 1, true);
+      });
+    },
+  );
 
   await t.step("5.6b post-response parallel:true readOnly:false → coerced + warn", async () => {
     await withSilencedConsole(async ({ warnCalls }) => {
       const hd = new HookDispatcher();
-      hd.register("post-response", async () => {},
-        { parallel: true, readOnly: false, priority: 100 }, "no-ro-plugin");
+      hd.register("post-response", async () => {}, {
+        parallel: true,
+        readOnly: false,
+        priority: 100,
+      }, "no-ro-plugin");
 
       await hd.dispatch("post-response", {});
       assertEquals(countCallsContaining(warnCalls, "readOnly:true") >= 1, true);
     });
   });
 
-  await t.step("5.6c post-response parallel:true readOnly:true → accepted as parallel", async () => {
-    await withSilencedConsole(async ({ warnCalls }) => {
-      const hd = new HookDispatcher();
-      hd.register("post-response", async () => {},
-        { parallel: true, readOnly: true }, "ok-plugin");
+  await t.step(
+    "5.6c post-response parallel:true readOnly:true → accepted as parallel",
+    async () => {
+      await withSilencedConsole(async ({ warnCalls }) => {
+        const hd = new HookDispatcher();
+        hd.register(
+          "post-response",
+          async () => {},
+          { parallel: true, readOnly: true },
+          "ok-plugin",
+        );
 
-      // No PARALLEL_ALLOWED or readOnly warn
-      const allowlistWarns = countCallsContaining(warnCalls, "PARALLEL_ALLOWED");
-      const readOnlyWarns = countCallsContaining(warnCalls, "readOnly:true");
-      assertEquals(allowlistWarns, 0);
-      assertEquals(readOnlyWarns, 0);
+        // No PARALLEL_ALLOWED or readOnly warn
+        const allowlistWarns = countCallsContaining(warnCalls, "PARALLEL_ALLOWED");
+        const readOnlyWarns = countCallsContaining(warnCalls, "readOnly:true");
+        assertEquals(allowlistWarns, 0);
+        assertEquals(readOnlyWarns, 0);
 
-      
-      await hd.dispatch("post-response", {});
-      const m = hd.getMetricsBuffer();
-      assertEquals(m.length, 1);
-      assertEquals(m[0]!.parallelCount, 1);
-    });
-  });
+        await hd.dispatch("post-response", {});
+        const m = hd.getMetricsBuffer();
+        assertEquals(m.length, 1);
+        assertEquals(m[0]!.parallelCount, 1);
+      });
+    },
+  );
 
   // 5.7 response-stream
   await t.step("5.7a response-stream parallel:true readOnly:true → accepted", async () => {
     await withSilencedConsole(async ({ errorCalls }) => {
       const hd = new HookDispatcher();
-      hd.register("response-stream", async () => {},
-        { parallel: true, readOnly: true }, "stream-ok");
+      hd.register(
+        "response-stream",
+        async () => {},
+        { parallel: true, readOnly: true },
+        "stream-ok",
+      );
 
       await hd.dispatch("response-stream", {});
       // No error logged about readOnly
@@ -462,72 +563,106 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     });
   });
 
-  await t.step("5.7b response-stream parallel:true no readOnly → rejected + log.error", async () => {
-    await withSilencedConsole(async ({ errorCalls }) => {
-      const hd = new HookDispatcher();
-      hd.register("response-stream", async () => {},
-        { parallel: true, readOnly: false }, "stream-bad");
+  await t.step(
+    "5.7b response-stream parallel:true no readOnly → rejected + log.error",
+    async () => {
+      await withSilencedConsole(async ({ errorCalls }) => {
+        const hd = new HookDispatcher();
+        hd.register(
+          "response-stream",
+          async () => {},
+          { parallel: true, readOnly: false },
+          "stream-bad",
+        );
 
-      await hd.dispatch("response-stream", {});
-      assertEquals(countCallsContaining(errorCalls, "readOnly:true") >= 1, true);
-      // Falls to serial
-      const m = hd.getMetricsBuffer();
-      assertEquals(m[0]!.parallelCount, 0);
-      assertEquals(m[0]!.serialCount, 1);
-    });
-  });
+        await hd.dispatch("response-stream", {});
+        assertEquals(countCallsContaining(errorCalls, "readOnly:true") >= 1, true);
+        // Falls to serial
+        const m = hd.getMetricsBuffer();
+        assertEquals(m[0]!.parallelCount, 0);
+        assertEquals(m[0]!.serialCount, 1);
+      });
+    },
+  );
 
-  await t.step("5.7c two parallel readOnly observers: timestamps overlap (actually parallel)", async () => {
-    await withSilencedConsole(async () => {
-      const hd = new HookDispatcher();
-      const timestamps: { id: string; start: number; end: number }[] = [];
+  await t.step(
+    "5.7c two parallel readOnly observers: timestamps overlap (actually parallel)",
+    async () => {
+      await withSilencedConsole(async () => {
+        const hd = new HookDispatcher();
+        const timestamps: { id: string; start: number; end: number }[] = [];
 
-      hd.register("post-response", async () => {
-        const start = performance.now();
-        await new Promise((r) => setTimeout(r, 30));
-        timestamps.push({ id: "obs1", start, end: performance.now() });
-      }, { parallel: true, readOnly: true }, "obs1");
-      hd.register("post-response", async () => {
-        const start = performance.now();
-        await new Promise((r) => setTimeout(r, 30));
-        timestamps.push({ id: "obs2", start, end: performance.now() });
-      }, { parallel: true, readOnly: true }, "obs2");
+        hd.register(
+          "post-response",
+          async () => {
+            const start = performance.now();
+            await new Promise((r) => setTimeout(r, 30));
+            timestamps.push({ id: "obs1", start, end: performance.now() });
+          },
+          { parallel: true, readOnly: true },
+          "obs1",
+        );
+        hd.register(
+          "post-response",
+          async () => {
+            const start = performance.now();
+            await new Promise((r) => setTimeout(r, 30));
+            timestamps.push({ id: "obs2", start, end: performance.now() });
+          },
+          { parallel: true, readOnly: true },
+          "obs2",
+        );
 
-      await hd.dispatch("post-response", {});
+        await hd.dispatch("post-response", {});
 
-      assertEquals(timestamps.length, 2);
-      const a = timestamps[0]!;
-      const b = timestamps[1]!;
-      // They should overlap: a.start < b.end && b.start < a.end
-      assertEquals(a.start < b.end && b.start < a.end, true,
-        "Parallel observers should have overlapping time ranges");
-    });
-  });
+        assertEquals(timestamps.length, 2);
+        const a = timestamps[0]!;
+        const b = timestamps[1]!;
+        // They should overlap: a.start < b.end && b.start < a.end
+        assertEquals(
+          a.start < b.end && b.start < a.end,
+          true,
+          "Parallel observers should have overlapping time ranges",
+        );
+      });
+    },
+  );
 
-  await t.step("5.7d response-stream: next chunk not blocked by previous parallel handlers", async () => {
-    await withSilencedConsole(async () => {
-      const hd = new HookDispatcher();
-      const chunkStarts: number[] = [];
+  await t.step(
+    "5.7d response-stream: next chunk not blocked by previous parallel handlers",
+    async () => {
+      await withSilencedConsole(async () => {
+        const hd = new HookDispatcher();
+        const chunkStarts: number[] = [];
 
-      hd.register("response-stream", async () => {
-        await new Promise((r) => setTimeout(r, 50));
-      }, { parallel: true, readOnly: true }, "slow-observer");
+        hd.register(
+          "response-stream",
+          async () => {
+            await new Promise((r) => setTimeout(r, 50));
+          },
+          { parallel: true, readOnly: true },
+          "slow-observer",
+        );
 
-      // Dispatch two chunks rapidly
-      const t0 = performance.now();
-      await hd.dispatch("response-stream", { chunk: 1 });
-      chunkStarts.push(performance.now() - t0);
-      await hd.dispatch("response-stream", { chunk: 2 });
-      chunkStarts.push(performance.now() - t0);
+        // Dispatch two chunks rapidly
+        const t0 = performance.now();
+        await hd.dispatch("response-stream", { chunk: 1 });
+        chunkStarts.push(performance.now() - t0);
+        await hd.dispatch("response-stream", { chunk: 2 });
+        chunkStarts.push(performance.now() - t0);
 
-      // response-stream parallel is fire-and-forget, so dispatch returns quickly
-      // Second chunk start should be close to first (no 50ms back-pressure)
-      assertEquals(chunkStarts[1]! - chunkStarts[0]! < 40, true,
-        "Next chunk should not wait for previous parallel handlers");
-      // Wait for background promises to settle
-      await new Promise((r) => setTimeout(r, 80));
-    });
-  });
+        // response-stream parallel is fire-and-forget, so dispatch returns quickly
+        // Second chunk start should be close to first (no 50ms back-pressure)
+        assertEquals(
+          chunkStarts[1]! - chunkStarts[0]! < 40,
+          true,
+          "Next chunk should not wait for previous parallel handlers",
+        );
+        // Wait for background promises to settle
+        await new Promise((r) => setTimeout(r, 80));
+      });
+    },
+  );
 
   // 5.8 HOOK_DEBUG write detector
   await t.step("5.8 HOOK_DEBUG: parallel write triggers log.warn with mutatedKey", async () => {
@@ -535,9 +670,14 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     try {
       await withSilencedConsole(async ({ warnCalls }) => {
         const hd = new HookDispatcher();
-        hd.register("post-response", async (ctx) => {
-          ctx.foo = 1;
-        }, { parallel: true, readOnly: true }, "debug-writer");
+        hd.register(
+          "post-response",
+          async (ctx) => {
+            ctx.foo = 1;
+          },
+          { parallel: true, readOnly: true },
+          "debug-writer",
+        );
 
         await hd.dispatch("post-response", {});
 
@@ -545,7 +685,8 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
         assertEquals(mutationWarns >= 1, true, "Should warn about readOnly violation");
         // Check specific content
         const warnStr = warnCalls.find((a) =>
-          typeof a[0] === "string" && a[0].includes("mutatedKey"))![0] as string;
+          typeof a[0] === "string" && a[0].includes("mutatedKey")
+        )![0] as string;
         assertEquals(warnStr.includes('"foo"'), true);
         assertEquals(warnStr.includes('"parallel"'), true);
       });
@@ -560,8 +701,12 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const hd = new HookDispatcher();
       const order: string[] = [];
 
-      hd.register("prompt-assembly", async () => { order.push("a"); }, 50);
-      hd.register("prompt-assembly", async () => { order.push("b"); }, 100);
+      hd.register("prompt-assembly", async () => {
+        order.push("a");
+      }, 50);
+      hd.register("prompt-assembly", async () => {
+        order.push("b");
+      }, 100);
       hd.register("prompt-assembly", async (ctx) => {
         order.push("c");
         ctx.result = "done";
@@ -588,10 +733,15 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const events: { id: number; start: number }[] = [];
 
       for (let i = 0; i < 4; i++) {
-        hd.register("post-response", async () => {
-          events.push({ id: i, start: performance.now() });
-          await new Promise((r) => setTimeout(r, DELAY));
-        }, { parallel: true, readOnly: true, concurrency: 1 }, `conc1-${i}`);
+        hd.register(
+          "post-response",
+          async () => {
+            events.push({ id: i, start: performance.now() });
+            await new Promise((r) => setTimeout(r, DELAY));
+          },
+          { parallel: true, readOnly: true, concurrency: 1 },
+          `conc1-${i}`,
+        );
       }
 
       const t0 = performance.now();
@@ -600,8 +750,7 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
 
       assertEquals(events.length, 4);
       // Wall-time should be ≈ 4×DELAY (sequential)
-      assertEquals(elapsed >= DELAY * 3.5, true,
-        `Expected ≈${DELAY * 4}ms, got ${elapsed}ms`);
+      assertEquals(elapsed >= DELAY * 3.5, true, `Expected ≈${DELAY * 4}ms, got ${elapsed}ms`);
     });
   });
 
@@ -611,9 +760,14 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const DELAY = 30;
 
       for (let i = 0; i < 4; i++) {
-        hd.register("post-response", async () => {
-          await new Promise((r) => setTimeout(r, DELAY));
-        }, { parallel: true, readOnly: true, concurrency: 2 }, `conc2-${i}`);
+        hd.register(
+          "post-response",
+          async () => {
+            await new Promise((r) => setTimeout(r, DELAY));
+          },
+          { parallel: true, readOnly: true, concurrency: 2 },
+          `conc2-${i}`,
+        );
       }
 
       const t0 = performance.now();
@@ -635,12 +789,17 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       let running = 0;
       for (let i = 0; i < 4; i++) {
         const conc = i < 2 ? 2 : 4; // entries with 2 and 4 → min = 2
-        hd.register("post-response", async () => {
-          running++;
-          concurrent.push(running);
-          await new Promise((r) => setTimeout(r, DELAY));
-          running--;
-        }, { parallel: true, readOnly: true, concurrency: conc }, `conc-mix-${i}`);
+        hd.register(
+          "post-response",
+          async () => {
+            running++;
+            concurrent.push(running);
+            await new Promise((r) => setTimeout(r, DELAY));
+            running--;
+          },
+          { parallel: true, readOnly: true, concurrency: conc },
+          `conc-mix-${i}`,
+        );
       }
 
       await hd.dispatch("post-response", {});
@@ -657,9 +816,14 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const DELAY = 30;
 
       for (let i = 0; i < 4; i++) {
-        hd.register("post-response", async () => {
-          await new Promise((r) => setTimeout(r, DELAY));
-        }, { parallel: true, readOnly: true }, `no-conc-${i}`);
+        hd.register(
+          "post-response",
+          async () => {
+            await new Promise((r) => setTimeout(r, DELAY));
+          },
+          { parallel: true, readOnly: true },
+          `no-conc-${i}`,
+        );
       }
 
       const t0 = performance.now();
@@ -667,8 +831,11 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const elapsed = performance.now() - t0;
 
       // Unbounded: all 4 run at once → wall-time ≈ 1×DELAY
-      assertEquals(elapsed < DELAY * 2, true,
-        `Expected unbounded parallel (≈${DELAY}ms), got ${elapsed}ms`);
+      assertEquals(
+        elapsed < DELAY * 2,
+        true,
+        `Expected unbounded parallel (≈${DELAY}ms), got ${elapsed}ms`,
+      );
     });
   });
 
@@ -679,12 +846,18 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     for (const val of badValues) {
       await withSilencedConsole(async ({ warnCalls }) => {
         const hd = new HookDispatcher();
-        hd.register("post-response", async () => {},
+        hd.register(
+          "post-response",
+          async () => {},
           { parallel: true, readOnly: true, concurrency: val } as Parameters<typeof hd.register>[2],
-          `coerce-${val}`);
+          `coerce-${val}`,
+        );
 
-        assertEquals(countCallsContaining(warnCalls, "concurrency") >= 1, true,
-          `concurrency:${val} should trigger warn`);
+        assertEquals(
+          countCallsContaining(warnCalls, "concurrency") >= 1,
+          true,
+          `concurrency:${val} should trigger warn`,
+        );
 
         // Should still dispatch without issues (unbounded fallback)
         await hd.dispatch("post-response", {});
@@ -698,14 +871,24 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const hd = new HookDispatcher();
       const events: { id: string; time: number }[] = [];
 
-      hd.register("post-response", async () => {
-        await new Promise((r) => setTimeout(r, 20));
-        events.push({ id: "b", time: performance.now() });
-      }, { parallel: true, readOnly: true, priority: 100 }, "b");
+      hd.register(
+        "post-response",
+        async () => {
+          await new Promise((r) => setTimeout(r, 20));
+          events.push({ id: "b", time: performance.now() });
+        },
+        { parallel: true, readOnly: true, priority: 100 },
+        "b",
+      );
 
-      hd.register("post-response", async () => {
-        events.push({ id: "a", time: performance.now() });
-      }, { parallel: true, readOnly: true, priority: 100, dependsOn: ["b"] }, "a");
+      hd.register(
+        "post-response",
+        async () => {
+          events.push({ id: "a", time: performance.now() });
+        },
+        { parallel: true, readOnly: true, priority: 100, dependsOn: ["b"] },
+        "a",
+      );
 
       await hd.dispatch("post-response", {});
 
@@ -722,21 +905,34 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const hd = new HookDispatcher();
       const order: string[] = [];
 
-      hd.register("post-response", async () => {
-        order.push("a");
-      }, { parallel: true, readOnly: true, priority: 50, dependsOn: ["b"] }, "a");
+      hd.register(
+        "post-response",
+        async () => {
+          order.push("a");
+        },
+        { parallel: true, readOnly: true, priority: 50, dependsOn: ["b"] },
+        "a",
+      );
 
-      hd.register("post-response", async () => {
-        order.push("b");
-      }, { parallel: true, readOnly: true, priority: 100, dependsOn: ["a"] }, "b");
+      hd.register(
+        "post-response",
+        async () => {
+          order.push("b");
+        },
+        { parallel: true, readOnly: true, priority: 100, dependsOn: ["a"] },
+        "b",
+      );
 
       await hd.dispatch("post-response", {});
 
       // Both should still run (fallback to priority-only in single layer)
       assertEquals(order.length, 2);
       // log.error about cycle
-      assertEquals(countCallsContaining(errorCalls, "cycle") >= 1, true,
-        "Should log.error about cycle detection");
+      assertEquals(
+        countCallsContaining(errorCalls, "cycle") >= 1,
+        true,
+        "Should log.error about cycle detection",
+      );
     });
   });
 
@@ -746,19 +942,32 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const hd = new HookDispatcher();
       const order: string[] = [];
 
-      hd.register("post-response", async () => {
-        order.push("a");
-      }, { parallel: true, readOnly: true, priority: 100, dependsOn: ["ghost"] }, "a");
+      hd.register(
+        "post-response",
+        async () => {
+          order.push("a");
+        },
+        { parallel: true, readOnly: true, priority: 100, dependsOn: ["ghost"] },
+        "a",
+      );
 
-      hd.register("post-response", async () => {
-        order.push("other");
-      }, { parallel: true, readOnly: true, priority: 50 }, "other");
+      hd.register(
+        "post-response",
+        async () => {
+          order.push("other");
+        },
+        { parallel: true, readOnly: true, priority: 50 },
+        "other",
+      );
 
       await hd.dispatch("post-response", {});
 
       assertEquals(order.length, 2);
-      assertEquals(countCallsContaining(errorCalls, "unknown") >= 1, true,
-        "Should log.error about unknown dep");
+      assertEquals(
+        countCallsContaining(errorCalls, "unknown") >= 1,
+        true,
+        "Should log.error about unknown dep",
+      );
     });
   });
 
@@ -767,8 +976,7 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     await withSilencedConsole(async () => {
       const hd = new HookDispatcher();
 
-      hd.register("post-response", async () => {},
-        { readOnly: true }, "trackb-plugin");
+      hd.register("post-response", async () => {}, { readOnly: true }, "trackb-plugin");
 
       await hd.dispatch("post-response", {});
       const m = hd.getMetricsBuffer();
@@ -781,8 +989,12 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     await withSilencedConsole(async () => {
       const hd = new HookDispatcher();
 
-      hd.register("post-response", async () => {},
-        { readOnly: true, parallel: false }, "optout-plugin");
+      hd.register(
+        "post-response",
+        async () => {},
+        { readOnly: true, parallel: false },
+        "optout-plugin",
+      );
 
       await hd.dispatch("post-response", {});
       const m = hd.getMetricsBuffer();
@@ -795,8 +1007,7 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     await withSilencedConsole(async () => {
       const hd = new HookDispatcher();
 
-      hd.register("post-response", async () => {},
-        { readOnly: false }, "no-ro-plugin");
+      hd.register("post-response", async () => {}, { readOnly: false }, "no-ro-plugin");
 
       await hd.dispatch("post-response", {});
       const m = hd.getMetricsBuffer();
@@ -810,11 +1021,18 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     await withSilencedConsole(async ({ warnCalls }) => {
       const hd = new HookDispatcher();
 
-      hd.register("post-response", async () => {},
-        { parallel: true, readOnly: true, priority: 50 }, "low-prio-plugin");
+      hd.register(
+        "post-response",
+        async () => {},
+        { parallel: true, readOnly: true, priority: 50 },
+        "low-prio-plugin",
+      );
 
-      assertEquals(countCallsContaining(warnCalls, "priority") >= 1, true,
-        "Should warn about priority < 100 for parallel handler");
+      assertEquals(
+        countCallsContaining(warnCalls, "priority") >= 1,
+        true,
+        "Should warn about priority < 100 for parallel handler",
+      );
 
       // Handler should still be registered as parallel
       await hd.dispatch("post-response", {});
@@ -831,11 +1049,19 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const order1: string[] = [];
       const order2: string[] = [];
 
-      hd1.register("prompt-assembly", async () => { order1.push("a"); }, 50);
-      hd1.register("prompt-assembly", async () => { order1.push("b"); }, 200);
+      hd1.register("prompt-assembly", async () => {
+        order1.push("a");
+      }, 50);
+      hd1.register("prompt-assembly", async () => {
+        order1.push("b");
+      }, 200);
 
-      hd2.register("prompt-assembly", async () => { order2.push("a"); }, { priority: 50 });
-      hd2.register("prompt-assembly", async () => { order2.push("b"); }, { priority: 200 });
+      hd2.register("prompt-assembly", async () => {
+        order2.push("a");
+      }, { priority: 50 });
+      hd2.register("prompt-assembly", async () => {
+        order2.push("b");
+      }, { priority: 200 });
 
       await hd1.dispatch("prompt-assembly", {});
       await hd2.dispatch("prompt-assembly", {});
@@ -848,8 +1074,12 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     await withSilencedConsole(async () => {
       const hd = new HookDispatcher();
 
-      hd.register("post-response", async () => {},
-        { readOnly: true, parallel: false }, "override-plugin");
+      hd.register(
+        "post-response",
+        async () => {},
+        { readOnly: true, parallel: false },
+        "override-plugin",
+      );
 
       await hd.dispatch("post-response", {});
       const m = hd.getMetricsBuffer();
@@ -863,14 +1093,24 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       const hd = new HookDispatcher();
       const events: { id: string; time: number }[] = [];
 
-      hd.register("post-response", async () => {
-        await new Promise((r) => setTimeout(r, 10));
-        events.push({ id: "c", time: performance.now() });
-      }, { parallel: true, readOnly: true }, "c");
+      hd.register(
+        "post-response",
+        async () => {
+          await new Promise((r) => setTimeout(r, 10));
+          events.push({ id: "c", time: performance.now() });
+        },
+        { parallel: true, readOnly: true },
+        "c",
+      );
 
-      hd.register("post-response", async () => {
-        events.push({ id: "a", time: performance.now() });
-      }, { parallel: true, readOnly: true, dependsOn: ["c"] }, "a");
+      hd.register(
+        "post-response",
+        async () => {
+          events.push({ id: "a", time: performance.now() });
+        },
+        { parallel: true, readOnly: true, dependsOn: ["c"] },
+        "a",
+      );
 
       await hd.dispatch("post-response", {});
 
@@ -884,8 +1124,7 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     await withSilencedConsole(async ({ warnCalls }) => {
       const hd = new HookDispatcher();
 
-      hd.register("pre-write", async () => {},
-        { parallel: true, readOnly: true }, "pw-plugin");
+      hd.register("pre-write", async () => {}, { parallel: true, readOnly: true }, "pw-plugin");
 
       assertEquals(countCallsContaining(warnCalls, "PARALLEL_ALLOWED") >= 1, true);
 
@@ -896,30 +1135,37 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
     });
   });
 
-  await t.step("5.17e register response-stream parallel:true no readOnly → reject + log.error", async () => {
-    await withSilencedConsole(async ({ errorCalls }) => {
-      const hd = new HookDispatcher();
+  await t.step(
+    "5.17e register response-stream parallel:true no readOnly → reject + log.error",
+    async () => {
+      await withSilencedConsole(async ({ errorCalls }) => {
+        const hd = new HookDispatcher();
 
-      hd.register("response-stream", async () => {},
-        { parallel: true }, "stream-bad-plugin");
+        hd.register("response-stream", async () => {}, { parallel: true }, "stream-bad-plugin");
 
-      assertEquals(countCallsContaining(errorCalls, "readOnly:true") >= 1, true);
+        assertEquals(countCallsContaining(errorCalls, "readOnly:true") >= 1, true);
 
-      await hd.dispatch("response-stream", {});
-      const m = hd.getMetricsBuffer();
-      assertEquals(m[0]!.serialCount, 1);
-      assertEquals(m[0]!.parallelCount, 0);
-    });
-  });
+        await hd.dispatch("response-stream", {});
+        const m = hd.getMetricsBuffer();
+        assertEquals(m[0]!.serialCount, 1);
+        assertEquals(m[0]!.parallelCount, 0);
+      });
+    },
+  );
 
   // 5.19 response-stream 5ms soft warn
   await t.step("5.19 response-stream sliding window warn after 50 samples > 5ms", async () => {
     await withSilencedConsole(async ({ warnCalls }) => {
       const hd = new HookDispatcher();
 
-      hd.register("response-stream", async () => {
-        await new Promise((r) => setTimeout(r, 10));
-      }, { parallel: true, readOnly: true }, "slow-stream-handler");
+      hd.register(
+        "response-stream",
+        async () => {
+          await new Promise((r) => setTimeout(r, 10));
+        },
+        { parallel: true, readOnly: true },
+        "slow-stream-handler",
+      );
 
       // Dispatch 51 chunks
       for (let i = 0; i < 51; i++) {
@@ -929,10 +1175,12 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
       }
 
       // Warn should fire once with avgMs >= 5 and samples: 50
-      const streamWarns = warnCalls.filter((a) =>
-        typeof a[0] === "string" && a[0].includes("5ms"));
-      assertEquals(streamWarns.length >= 1, true,
-        "Should warn about response-stream handlers exceeding 5ms average");
+      const streamWarns = warnCalls.filter((a) => typeof a[0] === "string" && a[0].includes("5ms"));
+      assertEquals(
+        streamWarns.length >= 1,
+        true,
+        "Should warn about response-stream handlers exceeding 5ms average",
+      );
 
       // Subsequent dispatches should NOT warn again (debounce)
       const warnCountBefore = streamWarns.length;
@@ -941,9 +1189,13 @@ Deno.test("HookDispatcher — Parallel dispatch", async (t) => {
         await new Promise((r) => setTimeout(r, 15));
       }
       const streamWarnsAfter = warnCalls.filter((a) =>
-        typeof a[0] === "string" && a[0].includes("5ms"));
-      assertEquals(streamWarnsAfter.length, warnCountBefore,
-        "Should not warn again (debounce until crossing below threshold)");
+        typeof a[0] === "string" && a[0].includes("5ms")
+      );
+      assertEquals(
+        streamWarnsAfter.length,
+        warnCountBefore,
+        "Should not warn again (debounce until crossing below threshold)",
+      );
     });
   });
 });
@@ -1091,7 +1343,9 @@ Deno.test("HookDispatcher per-handler events", async (t) => {
     const hd = new HookDispatcher();
     hd.register("prompt-assembly", async () => {});
     let count = 0;
-    const cb = () => { count++; };
+    const cb = () => {
+      count++;
+    };
     hd.subscribeHandlerEvents(cb);
     await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
     assertEquals(count, 2);
@@ -1100,27 +1354,30 @@ Deno.test("HookDispatcher per-handler events", async (t) => {
     assertEquals(count, 2);
   });
 
-  await t.step("QUALITY-5: non-cloneable allowlist field yields sentinel, dispatch completes", async () => {
-    const hd = new HookDispatcher();
-    // Handler stashes a function on previousContext (non-cloneable).
-    hd.register("prompt-assembly", async (ctx) => {
-      (ctx as Record<string, unknown>).previousContext = () => "I am a function";
-    });
-    const events: Array<{ kind: string; ctxAfterSnapshot?: unknown }> = [];
-    hd.subscribeHandlerEvents((ev) => {
-      if (ev.kind === "handler-end") {
-        events.push({ kind: ev.kind, ctxAfterSnapshot: ev.ctxAfterSnapshot });
-      }
-    });
-    // Dispatch must NOT throw.
-    await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
-    assertEquals(events.length, 1);
-    const snap = events[0]!.ctxAfterSnapshot as Record<string, unknown>;
-    // The non-cloneable field has a sentinel; rawChapters cloned normally.
-    const pc = snap.previousContext as { __snapshotError?: string };
-    assertEquals(typeof pc.__snapshotError, "string");
-    assertEquals(Array.isArray(snap.rawChapters), true);
-  });
+  await t.step(
+    "QUALITY-5: non-cloneable allowlist field yields sentinel, dispatch completes",
+    async () => {
+      const hd = new HookDispatcher();
+      // Handler stashes a function on previousContext (non-cloneable).
+      hd.register("prompt-assembly", async (ctx) => {
+        (ctx as Record<string, unknown>).previousContext = () => "I am a function";
+      });
+      const events: Array<{ kind: string; ctxAfterSnapshot?: unknown }> = [];
+      hd.subscribeHandlerEvents((ev) => {
+        if (ev.kind === "handler-end") {
+          events.push({ kind: ev.kind, ctxAfterSnapshot: ev.ctxAfterSnapshot });
+        }
+      });
+      // Dispatch must NOT throw.
+      await hd.dispatch("prompt-assembly", { previousContext: [], rawChapters: [] });
+      assertEquals(events.length, 1);
+      const snap = events[0]!.ctxAfterSnapshot as Record<string, unknown>;
+      // The non-cloneable field has a sentinel; rawChapters cloned normally.
+      const pc = snap.previousContext as { __snapshotError?: string };
+      assertEquals(typeof pc.__snapshotError, "string");
+      assertEquals(Array.isArray(snap.rawChapters), true);
+    },
+  );
 
   await t.step("QUALITY-8: getHandlerEventSubscribers returns plugin → kinds", () => {
     const hd = new HookDispatcher();
@@ -1146,26 +1403,29 @@ Deno.test("HookDispatcher per-handler events", async (t) => {
 Deno.test("HookDispatcher — pre-llm-fetch parallel eligibility", async (t) => {
   const { _resetThrottleWarnDedupForTesting } = await import("../../../writer/lib/hooks.ts");
 
-  await t.step("pre-llm-fetch accepts {parallel:true, readOnly:true} without coercion warn", async () => {
-    await withSilencedConsole(async ({ warnCalls }) => {
-      _resetThrottleWarnDedupForTesting();
-      const hd = new HookDispatcher();
-      hd.register(
-        "pre-llm-fetch",
-        async () => {},
-        { parallel: true, readOnly: true },
-        "obs-plugin",
-      );
-      // Must NOT trigger the PARALLEL_ALLOWED rejection warn.
-      assertEquals(
-        countCallsContaining(warnCalls, "PARALLEL_ALLOWED"),
-        0,
-        "pre-llm-fetch should be in PARALLEL_ALLOWED",
-      );
-      const intro = hd.introspect();
-      assertEquals(intro["pre-llm-fetch"]![0]!.parallel, true);
-    });
-  });
+  await t.step(
+    "pre-llm-fetch accepts {parallel:true, readOnly:true} without coercion warn",
+    async () => {
+      await withSilencedConsole(async ({ warnCalls }) => {
+        _resetThrottleWarnDedupForTesting();
+        const hd = new HookDispatcher();
+        hd.register(
+          "pre-llm-fetch",
+          async () => {},
+          { parallel: true, readOnly: true },
+          "obs-plugin",
+        );
+        // Must NOT trigger the PARALLEL_ALLOWED rejection warn.
+        assertEquals(
+          countCallsContaining(warnCalls, "PARALLEL_ALLOWED"),
+          0,
+          "pre-llm-fetch should be in PARALLEL_ALLOWED",
+        );
+        const intro = hd.introspect();
+        assertEquals(intro["pre-llm-fetch"]![0]!.parallel, true);
+      });
+    },
+  );
 
   await t.step("pre-llm-fetch {readOnly:true} auto-promotes to parallel (Track B)", async () => {
     await withSilencedConsole(async () => {
@@ -1182,39 +1442,59 @@ Deno.test("HookDispatcher — pre-llm-fetch parallel eligibility", async (t) => 
     });
   });
 
-  await t.step("parallel handler push() on ctx.messages throws TypeError (deep-frozen)", async () => {
-    await withSilencedConsole(async () => {
-      _resetThrottleWarnDedupForTesting();
-      const hd = new HookDispatcher();
-      let caught: unknown;
-      hd.register("pre-llm-fetch", async (ctx) => {
-        try {
-          (ctx.messages as unknown as Array<unknown>).push({ role: "system", content: "rogue" });
-        } catch (e) {
-          caught = e;
-          throw e;
-        }
-      }, { parallel: true, readOnly: true }, "mutator");
-      // Simulate the dispatch-site freeze invariant by freezing messages here.
-      const msgs = Object.freeze([{ role: "user", content: "hi" }]);
-      await hd.dispatch("pre-llm-fetch", { messages: msgs });
-      assertEquals(caught instanceof TypeError, true, "push on frozen array should throw TypeError");
-    });
-  });
+  await t.step(
+    "parallel handler push() on ctx.messages throws TypeError (deep-frozen)",
+    async () => {
+      await withSilencedConsole(async () => {
+        _resetThrottleWarnDedupForTesting();
+        const hd = new HookDispatcher();
+        let caught: unknown;
+        hd.register(
+          "pre-llm-fetch",
+          async (ctx) => {
+            try {
+              (ctx.messages as unknown as Array<unknown>).push({
+                role: "system",
+                content: "rogue",
+              });
+            } catch (e) {
+              caught = e;
+              throw e;
+            }
+          },
+          { parallel: true, readOnly: true },
+          "mutator",
+        );
+        // Simulate the dispatch-site freeze invariant by freezing messages here.
+        const msgs = Object.freeze([{ role: "user", content: "hi" }]);
+        await hd.dispatch("pre-llm-fetch", { messages: msgs });
+        assertEquals(
+          caught instanceof TypeError,
+          true,
+          "push on frozen array should throw TypeError",
+        );
+      });
+    },
+  );
 
   await t.step("parallel handler mutating nested message field throws (deep-frozen)", async () => {
     await withSilencedConsole(async () => {
       _resetThrottleWarnDedupForTesting();
       const hd = new HookDispatcher();
       let caught: unknown;
-      hd.register("pre-llm-fetch", async (ctx) => {
-        try {
-          (ctx.messages as Array<{ role: string }>)[0]!.role = "x";
-        } catch (e) {
-          caught = e;
-          throw e;
-        }
-      }, { parallel: true, readOnly: true }, "nested-mutator");
+      hd.register(
+        "pre-llm-fetch",
+        async (ctx) => {
+          try {
+            (ctx.messages as Array<{ role: string }>)[0]!.role = "x";
+          } catch (e) {
+            caught = e;
+            throw e;
+          }
+        },
+        { parallel: true, readOnly: true },
+        "nested-mutator",
+      );
       // Deep-freeze the nested element (mirrors chat-shared deepFreeze).
       const msg0 = Object.freeze({ role: "user", content: "hi" });
       const msgs = Object.freeze([msg0]);
@@ -1223,22 +1503,30 @@ Deno.test("HookDispatcher — pre-llm-fetch parallel eligibility", async (t) => 
     });
   });
 
-  await t.step("parallel handler reassigning ctx.model does NOT throw (outer not frozen, observe-only)", async () => {
-    await withSilencedConsole(async () => {
-      _resetThrottleWarnDedupForTesting();
-      const hd = new HookDispatcher();
-      let errored = false;
-      hd.register("pre-llm-fetch", async (ctx) => {
-        try {
-          (ctx as Record<string, unknown>).model = "tampered";
-        } catch {
-          errored = true;
-        }
-      }, { parallel: true, readOnly: true }, "outer-mutator");
-      await hd.dispatch("pre-llm-fetch", { model: "real-model", messages: Object.freeze([]) });
-      assertEquals(errored, false, "reassigning outer-context field must not throw");
-    });
-  });
+  await t.step(
+    "parallel handler reassigning ctx.model does NOT throw (outer not frozen, observe-only)",
+    async () => {
+      await withSilencedConsole(async () => {
+        _resetThrottleWarnDedupForTesting();
+        const hd = new HookDispatcher();
+        let errored = false;
+        hd.register(
+          "pre-llm-fetch",
+          async (ctx) => {
+            try {
+              (ctx as Record<string, unknown>).model = "tampered";
+            } catch {
+              errored = true;
+            }
+          },
+          { parallel: true, readOnly: true },
+          "outer-mutator",
+        );
+        await hd.dispatch("pre-llm-fetch", { model: "real-model", messages: Object.freeze([]) });
+        assertEquals(errored, false, "reassigning outer-context field must not throw");
+      });
+    },
+  );
 });
 
 // =============================================================================
@@ -1252,17 +1540,25 @@ Deno.test("HookDispatcher — register-time throttle warning", async (t) => {
     await withSilencedConsole(async ({ warnCalls }) => {
       _resetThrottleWarnDedupForTesting();
       const hd = new HookDispatcher();
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "throttle-a");
+      hd.register(
+        "prompt-assembly",
+        async () => {},
+        { parallel: true, readOnly: true },
+        "throttle-a",
+      );
       // First registration alone: must NOT warn.
       assertEquals(countCallsContaining(warnCalls, "'prompt-assembly' parallel bucket"), 0);
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "throttle-b");
+      hd.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 1,
+      }, "throttle-b");
       const warns = countCallsContaining(warnCalls, "'prompt-assembly' parallel bucket");
       assertEquals(warns, 1, "Exactly one throttle warn must be emitted");
       // Warn should cite both plugins.
       const warnLine = warnCalls.find((a) =>
-        typeof a[0] === "string" && a[0].includes("'prompt-assembly' parallel bucket"))![0] as string;
+        typeof a[0] === "string" && a[0].includes("'prompt-assembly' parallel bucket")
+      )![0] as string;
       assertEquals(warnLine.includes("throttle-a"), true);
       assertEquals(warnLine.includes("throttle-b"), true);
     });
@@ -1272,12 +1568,19 @@ Deno.test("HookDispatcher — register-time throttle warning", async (t) => {
     await withSilencedConsole(async ({ warnCalls }) => {
       _resetThrottleWarnDedupForTesting();
       const hd = new HookDispatcher();
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 5 }, "high-cap");
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "low-cap");
+      hd.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 5,
+      }, "high-cap");
+      hd.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 1,
+      }, "low-cap");
       const warnLine = warnCalls.find((a) =>
-        typeof a[0] === "string" && a[0].includes("'prompt-assembly' parallel bucket"));
+        typeof a[0] === "string" && a[0].includes("'prompt-assembly' parallel bucket")
+      );
       assertEquals(warnLine !== undefined, true);
       const msg = warnLine![0] as string;
       // low-cap is the throttler (declared 1).
@@ -1291,68 +1594,127 @@ Deno.test("HookDispatcher — register-time throttle warning", async (t) => {
     await withSilencedConsole(async ({ warnCalls }) => {
       _resetThrottleWarnDedupForTesting();
       const hd = new HookDispatcher();
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 2 }, "same-a");
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 2 }, "same-b");
+      hd.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 2,
+      }, "same-a");
+      hd.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 2,
+      }, "same-b");
       assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 0);
     });
   });
 
-  await t.step("dedup: identical (stage, plugin, concurrency) registered twice → one warn", async () => {
-    await withSilencedConsole(async ({ warnCalls }) => {
-      _resetThrottleWarnDedupForTesting();
-      const hd = new HookDispatcher();
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "dedup-peer");
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "dedup-target");
-      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
-      // Re-register the same plugin with same concurrency — dedup kicks in.
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "dedup-target");
-      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1, "dedup must keep count at 1");
-    });
-  });
+  await t.step(
+    "dedup: identical (stage, plugin, concurrency) registered twice → one warn",
+    async () => {
+      await withSilencedConsole(async ({ warnCalls }) => {
+        _resetThrottleWarnDedupForTesting();
+        const hd = new HookDispatcher();
+        hd.register(
+          "prompt-assembly",
+          async () => {},
+          { parallel: true, readOnly: true },
+          "dedup-peer",
+        );
+        hd.register("prompt-assembly", async () => {}, {
+          parallel: true,
+          readOnly: true,
+          concurrency: 1,
+        }, "dedup-target");
+        assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
+        // Re-register the same plugin with same concurrency — dedup kicks in.
+        hd.register("prompt-assembly", async () => {}, {
+          parallel: true,
+          readOnly: true,
+          concurrency: 1,
+        }, "dedup-target");
+        assertEquals(
+          countCallsContaining(warnCalls, "parallel bucket"),
+          1,
+          "dedup must keep count at 1",
+        );
+      });
+    },
+  );
 
-  await t.step("dedup-key discrimination: same plugin different concurrency → two warns", async () => {
-    await withSilencedConsole(async ({ warnCalls }) => {
-      _resetThrottleWarnDedupForTesting();
-      const hd = new HookDispatcher();
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "discrim-peer");
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "discrim-target");
-      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 2 }, "discrim-target");
-      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 2,
-        "different concurrency must produce a new warn");
-    });
-  });
+  await t.step(
+    "dedup-key discrimination: same plugin different concurrency → two warns",
+    async () => {
+      await withSilencedConsole(async ({ warnCalls }) => {
+        _resetThrottleWarnDedupForTesting();
+        const hd = new HookDispatcher();
+        hd.register(
+          "prompt-assembly",
+          async () => {},
+          { parallel: true, readOnly: true },
+          "discrim-peer",
+        );
+        hd.register("prompt-assembly", async () => {}, {
+          parallel: true,
+          readOnly: true,
+          concurrency: 1,
+        }, "discrim-target");
+        assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
+        hd.register("prompt-assembly", async () => {}, {
+          parallel: true,
+          readOnly: true,
+          concurrency: 2,
+        }, "discrim-target");
+        assertEquals(
+          countCallsContaining(warnCalls, "parallel bucket"),
+          2,
+          "different concurrency must produce a new warn",
+        );
+      });
+    },
+  );
 
   await t.step("_resetThrottleWarnDedupForTesting() clears dedup so warns re-emit", async () => {
     await withSilencedConsole(async ({ warnCalls }) => {
       _resetThrottleWarnDedupForTesting();
       const hd = new HookDispatcher();
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "reset-peer");
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "reset-target");
+      hd.register(
+        "prompt-assembly",
+        async () => {},
+        { parallel: true, readOnly: true },
+        "reset-peer",
+      );
+      hd.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 1,
+      }, "reset-target");
       assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
       // Re-registration WITHOUT reset → still 1.
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "reset-target");
+      hd.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 1,
+      }, "reset-target");
       assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 1);
       // After reset on a fresh dispatcher → fires again.
       _resetThrottleWarnDedupForTesting();
       const hd2 = new HookDispatcher();
-      hd2.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "reset-peer");
-      hd2.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "reset-target");
-      assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 2,
-        "post-reset re-registration must re-emit");
+      hd2.register(
+        "prompt-assembly",
+        async () => {},
+        { parallel: true, readOnly: true },
+        "reset-peer",
+      );
+      hd2.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 1,
+      }, "reset-target");
+      assertEquals(
+        countCallsContaining(warnCalls, "parallel bucket"),
+        2,
+        "post-reset re-registration must re-emit",
+      );
     });
   });
 
@@ -1363,53 +1725,70 @@ Deno.test("HookDispatcher — register-time throttle warning", async (t) => {
       // Plain serial handler with no parallel options.
       hd.register("prompt-assembly", async () => {}, 100, "serial-handler");
       // Parallel handler with finite concurrency — no parallel peer, so no warn.
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "only-parallel");
+      hd.register("prompt-assembly", async () => {}, {
+        parallel: true,
+        readOnly: true,
+        concurrency: 1,
+      }, "only-parallel");
       assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 0);
     });
   });
 
-  await t.step("reverse: existing finite + new unbounded → warn names existing as throttler, role=slowed", async () => {
-    await withSilencedConsole(async ({ warnCalls }) => {
-      _resetThrottleWarnDedupForTesting();
-      const hd = new HookDispatcher();
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true, concurrency: 1 }, "existing-cap");
-      // New unbounded registration is the SLOWED party.
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "new-unbounded");
-      const warnLine = warnCalls.find((a) =>
-        typeof a[0] === "string" && a[0].includes("parallel bucket"));
-      assertEquals(warnLine !== undefined, true, "must emit one warn");
-      const msg = warnLine![0] as string;
-      // existing-cap is the throttler (declared 1).
-      assertEquals(msg.includes("existing-cap (concurrency=1)"), true, msg);
-      // Wording must NOT claim the new unbounded plugin is throttling peers.
-      assertEquals(msg.includes("which throttles peers"), false,
-        `new-unbounded is the slowed party, not the throttler: ${msg}`);
-      // Reverse-direction wording must surface that the bucket — including the
-      // new registration — is being throttled.
-      assertEquals(msg.includes("will throttle"), true,
-        `must surface that the bucket is throttled: ${msg}`);
-      // Spec / tasks.md / docs mandate this literal phrase for operator grep.
-      assertEquals(
-        msg.includes("throttle the entire 'prompt-assembly' parallel bucket"),
-        true,
-        `warn message MUST contain the literal phrase "throttle the entire '<stage>' parallel bucket": ${msg}`,
-      );
-    });
-  });
+  await t.step(
+    "reverse: existing finite + new unbounded → warn names existing as throttler, role=slowed",
+    async () => {
+      await withSilencedConsole(async ({ warnCalls }) => {
+        _resetThrottleWarnDedupForTesting();
+        const hd = new HookDispatcher();
+        hd.register("prompt-assembly", async () => {}, {
+          parallel: true,
+          readOnly: true,
+          concurrency: 1,
+        }, "existing-cap");
+        // New unbounded registration is the SLOWED party.
+        hd.register(
+          "prompt-assembly",
+          async () => {},
+          { parallel: true, readOnly: true },
+          "new-unbounded",
+        );
+        const warnLine = warnCalls.find((a) =>
+          typeof a[0] === "string" && a[0].includes("parallel bucket")
+        );
+        assertEquals(warnLine !== undefined, true, "must emit one warn");
+        const msg = warnLine![0] as string;
+        // existing-cap is the throttler (declared 1).
+        assertEquals(msg.includes("existing-cap (concurrency=1)"), true, msg);
+        // Wording must NOT claim the new unbounded plugin is throttling peers.
+        assertEquals(
+          msg.includes("which throttles peers"),
+          false,
+          `new-unbounded is the slowed party, not the throttler: ${msg}`,
+        );
+        // Reverse-direction wording must surface that the bucket — including the
+        // new registration — is being throttled.
+        assertEquals(
+          msg.includes("will throttle"),
+          true,
+          `must surface that the bucket is throttled: ${msg}`,
+        );
+        // Spec / tasks.md / docs mandate this literal phrase for operator grep.
+        assertEquals(
+          msg.includes("throttle the entire 'prompt-assembly' parallel bucket"),
+          true,
+          `warn message MUST contain the literal phrase "throttle the entire '<stage>' parallel bucket": ${msg}`,
+        );
+      });
+    },
+  );
 
   await t.step("all-unbounded peers → no warn", async () => {
     await withSilencedConsole(async ({ warnCalls }) => {
       _resetThrottleWarnDedupForTesting();
       const hd = new HookDispatcher();
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "ub-a");
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "ub-b");
-      hd.register("prompt-assembly", async () => {},
-        { parallel: true, readOnly: true }, "ub-c");
+      hd.register("prompt-assembly", async () => {}, { parallel: true, readOnly: true }, "ub-a");
+      hd.register("prompt-assembly", async () => {}, { parallel: true, readOnly: true }, "ub-b");
+      hd.register("prompt-assembly", async () => {}, { parallel: true, readOnly: true }, "ub-c");
       assertEquals(countCallsContaining(warnCalls, "parallel bucket"), 0);
     });
   });
@@ -1418,14 +1797,15 @@ Deno.test("HookDispatcher — register-time throttle warning", async (t) => {
     _resetThrottleWarnDedupForTesting();
     const captured: Array<{ msg: unknown; payload: unknown }> = [];
     const baseLogger = {
-      warn: (msg: unknown, payload?: unknown) => { captured.push({ msg, payload }); },
+      warn: (msg: unknown, payload?: unknown) => {
+        captured.push({ msg, payload });
+      },
       info: () => {},
       error: () => {},
       debug: () => {},
     };
     const hd = new HookDispatcher();
-    hd.register("prompt-assembly", async () => {},
-      { parallel: true, readOnly: true }, "peer-a");
+    hd.register("prompt-assembly", async () => {}, { parallel: true, readOnly: true }, "peer-a");
     hd.register(
       "prompt-assembly",
       async () => {},
@@ -1435,7 +1815,8 @@ Deno.test("HookDispatcher — register-time throttle warning", async (t) => {
       baseLogger as any,
     );
     const throttleWarns = captured.filter((c) =>
-      typeof c.msg === "string" && (c.msg as string).includes("parallel bucket"));
+      typeof c.msg === "string" && (c.msg as string).includes("parallel bucket")
+    );
     assertEquals(throttleWarns.length, 1, "baseLogger.warn must receive the throttle warn");
     const payload = throttleWarns[0]!.payload as { role?: string; throttlers?: unknown[] };
     assertEquals(payload.role, "throttler");

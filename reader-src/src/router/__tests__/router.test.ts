@@ -45,7 +45,7 @@ describe("router integration with useChapterNav", () => {
           status: 200,
           json: () => Promise.resolve([]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
   });
@@ -61,11 +61,12 @@ describe("router integration with useChapterNav", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: () => Promise.resolve([
-          { number: 1, content: "ch1" },
-          { number: 2, content: "ch2" },
-          { number: 3, content: "ch3" },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { number: 1, content: "ch1" },
+            { number: 2, content: "ch2" },
+            { number: 3, content: "ch3" },
+          ]),
         headers: new Headers(),
       });
     vi.stubGlobal("fetch", fetchMock);
@@ -95,11 +96,12 @@ describe("router integration with useChapterNav", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: () => Promise.resolve([
-          { number: 1, content: "ch1" },
-          { number: 2, content: "ch2" },
-          { number: 3, content: "ch3" },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { number: 1, content: "ch1" },
+            { number: 2, content: "ch2" },
+            { number: 3, content: "ch3" },
+          ]),
         headers: new Headers(),
       });
     vi.stubGlobal("fetch", fetchMock);
@@ -136,7 +138,7 @@ describe("router integration with useStorySelector", () => {
           status: 200,
           json: () => Promise.resolve([]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
   });

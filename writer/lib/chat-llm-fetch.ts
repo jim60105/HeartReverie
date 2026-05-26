@@ -14,11 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { errorMessage } from "./errors.ts";
-import type {
-  ChatMessage,
-  LlmConfig,
-  PreLlmFetchPayload,
-} from "../types.ts";
+import type { ChatMessage, LlmConfig, PreLlmFetchPayload } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";

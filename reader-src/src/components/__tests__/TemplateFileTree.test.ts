@@ -1,14 +1,59 @@
 // Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import TemplateFileTree from "@/components/TemplateFileTree.vue";
 import type { TemplateRef } from "@/lib/template-api";
 
 const entries: TemplateRef[] = [
-  { id: "system.md", label: "system.md", path: "system.md", templatePath: "system.md", kind: "system", editable: true, sizeBytes: 0 },
-  { id: "plugin:thinking:fragments/think.md", label: "thinking", path: "fragments/think.md", templatePath: "plugin:thinking:fragments/think.md", kind: "plugin-fragment", pluginName: "thinking", pluginDisplayName: "思考鏈", editable: false, sizeBytes: 0 },
-  { id: "lore:global:world.md", label: "global", path: "world.md", templatePath: "lore:global:world.md", kind: "lore", loreScope: "global", editable: true, sizeBytes: 0 },
-  { id: "lore:series:demo:cast.md", label: "series", path: "cast.md", templatePath: "lore:series:demo:cast.md", kind: "lore", loreScope: "series", editable: true, sizeBytes: 0 },
-  { id: "lore:story:demo:ch01:scene.md", label: "story", path: "scene.md", templatePath: "lore:story:demo:ch01:scene.md", kind: "lore", loreScope: "story", editable: true, sizeBytes: 0 },
+  {
+    id: "system.md",
+    label: "system.md",
+    path: "system.md",
+    templatePath: "system.md",
+    kind: "system",
+    editable: true,
+    sizeBytes: 0,
+  },
+  {
+    id: "plugin:thinking:fragments/think.md",
+    label: "thinking",
+    path: "fragments/think.md",
+    templatePath: "plugin:thinking:fragments/think.md",
+    kind: "plugin-fragment",
+    pluginName: "thinking",
+    pluginDisplayName: "思考鏈",
+    editable: false,
+    sizeBytes: 0,
+  },
+  {
+    id: "lore:global:world.md",
+    label: "global",
+    path: "world.md",
+    templatePath: "lore:global:world.md",
+    kind: "lore",
+    loreScope: "global",
+    editable: true,
+    sizeBytes: 0,
+  },
+  {
+    id: "lore:series:demo:cast.md",
+    label: "series",
+    path: "cast.md",
+    templatePath: "lore:series:demo:cast.md",
+    kind: "lore",
+    loreScope: "series",
+    editable: true,
+    sizeBytes: 0,
+  },
+  {
+    id: "lore:story:demo:ch01:scene.md",
+    label: "story",
+    path: "scene.md",
+    templatePath: "lore:story:demo:ch01:scene.md",
+    kind: "lore",
+    loreScope: "story",
+    editable: true,
+    sizeBytes: 0,
+  },
 ];
 
 describe("TemplateFileTree", () => {

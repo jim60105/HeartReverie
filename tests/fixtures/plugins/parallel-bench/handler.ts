@@ -13,10 +13,21 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-export function register(ctx: { hooks: { register: (stage: string, handler: (context: Record<string, unknown>) => Promise<void>) => void } }) {
+export function register(
+  ctx: {
+    hooks: {
+      register: (
+        stage: string,
+        handler: (context: Record<string, unknown>) => Promise<void>,
+      ) => void;
+    };
+  },
+) {
   ctx.hooks.register("post-response", async (context) => {
     // Simulate async I/O work (e.g., metrics push)
     await new Promise((r) => setTimeout(r, 20));
-    (context.logger as { debug?: (...args: unknown[]) => void })?.debug?.("parallel-bench: post-response completed");
+    (context.logger as { debug?: (...args: unknown[]) => void })?.debug?.(
+      "parallel-bench: post-response completed",
+    );
   });
 }

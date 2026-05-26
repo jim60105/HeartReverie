@@ -25,7 +25,7 @@ describe("rendering pipeline integration", () => {
           status: 200,
           json: () => Promise.resolve([]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
   });
@@ -108,8 +108,7 @@ describe("rendering pipeline integration", () => {
 
   it("multiple status blocks are not natively extracted", async () => {
     const { renderChapter } = await getRenderer();
-    const input =
-      "<status>基礎: [A||||]</status> mid <status>基礎: [B||||]</status>";
+    const input = "<status>基礎: [A||||]</status> mid <status>基礎: [B||||]</status>";
     const tokens = renderChapter(input);
     const types = new Set(tokens.map((t) => t.type));
     expect(types.has("status" as never)).toBe(false);

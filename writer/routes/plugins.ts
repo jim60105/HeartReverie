@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { resolve, SEPARATOR } from "@std/path";
-import { problemJson, errorMessage } from "../lib/errors.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
 import { resolveLoreVariables } from "../lib/lore.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";

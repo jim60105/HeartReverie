@@ -31,11 +31,7 @@ import { computeTopoLayers, type HandlerEntry } from "./hooks-topo.ts";
 import type { DispatchMetric, HookMetricsCollector } from "./hooks-metrics.ts";
 import type { HandlerEventBus } from "./hooks-event-bus.ts";
 import { captureRefs, cloneAllowlistSnapshot } from "./hooks-snapshot.ts";
-import {
-  deriveHandlerLogger,
-  makeParallelView,
-  makeSerialView,
-} from "./hooks-runner-view.ts";
+import { deriveHandlerLogger, makeParallelView, makeSerialView } from "./hooks-runner-view.ts";
 
 interface HandlerStartState {
   ctxBeforeRefs: Record<string, unknown>;
@@ -108,9 +104,9 @@ function emitHandlerEnd(
     reassigned,
     error: handlerError !== undefined
       ? {
-          message: errorMessage(handlerError),
-          name: handlerError instanceof Error ? handlerError.name : "Error",
-        }
+        message: errorMessage(handlerError),
+        name: handlerError instanceof Error ? handlerError.name : "Error",
+      }
       : undefined,
     durationMs: endTime - state.startTime,
   };
@@ -168,7 +164,7 @@ export class HookRunner {
       if (stage === "response-stream") {
         // Fire-and-forget: don't await. Background promise handles logging.
         this.#runParallelBucket(stage, parallel, parallelBase, context, correlationId)
-          .catch(() => { /* allSettled already handles individual errors */ });
+          .catch(() => {/* allSettled already handles individual errors */});
       } else {
         await this.#runParallelBucket(stage, parallel, parallelBase, context, correlationId);
       }
@@ -176,8 +172,9 @@ export class HookRunner {
 
     // Metrics + ring buffer + SSE emit
     const durationMs = Math.round(performance.now() - startTime);
-    const dispatchPhase: DispatchMetric["dispatchPhase"] =
-      parallel.length === 0 ? "serial" : (serial.length === 0 ? "parallel" : "mixed");
+    const dispatchPhase: DispatchMetric["dispatchPhase"] = parallel.length === 0
+      ? "serial"
+      : (serial.length === 0 ? "parallel" : "mixed");
     this.#metrics.recordDispatch(
       stage,
       dispatchPhase,
@@ -221,7 +218,12 @@ export class HookRunner {
     const handlerLogger = deriveHandlerLogger(entry, correlationId);
     const view = makeSerialView(context, handlerLogger);
     const startState = emitHandlerStart(
-      this.#eventBus, stage, entry, handlerIndex, correlationId, context,
+      this.#eventBus,
+      stage,
+      entry,
+      handlerIndex,
+      correlationId,
+      context,
     );
 
     let handlerError: unknown = undefined;
@@ -240,8 +242,14 @@ export class HookRunner {
 
     if (startState) {
       emitHandlerEnd(
-        this.#eventBus, stage, entry, handlerIndex, correlationId, context,
-        startState, handlerError,
+        this.#eventBus,
+        stage,
+        entry,
+        handlerIndex,
+        correlationId,
+        context,
+        startState,
+        handlerError,
       );
     }
   }
@@ -266,7 +274,12 @@ export class HookRunner {
     const handlerLogger = deriveHandlerLogger(entry, correlationId);
     const view = makeParallelView(context, handlerLogger, this.#log, entry, stage);
     const startState = emitHandlerStart(
-      this.#eventBus, stage, entry, handlerIndex, correlationId, context,
+      this.#eventBus,
+      stage,
+      entry,
+      handlerIndex,
+      correlationId,
+      context,
     );
 
     try {
@@ -277,8 +290,14 @@ export class HookRunner {
       // #runParallelBucket continues to work unchanged.
       if (startState) {
         emitHandlerEnd(
-          this.#eventBus, stage, entry, handlerIndex, correlationId, context,
-          startState, err,
+          this.#eventBus,
+          stage,
+          entry,
+          handlerIndex,
+          correlationId,
+          context,
+          startState,
+          err,
         );
       }
       throw err;
@@ -286,8 +305,14 @@ export class HookRunner {
 
     if (startState) {
       emitHandlerEnd(
-        this.#eventBus, stage, entry, handlerIndex, correlationId, context,
-        startState, undefined,
+        this.#eventBus,
+        stage,
+        entry,
+        handlerIndex,
+        correlationId,
+        context,
+        startState,
+        undefined,
       );
     }
   }
@@ -320,10 +345,16 @@ export class HookRunner {
         const results = await Promise.allSettled(
           chunk.map((entry) => {
             const t0 = performance.now();
-            return this.#runParallel(stage, entry, indexOf.get(entry)!, context, correlationId).then(
-              () => { this.#metrics.recordStreamWallTime(stage, entry.plugin, performance.now() - t0); },
-              (err) => { this.#metrics.recordStreamWallTime(stage, entry.plugin, performance.now() - t0); throw err; },
-            );
+            return this.#runParallel(stage, entry, indexOf.get(entry)!, context, correlationId)
+              .then(
+                () => {
+                  this.#metrics.recordStreamWallTime(stage, entry.plugin, performance.now() - t0);
+                },
+                (err) => {
+                  this.#metrics.recordStreamWallTime(stage, entry.plugin, performance.now() - t0);
+                  throw err;
+                },
+              );
           }),
         );
         this.#handleParallelResults(stage, chunk, results);

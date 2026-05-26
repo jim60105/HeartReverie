@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assert as assertTrue, assertThrows } from "@std/assert";
+import { assert as assertTrue, assertEquals, assertThrows } from "@std/assert";
 import { PIPELINE_FIELDS } from "../../../writer/lib/hook-pipeline-fields.ts";
 
 Deno.test("PIPELINE_FIELDS — required entries are present", () => {

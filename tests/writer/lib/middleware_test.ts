@@ -16,7 +16,7 @@
 import { assertEquals, assertMatch } from "@std/assert";
 import { Hono } from "@hono/hono";
 import type { MiddlewareHandler } from "@hono/hono";
-import { verifyPassphrase, validateParams } from "../../../writer/lib/middleware.ts";
+import { validateParams, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 
 function createTestApp(middleware: MiddlewareHandler) {
   const app = new Hono();
@@ -31,9 +31,11 @@ Deno.test("verifyPassphrase", async (t) => {
     Deno.env.set("PASSPHRASE", "test-secret");
 
     const app = createTestApp(verifyPassphrase);
-    const res = await app.fetch(new Request("http://localhost/test", {
-      headers: { "x-passphrase": "test-secret" },
-    }));
+    const res = await app.fetch(
+      new Request("http://localhost/test", {
+        headers: { "x-passphrase": "test-secret" },
+      }),
+    );
 
     assertEquals(res.status, 200);
     if (original !== undefined) Deno.env.set("PASSPHRASE", original);
@@ -45,9 +47,11 @@ Deno.test("verifyPassphrase", async (t) => {
     Deno.env.set("PASSPHRASE", "correct-pass");
 
     const app = createTestApp(verifyPassphrase);
-    const res = await app.fetch(new Request("http://localhost/test", {
-      headers: { "x-passphrase": "wrong-pass" },
-    }));
+    const res = await app.fetch(
+      new Request("http://localhost/test", {
+        headers: { "x-passphrase": "wrong-pass" },
+      }),
+    );
     const body = await res.json();
 
     assertEquals(res.status, 401);
@@ -73,9 +77,11 @@ Deno.test("verifyPassphrase", async (t) => {
     Deno.env.delete("PASSPHRASE");
 
     const app = createTestApp(verifyPassphrase);
-    const res = await app.fetch(new Request("http://localhost/test", {
-      headers: { "x-passphrase": "any" },
-    }));
+    const res = await app.fetch(
+      new Request("http://localhost/test", {
+        headers: { "x-passphrase": "any" },
+      }),
+    );
     const body = await res.json();
 
     assertEquals(res.status, 503);
@@ -90,9 +96,11 @@ Deno.test("verifyPassphrase", async (t) => {
 
     // Different-length passphrase — should still return 401 without throwing
     const app = createTestApp(verifyPassphrase);
-    const res = await app.fetch(new Request("http://localhost/test", {
-      headers: { "x-passphrase": "a" },
-    }));
+    const res = await app.fetch(
+      new Request("http://localhost/test", {
+        headers: { "x-passphrase": "a" },
+      }),
+    );
 
     assertEquals(res.status, 401);
     if (original !== undefined) Deno.env.set("PASSPHRASE", original);
@@ -105,15 +113,21 @@ Deno.test("verifyPassphrase", async (t) => {
 
     const warnCalls: string[] = [];
     const origWarn = console.warn;
-    console.warn = (...args: unknown[]) => { warnCalls.push(args.join(" ")); };
+    console.warn = (...args: unknown[]) => {
+      warnCalls.push(args.join(" "));
+    };
 
     try {
       const app = createTestApp(verifyPassphrase);
-      await app.fetch(new Request("http://localhost/test", {
-        headers: { "x-passphrase": "wrong-pass" },
-      }));
+      await app.fetch(
+        new Request("http://localhost/test", {
+          headers: { "x-passphrase": "wrong-pass" },
+        }),
+      );
 
-      const hasAuditLog = warnCalls.some((msg) => msg.includes("[auth]") && msg.includes("Rejected"));
+      const hasAuditLog = warnCalls.some((msg) =>
+        msg.includes("[auth]") && msg.includes("Rejected")
+      );
       assertEquals(hasAuditLog, true, "console.warn should log [auth] rejection");
     } finally {
       console.warn = origWarn;
@@ -129,16 +143,24 @@ Deno.test("verifyPassphrase", async (t) => {
 
     const warnCalls: string[] = [];
     const origWarn = console.warn;
-    console.warn = (...args: unknown[]) => { warnCalls.push(args.join(" ")); };
+    console.warn = (...args: unknown[]) => {
+      warnCalls.push(args.join(" "));
+    };
 
     try {
       const app = createTestApp(verifyPassphrase);
-      await app.fetch(new Request("http://localhost/test", {
-        headers: { "x-passphrase": "wrong" },
-      }));
+      await app.fetch(
+        new Request("http://localhost/test", {
+          headers: { "x-passphrase": "wrong" },
+        }),
+      );
 
       for (const msg of warnCalls) {
-        assertEquals(msg.includes(secretPassphrase), false, "Passphrase value must not appear in logs");
+        assertEquals(
+          msg.includes(secretPassphrase),
+          false,
+          "Passphrase value must not appear in logs",
+        );
         assertEquals(msg.includes("wrong"), false, "Provided passphrase must not appear in logs");
       }
     } finally {

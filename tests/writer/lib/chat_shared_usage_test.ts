@@ -15,7 +15,7 @@
 
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { executeChat, ChatAbortError } from "../../../writer/lib/chat-shared.ts";
+import { ChatAbortError, executeChat } from "../../../writer/lib/chat-shared.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { createSafePath } from "../../../writer/lib/middleware.ts";
 import { readUsage, USAGE_FILENAME } from "../../../writer/lib/usage.ts";
@@ -54,7 +54,7 @@ function buildConfig(tmpDir: string): AppConfig {
       topA: 1,
       reasoningEnabled: true,
       reasoningEffort: "high",
-    maxCompletionTokens: 4096,
+      maxCompletionTokens: 4096,
     },
     THEME_DIR: "./themes/",
     PROMPT_FILE: "x",
@@ -82,7 +82,11 @@ function stubFetch(chunks: string[]): { restore: () => void } {
     }
     return original(url as string, _opts);
   }) as FetchFn;
-  return { restore: () => { globalThis.fetch = original; } };
+  return {
+    restore: () => {
+      globalThis.fetch = original;
+    },
+  };
 }
 
 function buildPromptStub() {
@@ -139,38 +143,41 @@ Deno.test({
       }
     });
 
-    await t.step("success without usage → ChatResult.usage is null and no file written", async () => {
-      const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-none-" });
-      try {
-        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-        const stub = stubFetch([
-          'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
-          "data: [DONE]\n\n",
-        ]);
+    await t.step(
+      "success without usage → ChatResult.usage is null and no file written",
+      async () => {
+        const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-none-" });
         try {
-          const result = await executeChat({
-            series: "s1",
-            name: "n1",
-            message: "Hi",
-            config: buildConfig(tmpDir),
-            safePath: createSafePath(tmpDir),
-            hookDispatcher: new HookDispatcher(),
-            buildPromptFromStory: buildPromptStub(),
-          });
-          assertEquals(result.usage, null);
+          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+          const stub = stubFetch([
+            'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+            "data: [DONE]\n\n",
+          ]);
+          try {
+            const result = await executeChat({
+              series: "s1",
+              name: "n1",
+              message: "Hi",
+              config: buildConfig(tmpDir),
+              safePath: createSafePath(tmpDir),
+              hookDispatcher: new HookDispatcher(),
+              buildPromptFromStory: buildPromptStub(),
+            });
+            assertEquals(result.usage, null);
+          } finally {
+            stub.restore();
+          }
+          try {
+            await Deno.stat(join(tmpDir, "s1", "n1", USAGE_FILENAME));
+            throw new Error("_usage.json should not exist");
+          } catch (err) {
+            if (!(err instanceof Deno.errors.NotFound)) throw err;
+          }
         } finally {
-          stub.restore();
+          await Deno.remove(tmpDir, { recursive: true });
         }
-        try {
-          await Deno.stat(join(tmpDir, "s1", "n1", USAGE_FILENAME));
-          throw new Error("_usage.json should not exist");
-        } catch (err) {
-          if (!(err instanceof Deno.errors.NotFound)) throw err;
-        }
-      } finally {
-        await Deno.remove(tmpDir, { recursive: true });
-      }
-    });
+      },
+    );
 
     await t.step("abort path → no usage written", async () => {
       const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-abort-" });
@@ -206,87 +213,95 @@ Deno.test({
           await Deno.stat(join(tmpDir, "s1", "n1", USAGE_FILENAME));
           throw new Error("_usage.json should not exist");
         } catch (err) {
-          if (!(err instanceof Deno.errors.NotFound)) throw err;
+          if (!(err instanceof Deno.errors.NotFound)) {
+            throw err;
+          }
         }
       } finally {
         await Deno.remove(tmpDir, { recursive: true });
       }
     });
 
-    await t.step("upstream cost from final SSE chunk propagates into post-response payload", async () => {
-      const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-cost-" });
-      try {
-        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-        const stub = stubFetch([
-          'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
-          'data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33,"cost":0.0123}}\n\n',
-          "data: [DONE]\n\n",
-        ]);
-        const hd = new HookDispatcher();
-        let captured: unknown = null;
-        hd.register("post-response", (ctx) => {
-          captured = ctx;
-          return Promise.resolve();
-        });
+    await t.step(
+      "upstream cost from final SSE chunk propagates into post-response payload",
+      async () => {
+        const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-cost-" });
         try {
-          const result = await executeChat({
-            series: "s1",
-            name: "n1",
-            message: "Hi",
-            config: buildConfig(tmpDir),
-            safePath: createSafePath(tmpDir),
-            hookDispatcher: hd,
-            buildPromptFromStory: buildPromptStub(),
+          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+          const stub = stubFetch([
+            'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+            'data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33,"cost":0.0123}}\n\n',
+            "data: [DONE]\n\n",
+          ]);
+          const hd = new HookDispatcher();
+          let captured: unknown = null;
+          hd.register("post-response", (ctx) => {
+            captured = ctx;
+            return Promise.resolve();
           });
-          assertEquals(result.usage?.upstreamCostUsd, 0.0123);
+          try {
+            const result = await executeChat({
+              series: "s1",
+              name: "n1",
+              message: "Hi",
+              config: buildConfig(tmpDir),
+              safePath: createSafePath(tmpDir),
+              hookDispatcher: hd,
+              buildPromptFromStory: buildPromptStub(),
+            });
+            assertEquals(result.usage?.upstreamCostUsd, 0.0123);
+          } finally {
+            stub.restore();
+          }
+          const p = captured as { usage: { upstreamCostUsd?: number | null } | null } | null;
+          assertEquals(p?.usage?.upstreamCostUsd, 0.0123);
+          const records = await readUsage(join(tmpDir, "s1", "n1"));
+          assertEquals(records.length, 1);
+          assertEquals(records[0]!.upstreamCostUsd, 0.0123);
         } finally {
-          stub.restore();
+          await Deno.remove(tmpDir, { recursive: true });
         }
-        const p = captured as { usage: { upstreamCostUsd?: number | null } | null } | null;
-        assertEquals(p?.usage?.upstreamCostUsd, 0.0123);
-        const records = await readUsage(join(tmpDir, "s1", "n1"));
-        assertEquals(records.length, 1);
-        assertEquals(records[0]!.upstreamCostUsd, 0.0123);
-      } finally {
-        await Deno.remove(tmpDir, { recursive: true });
-      }
-    });
+      },
+    );
 
-    await t.step("missing upstream cost → upstreamCostUsd omitted from post-response usage", async () => {
-      const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-nocost-" });
-      try {
-        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-        const stub = stubFetch([
-          'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
-          'data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33}}\n\n',
-          "data: [DONE]\n\n",
-        ]);
-        const hd = new HookDispatcher();
-        let captured: unknown = null;
-        hd.register("post-response", (ctx) => {
-          captured = ctx;
-          return Promise.resolve();
-        });
+    await t.step(
+      "missing upstream cost → upstreamCostUsd omitted from post-response usage",
+      async () => {
+        const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-nocost-" });
         try {
-          await executeChat({
-            series: "s1",
-            name: "n1",
-            message: "Hi",
-            config: buildConfig(tmpDir),
-            safePath: createSafePath(tmpDir),
-            hookDispatcher: hd,
-            buildPromptFromStory: buildPromptStub(),
+          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+          const stub = stubFetch([
+            'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+            'data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33}}\n\n',
+            "data: [DONE]\n\n",
+          ]);
+          const hd = new HookDispatcher();
+          let captured: unknown = null;
+          hd.register("post-response", (ctx) => {
+            captured = ctx;
+            return Promise.resolve();
           });
+          try {
+            await executeChat({
+              series: "s1",
+              name: "n1",
+              message: "Hi",
+              config: buildConfig(tmpDir),
+              safePath: createSafePath(tmpDir),
+              hookDispatcher: hd,
+              buildPromptFromStory: buildPromptStub(),
+            });
+          } finally {
+            stub.restore();
+          }
+          const p = captured as { usage: Record<string, unknown> | null } | null;
+          assertEquals(p?.usage !== null && p?.usage !== undefined, true);
+          assertEquals("upstreamCostUsd" in (p!.usage as Record<string, unknown>), false);
         } finally {
-          stub.restore();
+          await Deno.remove(tmpDir, { recursive: true });
         }
-        const p = captured as { usage: Record<string, unknown> | null } | null;
-        assertEquals(p?.usage !== null && p?.usage !== undefined, true);
-        assertEquals("upstreamCostUsd" in (p!.usage as Record<string, unknown>), false);
-      } finally {
-        await Deno.remove(tmpDir, { recursive: true });
-      }
-    });
+      },
+    );
 
     await t.step("non-finite/negative upstream cost is treated as absent", async () => {
       const tmpDir = await Deno.makeTempDir({ prefix: "chat-usage-badcost-" });

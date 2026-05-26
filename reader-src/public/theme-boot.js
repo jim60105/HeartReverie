@@ -25,8 +25,7 @@
     if (textName) {
       var s = document.createElement("style");
       s.id = "theme-highlight-override";
-      s.textContent =
-        "::highlight(dialogue-quote-straight)," +
+      s.textContent = "::highlight(dialogue-quote-straight)," +
         "::highlight(dialogue-quote-curly)," +
         "::highlight(dialogue-quote-guillemet)," +
         "::highlight(dialogue-quote-corner)," +

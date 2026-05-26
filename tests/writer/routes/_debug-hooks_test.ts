@@ -18,11 +18,7 @@ import { stub } from "@std/testing/mock";
 import { createApp } from "../../../writer/app.ts";
 import { verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
-import type {
-  AppConfig,
-  AppDeps,
-  BuildPromptResult,
-} from "../../../writer/types.ts";
+import type { AppConfig, AppDeps, BuildPromptResult } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
 /** Build a minimal app with debug-hooks routes available via the passphrase middleware. */
@@ -71,9 +67,15 @@ async function withSilencedConsole<T>(
   const logCalls: unknown[][] = [];
   const warnCalls: unknown[][] = [];
   const errorCalls: unknown[][] = [];
-  const logStub = stub(console, "log", (...args: unknown[]) => { logCalls.push(args); });
-  const warnStub = stub(console, "warn", (...args: unknown[]) => { warnCalls.push(args); });
-  const errorStub = stub(console, "error", (...args: unknown[]) => { errorCalls.push(args); });
+  const logStub = stub(console, "log", (...args: unknown[]) => {
+    logCalls.push(args);
+  });
+  const warnStub = stub(console, "warn", (...args: unknown[]) => {
+    warnCalls.push(args);
+  });
+  const errorStub = stub(console, "error", (...args: unknown[]) => {
+    errorCalls.push(args);
+  });
   try {
     return await fn({ logCalls, warnCalls, errorCalls });
   } finally {
@@ -151,9 +153,14 @@ Deno.test({
     await t.step("6.4c: SSE stream receives dispatch event with expected fields", async () => {
       await withSilencedConsole(async () => {
         const hd = new HookDispatcher();
-        hd.register("post-response", async () => {
-          await new Promise((r) => setTimeout(r, 5));
-        }, 100, "sse-test-plugin");
+        hd.register(
+          "post-response",
+          async () => {
+            await new Promise((r) => setTimeout(r, 5));
+          },
+          100,
+          "sse-test-plugin",
+        );
 
         const app = createTestApp(hd);
 

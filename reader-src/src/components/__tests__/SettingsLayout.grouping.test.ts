@@ -51,14 +51,23 @@ const RouterLinkStub = defineComponent({
 });
 const RouterViewStub = defineComponent({
   name: "RouterView",
-  template: '<div />',
+  template: "<div />",
 });
 
 describe("SettingsLayout — sidebar grouping by meta.category", () => {
   it("renders general links before the developer-tools divider; hook-inspector lives in developer-tools", async () => {
     const SettingsLayout = (await import("@/components/SettingsLayout.vue")).default;
     const wrapper = mount(SettingsLayout, {
-      global: { stubs: { "router-link": RouterLinkStub, "router-view": RouterViewStub, AppHeader: defineComponent({ name: "AppHeader", template: '<header class="app-header-stub"><slot name="leading" /></header>' }) } },
+      global: {
+        stubs: {
+          "router-link": RouterLinkStub,
+          "router-view": RouterViewStub,
+          AppHeader: defineComponent({
+            name: "AppHeader",
+            template: '<header class="app-header-stub"><slot name="leading" /></header>',
+          }),
+        },
+      },
     });
     await nextTick();
     await new Promise((r) => setTimeout(r, 5));

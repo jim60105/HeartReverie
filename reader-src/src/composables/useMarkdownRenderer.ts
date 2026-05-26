@@ -6,12 +6,12 @@ import { frontendHooks } from "@/lib/plugin-hooks";
 import { usePlugins } from "@/composables/usePlugins";
 import { renderDebug } from "@/lib/render-debug";
 import type {
-  UseMarkdownRendererReturn,
+  ChapterRenderAfterContext,
+  FrontendRenderContext,
   RenderOptions,
   RenderToken,
+  UseMarkdownRendererReturn,
   VentoErrorCardProps,
-  FrontendRenderContext,
-  ChapterRenderAfterContext,
 } from "@/types";
 
 interface TokenData {
@@ -61,8 +61,7 @@ function dispatchChapterRenderAfter(
     const original = originalEntries.find((e) => e.ref === tok);
     const isNew = !original;
     const wasMutatedToHtml = original !== undefined && original.type !== "html";
-    const contentChanged =
-      original !== undefined &&
+    const contentChanged = original !== undefined &&
       original.type === "html" &&
       original.content !== tok.content;
     if (isNew || wasMutatedToHtml || contentChanged) {
@@ -142,9 +141,7 @@ function renderChapter(
   }
 
   // Build a regex to split on all structured placeholders
-  const escapedPlaceholders = allPlaceholders.map((p) =>
-    p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-  );
+  const escapedPlaceholders = allPlaceholders.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const splitRegex = new RegExp(`(${escapedPlaceholders.join("|")})`);
   const parts = html.split(splitRegex);
 

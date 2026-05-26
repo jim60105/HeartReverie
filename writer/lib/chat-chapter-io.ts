@@ -81,7 +81,11 @@ async function resolveLastChapter(
   const chapterFiles = await listChapterFiles(storyDir);
   if (chapterFiles.length === 0) {
     const verb = action === "append" ? "append" : "replace";
-    throw new ChatError("no-chapter", `Cannot ${verb}: no existing chapter file in story directory`, 400);
+    throw new ChatError(
+      "no-chapter",
+      `Cannot ${verb}: no existing chapter file in story directory`,
+      400,
+    );
   }
   const lastFile = chapterFiles[chapterFiles.length - 1]!;
   return { targetNum: parseInt(lastFile, 10), chapterPath: join(storyDir, lastFile) };
@@ -131,13 +135,20 @@ export async function openChapterForStream(args: {
 
     let file: Deno.FsFile | null = null;
     try {
-      file = await Deno.open(chapterPath, { write: true, create: true, truncate: true, mode: 0o664 });
+      file = await Deno.open(chapterPath, {
+        write: true,
+        create: true,
+        truncate: true,
+        mode: 0o664,
+      });
       if (preContent) {
         await file.write(encoder.encode(preContent));
       }
       return { file, preContent };
     } catch (err) {
-      try { file?.close(); } catch { /* nothing actionable; original error wins */ }
+      try {
+        file?.close();
+      } catch { /* nothing actionable; original error wins */ }
       throw err;
     }
   }
@@ -171,7 +182,9 @@ export async function openChapterForStream(args: {
       file = await Deno.open(chapterPath, { write: true, append: true, mode: 0o664 });
       return { file, preContent: "" };
     } catch (err) {
-      try { file?.close(); } catch { /* nothing actionable; original error wins */ }
+      try {
+        file?.close();
+      } catch { /* nothing actionable; original error wins */ }
       if (err instanceof Deno.errors.NotFound) {
         throw new ChatError("no-chapter", "Cannot continue: chapter file no longer exists", 400);
       }
@@ -185,8 +198,4 @@ export async function openChapterForStream(args: {
 // Mode-specific finalization + content-normalisation helpers live in a
 // sibling module; re-export here so existing call sites in chat-shared.ts
 // (and any downstream consumers) keep working without churn.
-export {
-  finalizeStreamMode,
-  normaliseAppendContent,
-} from "./chat-chapter-finalize.ts";
-
+export { finalizeStreamMode, normaliseAppendContent } from "./chat-chapter-finalize.ts";

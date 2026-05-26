@@ -17,7 +17,11 @@ import type { ChatMessage } from "./story.ts";
 import type { TokenUsageRecord } from "./llm.ts";
 
 /** Backend stages eligible for parallel dispatch declarations in manifest hooks[]. */
-export type BackendParallelStage = "prompt-assembly" | "post-response" | "response-stream" | "pre-llm-fetch";
+export type BackendParallelStage =
+  | "prompt-assembly"
+  | "post-response"
+  | "response-stream"
+  | "pre-llm-fetch";
 
 /** Valid hook lifecycle stages. */
 export type HookStage =
@@ -138,30 +142,30 @@ export interface PostResponsePayload {
  */
 export type HandlerEvent =
   | {
-      readonly kind: "handler-start";
-      readonly stage: HookStage;
-      readonly plugin: string | undefined;
-      readonly priority: number;
-      readonly handlerIndex: number;
-      readonly correlationId: string | undefined;
-      readonly timestamp: number;
-      readonly ctxBeforeSnapshot: unknown;
-      readonly ctxBeforeRefs: Readonly<Record<string, unknown>>;
-    }
+    readonly kind: "handler-start";
+    readonly stage: HookStage;
+    readonly plugin: string | undefined;
+    readonly priority: number;
+    readonly handlerIndex: number;
+    readonly correlationId: string | undefined;
+    readonly timestamp: number;
+    readonly ctxBeforeSnapshot: unknown;
+    readonly ctxBeforeRefs: Readonly<Record<string, unknown>>;
+  }
   | {
-      readonly kind: "handler-end";
-      readonly stage: HookStage;
-      readonly plugin: string | undefined;
-      readonly priority: number;
-      readonly handlerIndex: number;
-      readonly correlationId: string | undefined;
-      readonly timestamp: number;
-      readonly ctxAfterSnapshot: unknown;
-      readonly ctxAfterRefs: Readonly<Record<string, unknown>>;
-      readonly reassigned: ReadonlyArray<string>;
-      readonly error: { readonly message: string; readonly name: string } | undefined;
-      readonly durationMs: number;
-    };
+    readonly kind: "handler-end";
+    readonly stage: HookStage;
+    readonly plugin: string | undefined;
+    readonly priority: number;
+    readonly handlerIndex: number;
+    readonly correlationId: string | undefined;
+    readonly timestamp: number;
+    readonly ctxAfterSnapshot: unknown;
+    readonly ctxAfterRefs: Readonly<Record<string, unknown>>;
+    readonly reassigned: ReadonlyArray<string>;
+    readonly error: { readonly message: string; readonly name: string } | undefined;
+    readonly durationMs: number;
+  };
 
 /** Subscriber callback for per-handler `HookDispatcher` events. */
 export type HandlerEventSubscriber = (event: HandlerEvent) => void;

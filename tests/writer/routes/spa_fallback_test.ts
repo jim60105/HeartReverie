@@ -19,7 +19,7 @@ import { createApp, registerSpaFallback } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import type { Hono } from "@hono/hono";
-import type { AppDeps, AppConfig, BuildPromptResult } from "../../../writer/types.ts";
+import type { AppConfig, AppDeps, BuildPromptResult } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
 async function makeRequest(
@@ -36,62 +36,77 @@ async function makeRequest(
   return { status: res.status, headers: Object.fromEntries(res.headers), res };
 }
 
-Deno.test({ name: "SPA fallback", sanitizeOps: false, sanitizeResources: false, fn: async (t) => {
-  const tmpDir = await Deno.makeTempDir({ prefix: "spa-test-" });
-  const readerDir = join(tmpDir, "reader");
-  const playgroundDir = join(tmpDir, "playground");
+Deno.test({
+  name: "SPA fallback",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async (t) => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "spa-test-" });
+    const readerDir = join(tmpDir, "reader");
+    const playgroundDir = join(tmpDir, "playground");
 
-  Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("PASSPHRASE", "test-pass");
 
-  await Deno.mkdir(readerDir, { recursive: true });
-  await Deno.mkdir(playgroundDir, { recursive: true });
-  await Deno.writeTextFile(join(readerDir, "index.html"), "<!doctype html><html><body>SPA</body></html>");
+    await Deno.mkdir(readerDir, { recursive: true });
+    await Deno.mkdir(playgroundDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(readerDir, "index.html"),
+      "<!doctype html><html><body>SPA</body></html>",
+    );
 
-  const safePath = createSafePath(playgroundDir);
-  const app = createApp({
-    config: {
-      READER_DIR: readerDir,
-      PLAYGROUND_DIR: playgroundDir,
-      ROOT_DIR: tmpDir,
-    } as unknown as AppConfig,
-    safePath,
-    pluginManager: {
-      getPlugins: () => [],
-      getParameters: () => [],
-      getPluginDir: () => null,
-      getBuiltinDir: () => "/nonexistent-plugins",
-      getPromptVariables: async () => ({ variables: {}, fragments: [] }),
-      getStripTagPatterns: () => null,
-    } as unknown as PluginManager,
-    hookDispatcher: new HookDispatcher(),
-    buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
-    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    templateEngine: null,
+    const safePath = createSafePath(playgroundDir);
+    const app = createApp({
+      config: {
+        READER_DIR: readerDir,
+        PLAYGROUND_DIR: playgroundDir,
+        ROOT_DIR: tmpDir,
+      } as unknown as AppConfig,
+      safePath,
+      pluginManager: {
+        getPlugins: () => [],
+        getParameters: () => [],
+        getPluginDir: () => null,
+        getBuiltinDir: () => "/nonexistent-plugins",
+        getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+        getStripTagPatterns: () => null,
+      } as unknown as PluginManager,
+      hookDispatcher: new HookDispatcher(),
+      buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
+      buildContinuePromptFromStory: (async () => ({
+        messages: [],
+        ventoError: null,
+        targetChapterNumber: 0,
+        existingContent: "",
+        userMessageText: "",
+        assistantPrefill: "",
+      })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+      templateEngine: null,
       verifyPassphrase,
-  } as AppDeps);
-  registerSpaFallback(app, { READER_DIR: readerDir });
+    } as AppDeps);
+    registerSpaFallback(app, { READER_DIR: readerDir });
 
-  try {
-    await t.step("GET /unknown/path returns index.html (SPA fallback)", async () => {
-      const { status, res } = await makeRequest(app, "GET", "/my-series/my-story/chapter/3");
-      assertEquals(status, 200);
-      const text = await res.text();
-      assert(text.includes("SPA"), "Response should contain index.html content");
-    });
+    try {
+      await t.step("GET /unknown/path returns index.html (SPA fallback)", async () => {
+        const { status, res } = await makeRequest(app, "GET", "/my-series/my-story/chapter/3");
+        assertEquals(status, 200);
+        const text = await res.text();
+        assert(text.includes("SPA"), "Response should contain index.html content");
+      });
 
-    await t.step("GET /api/stories is NOT affected by SPA fallback", async () => {
-      const { status } = await makeRequest(app, "GET", "/api/stories");
-      // Should return actual API response, not index.html
-      assertEquals(status, 200);
-    });
+      await t.step("GET /api/stories is NOT affected by SPA fallback", async () => {
+        const { status } = await makeRequest(app, "GET", "/api/stories");
+        // Should return actual API response, not index.html
+        assertEquals(status, 200);
+      });
 
-    await t.step("GET / serves index.html from static files", async () => {
-      const { status, res } = await makeRequest(app, "GET", "/index.html");
-      assertEquals(status, 200);
-      const text = await res.text();
-      assert(text.includes("SPA"));
-    });
-  } finally {
-    await Deno.remove(tmpDir, { recursive: true });
-  }
-} });
+      await t.step("GET / serves index.html from static files", async () => {
+        const { status, res } = await makeRequest(app, "GET", "/index.html");
+        assertEquals(status, 200);
+        const text = await res.text();
+        assert(text.includes("SPA"));
+      });
+    } finally {
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  },
+});

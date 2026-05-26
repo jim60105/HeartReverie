@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import type { Hono } from "@hono/hono";
-import type { HookDispatcher, DispatchMetric } from "../lib/hooks.ts";
+import type { DispatchMetric, HookDispatcher } from "../lib/hooks.ts";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
@@ -33,7 +33,14 @@ export function registerDebugHookRoutes(
 
     const perStage: Record<
       string,
-      { count: number; avgMs: number; p50Ms: number; p95Ms: number; serialCount: number; parallelCount: number }
+      {
+        count: number;
+        avgMs: number;
+        p50Ms: number;
+        p95Ms: number;
+        serialCount: number;
+        parallelCount: number;
+      }
     > = {};
     const perPlugin: Record<
       string,
@@ -54,10 +61,9 @@ export function registerDebugHookRoutes(
     for (const [stage, metrics] of stageGroups) {
       const durations = metrics.map((m) => m.durationMs).sort((a, b) => a - b);
       const count = durations.length;
-      const avgMs =
-        Math.round(
-          (durations.reduce((s, d) => s + d, 0) / count) * 100,
-        ) / 100;
+      const avgMs = Math.round(
+        (durations.reduce((s, d) => s + d, 0) / count) * 100,
+      ) / 100;
       const p50Ms = durations[Math.floor(count * 0.5)] ?? 0;
       const p95Ms = durations[Math.floor(count * 0.95)] ?? 0;
       const serialCount = metrics.reduce((s, m) => s + m.serialCount, 0);

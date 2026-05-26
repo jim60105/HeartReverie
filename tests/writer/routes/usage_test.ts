@@ -62,9 +62,16 @@ function createTestApp(tmpDir: string): Hono {
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
-    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+    buildContinuePromptFromStory: (async () => ({
+      messages: [],
+      ventoError: null,
+      targetChapterNumber: 0,
+      existingContent: "",
+      userMessageText: "",
+      assistantPrefill: "",
+    })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     templateEngine: null,
-      verifyPassphrase,
+    verifyPassphrase,
   } as AppDeps);
 }
 
@@ -83,7 +90,9 @@ Deno.test({
 
     try {
       await t.step("GET without passphrase → 401", async () => {
-        const res = await makeRequest(app, "GET", "/api/stories/series1/story1/usage", { "x-passphrase": "" });
+        const res = await makeRequest(app, "GET", "/api/stories/series1/story1/usage", {
+          "x-passphrase": "",
+        });
         assertEquals(res.status, 401);
       });
 
@@ -102,20 +111,26 @@ Deno.test({
       });
 
       await t.step("GET on populated story → 200 with computed totals", async () => {
-        await appendUsage(storyDir, buildRecord({
-          chapter: 1,
-          promptTokens: 100,
-          completionTokens: 50,
-          totalTokens: 150,
-          model: "m",
-        }));
-        await appendUsage(storyDir, buildRecord({
-          chapter: 2,
-          promptTokens: 200,
-          completionTokens: 80,
-          totalTokens: 280,
-          model: "m",
-        }));
+        await appendUsage(
+          storyDir,
+          buildRecord({
+            chapter: 1,
+            promptTokens: 100,
+            completionTokens: 50,
+            totalTokens: 150,
+            model: "m",
+          }),
+        );
+        await appendUsage(
+          storyDir,
+          buildRecord({
+            chapter: 2,
+            promptTokens: 200,
+            completionTokens: 80,
+            totalTokens: 280,
+            model: "m",
+          }),
+        );
 
         const res = await makeRequest(app, "GET", "/api/stories/series1/story1/usage");
         assertEquals(res.status, 200);

@@ -19,11 +19,7 @@ import { createApp } from "../../../writer/app.ts";
 import { verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import type { Hono } from "@hono/hono";
-import type {
-  AppConfig,
-  AppDeps,
-  BuildPromptResult,
-} from "../../../writer/types.ts";
+import type { AppConfig, AppDeps, BuildPromptResult } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
 async function makeRequest(
@@ -38,8 +34,7 @@ async function makeRequest(
     headers: { "x-passphrase": "test-pass", ...headers },
   };
   if (body) {
-    (init.headers as Record<string, string>)["Content-Type"] =
-      "application/json";
+    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
     init.body = JSON.stringify(body);
   }
   const res = await app.fetch(new Request(`http://localhost${urlPath}`, init));
@@ -159,14 +154,11 @@ Deno.test({
             getStripTagPatterns: () => null,
             getPluginStyles: () => [],
             getPluginActionButtons: (name: string) =>
-              name === "disabled-plugin"
-                ? [{ id: "do-it", label: "Do it" }]
-                : [],
+              name === "disabled-plugin" ? [{ id: "do-it", label: "Do it" }] : [],
             getPluginSettings: async () => ({ enabled: false }),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
-          buildPromptFromStory: async () =>
-            ({}) as unknown as BuildPromptResult,
+          buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
           buildContinuePromptFromStory: (async () => ({
             messages: [],
             ventoError: null,
@@ -176,7 +168,7 @@ Deno.test({
             assistantPrefill: "",
           })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
           templateEngine: null,
-      verifyPassphrase,
+          verifyPassphrase,
         } as AppDeps);
 
         const res = await makeRequest(
@@ -224,8 +216,7 @@ Deno.test({
                 frontendModule: "ui.js",
               },
             ],
-            getPluginDir: (name: string) =>
-              name === "my-plugin" ? pluginDir : null,
+            getPluginDir: (name: string) => name === "my-plugin" ? pluginDir : null,
             getBuiltinDir: () => "/nonexistent-plugins",
             getParameters: () => [],
             getPromptVariables: async () => ({ variables: {}, fragments: [] }),
@@ -235,8 +226,7 @@ Deno.test({
             getPluginAllowedJsFiles: () => new Set<string>(),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
-          buildPromptFromStory: async () =>
-            ({}) as unknown as BuildPromptResult,
+          buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
           buildContinuePromptFromStory: (async () => ({
             messages: [],
             ventoError: null,
@@ -246,7 +236,7 @@ Deno.test({
             assistantPrefill: "",
           })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
           templateEngine: null,
-      verifyPassphrase,
+          verifyPassphrase,
         } as AppDeps);
 
         const res = await makeRequest(app, "GET", "/api/plugins");
@@ -276,8 +266,7 @@ Deno.test({
                 frontendModule: "ui.js",
               },
             ],
-            getPluginDir: (name: string) =>
-              name === "my-plugin" ? pluginDir : null,
+            getPluginDir: (name: string) => name === "my-plugin" ? pluginDir : null,
             getBuiltinDir: () => "/nonexistent-plugins",
             getParameters: () => [],
             getPromptVariables: async () => ({ variables: {}, fragments: [] }),
@@ -288,8 +277,7 @@ Deno.test({
               name === "my-plugin" ? new Set(["ui.js"]) : new Set<string>(),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
-          buildPromptFromStory: async () =>
-            ({}) as unknown as BuildPromptResult,
+          buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
           buildContinuePromptFromStory: (async () => ({
             messages: [],
             ventoError: null,
@@ -299,7 +287,7 @@ Deno.test({
             assistantPrefill: "",
           })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
           templateEngine: null,
-      verifyPassphrase,
+          verifyPassphrase,
         } as AppDeps);
 
         const res = await app.fetch(
@@ -338,8 +326,7 @@ Deno.test({
                 frontendModule: "nonexistent.js",
               },
             ],
-            getPluginDir: (name: string) =>
-              name === "missing-plugin" ? missingDir : null,
+            getPluginDir: (name: string) => name === "missing-plugin" ? missingDir : null,
             getBuiltinDir: () => "/nonexistent-plugins",
             getParameters: () => [],
             getPromptVariables: async () => ({ variables: {}, fragments: [] }),
@@ -347,13 +334,10 @@ Deno.test({
             getPluginStyles: () => [],
             getPluginActionButtons: () => [],
             getPluginAllowedJsFiles: (name: string) =>
-              name === "missing-plugin"
-                ? new Set(["nonexistent.js"])
-                : new Set<string>(),
+              name === "missing-plugin" ? new Set(["nonexistent.js"]) : new Set<string>(),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
-          buildPromptFromStory: async () =>
-            ({}) as unknown as BuildPromptResult,
+          buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
           buildContinuePromptFromStory: (async () => ({
             messages: [],
             ventoError: null,
@@ -363,7 +347,7 @@ Deno.test({
             assistantPrefill: "",
           })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
           templateEngine: null,
-      verifyPassphrase,
+          verifyPassphrase,
         } as AppDeps);
 
         const res = await makeRequest(
@@ -421,8 +405,7 @@ Deno.test({
                 frontendImports: ["frontend-lightbox.js"],
               },
             ],
-            getPluginDir: (name: string) =>
-              name === "sibling-plugin" ? siblingDir : null,
+            getPluginDir: (name: string) => name === "sibling-plugin" ? siblingDir : null,
             getBuiltinDir: () => "/nonexistent-plugins",
             getParameters: () => [],
             getPromptVariables: async () => ({ variables: {}, fragments: [] }),
@@ -435,8 +418,7 @@ Deno.test({
                 : new Set<string>(),
           } as unknown as PluginManager,
           hookDispatcher: new HookDispatcher(),
-          buildPromptFromStory: async () =>
-            ({}) as unknown as BuildPromptResult,
+          buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
           buildContinuePromptFromStory: (async () => ({
             messages: [],
             ventoError: null,
@@ -530,8 +512,7 @@ Deno.test({
               frontendModule: "../../escape.js",
             },
           ],
-          getPluginDir: (name: string) =>
-            name === "escape-plugin" ? escapedDir : null,
+          getPluginDir: (name: string) => name === "escape-plugin" ? escapedDir : null,
           getBuiltinDir: () => "/nonexistent-plugins",
           getParameters: () => [],
           getPromptVariables: async () => ({ variables: {}, fragments: [] }),
@@ -551,7 +532,7 @@ Deno.test({
           assistantPrefill: "",
         })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         templateEngine: null,
-      verifyPassphrase,
+        verifyPassphrase,
       } as AppDeps);
 
       // The route should not be registered at all, so any request to it returns 404
@@ -614,7 +595,7 @@ Deno.test({
           assistantPrefill: "",
         })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         templateEngine: null,
-      verifyPassphrase,
+        verifyPassphrase,
       } as AppDeps);
     }
 
@@ -757,9 +738,7 @@ Deno.test({
       assertEquals(res.status, 200);
       assert(Array.isArray(res.body));
       assert(
-        res.body.some((p: Record<string, unknown>) =>
-          p.name === "lore_all" && p.source === "lore"
-        ),
+        res.body.some((p: Record<string, unknown>) => p.name === "lore_all" && p.source === "lore"),
       );
       assert(
         res.body.some((p: Record<string, unknown>) =>
@@ -837,14 +816,12 @@ Deno.test({
               frontendStyles,
             },
           ],
-          getPluginDir: (name: string) =>
-            name === "styled-plugin" ? pluginDir : null,
+          getPluginDir: (name: string) => name === "styled-plugin" ? pluginDir : null,
           getBuiltinDir: () => "/nonexistent-plugins",
           getParameters: () => [],
           getPromptVariables: async () => ({ variables: {}, fragments: [] }),
           getStripTagPatterns: () => null,
-          getPluginStyles: (name: string) =>
-            name === "styled-plugin" ? [...validatedStyles] : [],
+          getPluginStyles: (name: string) => name === "styled-plugin" ? [...validatedStyles] : [],
           getPluginActionButtons: () => [],
           getPluginAllowedJsFiles: () => new Set<string>(),
         } as unknown as PluginManager,
@@ -859,7 +836,7 @@ Deno.test({
           assistantPrefill: "",
         })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         templateEngine: null,
-      verifyPassphrase,
+        verifyPassphrase,
       } as AppDeps);
     }
 

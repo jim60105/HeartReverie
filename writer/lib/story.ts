@@ -25,18 +25,10 @@
  *   the codebase.
  */
 
-import type {
-  RenderOptions,
-  RenderResult,
-  SafePathFn,
-  StoryEngine,
-} from "../types.ts";
+import type { RenderOptions, RenderResult, SafePathFn, StoryEngine } from "../types.ts";
 import type { PluginManager } from "./plugin-manager.ts";
 import type { HookDispatcher } from "./hooks.ts";
-import {
-  buildContinuePromptFromStory,
-  buildPromptFromStory,
-} from "./story-prompt-builder.ts";
+import { buildContinuePromptFromStory, buildPromptFromStory } from "./story-prompt-builder.ts";
 
 export {
   atomicWriteChapter,

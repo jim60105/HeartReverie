@@ -5,7 +5,15 @@ import { defineComponent, h, nextTick } from "vue";
 // Stub heavy CodeMirror module — its imports break in happy-dom.
 vi.mock("@/components/VentoCodeEditor.vue", () => ({
   default: defineComponent({
-    props: ["source", "templatePath", "variables", "readOnly", "series", "story", "enableSaveShortcut"],
+    props: [
+      "source",
+      "templatePath",
+      "variables",
+      "readOnly",
+      "series",
+      "story",
+      "enableSaveShortcut",
+    ],
     emits: ["update:source", "lint", "save-request"],
     setup(_props, { expose }) {
       expose({ jumpTo: vi.fn(), focus: vi.fn(), insertAtCursor: vi.fn() });
@@ -59,15 +67,31 @@ describe("TemplateEditorPage", () => {
   it("blocks save when lint reports errors", async () => {
     const writeCalls: unknown[] = [];
     setupFetch({
-      "GET /api/templates": () => jsonResponse({
-        entries: [{ id: "system.md", label: "system.md", path: "system.md", templatePath: "system.md", kind: "system", editable: true, sizeBytes: 0 }],
-        templates: [],
-      }),
+      "GET /api/templates": () =>
+        jsonResponse({
+          entries: [{
+            id: "system.md",
+            label: "system.md",
+            path: "system.md",
+            templatePath: "system.md",
+            kind: "system",
+            editable: true,
+            sizeBytes: 0,
+          }],
+          templates: [],
+        }),
       "GET /api/templates/variables": () => jsonResponse({ variables: [] }),
       "GET /api/templates/source": () => jsonResponse({ source: "hello" }),
-      "POST /api/templates/lint": () => jsonResponse({
-        diagnostics: [{ ruleId: "vento.parse-error", severity: "error", line: 1, column: 1, message: "boom" }],
-      }),
+      "POST /api/templates/lint": () =>
+        jsonResponse({
+          diagnostics: [{
+            ruleId: "vento.parse-error",
+            severity: "error",
+            line: 1,
+            column: 1,
+            message: "boom",
+          }],
+        }),
       "POST /api/templates/preview": () => jsonResponse({ kind: "messages", messages: [] }),
       "PUT /api/templates": (b) => {
         writeCalls.push(b);
@@ -81,7 +105,8 @@ describe("TemplateEditorPage", () => {
     const saveBtn = w.findAll("button").find((b) => b.text().trim() === "儲存");
     expect(saveBtn).toBeDefined();
     // Make dirty by simulating editor update.
-    (w.vm as unknown as { editorSource: string; baselineSource: string; dirty: boolean }).editorSource = "changed";
+    (w.vm as unknown as { editorSource: string; baselineSource: string; dirty: boolean })
+      .editorSource = "changed";
     (w.vm as unknown as { dirty: boolean }).dirty = true;
     await nextTick();
     await saveBtn!.trigger("click");
@@ -93,15 +118,31 @@ describe("TemplateEditorPage", () => {
 
   it("allows save with only warnings (shows diff modal)", async () => {
     setupFetch({
-      "GET /api/templates": () => jsonResponse({
-        entries: [{ id: "system.md", label: "system.md", path: "system.md", templatePath: "system.md", kind: "system", editable: true, sizeBytes: 0 }],
-        templates: [],
-      }),
+      "GET /api/templates": () =>
+        jsonResponse({
+          entries: [{
+            id: "system.md",
+            label: "system.md",
+            path: "system.md",
+            templatePath: "system.md",
+            kind: "system",
+            editable: true,
+            sizeBytes: 0,
+          }],
+          templates: [],
+        }),
       "GET /api/templates/variables": () => jsonResponse({ variables: [] }),
       "GET /api/templates/source": () => jsonResponse({ source: "hello" }),
-      "POST /api/templates/lint": () => jsonResponse({
-        diagnostics: [{ ruleId: "vento.unknown-variable", severity: "warning", line: 1, column: 1, message: "unknown" }],
-      }),
+      "POST /api/templates/lint": () =>
+        jsonResponse({
+          diagnostics: [{
+            ruleId: "vento.unknown-variable",
+            severity: "warning",
+            line: 1,
+            column: 1,
+            message: "unknown",
+          }],
+        }),
       "POST /api/templates/preview": () => jsonResponse({ kind: "messages", messages: [] }),
       "PUT /api/templates": () => jsonResponse({ ok: true, path: "/x/system.md" }),
     });
@@ -121,10 +162,19 @@ describe("TemplateEditorPage", () => {
 
   it("surfaces 403 toast on plugin write attempt", async () => {
     setupFetch({
-      "GET /api/templates": () => jsonResponse({
-        entries: [{ id: "system.md", label: "system.md", path: "system.md", templatePath: "system.md", kind: "system", editable: true, sizeBytes: 0 }],
-        templates: [],
-      }),
+      "GET /api/templates": () =>
+        jsonResponse({
+          entries: [{
+            id: "system.md",
+            label: "system.md",
+            path: "system.md",
+            templatePath: "system.md",
+            kind: "system",
+            editable: true,
+            sizeBytes: 0,
+          }],
+          templates: [],
+        }),
       "GET /api/templates/variables": () => jsonResponse({ variables: [] }),
       "GET /api/templates/source": () => jsonResponse({ source: "" }),
       "POST /api/templates/lint": () => jsonResponse({ diagnostics: [] }),

@@ -35,10 +35,7 @@
  * has no I/O and no clock reads of its own.
  */
 
-import {
-  type ValidationError,
-  validate as validateSchema,
-} from "./schema-validator.ts";
+import { validate as validateSchema, type ValidationError } from "./schema-validator.ts";
 import {
   computeDeepDiff,
   computeHiddenPaths,
@@ -46,10 +43,7 @@ import {
   isPathInScope,
   unionPaths,
 } from "./settings-diff.ts";
-import {
-  applyPreviousNamesMigration,
-  mergeXLegacy,
-} from "./plugin-settings-helpers.ts";
+import { applyPreviousNamesMigration, mergeXLegacy } from "./plugin-settings-helpers.ts";
 import type { SettingsAudit } from "./plugin-settings-audit.ts";
 
 export interface ValidateAndPrepareResult {

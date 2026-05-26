@@ -18,11 +18,7 @@ import { join } from "@std/path";
 import { executeChat } from "../../../writer/lib/chat-shared.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { createSafePath } from "../../../writer/lib/middleware.ts";
-import type {
-  AppConfig,
-  BuildPromptResult,
-  LlmConfig,
-} from "../../../writer/types.ts";
+import type { AppConfig, BuildPromptResult, LlmConfig } from "../../../writer/types.ts";
 
 function buildConfig(tmpDir: string): AppConfig {
   const llmDefaults: LlmConfig = {
@@ -90,7 +86,12 @@ function captureUpstreamFetch(): {
     }
     return original(url as string, opts);
   }) as typeof fetch;
-  return { restore: () => { globalThis.fetch = original; }, captured };
+  return {
+    restore: () => {
+      globalThis.fetch = original;
+    },
+    captured,
+  };
 }
 
 const buildPromptStub = () =>
@@ -112,86 +113,89 @@ Deno.test({
     Deno.env.set("LLM_API_KEY", "k");
     try {
       await t.step("default chat request carries the three attribution headers", async () => {
-      const tmpDir = await Deno.makeTempDir({ prefix: "chat-attribution-1-" });
-      try {
-        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-        const cap = captureUpstreamFetch();
+        const tmpDir = await Deno.makeTempDir({ prefix: "chat-attribution-1-" });
         try {
-          await executeChat({
-            series: "s1",
-            name: "n1",
-            message: "Hi",
-            config: buildConfig(tmpDir),
-            safePath: createSafePath(tmpDir),
-            hookDispatcher: new HookDispatcher(),
-            buildPromptFromStory: buildPromptStub,
-          });
+          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+          const cap = captureUpstreamFetch();
+          try {
+            await executeChat({
+              series: "s1",
+              name: "n1",
+              message: "Hi",
+              config: buildConfig(tmpDir),
+              safePath: createSafePath(tmpDir),
+              hookDispatcher: new HookDispatcher(),
+              buildPromptFromStory: buildPromptStub,
+            });
+          } finally {
+            cap.restore();
+          }
+          const headers = cap.captured.headers!;
+          assertEquals(
+            headers.get("HTTP-Referer"),
+            "https://github.com/jim60105/HeartReverie",
+          );
+          assertEquals(
+            headers.get("X-OpenRouter-Title"),
+            "HeartReverie",
+          );
+          assertEquals(
+            headers.get("X-OpenRouter-Categories"),
+            "roleplay,creative-writing",
+          );
+          // existing headers still present
+          assertEquals(headers.get("Content-Type"), "application/json");
+          assertEquals(headers.get("Authorization"), "Bearer k");
         } finally {
-          cap.restore();
+          await Deno.remove(tmpDir, { recursive: true });
         }
-        const headers = cap.captured.headers!;
-        assertEquals(
-          headers.get("HTTP-Referer"),
-          "https://github.com/jim60105/HeartReverie",
-        );
-        assertEquals(
-          headers.get("X-OpenRouter-Title"),
-          "HeartReverie",
-        );
-        assertEquals(
-          headers.get("X-OpenRouter-Categories"),
-          "roleplay,creative-writing",
-        );
-        // existing headers still present
-        assertEquals(headers.get("Content-Type"), "application/json");
-        assertEquals(headers.get("Authorization"), "Bearer k");
-      } finally {
-        await Deno.remove(tmpDir, { recursive: true });
-      }
-    });
+      });
 
-    await t.step("attribution headers attached even when LLM_API_URL is non-OpenRouter", async () => {
-      const tmpDir = await Deno.makeTempDir({ prefix: "chat-attribution-2-" });
-      try {
-        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-        const config = buildConfig(tmpDir);
-        // Override to a non-OpenRouter URL while keeping the path component the
-        // captureUpstreamFetch matcher recognizes.
-        const cfgWithCustomUrl = {
-          ...config,
-          LLM_API_URL: "https://self-hosted.example/v1/chat/completions",
-        } as AppConfig;
-        const cap = captureUpstreamFetch();
-        try {
-          await executeChat({
-            series: "s1",
-            name: "n1",
-            message: "Hi",
-            config: cfgWithCustomUrl,
-            safePath: createSafePath(tmpDir),
-            hookDispatcher: new HookDispatcher(),
-            buildPromptFromStory: buildPromptStub,
-          });
-        } finally {
-          cap.restore();
-        }
-        const headers = cap.captured.headers!;
-        assertEquals(
-          headers.get("HTTP-Referer"),
-          "https://github.com/jim60105/HeartReverie",
-        );
-        assertEquals(
-          headers.get("X-OpenRouter-Title"),
-          "HeartReverie",
-        );
-        assertEquals(
-          headers.get("X-OpenRouter-Categories"),
-          "roleplay,creative-writing",
-        );
-      } finally {
-        await Deno.remove(tmpDir, { recursive: true });
-      }
-    });
+      await t.step(
+        "attribution headers attached even when LLM_API_URL is non-OpenRouter",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "chat-attribution-2-" });
+          try {
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            const config = buildConfig(tmpDir);
+            // Override to a non-OpenRouter URL while keeping the path component the
+            // captureUpstreamFetch matcher recognizes.
+            const cfgWithCustomUrl = {
+              ...config,
+              LLM_API_URL: "https://self-hosted.example/v1/chat/completions",
+            } as AppConfig;
+            const cap = captureUpstreamFetch();
+            try {
+              await executeChat({
+                series: "s1",
+                name: "n1",
+                message: "Hi",
+                config: cfgWithCustomUrl,
+                safePath: createSafePath(tmpDir),
+                hookDispatcher: new HookDispatcher(),
+                buildPromptFromStory: buildPromptStub,
+              });
+            } finally {
+              cap.restore();
+            }
+            const headers = cap.captured.headers!;
+            assertEquals(
+              headers.get("HTTP-Referer"),
+              "https://github.com/jim60105/HeartReverie",
+            );
+            assertEquals(
+              headers.get("X-OpenRouter-Title"),
+              "HeartReverie",
+            );
+            assertEquals(
+              headers.get("X-OpenRouter-Categories"),
+              "roleplay,creative-writing",
+            );
+          } finally {
+            await Deno.remove(tmpDir, { recursive: true });
+          }
+        },
+      );
     } finally {
       if (previousKey === undefined) {
         Deno.env.delete("LLM_API_KEY");

@@ -236,7 +236,9 @@ Deno.test("loadCompactionConfig — plugin-settings layer (UI)", async (t) => {
 Deno.test("settingsSchema defaults match DEFAULTS constant", async () => {
   const manifestUrl = new URL("../../../plugins/context-compaction/plugin.json", import.meta.url);
   const manifest = JSON.parse(await Deno.readTextFile(manifestUrl)) as {
-    settingsSchema: { properties: { recentChapters: { default: unknown }; enabled: { default: unknown } } };
+    settingsSchema: {
+      properties: { recentChapters: { default: unknown }; enabled: { default: unknown } };
+    };
   };
   assertEquals(manifest.settingsSchema.properties.recentChapters.default, DEFAULTS.recentChapters);
   assertEquals(manifest.settingsSchema.properties.enabled.default, DEFAULTS.enabled);

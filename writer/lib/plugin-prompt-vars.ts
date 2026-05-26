@@ -33,10 +33,7 @@ import { errorMessage } from "./errors.ts";
 import { isPathContained } from "./path-safety.ts";
 import { validateTemplate } from "./template.ts";
 import { createLogger } from "./logger.ts";
-import type {
-  DynamicVariableContext,
-  PluginManifest,
-} from "../types.ts";
+import type { DynamicVariableContext, PluginManifest } from "../types.ts";
 
 const log = createLogger("plugin");
 

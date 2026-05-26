@@ -19,7 +19,10 @@ import { resolve } from "@std/path";
 // config.ts evaluates all constants at module load time, so we use a
 // subprocess to get a fresh module evaluation with controlled env vars.
 
-async function evalScript(env: Record<string, string>, script: string): Promise<{ stdout: string; stderr: string }> {
+async function evalScript(
+  env: Record<string, string>,
+  script: string,
+): Promise<{ stdout: string; stderr: string }> {
   const cmd = new Deno.Command(Deno.execPath(), {
     args: ["eval", "--", script],
     cwd: resolve(import.meta.dirname!, "../../.."),
@@ -64,7 +67,10 @@ async function evalReasoningEnv(env: Record<string, string>): Promise<{
 
 Deno.test("PROMPT_FILE defaults to _prompts/system.md when env var is unset", async () => {
   const result = await evalConfig({});
-  assert(result.endsWith("_prompts/system.md"), `Expected path ending with _prompts/system.md, got: ${result}`);
+  assert(
+    result.endsWith("_prompts/system.md"),
+    `Expected path ending with _prompts/system.md, got: ${result}`,
+  );
   assert(result.includes("playground"), `Expected path containing playground, got: ${result}`);
 });
 
@@ -144,7 +150,9 @@ Deno.test("LLM_REASONING_EFFORT rejects mixed-case (case-sensitive)", async () =
   assertEquals(r.effort, "xhigh");
 });
 
-async function evalMaxTokens(env: Record<string, string>): Promise<{ value: number | null; stderr: string }> {
+async function evalMaxTokens(
+  env: Record<string, string>,
+): Promise<{ value: number | null; stderr: string }> {
   const script = `
     const c = await import("./writer/lib/config.ts");
     console.log(JSON.stringify({ value: c.LLM_MAX_COMPLETION_TOKENS }));

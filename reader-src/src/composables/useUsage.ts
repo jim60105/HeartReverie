@@ -15,11 +15,7 @@
 
 import { ref } from "vue";
 import { apiFetch } from "@/lib/api";
-import type {
-  TokenUsageRecord,
-  UsageTotals,
-  UseUsageReturn,
-} from "@/types";
+import type { TokenUsageRecord, UsageTotals, UseUsageReturn } from "@/types";
 
 const records = ref<TokenUsageRecord[]>([]);
 const totals = ref<UsageTotals>({

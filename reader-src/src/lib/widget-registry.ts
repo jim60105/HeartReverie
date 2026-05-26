@@ -136,10 +136,10 @@ export function createDefaultWidgetRegistry(): WidgetRegistry {
     match: (schema) => {
       if (!isType(schema, "number") && !isType(schema, "integer")) return 0;
       // RangeNumberWidget wins when bounds are declared, so this is the plain case.
-      const hasMin =
-        typeof schema["minimum"] === "number" || typeof schema["exclusiveMinimum"] === "number";
-      const hasMax =
-        typeof schema["maximum"] === "number" || typeof schema["exclusiveMaximum"] === "number";
+      const hasMin = typeof schema["minimum"] === "number" ||
+        typeof schema["exclusiveMinimum"] === "number";
+      const hasMax = typeof schema["maximum"] === "number" ||
+        typeof schema["exclusiveMaximum"] === "number";
       return hasMin && hasMax ? 0 : 40;
     },
   });
@@ -149,10 +149,10 @@ export function createDefaultWidgetRegistry(): WidgetRegistry {
     component: RangeNumberWidget,
     match: (schema) => {
       if (!isType(schema, "number") && !isType(schema, "integer")) return 0;
-      const hasMin =
-        typeof schema["minimum"] === "number" || typeof schema["exclusiveMinimum"] === "number";
-      const hasMax =
-        typeof schema["maximum"] === "number" || typeof schema["exclusiveMaximum"] === "number";
+      const hasMin = typeof schema["minimum"] === "number" ||
+        typeof schema["exclusiveMinimum"] === "number";
+      const hasMax = typeof schema["maximum"] === "number" ||
+        typeof schema["exclusiveMaximum"] === "number";
       return hasMin && hasMax ? 55 : 0;
     },
   });

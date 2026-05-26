@@ -17,10 +17,7 @@ import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
 import { errorMessage, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
-import {
-  buildVariableCatalog,
-  type TemplateKind,
-} from "../lib/template-lint.ts";
+import { buildVariableCatalog, type TemplateKind } from "../lib/template-lint.ts";
 import { parseTemplatePath, resolveTemplatePath } from "./templates-path.ts";
 import { enumerateAllLore } from "./templates-lore-enum.ts";
 
@@ -138,7 +135,10 @@ export function registerTemplateReadRoutes(app: Hono, deps: AppDeps): void {
       log.error("GET /api/templates/variables failed", {
         error: errorMessage(err),
       });
-      return c.json(problemJson("Internal Server Error", 500, "Failed to build variable catalog"), 500);
+      return c.json(
+        problemJson("Internal Server Error", 500, "Failed to build variable catalog"),
+        500,
+      );
     }
   });
 
@@ -152,11 +152,17 @@ export function registerTemplateReadRoutes(app: Hono, deps: AppDeps): void {
     const templatePath = url.searchParams.get("templatePath");
     const parsed = parseTemplatePath(templatePath);
     if (!parsed.ok) {
-      return c.json(problemJson("Bad Request", parsed.err.status, parsed.err.detail), parsed.err.status as 400);
+      return c.json(
+        problemJson("Bad Request", parsed.err.status, parsed.err.detail),
+        parsed.err.status as 400,
+      );
     }
     const resolved = resolveTemplatePath(parsed.value, deps);
     if (!resolved.ok) {
-      return c.json(problemJson("Bad Request", resolved.err.status, resolved.err.detail), resolved.err.status as 400);
+      return c.json(
+        problemJson("Bad Request", resolved.err.status, resolved.err.detail),
+        resolved.err.status as 400,
+      );
     }
     try {
       const source = await Deno.readTextFile(resolved.value.absolute);
@@ -182,7 +188,10 @@ export function registerTemplateReadRoutes(app: Hono, deps: AppDeps): void {
         templatePath,
         error: errorMessage(err),
       });
-      return c.json(problemJson("Internal Server Error", 500, "Failed to read template source"), 500);
+      return c.json(
+        problemJson("Internal Server Error", 500, "Failed to read template source"),
+        500,
+      );
     }
   });
 }

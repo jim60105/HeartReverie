@@ -26,7 +26,7 @@ function mockFetch(body: unknown, status = 200) {
         status,
         json: () => Promise.resolve(body),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }
@@ -82,7 +82,9 @@ describe("useChatApi.continueLastChapter", () => {
       "fetch",
       vi.fn(
         () =>
-          new Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; headers: Headers }>((resolve) => {
+          new Promise<
+            { ok: boolean; status: number; json: () => Promise<unknown>; headers: Headers }
+          >((resolve) => {
             if (!resolveFetch) {
               resolveFetch = () =>
                 resolve({

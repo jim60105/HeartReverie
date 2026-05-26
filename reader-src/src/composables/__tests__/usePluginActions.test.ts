@@ -182,9 +182,10 @@ describe("usePluginActions", () => {
     let resume: (() => void) | undefined;
     frontendHooks.register(
       "action-button:click",
-      () => new Promise<void>((r) => {
-        resume = r;
-      }),
+      () =>
+        new Promise<void>((r) => {
+          resume = r;
+        }),
       100,
       "alpha",
     );
@@ -218,7 +219,10 @@ describe("usePluginActions", () => {
           series: ctx.series,
           name: ctx.name,
         };
-        await ctx.runPluginPrompt("state-recompute.md", { append: true, appendTag: "UpdateVariable" });
+        await ctx.runPluginPrompt("state-recompute.md", {
+          append: true,
+          appendTag: "UpdateVariable",
+        });
         await ctx.reload();
       },
       100,

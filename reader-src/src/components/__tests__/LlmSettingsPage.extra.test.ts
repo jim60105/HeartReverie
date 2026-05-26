@@ -107,9 +107,7 @@ function resetMocks() {
   fetchSeriesMock.mockReset();
   fetchStoriesMock.mockReset();
   notifyMock.mockReset();
-  saveConfigMock.mockImplementation((_s, _n, payload) =>
-    Promise.resolve(payload)
-  );
+  saveConfigMock.mockImplementation((_s, _n, payload) => Promise.resolve(payload));
   loadConfigMock.mockResolvedValue(undefined);
   loadLlmDefaultsMock.mockResolvedValue(undefined);
   fetchSeriesMock.mockResolvedValue(undefined);
@@ -270,9 +268,7 @@ describe("LlmSettingsPage — extra coverage", () => {
     const wrapper = mount(LlmSettingsPage);
     await flushPromises();
     // The model row's read-only input should show empty value + placeholder.
-    const modelRow = wrapper.findAll(".field-row").find((r) =>
-      r.text().includes("model")
-    )!;
+    const modelRow = wrapper.findAll(".field-row").find((r) => r.text().includes("model"))!;
     const input = modelRow.find("input.default-display.field-input");
     expect(input.attributes("placeholder")).toBe("使用預設值");
     expect((input.element as HTMLInputElement).value).toBe("");
@@ -468,9 +464,7 @@ describe("LlmSettingsPage — extra coverage", () => {
     x.enabledMap.model = true;
     await flushPromises();
     // Find the editable model row's text input (v-model'd against valueMap.model).
-    const modelRow = wrapper.findAll(".field-row").find((r) =>
-      r.text().includes("model")
-    )!;
+    const modelRow = wrapper.findAll(".field-row").find((r) => r.text().includes("model"))!;
     const inputs = modelRow.findAll("input.field-input");
     const editable = inputs.find((i) => !i.attributes("disabled"))!;
     await editable.setValue("custom-model-x");
@@ -518,9 +512,7 @@ describe("LlmSettingsPage — extra coverage", () => {
     const x = exposed(wrapper);
     const effortSelect = wrapper
       .findAll("select")
-      .find((s) =>
-        s.findAll("option").some((o) => o.attributes("value") === "xhigh")
-      )!;
+      .find((s) => s.findAll("option").some((o) => o.attributes("value") === "xhigh"))!;
     await effortSelect.setValue("medium");
     expect(x.valueMap.reasoningEffort).toBe("medium");
   });

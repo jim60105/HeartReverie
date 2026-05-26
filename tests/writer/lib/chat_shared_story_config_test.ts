@@ -53,7 +53,7 @@ function buildConfig(tmpDir: string): AppConfig {
       topA: 1,
       reasoningEnabled: true,
       reasoningEffort: "high",
-    maxCompletionTokens: 4096,
+      maxCompletionTokens: 4096,
     },
     THEME_DIR: "./themes/",
     PROMPT_FILE: "x",
@@ -85,7 +85,12 @@ function captureUpstreamFetch(): {
     }
     return original(url as string, opts);
   }) as typeof fetch;
-  return { restore: () => { globalThis.fetch = original; }, captured };
+  return {
+    restore: () => {
+      globalThis.fetch = original;
+    },
+    captured,
+  };
 }
 
 Deno.test({
@@ -95,50 +100,53 @@ Deno.test({
   fn: async (t) => {
     Deno.env.set("LLM_API_KEY", "k");
 
-    await t.step("temperature override is applied; other fields fall back to defaults", async () => {
-      const tmpDir = await Deno.makeTempDir({ prefix: "chat-pso-" });
-      try {
-        const storyDir = join(tmpDir, "s1", "n1");
-        await Deno.mkdir(storyDir, { recursive: true });
-        await Deno.writeTextFile(
-          join(storyDir, "_config.json"),
-          JSON.stringify({ temperature: 0.9, model: "story-specific" }),
-        );
-
-        const cap = captureUpstreamFetch();
+    await t.step(
+      "temperature override is applied; other fields fall back to defaults",
+      async () => {
+        const tmpDir = await Deno.makeTempDir({ prefix: "chat-pso-" });
         try {
-          await executeChat({
-            series: "s1",
-            name: "n1",
-            message: "Hi",
-            config: buildConfig(tmpDir),
-            safePath: createSafePath(tmpDir),
-            hookDispatcher: new HookDispatcher(),
-            buildPromptFromStory: () =>
-              Promise.resolve({
-                messages: [{ role: "user" as const, content: "p" }],
-                previousContext: [],
-                isFirstRound: true,
-                ventoError: null,
-                chapterFiles: [],
-                chapters: [],
-              } as BuildPromptResult),
-          });
-        } finally {
-          cap.restore();
-        }
+          const storyDir = join(tmpDir, "s1", "n1");
+          await Deno.mkdir(storyDir, { recursive: true });
+          await Deno.writeTextFile(
+            join(storyDir, "_config.json"),
+            JSON.stringify({ temperature: 0.9, model: "story-specific" }),
+          );
 
-        assertEquals(cap.captured.body !== null, true);
-        const body = cap.captured.body!;
-        assertEquals(body.temperature, 0.9);
-        assertEquals(body.model, "story-specific");
-        // Unset fields fall back to defaults
-        assertEquals(body.top_k, 10);
-        assertEquals(body.frequency_penalty, 0.13);
-      } finally {
-        await Deno.remove(tmpDir, { recursive: true });
-      }
-    });
+          const cap = captureUpstreamFetch();
+          try {
+            await executeChat({
+              series: "s1",
+              name: "n1",
+              message: "Hi",
+              config: buildConfig(tmpDir),
+              safePath: createSafePath(tmpDir),
+              hookDispatcher: new HookDispatcher(),
+              buildPromptFromStory: () =>
+                Promise.resolve({
+                  messages: [{ role: "user" as const, content: "p" }],
+                  previousContext: [],
+                  isFirstRound: true,
+                  ventoError: null,
+                  chapterFiles: [],
+                  chapters: [],
+                } as BuildPromptResult),
+            });
+          } finally {
+            cap.restore();
+          }
+
+          assertEquals(cap.captured.body !== null, true);
+          const body = cap.captured.body!;
+          assertEquals(body.temperature, 0.9);
+          assertEquals(body.model, "story-specific");
+          // Unset fields fall back to defaults
+          assertEquals(body.top_k, 10);
+          assertEquals(body.frequency_penalty, 0.13);
+        } finally {
+          await Deno.remove(tmpDir, { recursive: true });
+        }
+      },
+    );
 
     await t.step("absent _config.json → defaults are used verbatim", async () => {
       const tmpDir = await Deno.makeTempDir({ prefix: "chat-pso-def-" });

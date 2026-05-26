@@ -242,8 +242,8 @@ describe("AppHeader", () => {
       // `import.meta.filename`; for older runtimes, fall back to
       // `fileURLToPath(import.meta.url)` (more robust than `.pathname`
       // for URL-encoded characters and non-POSIX paths).
-      const testFilePath = (import.meta as { filename?: string }).filename
-        ?? fileURLToPath(import.meta.url);
+      const testFilePath = (import.meta as { filename?: string }).filename ??
+        fileURLToPath(import.meta.url);
       const sfcPath = resolve(dirname(testFilePath), "..", "AppHeader.vue");
       const source = readFileSync(sfcPath, "utf8");
       const mobileBlockMatch = source.match(
@@ -262,8 +262,8 @@ describe("AppHeader", () => {
     // `flex-wrap: nowrap` at narrow viewports (see openspec change
     // `mobile-responsive-layout`, task 2.4).
     it("pins white-space: nowrap on .header-btn and .chapter-progress", () => {
-      const testFilePath = (import.meta as { filename?: string }).filename
-        ?? fileURLToPath(import.meta.url);
+      const testFilePath = (import.meta as { filename?: string }).filename ??
+        fileURLToPath(import.meta.url);
       const sfcPath = resolve(dirname(testFilePath), "..", "AppHeader.vue");
       const source = readFileSync(sfcPath, "utf8");
       // Match a top-level (non-media-nested) `.header-btn { ... white-space: nowrap ... }` rule.
@@ -347,8 +347,8 @@ describe("AppHeader", () => {
     });
 
     it("uses display: contents on [data-chapter-list] so nav children remain flex participants", () => {
-      const testFilePath = (import.meta as { filename?: string }).filename
-        ?? fileURLToPath(import.meta.url);
+      const testFilePath = (import.meta as { filename?: string }).filename ??
+        fileURLToPath(import.meta.url);
       const sfcPath = resolve(dirname(testFilePath), "..", "AppHeader.vue");
       const source = readFileSync(sfcPath, "utf8");
       expect(source).toMatch(/\[data-chapter-list\]\s*\{[^}]*display:\s*contents/);

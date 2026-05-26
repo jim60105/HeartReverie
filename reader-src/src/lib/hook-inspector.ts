@@ -4,12 +4,7 @@
 // network access; safe to unit-test in isolation. See `design.md §D9` and
 // `hook-inspector/spec.md` for the C1..C4 semantics.
 
-import type {
-  ConflictReport,
-  HandlerInfo,
-  ManifestDeclarations,
-  PipelineFieldRef,
-} from "@/types";
+import type { ConflictReport, HandlerInfo, ManifestDeclarations, PipelineFieldRef } from "@/types";
 
 type StageHandlers = Record<string, readonly HandlerInfo[]>;
 
@@ -22,7 +17,10 @@ export function mergeFrontendDeclarations(
   introspect: StageHandlers,
   manifestDeclarations: readonly ManifestDeclarations[],
 ): StageHandlers {
-  const declIndex = new Map<string, { reads?: readonly string[]; writes?: readonly string[]; note?: string }>();
+  const declIndex = new Map<
+    string,
+    { reads?: readonly string[]; writes?: readonly string[]; note?: string }
+  >();
   for (const entry of manifestDeclarations) {
     for (const h of entry.hooks) {
       declIndex.set(`${entry.plugin}::${h.stage}`, {
@@ -94,7 +92,8 @@ export function detectConflicts(
           stage,
           field,
           plugins: [...pluginSet] as string[],
-          message: `Stage '${stage}' field '${field}' written by ${pluginSet.size} plugins outside the pipeline allowlist`,
+          message:
+            `Stage '${stage}' field '${field}' written by ${pluginSet.size} plugins outside the pipeline allowlist`,
         });
       }
     }
@@ -118,7 +117,8 @@ export function detectConflicts(
             field: f,
             plugins: [reader.plugin ?? "", writer.plugin ?? ""].filter(Boolean),
             priorities: [reader.priority, writer.priority],
-            message: `Stage '${stage}': '${reader.plugin}' reads '${f}' at priority ${reader.priority} before '${writer.plugin}' writes at priority ${writer.priority}`,
+            message:
+              `Stage '${stage}': '${reader.plugin}' reads '${f}' at priority ${reader.priority} before '${writer.plugin}' writes at priority ${writer.priority}`,
           });
         }
       }
@@ -138,7 +138,8 @@ export function detectConflicts(
           stage,
           plugins: plugins as string[],
           priorities: [priority],
-          message: `Stage '${stage}': ${plugins.length} plugins share priority ${priority} (order non-deterministic)`,
+          message:
+            `Stage '${stage}': ${plugins.length} plugins share priority ${priority} (order non-deterministic)`,
         });
       }
     }
@@ -150,7 +151,8 @@ export function detectConflicts(
           kind: "C4-runtime-error",
           stage,
           plugins: [h.plugin],
-          message: `Stage '${stage}': handler from '${h.plugin}' has thrown ${h.errorCount} time(s) since last restart`,
+          message:
+            `Stage '${stage}': handler from '${h.plugin}' has thrown ${h.errorCount} time(s) since last restart`,
         });
       }
     }

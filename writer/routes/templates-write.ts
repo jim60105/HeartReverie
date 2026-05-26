@@ -18,15 +18,8 @@ import type { AppDeps } from "../types.ts";
 import { errorMessage, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { validateTemplate } from "../lib/template.ts";
-import {
-  atomicWriteWithBackup,
-  PathSafetyError,
-} from "../lib/path-safety.ts";
-import {
-  parentDir,
-  parseTemplatePath,
-  resolveTemplatePath,
-} from "./templates-path.ts";
+import { atomicWriteWithBackup, PathSafetyError } from "../lib/path-safety.ts";
+import { parentDir, parseTemplatePath, resolveTemplatePath } from "./templates-path.ts";
 
 const log = createLogger("template");
 
@@ -39,7 +32,9 @@ const WRITE_MUTEX = new Map<string, Promise<void>>();
 async function withWriteMutex<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const prev = WRITE_MUTEX.get(key) ?? Promise.resolve();
   let release: () => void;
-  const next = new Promise<void>((r) => { release = r; });
+  const next = new Promise<void>((r) => {
+    release = r;
+  });
   const chained = prev.then(() => next);
   WRITE_MUTEX.set(key, chained);
   await prev;
@@ -70,12 +65,21 @@ export function registerTemplateWriteRoutes(app: Hono, deps: AppDeps): void {
     // 403 BEFORE any validation when targeting plugin: paths
     if (typeof templatePath === "string" && templatePath.startsWith("plugin:")) {
       return c.json(
-        problemJson("Forbidden", 403, "Plugin fragments are read-only; edit them in the plugin source repository"),
+        problemJson(
+          "Forbidden",
+          403,
+          "Plugin fragments are read-only; edit them in the plugin source repository",
+        ),
         403,
       );
     }
     const parsed = parseTemplatePath(templatePath);
-    if (!parsed.ok) return c.json(problemJson("Bad Request", parsed.err.status, parsed.err.detail), parsed.err.status as 400);
+    if (!parsed.ok) {
+      return c.json(
+        problemJson("Bad Request", parsed.err.status, parsed.err.detail),
+        parsed.err.status as 400,
+      );
+    }
 
     if (source.length > 500_000) {
       return c.json(problemJson("Bad Request", 400, "Template exceeds maximum length"), 400);
@@ -93,7 +97,10 @@ export function registerTemplateWriteRoutes(app: Hono, deps: AppDeps): void {
 
     const resolved = resolveTemplatePath(parsed.value, deps);
     if (!resolved.ok) {
-      return c.json(problemJson("Bad Request", resolved.err.status, resolved.err.detail), resolved.err.status as 400);
+      return c.json(
+        problemJson("Bad Request", resolved.err.status, resolved.err.detail),
+        resolved.err.status as 400,
+      );
     }
 
     try {
@@ -123,7 +130,10 @@ export function registerTemplateWriteRoutes(app: Hono, deps: AppDeps): void {
     } catch (err: unknown) {
       if (err instanceof PathSafetyError) {
         if (err.code === "symlink-rejected") {
-          log.warn("Template write rejected — symlink target", { templatePath, error: err.message });
+          log.warn("Template write rejected — symlink target", {
+            templatePath,
+            error: err.message,
+          });
           return c.json(problemJson("Bad Request", 400, err.message), 400);
         }
         log.warn("Template write rejected — path safety", { templatePath, error: err.message });

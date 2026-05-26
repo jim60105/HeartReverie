@@ -43,9 +43,28 @@ const MAX_ANCHOR_FIELD_LEN = 32;
 const MAX_NAME_LEN = 128;
 
 const RESERVED_NAMES = new Set([
-  "CON", "PRN", "AUX", "NUL",
-  "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-  "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+  "CON",
+  "PRN",
+  "AUX",
+  "NUL",
+  "COM1",
+  "COM2",
+  "COM3",
+  "COM4",
+  "COM5",
+  "COM6",
+  "COM7",
+  "COM8",
+  "COM9",
+  "LPT1",
+  "LPT2",
+  "LPT3",
+  "LPT4",
+  "LPT5",
+  "LPT6",
+  "LPT7",
+  "LPT8",
+  "LPT9",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -54,7 +73,10 @@ const RESERVED_NAMES = new Set([
 
 function isValidName(name: string): boolean {
   if (!name || name.length > MAX_NAME_LEN) return false;
-  if (name === "." || name.includes("..") || name.includes("/") || name.includes("\\") || name.includes("\0")) return false;
+  if (
+    name === "." || name.includes("..") || name.includes("/") || name.includes("\\") ||
+    name.includes("\0")
+  ) return false;
   if (RESERVED_NAMES.has(name.toUpperCase())) return false;
   return true;
 }
@@ -66,16 +88,22 @@ function isNonNegativeInteger(v: unknown): v is number {
 function isValidAnchor(a: unknown): a is TextFragmentAnchor {
   if (typeof a !== "object" || a === null || Array.isArray(a)) return false;
   const obj = a as Record<string, unknown>;
-  if (typeof obj.textStart !== "string" || obj.textStart.length > MAX_ANCHOR_FIELD_LEN) return false;
+  if (typeof obj.textStart !== "string" || obj.textStart.length > MAX_ANCHOR_FIELD_LEN) {
+    return false;
+  }
   for (const key of ["prefix", "textEnd", "suffix"] as const) {
     if (key in obj && obj[key] !== undefined) {
-      if (typeof obj[key] !== "string" || (obj[key] as string).length > MAX_ANCHOR_FIELD_LEN) return false;
+      if (typeof obj[key] !== "string" || (obj[key] as string).length > MAX_ANCHOR_FIELD_LEN) {
+        return false;
+      }
     }
   }
   return true;
 }
 
-function validateBody(body: unknown): { ok: true; entry: ClientProgressEntry } | { ok: false; reason: string } {
+function validateBody(
+  body: unknown,
+): { ok: true; entry: ClientProgressEntry } | { ok: false; reason: string } {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { ok: false, reason: "body must be a JSON object" };
   }
@@ -93,7 +121,9 @@ function validateBody(body: unknown): { ok: true; entry: ClientProgressEntry } |
   if (Number.isNaN(Date.parse(obj.lastReadAt))) {
     return { ok: false, reason: "lastReadAt must be a valid ISO 8601 date" };
   }
-  if ("selectionAnchor" in obj && obj.selectionAnchor !== null && obj.selectionAnchor !== undefined) {
+  if (
+    "selectionAnchor" in obj && obj.selectionAnchor !== null && obj.selectionAnchor !== undefined
+  ) {
     if (!isValidAnchor(obj.selectionAnchor)) {
       return { ok: false, reason: "selectionAnchor is invalid or fields exceed 32 chars" };
     }
@@ -491,9 +521,17 @@ export async function registerRoutes(ctx: PluginRouteContext): Promise<void> {
     }
 
     if (dryRun) {
-      return c.json({ wouldWrite: written.length, conflicts: conflicts.length, skipped: skipped.length });
+      return c.json({
+        wouldWrite: written.length,
+        conflicts: conflicts.length,
+        skipped: skipped.length,
+      });
     }
-    return c.json({ written: written.length, conflicts: conflicts.length, skipped: skipped.length });
+    return c.json({
+      written: written.length,
+      conflicts: conflicts.length,
+      skipped: skipped.length,
+    });
   });
 
   logger.debug("reading-progress routes registered");

@@ -30,11 +30,16 @@ vi.mock("@/composables/useStorySelector", () => ({
   }),
 }));
 
-const PARSEABLE = '{{ message "system" }}\nYou are helpful.\n{{ /message }}\n\n{{ message "user" }}\n{{ user_input }}\n{{ /message }}\n';
-const LOSSY = 'preamble\n\n{{ message "system" }}\nS\n{{ /message }}\n\nbetween\n\n{{ message "user" }}\nU\n{{ /message }}\n';
+const PARSEABLE =
+  '{{ message "system" }}\nYou are helpful.\n{{ /message }}\n\n{{ message "user" }}\n{{ user_input }}\n{{ /message }}\n';
+const LOSSY =
+  'preamble\n\n{{ message "system" }}\nS\n{{ /message }}\n\nbetween\n\n{{ message "user" }}\nU\n{{ /message }}\n';
 const UNPARSEABLE = '{{ message "system" }}\nNo closer here\n';
 
-interface FetchInit { method?: string; body?: string }
+interface FetchInit {
+  method?: string;
+  body?: string;
+}
 type FetchHandler = (
   url: string,
   init?: FetchInit,
@@ -518,9 +523,7 @@ describe("usePromptEditor — preview & misc", () => {
     e.cards.value[1]!.body = "dirty";
     const result = await e.previewTemplate("s", "t", "");
     expect(result).toEqual({ messages: [] });
-    const previewCall = fetchMock.mock.calls.find((c) =>
-      String(c[0]).includes("/preview-prompt")
-    );
+    const previewCall = fetchMock.mock.calls.find((c) => String(c[0]).includes("/preview-prompt"));
     const body = JSON.parse(
       (previewCall![1] as FetchInit).body!,
     ) as { message: string; template?: string };
@@ -534,7 +537,10 @@ describe("usePromptEditor — preview & misc", () => {
       vi.fn((url: string, _init?: FetchInit) => {
         if (url.includes("/api/plugins/parameters")) {
           return Promise.resolve({
-            ok: true, status: 200, json: () => Promise.resolve([]), headers: new Headers(),
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve([]),
+            headers: new Headers(),
           });
         }
         if (url.includes("/preview-prompt")) {
@@ -599,22 +605,25 @@ describe("usePromptEditor — preview & misc", () => {
     expect(after.some((c) => (c[1] as FetchInit | undefined)?.method === "DELETE")).toBe(true);
     expect(after.some((c) => {
       const m = (c[1] as FetchInit | undefined)?.method;
-      return typeof c[0] === "string" && (c[0] as string).includes("/api/template") && (!m || m === "GET");
+      return typeof c[0] === "string" && (c[0] as string).includes("/api/template") &&
+        (!m || m === "GET");
     })).toBe(true);
   });
 
   it("loadParameters re-fetches when story context changes", async () => {
     const fetchMock = makeFetch({ content: PARSEABLE });
     await freshEditor();
-    const initial = fetchMock.mock.calls.filter((c) =>
-      typeof c[0] === "string" && (c[0] as string).includes("/api/plugins/parameters")
-    ).length;
+    const initial =
+      fetchMock.mock.calls.filter((c) =>
+        typeof c[0] === "string" && (c[0] as string).includes("/api/plugins/parameters")
+      ).length;
     mockSelectedSeries.value = "series-a";
     mockSelectedStory.value = "story-b";
     await new Promise((r) => setTimeout(r, 50));
-    const after = fetchMock.mock.calls.filter((c) =>
-      typeof c[0] === "string" && (c[0] as string).includes("/api/plugins/parameters")
-    ).length;
+    const after =
+      fetchMock.mock.calls.filter((c) =>
+        typeof c[0] === "string" && (c[0] as string).includes("/api/plugins/parameters")
+      ).length;
     expect(after).toBeGreaterThan(initial);
     const withParams = fetchMock.mock.calls.find((c) =>
       typeof c[0] === "string" && (c[0] as string).includes("series=series-a")

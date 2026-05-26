@@ -23,7 +23,9 @@ export async function exportStory(
 ): Promise<void> {
   if (!series || !name) throw new Error("Missing series or story");
 
-  const url = `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(name)}/export?format=${format}`;
+  const url = `/api/stories/${encodeURIComponent(series)}/${
+    encodeURIComponent(name)
+  }/export?format=${format}`;
 
   const res = await apiFetch(url, { method: "GET", throwOnError: false });
   if (!res.ok) {
@@ -34,8 +36,8 @@ export async function exportStory(
 
   // Prefer server-provided filename from Content-Disposition header
   const disposition = res.headers.get("Content-Disposition") ?? "";
-  const filenameMatch = disposition.match(/filename\*=UTF-8''([^\s;]+)/i)
-    ?? disposition.match(/filename="([^"]+)"/i);
+  const filenameMatch = disposition.match(/filename\*=UTF-8''([^\s;]+)/i) ??
+    disposition.match(/filename="([^"]+)"/i);
   const filename = filenameMatch
     ? decodeURIComponent(filenameMatch[1]!)
     : `${series}-${name}.${EXTENSIONS[format]}`;

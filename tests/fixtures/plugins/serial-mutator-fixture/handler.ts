@@ -13,7 +13,16 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-export function register(ctx: { hooks: { register: (stage: string, handler: (context: Record<string, unknown>) => Promise<void>) => void } }) {
+export function register(
+  ctx: {
+    hooks: {
+      register: (
+        stage: string,
+        handler: (context: Record<string, unknown>) => Promise<void>,
+      ) => void;
+    };
+  },
+) {
   ctx.hooks.register("pre-write", async (context) => {
     context.preContent = "<user_message>fixture-test-content</user_message>";
   });

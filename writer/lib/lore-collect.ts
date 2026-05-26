@@ -30,11 +30,7 @@ import { errorMessage } from "./errors.ts";
 import { join, relative } from "@std/path";
 import { createLogger } from "./logger.ts";
 import { parseFrontmatter } from "./lore-frontmatter.ts";
-import {
-  computeEffectiveTags,
-  resolveDirectoryTag,
-  resolveFilenameTag,
-} from "./lore-tags.ts";
+import { computeEffectiveTags, resolveDirectoryTag, resolveFilenameTag } from "./lore-tags.ts";
 import type { LorePassage, LoreScope } from "./lore.ts";
 
 const log = createLogger("lore");

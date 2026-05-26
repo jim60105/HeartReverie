@@ -13,9 +13,9 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { join, dirname } from "@std/path";
+import { dirname, join } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson, errorMessage } from "../lib/errors.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
 import { validateTemplate } from "../lib/template.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
@@ -24,7 +24,9 @@ import type { AppDeps } from "../types.ts";
 const log = createLogger("file");
 
 /** Read the custom prompt file; fall back to system.md only when the custom file does not exist. */
-export async function readTemplate(config: { PROMPT_FILE: string; ROOT_DIR: string }): Promise<{ content: string; source: "custom" | "default" }> {
+export async function readTemplate(
+  config: { PROMPT_FILE: string; ROOT_DIR: string },
+): Promise<{ content: string; source: "custom" | "default" }> {
   try {
     const content = await Deno.readTextFile(config.PROMPT_FILE);
     return { content, source: "custom" };
@@ -35,7 +37,10 @@ export async function readTemplate(config: { PROMPT_FILE: string; ROOT_DIR: stri
   }
 }
 
-export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "pluginManager" | "buildPromptFromStory" | "config">): void {
+export function registerPromptRoutes(
+  app: Hono,
+  deps: Pick<AppDeps, "safePath" | "pluginManager" | "buildPromptFromStory" | "config">,
+): void {
   const { safePath, pluginManager, buildPromptFromStory, config } = deps;
 
   app.get("/api/template", async (c) => {
@@ -80,10 +85,18 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
 
       await Deno.mkdir(dirname(config.PROMPT_FILE), { recursive: true, mode: 0o775 });
       await Deno.writeTextFile(config.PROMPT_FILE, content, { mode: 0o664 });
-      log.info("Template file saved", { op: "write", path: config.PROMPT_FILE, bytes: new TextEncoder().encode(content).length });
+      log.info("Template file saved", {
+        op: "write",
+        path: config.PROMPT_FILE,
+        bytes: new TextEncoder().encode(content).length,
+      });
       return c.json({ ok: true });
     } catch (err: unknown) {
-      log.error("Failed to save template", { op: "write", path: config.PROMPT_FILE, error: errorMessage(err) });
+      log.error("Failed to save template", {
+        op: "write",
+        path: config.PROMPT_FILE,
+        error: errorMessage(err),
+      });
       return c.json(problemJson("Internal Server Error", 500, "Failed to save template"), 500);
     }
   });
@@ -94,7 +107,11 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
       log.info("Template file deleted", { op: "delete", path: config.PROMPT_FILE });
     } catch (err: unknown) {
       if (!(err instanceof Deno.errors.NotFound)) {
-        log.error("Failed to delete template", { op: "delete", path: config.PROMPT_FILE, error: errorMessage(err) });
+        log.error("Failed to delete template", {
+          op: "delete",
+          path: config.PROMPT_FILE,
+          error: errorMessage(err),
+        });
         return c.json(problemJson("Internal Server Error", 500, "Failed to delete template"), 500);
       }
     }
@@ -139,7 +156,10 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
           } catch (err: unknown) {
             if (!(err instanceof Deno.errors.NotFound)) {
               log.error(`[prompt] Template read failed: ${errorMessage(err)}`);
-              return c.json(problemJson("Internal Server Error", 500, "Failed to read prompt template"), 500);
+              return c.json(
+                problemJson("Internal Server Error", 500, "Failed to read prompt template"),
+                500,
+              );
             }
             // NotFound → use default rendering
           }
@@ -155,7 +175,7 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
           name,
           storyDir,
           message,
-          templateOverride
+          templateOverride,
         );
 
         if (ventoError) {
@@ -178,6 +198,6 @@ export function registerPromptRoutes(app: Hono, deps: Pick<AppDeps, "safePath" |
         log.error("Preview prompt error", { error: errorMessage(err), path: c.req.path });
         return c.json(problemJson("Internal Server Error", 500, "Failed to preview prompt"), 500);
       }
-    }
+    },
   );
 }

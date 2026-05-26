@@ -1,5 +1,12 @@
 // Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
-import { listTemplates, lintTemplate, previewTemplate, writeTemplate, TemplateApiError, getVariables } from "@/lib/template-api";
+import {
+  getVariables,
+  lintTemplate,
+  listTemplates,
+  previewTemplate,
+  TemplateApiError,
+  writeTemplate,
+} from "@/lib/template-api";
 
 vi.mock("@/composables/useAuth", () => ({
   useAuth: () => ({ getAuthHeaders: () => ({ "X-Passphrase": "pw" }) }),
@@ -50,7 +57,11 @@ describe("template-api HTTP client", () => {
       json: async () => ({ kind: "markdown", content: "rendered" }),
     });
     vi.stubGlobal("fetch", fetchMock);
-    const res = await previewTemplate({ templatePath: "system.md", source: "x", fixture: { user_input: "u" } });
+    const res = await previewTemplate({
+      templatePath: "system.md",
+      source: "x",
+      fixture: { user_input: "u" },
+    });
     expect(res.kind).toBe("markdown");
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(init.body as string).fixture).toEqual({ user_input: "u" });

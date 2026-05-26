@@ -145,7 +145,7 @@ function toAsciiFilename(input: string): string {
   let out = "";
   for (const ch of input) {
     const code = ch.codePointAt(0)!;
-    if (code < 0x20 || code === 0x7f || code > 0x7e || ch === "\"" || ch === "\\") {
+    if (code < 0x20 || code === 0x7f || code > 0x7e || ch === '"' || ch === "\\") {
       out += "_";
     } else {
       out += ch;

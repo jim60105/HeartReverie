@@ -57,9 +57,9 @@ describe("StorySelector", () => {
     const wrapper = mount(StorySelector);
     await flushPromises();
     expect(fetchSeriesMock).toHaveBeenCalledTimes(1);
-    expect(wrapper.find("[data-testid=\"export-md\"]").exists()).toBe(true);
-    expect(wrapper.find("[data-testid=\"export-json\"]").exists()).toBe(true);
-    expect(wrapper.find("[data-testid=\"export-txt\"]").exists()).toBe(true);
+    expect(wrapper.find('[data-testid="export-md"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="export-json"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="export-txt"]').exists()).toBe(true);
   });
 
   it("creates a story using trimmed name then navigates", async () => {
@@ -147,12 +147,12 @@ describe("StorySelector", () => {
 
   it("disables export buttons without selection and calls export with format", async () => {
     const wrapper = mount(StorySelector);
-    expect(wrapper.find("[data-testid=\"export-md\"]").attributes("disabled")).toBeDefined();
+    expect(wrapper.find('[data-testid="export-md"]').attributes("disabled")).toBeDefined();
 
     selectedSeriesRef.value = "alpha";
     selectedStoryRef.value = "story-1";
     await flushPromises();
-    await wrapper.find("[data-testid=\"export-json\"]").trigger("click");
+    await wrapper.find('[data-testid="export-json"]').trigger("click");
 
     expect(exportStoryMock).toHaveBeenCalledWith("alpha", "story-1", "json");
   });

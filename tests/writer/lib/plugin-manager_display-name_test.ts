@@ -5,7 +5,7 @@
 // that omits `displayName`, supplies a non-string value, or supplies a
 // value whose trim is empty.
 
-import { assertEquals, assert as assertTrue } from "@std/assert";
+import { assert as assertTrue, assertEquals } from "@std/assert";
 import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
@@ -47,9 +47,7 @@ async function writeManifest(
 }
 
 function warnIncludes(calls: WarnCall[], needle: string): boolean {
-  return calls.some((c) =>
-    c.args.some((a) => typeof a === "string" && a.includes(needle))
-  );
+  return calls.some((c) => c.args.some((a) => typeof a === "string" && a.includes(needle)));
 }
 
 Deno.test("PluginManager: displayName manifest validation", async (t) => {

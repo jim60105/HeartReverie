@@ -36,7 +36,7 @@ describe("useChapterNav — chapterCount & latestChapterIsEmpty", () => {
           status: 200,
           json: () => Promise.resolve([]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
   });

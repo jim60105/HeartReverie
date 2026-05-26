@@ -210,7 +210,9 @@ export function parseSystemTemplate(source: string): ParseResult {
       if (anyLiteral) {
         return {
           cards: null,
-          parseError: `不支援的訊息角色：${anyLiteral[1]}（僅支援 system / user / assistant），需使用純文字模式編輯`,
+          parseError: `不支援的訊息角色：${
+            anyLiteral[1]
+          }（僅支援 system / user / assistant），需使用純文字模式編輯`,
           topLevelContentDropped: false,
         };
       }

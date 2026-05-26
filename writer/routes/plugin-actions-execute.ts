@@ -42,10 +42,7 @@ import { listChapterFiles } from "../lib/story.ts";
 import { streamLlmAndPersist, type WriteMode } from "../lib/chat-shared.ts";
 import type { AppDeps, PluginRunPromptResponse } from "../types.ts";
 import { pluginActionProblems } from "../lib/errors.ts";
-import type {
-  PluginActionOutcome,
-  PluginActionRequestArgs,
-} from "./plugin-actions-shared.ts";
+import type { PluginActionOutcome, PluginActionRequestArgs } from "./plugin-actions-shared.ts";
 import type { PreflightContext } from "./plugin-actions-preflight.ts";
 
 /** Subset of `AppDeps` consumed by {@link runUnderLock}. */
@@ -99,9 +96,7 @@ export async function runUnderLock(
     const lastChapterPath = join(storyDir, lastFile);
     const rawDraft = await Deno.readTextFile(lastChapterPath);
     const stripRegex = pluginManager.getStripTagPatterns();
-    const cleanDraft = stripRegex
-      ? rawDraft.replace(stripRegex, "").trim()
-      : rawDraft.trim();
+    const cleanDraft = stripRegex ? rawDraft.replace(stripRegex, "").trim() : rawDraft.trim();
     renderVariables.draft = cleanDraft;
   }
 

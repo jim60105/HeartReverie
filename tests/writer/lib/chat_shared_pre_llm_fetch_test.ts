@@ -71,7 +71,9 @@ function mockFetchCapture(captured: CapturedFetch[]): () => void {
     if (typeof url === "string" && url.includes("chat/completions")) {
       const bodyRaw = typeof opts?.body === "string" ? opts.body : "";
       let parsed: Record<string, unknown> = {};
-      try { parsed = JSON.parse(bodyRaw); } catch { /* ignore */ }
+      try {
+        parsed = JSON.parse(bodyRaw);
+      } catch { /* ignore */ }
       captured.push({ url, body: parsed });
       return Promise.resolve(
         new Response(
@@ -89,7 +91,9 @@ function mockFetchCapture(captured: CapturedFetch[]): () => void {
     }
     return original(url as string, opts);
   }) as typeof fetch;
-  return () => { globalThis.fetch = original; };
+  return () => {
+    globalThis.fetch = original;
+  };
 }
 
 interface RunOptions {
@@ -222,29 +226,32 @@ Deno.test({
       }
     });
 
-    await t.step("6.4 correlationId matches between prompt-assembly and pre-llm-fetch", async () => {
-      const tmp = await Deno.makeTempDir({ prefix: "pre-llm-4-" });
-      try {
-        const hd = new HookDispatcher();
-        let preLlmCid: string | undefined;
-        hd.register("pre-llm-fetch", (ctx) => {
-          preLlmCid = ctx.correlationId as string;
-          return Promise.resolve();
-        });
-        const promptCidCap: { value?: string } = {};
-        const captured: CapturedFetch[] = [];
-        await runChat(tmp, {
-          hookDispatcher: hd,
-          captured,
-          buildPromptCorrelationCapture: promptCidCap,
-        });
-        assert(promptCidCap.value, "buildPromptFromStory should receive correlationId");
-        assert(preLlmCid, "pre-llm-fetch should observe correlationId");
-        assertStrictEquals(preLlmCid, promptCidCap.value);
-      } finally {
-        await Deno.remove(tmp, { recursive: true });
-      }
-    });
+    await t.step(
+      "6.4 correlationId matches between prompt-assembly and pre-llm-fetch",
+      async () => {
+        const tmp = await Deno.makeTempDir({ prefix: "pre-llm-4-" });
+        try {
+          const hd = new HookDispatcher();
+          let preLlmCid: string | undefined;
+          hd.register("pre-llm-fetch", (ctx) => {
+            preLlmCid = ctx.correlationId as string;
+            return Promise.resolve();
+          });
+          const promptCidCap: { value?: string } = {};
+          const captured: CapturedFetch[] = [];
+          await runChat(tmp, {
+            hookDispatcher: hd,
+            captured,
+            buildPromptCorrelationCapture: promptCidCap,
+          });
+          assert(promptCidCap.value, "buildPromptFromStory should receive correlationId");
+          assert(preLlmCid, "pre-llm-fetch should observe correlationId");
+          assertStrictEquals(preLlmCid, promptCidCap.value);
+        } finally {
+          await Deno.remove(tmp, { recursive: true });
+        }
+      },
+    );
 
     await t.step("6.5 handler error does NOT block fetch (errors absorbed)", async () => {
       const tmp = await Deno.makeTempDir({ prefix: "pre-llm-5-" });
@@ -276,123 +283,136 @@ Deno.test({
       }
     });
 
-    await t.step("BLOCKING-1: payload is deep-frozen — nested mutation throws (strict)", async () => {
-      const tmp = await Deno.makeTempDir({ prefix: "pre-llm-blocking1-" });
-      try {
-        const hd = new HookDispatcher();
-        let nestedMessageThrow = false;
-        let nestedMetadataThrow = false;
-        // Capture refs to assert post-dispatch unchanged values.
-        let observedMessages: Array<{ role: string; content: string }> | undefined;
-        let observedMetadata: Record<string, unknown> | undefined;
-        hd.register("pre-llm-fetch", (ctx) => {
-          observedMessages = ctx.messages as Array<{ role: string; content: string }>;
-          observedMetadata = ctx.requestMetadata as Record<string, unknown>;
-          // Strict-mode handler module (Deno test files are strict ESM by
-          // default) — assigning to a frozen nested property throws.
-          try {
-            (ctx.messages as Array<{ content: string }>)[0]!.content = "TAMPERED";
-          } catch {
-            nestedMessageThrow = true;
-          }
-          try {
-            (ctx.requestMetadata as Record<string, unknown>).model = "TAMPERED";
-          } catch {
-            nestedMetadataThrow = true;
-          }
-          return Promise.resolve();
-        });
-        const captured: CapturedFetch[] = [];
-        await runChat(tmp, {
-          hookDispatcher: hd,
-          captured,
-          promptMessages: [{ role: "user", content: "original-content" }],
-        });
-        // Both nested mutations MUST have thrown in strict mode.
-        assert(nestedMessageThrow, "ctx.messages[0].content = ... must throw");
-        assert(nestedMetadataThrow, "ctx.requestMetadata.model = ... must throw");
-        // Post-dispatch payload values stay unchanged.
-        assertEquals(observedMessages![0]!.content, "original-content");
-        assertEquals(observedMetadata!.model, "test-model");
-        // Bytes actually posted unchanged too.
-        const sent = captured[0]!.body.messages as Array<{ content: string }>;
-        assertEquals(sent[0]!.content, "original-content");
-        assertEquals(captured[0]!.body.model, "test-model");
-      } finally {
-        await Deno.remove(tmp, { recursive: true });
-      }
-    });
+    await t.step(
+      "BLOCKING-1: payload is deep-frozen — nested mutation throws (strict)",
+      async () => {
+        const tmp = await Deno.makeTempDir({ prefix: "pre-llm-blocking1-" });
+        try {
+          const hd = new HookDispatcher();
+          let nestedMessageThrow = false;
+          let nestedMetadataThrow = false;
+          // Capture refs to assert post-dispatch unchanged values.
+          let observedMessages: Array<{ role: string; content: string }> | undefined;
+          let observedMetadata: Record<string, unknown> | undefined;
+          hd.register("pre-llm-fetch", (ctx) => {
+            observedMessages = ctx.messages as Array<{ role: string; content: string }>;
+            observedMetadata = ctx.requestMetadata as Record<string, unknown>;
+            // Strict-mode handler module (Deno test files are strict ESM by
+            // default) — assigning to a frozen nested property throws.
+            try {
+              (ctx.messages as Array<{ content: string }>)[0]!.content = "TAMPERED";
+            } catch {
+              nestedMessageThrow = true;
+            }
+            try {
+              (ctx.requestMetadata as Record<string, unknown>).model = "TAMPERED";
+            } catch {
+              nestedMetadataThrow = true;
+            }
+            return Promise.resolve();
+          });
+          const captured: CapturedFetch[] = [];
+          await runChat(tmp, {
+            hookDispatcher: hd,
+            captured,
+            promptMessages: [{ role: "user", content: "original-content" }],
+          });
+          // Both nested mutations MUST have thrown in strict mode.
+          assert(nestedMessageThrow, "ctx.messages[0].content = ... must throw");
+          assert(nestedMetadataThrow, "ctx.requestMetadata.model = ... must throw");
+          // Post-dispatch payload values stay unchanged.
+          assertEquals(observedMessages![0]!.content, "original-content");
+          assertEquals(observedMetadata!.model, "test-model");
+          // Bytes actually posted unchanged too.
+          const sent = captured[0]!.body.messages as Array<{ content: string }>;
+          assertEquals(sent[0]!.content, "original-content");
+          assertEquals(captured[0]!.body.model, "test-model");
+        } finally {
+          await Deno.remove(tmp, { recursive: true });
+        }
+      },
+    );
 
-    await t.step("BLOCKING-2: outer ctx fields (model, writeMode) are NOT frozen — reassignment does not throw", async () => {
-      const tmp = await Deno.makeTempDir({ prefix: "pre-llm-blocking2-" });
-      try {
-        const hd = new HookDispatcher();
-        let outerReassignThrew = false;
-        hd.register("pre-llm-fetch", (ctx) => {
-          try {
-            // Outer fields (model, writeMode, correlationId, storyDir, series,
-            // name) are documented as observe-only with no peer-isolation
-            // guarantee: reassigning them on the local view MUST NOT throw.
-            (ctx as Record<string, unknown>).model = "tampered-outer";
-            (ctx as Record<string, unknown>).writeMode = { kind: "fake" };
-            (ctx as Record<string, unknown>).correlationId = "fake-cid";
-          } catch {
-            outerReassignThrew = true;
-          }
-          return Promise.resolve();
-        });
-        const captured: CapturedFetch[] = [];
-        await runChat(tmp, { hookDispatcher: hd, captured });
-        assertEquals(outerReassignThrew, false, "Outer-field reassignment must not throw");
-        // And the upstream fetch must remain unchanged (engine uses requestBody).
-        assertEquals(captured[0]!.body.model, "test-model");
-      } finally {
-        await Deno.remove(tmp, { recursive: true });
-      }
-    });
+    await t.step(
+      "BLOCKING-2: outer ctx fields (model, writeMode) are NOT frozen — reassignment does not throw",
+      async () => {
+        const tmp = await Deno.makeTempDir({ prefix: "pre-llm-blocking2-" });
+        try {
+          const hd = new HookDispatcher();
+          let outerReassignThrew = false;
+          hd.register("pre-llm-fetch", (ctx) => {
+            try {
+              // Outer fields (model, writeMode, correlationId, storyDir, series,
+              // name) are documented as observe-only with no peer-isolation
+              // guarantee: reassigning them on the local view MUST NOT throw.
+              (ctx as Record<string, unknown>).model = "tampered-outer";
+              (ctx as Record<string, unknown>).writeMode = { kind: "fake" };
+              (ctx as Record<string, unknown>).correlationId = "fake-cid";
+            } catch {
+              outerReassignThrew = true;
+            }
+            return Promise.resolve();
+          });
+          const captured: CapturedFetch[] = [];
+          await runChat(tmp, { hookDispatcher: hd, captured });
+          assertEquals(outerReassignThrew, false, "Outer-field reassignment must not throw");
+          // And the upstream fetch must remain unchanged (engine uses requestBody).
+          assertEquals(captured[0]!.body.model, "test-model");
+        } finally {
+          await Deno.remove(tmp, { recursive: true });
+        }
+      },
+    );
 
-    await t.step("BLOCKING-3: top-level reassignment of ctx.messages / ctx.requestMetadata must throw (non-writable)", async () => {
-      const tmp = await Deno.makeTempDir({ prefix: "pre-llm-blocking3-" });
-      try {
-        const hd = new HookDispatcher();
-        let messagesReplaceThrew = false;
-        let metadataReplaceThrew = false;
-        let observedMessages: unknown;
-        let observedMetadata: unknown;
-        hd.register("pre-llm-fetch", (ctx) => {
-          try {
-            (ctx as Record<string, unknown>).messages = [];
-          } catch {
-            messagesReplaceThrew = true;
-          }
-          try {
-            (ctx as Record<string, unknown>).requestMetadata = {};
-          } catch {
-            metadataReplaceThrew = true;
-          }
-          observedMessages = ctx.messages;
-          observedMetadata = ctx.requestMetadata;
-          return Promise.resolve();
-        });
-        const captured: CapturedFetch[] = [];
-        await runChat(tmp, {
-          hookDispatcher: hd,
-          captured,
-          promptMessages: [{ role: "user", content: "original-content" }],
-        });
-        assert(messagesReplaceThrew,
-          "ctx.messages = [] must throw — non-writable property protects peer observers");
-        assert(metadataReplaceThrew,
-          "ctx.requestMetadata = {} must throw — non-writable property protects peer observers");
-        // Original references preserved.
-        const obsMessages = observedMessages as Array<{ content: string }>;
-        assertEquals(obsMessages.length, 1);
-        assertEquals(obsMessages[0]!.content, "original-content");
-        assertEquals((observedMetadata as { model: string }).model, "test-model");
-      } finally {
-        await Deno.remove(tmp, { recursive: true });
-      }
-    });
+    await t.step(
+      "BLOCKING-3: top-level reassignment of ctx.messages / ctx.requestMetadata must throw (non-writable)",
+      async () => {
+        const tmp = await Deno.makeTempDir({ prefix: "pre-llm-blocking3-" });
+        try {
+          const hd = new HookDispatcher();
+          let messagesReplaceThrew = false;
+          let metadataReplaceThrew = false;
+          let observedMessages: unknown;
+          let observedMetadata: unknown;
+          hd.register("pre-llm-fetch", (ctx) => {
+            try {
+              (ctx as Record<string, unknown>).messages = [];
+            } catch {
+              messagesReplaceThrew = true;
+            }
+            try {
+              (ctx as Record<string, unknown>).requestMetadata = {};
+            } catch {
+              metadataReplaceThrew = true;
+            }
+            observedMessages = ctx.messages;
+            observedMetadata = ctx.requestMetadata;
+            return Promise.resolve();
+          });
+          const captured: CapturedFetch[] = [];
+          await runChat(tmp, {
+            hookDispatcher: hd,
+            captured,
+            promptMessages: [{ role: "user", content: "original-content" }],
+          });
+          assert(
+            messagesReplaceThrew,
+            "ctx.messages = [] must throw — non-writable property protects peer observers",
+          );
+          assert(
+            metadataReplaceThrew,
+            "ctx.requestMetadata = {} must throw — non-writable property protects peer observers",
+          );
+          // Original references preserved.
+          const obsMessages = observedMessages as Array<{ content: string }>;
+          assertEquals(obsMessages.length, 1);
+          assertEquals(obsMessages[0]!.content, "original-content");
+          assertEquals((observedMetadata as { model: string }).model, "test-model");
+        } finally {
+          await Deno.remove(tmp, { recursive: true });
+        }
+      },
+    );
 
     await t.step("QUALITY-6: dispatcher-level rejection does NOT block fetch", async () => {
       const tmp = await Deno.makeTempDir({ prefix: "pre-llm-q6-" });
@@ -401,7 +421,10 @@ Deno.test({
         // Force the dispatcher itself to reject (not a handler error — the
         // dispatcher's per-handler catch already swallows those).
         const originalDispatch = hd.dispatch.bind(hd);
-        hd.dispatch = ((stage: Parameters<typeof originalDispatch>[0], ctx: Parameters<typeof originalDispatch>[1]) => {
+        hd.dispatch = ((
+          stage: Parameters<typeof originalDispatch>[0],
+          ctx: Parameters<typeof originalDispatch>[1],
+        ) => {
           if (stage === "pre-llm-fetch") {
             return Promise.reject(new Error("synthetic dispatcher failure"));
           }

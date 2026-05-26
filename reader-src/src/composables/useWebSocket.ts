@@ -13,12 +13,8 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { ref } from 'vue';
-import type {
-  UseWebSocketReturn,
-  WsClientMessage,
-  WsServerMessage,
-} from '@/types';
+import { ref } from "vue";
+import type { UseWebSocketReturn, WsClientMessage, WsServerMessage } from "@/types";
 
 // ── Module-level singleton state ──
 
@@ -29,8 +25,8 @@ let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 1000;
 let intentionalClose = false;
-let storedUrl = '';
-let storedPassphrase = '';
+let storedUrl = "";
+let storedPassphrase = "";
 
 const RECONNECT_CAP = 30000;
 
@@ -71,7 +67,9 @@ function dispatch(msg: WsServerMessage): void {
 function createConnection(url: string, passphrase: string): void {
   // Clean up previous socket if any
   if (ws) {
-    try { ws.close(); } catch { /* ignore */ }
+    try {
+      ws.close();
+    } catch { /* ignore */ }
     ws = null;
   }
 
@@ -86,7 +84,7 @@ function createConnection(url: string, passphrase: string): void {
     isConnected.value = true;
     reconnectDelay = 1000;
     // Authentication handshake
-    send({ type: 'auth', passphrase });
+    send({ type: "auth", passphrase });
   };
 
   ws.onmessage = (event: MessageEvent) => {
@@ -97,9 +95,9 @@ function createConnection(url: string, passphrase: string): void {
       return;
     }
 
-    if (msg.type === 'auth:ok') {
+    if (msg.type === "auth:ok") {
       isAuthenticated.value = true;
-    } else if (msg.type === 'auth:error') {
+    } else if (msg.type === "auth:error") {
       isAuthenticated.value = false;
     }
 
@@ -136,7 +134,7 @@ function send(message: WsClientMessage): void {
  * Register a handler for a specific server message type.
  * Returns an unsubscribe function.
  */
-function onMessage<T extends WsServerMessage['type']>(
+function onMessage<T extends WsServerMessage["type"]>(
   type: T,
   handler: (msg: Extract<WsServerMessage, { type: T }>) => void,
 ): () => void {
@@ -176,7 +174,9 @@ function disconnect(): void {
   intentionalClose = true;
   clearReconnectTimer();
   if (ws) {
-    try { ws.close(); } catch { /* ignore */ }
+    try {
+      ws.close();
+    } catch { /* ignore */ }
     ws = null;
   }
   isConnected.value = false;

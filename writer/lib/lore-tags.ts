@@ -54,7 +54,9 @@ export function normalizeTag(tag: string): string | null {
  * Returns null if the path doesn't match a known scope structure.
  * @deprecated Scope is now passed explicitly by the caller. Retained for backward compatibility.
  */
-export function identifyScope(relPath: string): { scope: LoreScope; series?: string; story?: string } | null {
+export function identifyScope(
+  relPath: string,
+): { scope: LoreScope; series?: string; story?: string } | null {
   const parts = relPath.split("/").filter(Boolean);
   if (parts.length < 2) return null; // At minimum: scope/file.md
 

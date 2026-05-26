@@ -35,7 +35,7 @@ describe("SelectWidget", () => {
             { value: "y", label: "Banana" },
           ],
         }),
-      }) as unknown as Response,
+      }) as unknown as Response
     );
     vi.stubGlobal("fetch", fetchMock);
     try {
@@ -101,7 +101,7 @@ describe("MultiSelectWidget", () => {
             { value: "y", label: "Y" },
           ],
         }),
-      }) as unknown as Response,
+      }) as unknown as Response
     );
     vi.stubGlobal("fetch", fetchMock);
     try {

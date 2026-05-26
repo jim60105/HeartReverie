@@ -33,7 +33,9 @@ export function register({ hooks, logger }: PluginRegisterContext): void {
     const series = context.series as string;
 
     if (!previousContext || !rawChapters || previousContext.length === 0) {
-      log.debug("Skipping compaction: no context to compact", { chapters: rawChapters?.length ?? 0 });
+      log.debug("Skipping compaction: no context to compact", {
+        chapters: rawChapters?.length ?? 0,
+      });
       return;
     }
 

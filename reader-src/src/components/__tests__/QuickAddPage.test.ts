@@ -1,4 +1,4 @@
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import QuickAddPage from "@/components/QuickAddPage.vue";
 
@@ -149,13 +149,31 @@ describe("QuickAddPage", () => {
         calls2.push({ url, init });
         const method = init?.method ?? "GET";
         if (url.includes("/api/stories/") && method === "POST") {
-          return { ok: true, status: 201, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         if (url.includes("/api/lore/") && method === "GET") {
-          return { ok: false, status: 404, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         if (url.includes("/api/lore/") && method === "PUT") {
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         throw new Error(`Unmatched: ${method} ${url}`);
       }),
@@ -183,7 +201,13 @@ describe("QuickAddPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         calls.push({ url, init });
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -203,7 +227,13 @@ describe("QuickAddPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         calls.push({ url, init });
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -225,11 +255,31 @@ describe("QuickAddPage", () => {
       vi.fn(async (url: string, init?: RequestInit) => {
         calls.push({ url, init });
         const method = init?.method ?? "GET";
-        if (method === "POST")
-          return { ok: true, status: 201, json: async () => ({}), text: async () => "{}", headers: new Headers() };
-        if (method === "GET")
-          return { ok: false, status: 404, json: async () => ({}), text: async () => "{}", headers: new Headers() };
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        if (method === "POST") {
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
+        if (method === "GET") {
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -249,15 +299,41 @@ describe("QuickAddPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         const method = init?.method ?? "GET";
-        if (method === "GET" && url.includes("/api/lore/"))
-          return { ok: true, status: 200, json: async () => ({ frontmatter: {}, content: "" }), text: async () => "{}", headers: new Headers() };
-        if (method === "POST")
-          return { ok: true, status: 201, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        if (method === "GET" && url.includes("/api/lore/")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ frontmatter: {}, content: "" }),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
+        if (method === "POST") {
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
         if (method === "PUT") {
           putCount++;
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -283,15 +359,41 @@ describe("QuickAddPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         const method = init?.method ?? "GET";
-        if (method === "POST")
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
-        if (method === "GET" && url.includes("/api/lore/"))
-          return { ok: false, status: 404, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        if (method === "POST") {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
+        if (method === "GET" && url.includes("/api/lore/")) {
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
         if (method === "PUT") {
           putCount++;
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper, router } = await mountPage();
@@ -312,15 +414,41 @@ describe("QuickAddPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         const method = init?.method ?? "GET";
-        if (method === "POST")
-          return { ok: false, status: 500, json: async () => ({ detail: "boom" }), text: async () => "{}", headers: new Headers() };
-        if (method === "GET" && url.includes("/api/lore/"))
-          return { ok: false, status: 404, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        if (method === "POST") {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({ detail: "boom" }),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
+        if (method === "GET" && url.includes("/api/lore/")) {
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
         if (method === "PUT") {
           putCount++;
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -342,16 +470,41 @@ describe("QuickAddPage", () => {
         const method = init?.method ?? "GET";
         if (method === "POST") {
           order.push("init");
-          return { ok: true, status: 201, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
-        if (method === "GET" && url.includes("/api/lore/"))
-          return { ok: false, status: 404, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        if (method === "GET" && url.includes("/api/lore/")) {
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
         if (method === "PUT") {
           if (url.includes("Hero")) order.push("character");
           else order.push("worldinfo");
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -374,7 +527,13 @@ describe("QuickAddPage", () => {
         calls.push({ url, init });
         const method = init?.method ?? "GET";
         if (method === "GET" && url.includes("/api/lore/")) {
-          return { ok: false, status: 401, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         throw new Error(`Unexpected ${method} ${url}`);
       }),
@@ -399,7 +558,13 @@ describe("QuickAddPage", () => {
         calls.push({ url, init });
         const method = init?.method ?? "GET";
         if (method === "GET" && url.includes("/api/lore/")) {
-          return { ok: false, status: 500, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         throw new Error(`Unexpected ${method} ${url}`);
       }),
@@ -438,15 +603,41 @@ describe("QuickAddPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         const method = init?.method ?? "GET";
-        if (method === "GET" && url.includes("/api/lore/"))
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
-        if (method === "POST")
-          return { ok: true, status: 201, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        if (method === "GET" && url.includes("/api/lore/")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
+        if (method === "POST") {
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
+        }
         if (method === "PUT") {
           putCount++;
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -474,7 +665,13 @@ describe("QuickAddPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         calls.push({ url, init });
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -492,7 +689,13 @@ describe("QuickAddPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         calls.push({ url, init });
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();
@@ -515,23 +718,59 @@ describe("QuickAddPage", () => {
         const method = init?.method ?? "GET";
         if (method === "GET" && url.includes("/api/lore/")) {
           if (url.includes("Hero")) charGetCount++;
-          return { ok: false, status: 404, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         if (method === "POST") {
-          return { ok: true, status: 201, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         if (method === "PUT") {
           if (url.includes("Hero")) {
             charPutCount++;
-            return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({}),
+              text: async () => "{}",
+              headers: new Headers(),
+            };
           }
           wiPutCount++;
           if (wiPutShouldFail) {
-            return { ok: false, status: 500, json: async () => ({ detail: "boom" }), text: async () => "{}", headers: new Headers() };
+            return {
+              ok: false,
+              status: 500,
+              json: async () => ({ detail: "boom" }),
+              text: async () => "{}",
+              headers: new Headers(),
+            };
           }
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
-        return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => "{}",
+          headers: new Headers(),
+        };
       }),
     );
     const { wrapper } = await mountPage();

@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { isReservedDirectoryName, validateParams } from "../lib/middleware.ts";
-import { problemJson, errorMessage } from "../lib/errors.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
@@ -36,7 +36,7 @@ export function registerStoriesRoutes(app: Hono, deps: Pick<AppDeps, "safePath" 
           (e) =>
             e.isDirectory &&
             !e.name.startsWith(".") &&
-            !isReservedDirectoryName(e.name)
+            !isReservedDirectoryName(e.name),
         )
         .map((e) => e.name);
       return c.json(dirs);

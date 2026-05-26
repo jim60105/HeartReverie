@@ -110,7 +110,7 @@ function makeDeps(
       })) as unknown as AppDeps["buildPromptFromStory"],
     buildContinuePromptFromStory,
     templateEngine: null,
-      verifyPassphrase,
+    verifyPassphrase,
   } as AppDeps;
 }
 
@@ -118,20 +118,24 @@ function mockLLMSuccess(chunks: string[]): () => void {
   const orig = globalThis.fetch;
   globalThis.fetch = ((url: string | URL | Request, opts?: RequestInit) => {
     if (typeof url === "string" && url.includes("chat/completions")) {
-      return Promise.resolve(new Response(
-        new ReadableStream({
-          start(c) {
-            const enc = new TextEncoder();
-            for (const chunk of chunks) c.enqueue(enc.encode(chunk));
-            c.close();
-          },
-        }),
-        { status: 200 },
-      ));
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(c) {
+              const enc = new TextEncoder();
+              for (const chunk of chunks) c.enqueue(enc.encode(chunk));
+              c.close();
+            },
+          }),
+          { status: 200 },
+        ),
+      );
     }
     return orig(url as string, opts);
   }) as typeof fetch;
-  return () => { globalThis.fetch = orig; };
+  return () => {
+    globalThis.fetch = orig;
+  };
 }
 
 function makePromptResult(
@@ -225,7 +229,11 @@ Deno.test({
         try {
           await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
           const app = createApp(makeDeps(tmpDir, () => {
-            throw new ContinuePromptError("no-chapter", "Cannot continue: no existing chapter file", 400);
+            throw new ContinuePromptError(
+              "no-chapter",
+              "Cannot continue: no existing chapter file",
+              400,
+            );
           }));
           const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat/continue", {});
           assertEquals(res.status, 400);
@@ -242,7 +250,11 @@ Deno.test({
         try {
           await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
           const app = createApp(makeDeps(tmpDir, () => {
-            throw new ContinuePromptError("no-content", "Latest chapter has no content to continue", 400);
+            throw new ContinuePromptError(
+              "no-content",
+              "Latest chapter has no content to continue",
+              400,
+            );
           }));
           const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat/continue", {});
           assertEquals(res.status, 400);
@@ -273,8 +285,7 @@ Deno.test({
               existingContent: "x",
               userMessageText: "",
               assistantPrefill: "",
-            } as unknown as ContinuePromptResult)
-          ));
+            } as unknown as ContinuePromptResult)));
           const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat/continue", {});
           assertEquals(res.status, 422);
           assertEquals((res.body as Record<string, unknown>).type, "vento-error");
@@ -287,9 +298,9 @@ Deno.test({
       await t.step("400 bad path when series contains traversal", async () => {
         const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_route_continue_badpath_" });
         try {
-          const app = createApp(makeDeps(tmpDir, () =>
-            Promise.reject(new Error("should not be called"))
-          ));
+          const app = createApp(
+            makeDeps(tmpDir, () => Promise.reject(new Error("should not be called"))),
+          );
           // `..` segments are blocked by validateParams middleware; URL-encode
           // the slash so Hono receives the literal segment.
           const res = await makeRequest(app, "POST", "/api/stories/..%2Fevil/n1/chat/continue", {});
@@ -308,9 +319,9 @@ Deno.test({
 
           Deno.env.delete("LLM_API_KEY");
           try {
-            const app = createApp(makeDeps(tmpDir, () =>
-              Promise.resolve(makePromptResult("x", "x", "x"))
-            ));
+            const app = createApp(
+              makeDeps(tmpDir, () => Promise.resolve(makePromptResult("x", "x", "x"))),
+            );
             const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat/continue", {});
             assertEquals(res.status, 500);
             assertMatch(String(res.body!.detail), /LLM_API_KEY/);

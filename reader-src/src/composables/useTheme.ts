@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import type { UseThemeReturn, ThemePayload } from "@/types";
+import type { ThemePayload, UseThemeReturn } from "@/types";
 import { apiFetch, apiFetchJson } from "@/lib/api";
 
 const STORAGE_KEY_ID = "heartReverie.themeId";
@@ -18,8 +18,7 @@ function applyHighlightOverride(color: string): void {
     style.id = id;
     document.head.appendChild(style);
   }
-  style.textContent =
-    "::highlight(dialogue-quote-straight)," +
+  style.textContent = "::highlight(dialogue-quote-straight)," +
     "::highlight(dialogue-quote-curly)," +
     "::highlight(dialogue-quote-guillemet)," +
     "::highlight(dialogue-quote-corner)," +

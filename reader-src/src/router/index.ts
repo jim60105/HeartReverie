@@ -10,12 +10,9 @@ const LoreCodexPage = () => import("@/components/lore/LoreCodexPage.vue");
 const LlmSettingsPage = () => import("@/components/LlmSettingsPage.vue");
 const ThemeSettingsPage = () => import("@/components/ThemeSettingsPage.vue");
 const QuickAddPage = () => import("@/components/QuickAddPage.vue");
-const ImportCharacterCardPage = () =>
-  import("@/components/ImportCharacterCardPage.vue");
-const PluginSettingsPage = () =>
-  import("@/components/PluginSettingsPage.vue");
-const HookInspectorPage = () =>
-  import("@/components/HookInspectorPage.vue");
+const ImportCharacterCardPage = () => import("@/components/ImportCharacterCardPage.vue");
+const PluginSettingsPage = () => import("@/components/PluginSettingsPage.vue");
+const HookInspectorPage = () => import("@/components/HookInspectorPage.vue");
 
 export const settingsChildren: RouteRecordRaw[] = [
   {

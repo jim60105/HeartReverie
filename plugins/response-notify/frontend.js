@@ -15,31 +15,33 @@
 
 // Plugin: response-notify — Notify user when LLM generation completes
 
-import { getPluginSettings } from '../_shared/utils.js';
+import { getPluginSettings } from "../_shared/utils.js";
 
 export function register(hooks) {
-  hooks.register('notification', (context) => {
+  hooks.register("notification", (context) => {
     const settings = getPluginSettings(hooks);
     if (settings.enabled === false) return;
-    if (context.event !== 'chat:done') return;
-    if (typeof context.notify !== 'function') return;
+    if (context.event !== "chat:done") return;
+    if (typeof context.notify !== "function") return;
 
-    const isHidden = document.visibilityState === 'hidden';
+    const isHidden = document.visibilityState === "hidden";
     // Default `true` preserves the plugin's original always-notify behaviour
     // (channel switches between `in-app` and `auto` based on visibility).
     // Setting it to `false` opts in to "hidden tabs only".
     const notifyWhenVisible = settings.notifyWhenVisible !== false;
     if (!isHidden && !notifyWhenVisible) return;
 
-    const title = typeof settings.notifyTitle === 'string' ? settings.notifyTitle : '故事生成完成';
-    const body = typeof settings.notifyBody === 'string' ? settings.notifyBody : '新的章節已經寫入完成';
-    const level = typeof settings.notifyLevel === 'string' ? settings.notifyLevel : 'success';
+    const title = typeof settings.notifyTitle === "string" ? settings.notifyTitle : "故事生成完成";
+    const body = typeof settings.notifyBody === "string"
+      ? settings.notifyBody
+      : "新的章節已經寫入完成";
+    const level = typeof settings.notifyLevel === "string" ? settings.notifyLevel : "success";
 
     context.notify({
       title,
       body,
       level,
-      channel: isHidden ? 'auto' : 'in-app',
+      channel: isHidden ? "auto" : "in-app",
     });
   }, 100);
 }

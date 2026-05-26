@@ -24,11 +24,7 @@ import {
 import { ContinuePromptError } from "../../../writer/lib/story.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { createSafePath } from "../../../writer/lib/middleware.ts";
-import type {
-  AppConfig,
-  ContinuePromptResult,
-  LlmConfig,
-} from "../../../writer/types.ts";
+import type { AppConfig, ContinuePromptResult, LlmConfig } from "../../../writer/types.ts";
 
 function buildConfig(tmpDir: string): AppConfig {
   const llmDefaults: LlmConfig = {
@@ -75,24 +71,33 @@ function mockFetchFromChunks(chunks: string[]): () => void {
   const original = globalThis.fetch;
   globalThis.fetch = ((url: string | URL | Request, opts?: RequestInit) => {
     if (typeof url === "string" && url.includes("chat/completions")) {
-      return Promise.resolve(new Response(
-        new ReadableStream({
-          start(controller) {
-            const enc = new TextEncoder();
-            for (const c of chunks) controller.enqueue(enc.encode(c));
-            controller.close();
-          },
-        }),
-        { status: 200 },
-      ));
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              const enc = new TextEncoder();
+              for (const c of chunks) controller.enqueue(enc.encode(c));
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        ),
+      );
     }
     return original(url as string, opts);
   }) as typeof fetch;
-  return () => { globalThis.fetch = original; };
+  return () => {
+    globalThis.fetch = original;
+  };
 }
 
 /** Wraps a chapter file path to a known story dir. */
-async function setupStory(tmpDir: string, series: string, name: string, chapterContent: string): Promise<string> {
+async function setupStory(
+  tmpDir: string,
+  series: string,
+  name: string,
+  chapterContent: string,
+): Promise<string> {
   const dir = join(tmpDir, series, name);
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(join(dir, "001.md"), chapterContent);
@@ -100,7 +105,11 @@ async function setupStory(tmpDir: string, series: string, name: string, chapterC
 }
 
 /** Build a ContinuePromptResult that matches what `buildContinuePromptFromStory` would return. */
-function makePromptResult(existingContent: string, prefill: string, userMsg: string): ContinuePromptResult {
+function makePromptResult(
+  existingContent: string,
+  prefill: string,
+  userMsg: string,
+): ContinuePromptResult {
   const messages = [
     { role: "system" as const, content: "sys" },
     { role: "user" as const, content: userMsg },
@@ -128,61 +137,64 @@ Deno.test({
 
     try {
       // ───────────────────────────────────────────────────────────
-      await t.step("happy path: stream content appended; chapterContentAfter = existing + streamed", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_happy_" });
-        try {
-          const original = "<user_message>q</user_message>\n\nseed";
-          await setupStory(tmpDir, "s1", "n1", original);
-
-          let postSource: string | null = null;
-          let postContent: string | null = null;
-          let preWriteFired = false;
-          const hd = new HookDispatcher();
-          hd.register("post-response", (ctx) => {
-            postSource = ctx.source as string;
-            postContent = ctx.content as string;
-            return Promise.resolve();
-          });
-          hd.register("pre-write", () => {
-            preWriteFired = true;
-            return Promise.resolve();
-          });
-
-          const restore = mockFetchFromChunks([
-            'data: {"choices":[{"delta":{"content":" extra"}}]}\n\n',
-            'data: {"choices":[{"delta":{"content":" tail"}}]}\n\n',
-            "data: [DONE]\n\n",
-          ]);
+      await t.step(
+        "happy path: stream content appended; chapterContentAfter = existing + streamed",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_happy_" });
           try {
-            const result = await executeContinue({
-              series: "s1",
-              name: "n1",
-              config: buildConfig(tmpDir),
-              safePath: createSafePath(tmpDir),
-              hookDispatcher: hd,
-              buildContinuePromptFromStory: () =>
-                Promise.resolve(makePromptResult(original, "seed", "q")),
+            const original = "<user_message>q</user_message>\n\nseed";
+            await setupStory(tmpDir, "s1", "n1", original);
+
+            let postSource: string | null = null;
+            let postContent: string | null = null;
+            let preWriteFired = false;
+            const hd = new HookDispatcher();
+            hd.register("post-response", (ctx) => {
+              postSource = ctx.source as string;
+              postContent = ctx.content as string;
+              return Promise.resolve();
+            });
+            hd.register("pre-write", () => {
+              preWriteFired = true;
+              return Promise.resolve();
             });
 
-            assertEquals(result.chapter, 1);
-            assertEquals(
-              result.content,
-              original + " extra tail",
-              "HTTP content must be the FULL chapter (existing + streamed bytes)",
-            );
-            const onDisk = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
-            assertEquals(onDisk, original + " extra tail");
+            const restore = mockFetchFromChunks([
+              'data: {"choices":[{"delta":{"content":" extra"}}]}\n\n',
+              'data: {"choices":[{"delta":{"content":" tail"}}]}\n\n',
+              "data: [DONE]\n\n",
+            ]);
+            try {
+              const result = await executeContinue({
+                series: "s1",
+                name: "n1",
+                config: buildConfig(tmpDir),
+                safePath: createSafePath(tmpDir),
+                hookDispatcher: hd,
+                buildContinuePromptFromStory: () =>
+                  Promise.resolve(makePromptResult(original, "seed", "q")),
+              });
 
-            assertEquals(postSource, "continue", "post-response must fire with source: continue");
-            assertEquals(postContent, original + " extra tail");
-            assertEquals(preWriteFired, false, "pre-write must NOT fire in continue mode");
+              assertEquals(result.chapter, 1);
+              assertEquals(
+                result.content,
+                original + " extra tail",
+                "HTTP content must be the FULL chapter (existing + streamed bytes)",
+              );
+              const onDisk = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
+              assertEquals(onDisk, original + " extra tail");
+
+              assertEquals(postSource, "continue", "post-response must fire with source: continue");
+              assertEquals(postContent, original + " extra tail");
+              assertEquals(preWriteFired, false, "pre-write must NOT fire in continue mode");
+            } finally {
+              restore();
+            }
           } finally {
-            restore();
+            await Deno.remove(tmpDir, { recursive: true });
           }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
 
       // ───────────────────────────────────────────────────────────
       await t.step("<think> framing: reasoning bytes wrapped like write-new-chapter", async () => {
@@ -211,52 +223,10 @@ Deno.test({
             const onDisk = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
             assertStringIncludes(onDisk, "<think>\nthinking…\n</think>\n\n");
             assert(onDisk.startsWith(original), "original bytes must be preserved at file head");
-            assert(onDisk.endsWith(" body"), "trailing content delta must be appended after </think>");
-          } finally {
-            restore();
-          }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
-
-      // ───────────────────────────────────────────────────────────
-      await t.step("snapshot guard: existingContent mismatch → ChatError(conflict, 409)", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_conflict_" });
-        try {
-          const onDisk = "DIFFERENT bytes on disk";
-          await setupStory(tmpDir, "s1", "n1", onDisk);
-
-          // Snapshot guard runs after the LLM fetch in the current
-          // implementation, so provide a successful empty stream upstream.
-          const restore = mockFetchFromChunks(["data: [DONE]\n\n"]);
-          try {
-            const err = await assertRejects(
-              () =>
-                streamLlmAndPersist({
-                  messages: [
-                    { role: "system", content: "sys" },
-                    { role: "user", content: "q" },
-                  ],
-                  llmConfig: buildConfig(tmpDir).llmDefaults,
-                  series: "s1",
-                  name: "n1",
-                  storyDir: join(tmpDir, "s1", "n1"),
-                  rootDir: "/nonexistent-root",
-                  writeMode: {
-                    kind: "continue-last-chapter",
-                    targetChapterNumber: 1,
-                    existingContent: "STALE bytes captured at parse time",
-                  },
-                  hookDispatcher: new HookDispatcher(),
-                  config: buildConfig(tmpDir),
-                }),
-              ChatError,
+            assert(
+              onDisk.endsWith(" body"),
+              "trailing content delta must be appended after </think>",
             );
-            assertEquals(err.code, "conflict");
-            assertEquals(err.httpStatus, 409);
-            // File unchanged on disk.
-            assertEquals(await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md")), onDisk);
           } finally {
             restore();
           }
@@ -266,146 +236,104 @@ Deno.test({
       });
 
       // ───────────────────────────────────────────────────────────
-      await t.step("Deno.errors.NotFound on chapter file → ChatError(no-chapter, 400)", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_notfound_" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          // Deliberately do NOT create 001.md.
-
-          const restore = mockFetchFromChunks(["data: [DONE]\n\n"]);
+      await t.step(
+        "snapshot guard: existingContent mismatch → ChatError(conflict, 409)",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_conflict_" });
           try {
-            const err = await assertRejects(
-              () =>
-                streamLlmAndPersist({
-                  messages: [
-                    { role: "system", content: "sys" },
-                    { role: "user", content: "q" },
-                  ],
-                  llmConfig: buildConfig(tmpDir).llmDefaults,
-                  series: "s1",
-                  name: "n1",
-                  storyDir: join(tmpDir, "s1", "n1"),
-                  rootDir: "/nonexistent-root",
-                  writeMode: {
-                    kind: "continue-last-chapter",
-                    targetChapterNumber: 1,
-                    existingContent: "anything",
-                  },
-                  hookDispatcher: new HookDispatcher(),
-                  config: buildConfig(tmpDir),
-                }),
-              ChatError,
-            );
-            assertEquals(err.code, "no-chapter");
-            assertEquals(err.httpStatus, 400);
-          } finally {
-            restore();
-          }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+            const onDisk = "DIFFERENT bytes on disk";
+            await setupStory(tmpDir, "s1", "n1", onDisk);
 
-      // ───────────────────────────────────────────────────────────
-      await t.step("executeContinue translates ContinuePromptError(no-chapter) → ChatError(no-chapter, 400)", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_xlate_nc_" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          const err = await assertRejects(
-            () =>
-              executeContinue({
-                series: "s1",
-                name: "n1",
-                config: buildConfig(tmpDir),
-                safePath: createSafePath(tmpDir),
-                hookDispatcher: new HookDispatcher(),
-                buildContinuePromptFromStory: () => {
-                  throw new ContinuePromptError("no-chapter", "no chapter", 400);
-                },
-              }),
-            ChatError,
-          );
-          assertEquals(err.code, "no-chapter");
-          assertEquals(err.httpStatus, 400);
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
-
-      await t.step("executeContinue translates ContinuePromptError(no-content) → ChatError(no-content, 400)", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_xlate_no_" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          const err = await assertRejects(
-            () =>
-              executeContinue({
-                series: "s1",
-                name: "n1",
-                config: buildConfig(tmpDir),
-                safePath: createSafePath(tmpDir),
-                hookDispatcher: new HookDispatcher(),
-                buildContinuePromptFromStory: () => {
-                  throw new ContinuePromptError("no-content", "empty chapter", 400);
-                },
-              }),
-            ChatError,
-          );
-          assertEquals(err.code, "no-content");
-          assertEquals(err.httpStatus, 400);
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
-
-      // ───────────────────────────────────────────────────────────
-      await t.step("concurrent generation lock: second executeContinue → ChatError(concurrent, 409)", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_concurrent_" });
-        try {
-          const original = "<user_message>q</user_message>\n\nseed";
-          await setupStory(tmpDir, "s1", "n1", original);
-
-          // Use a fetch stub whose body never closes until we tell it to. This
-          // keeps the first executeContinue mid-flight while we kick off a
-          // second invocation that must collide with the per-story lock.
-          const originalFetch = globalThis.fetch;
-          let firstStreamController: ReadableStreamDefaultController<Uint8Array> | null = null;
-          globalThis.fetch = ((url: string | URL | Request, opts?: RequestInit) => {
-            if (typeof url === "string" && url.includes("chat/completions")) {
-              const sig = opts?.signal as AbortSignal | undefined;
-              return Promise.resolve(new Response(
-                new ReadableStream<Uint8Array>({
-                  start(c) {
-                    firstStreamController = c;
-                    if (sig) {
-                      const onAbort = () => {
-                        try { c.error(sig.reason ?? new DOMException("aborted", "AbortError")); } catch { /* */ }
-                      };
-                      if (sig.aborted) onAbort();
-                      else sig.addEventListener("abort", onAbort, { once: true });
-                    }
-                  },
-                }),
-                { status: 200 },
-              ));
+            // Snapshot guard runs after the LLM fetch in the current
+            // implementation, so provide a successful empty stream upstream.
+            const restore = mockFetchFromChunks(["data: [DONE]\n\n"]);
+            try {
+              const err = await assertRejects(
+                () =>
+                  streamLlmAndPersist({
+                    messages: [
+                      { role: "system", content: "sys" },
+                      { role: "user", content: "q" },
+                    ],
+                    llmConfig: buildConfig(tmpDir).llmDefaults,
+                    series: "s1",
+                    name: "n1",
+                    storyDir: join(tmpDir, "s1", "n1"),
+                    rootDir: "/nonexistent-root",
+                    writeMode: {
+                      kind: "continue-last-chapter",
+                      targetChapterNumber: 1,
+                      existingContent: "STALE bytes captured at parse time",
+                    },
+                    hookDispatcher: new HookDispatcher(),
+                    config: buildConfig(tmpDir),
+                  }),
+                ChatError,
+              );
+              assertEquals(err.code, "conflict");
+              assertEquals(err.httpStatus, 409);
+              // File unchanged on disk.
+              assertEquals(await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md")), onDisk);
+            } finally {
+              restore();
             }
-            return originalFetch(url as string, opts);
-          }) as typeof fetch;
+          } finally {
+            await Deno.remove(tmpDir, { recursive: true });
+          }
+        },
+      );
 
+      // ───────────────────────────────────────────────────────────
+      await t.step(
+        "Deno.errors.NotFound on chapter file → ChatError(no-chapter, 400)",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_notfound_" });
           try {
-            const buildPrompt = () => Promise.resolve(makePromptResult(original, "seed", "q"));
-            const ctrl = new AbortController();
-            const first = executeContinue({
-              series: "s1",
-              name: "n1",
-              config: buildConfig(tmpDir),
-              safePath: createSafePath(tmpDir),
-              hookDispatcher: new HookDispatcher(),
-              buildContinuePromptFromStory: buildPrompt,
-              signal: ctrl.signal,
-            });
-            // Yield so the first call has marked the generation lock.
-            await new Promise((r) => setTimeout(r, 30));
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            // Deliberately do NOT create 001.md.
 
+            const restore = mockFetchFromChunks(["data: [DONE]\n\n"]);
+            try {
+              const err = await assertRejects(
+                () =>
+                  streamLlmAndPersist({
+                    messages: [
+                      { role: "system", content: "sys" },
+                      { role: "user", content: "q" },
+                    ],
+                    llmConfig: buildConfig(tmpDir).llmDefaults,
+                    series: "s1",
+                    name: "n1",
+                    storyDir: join(tmpDir, "s1", "n1"),
+                    rootDir: "/nonexistent-root",
+                    writeMode: {
+                      kind: "continue-last-chapter",
+                      targetChapterNumber: 1,
+                      existingContent: "anything",
+                    },
+                    hookDispatcher: new HookDispatcher(),
+                    config: buildConfig(tmpDir),
+                  }),
+                ChatError,
+              );
+              assertEquals(err.code, "no-chapter");
+              assertEquals(err.httpStatus, 400);
+            } finally {
+              restore();
+            }
+          } finally {
+            await Deno.remove(tmpDir, { recursive: true });
+          }
+        },
+      );
+
+      // ───────────────────────────────────────────────────────────
+      await t.step(
+        "executeContinue translates ContinuePromptError(no-chapter) → ChatError(no-chapter, 400)",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_xlate_nc_" });
+          try {
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
             const err = await assertRejects(
               () =>
                 executeContinue({
@@ -414,24 +342,133 @@ Deno.test({
                   config: buildConfig(tmpDir),
                   safePath: createSafePath(tmpDir),
                   hookDispatcher: new HookDispatcher(),
-                  buildContinuePromptFromStory: buildPrompt,
+                  buildContinuePromptFromStory: () => {
+                    throw new ContinuePromptError("no-chapter", "no chapter", 400);
+                  },
                 }),
               ChatError,
             );
-            assertEquals(err.code, "concurrent");
-            assertEquals(err.httpStatus, 409);
-
-            // Release the first call so it can finish and clear the lock.
-            ctrl.abort();
-            try { (firstStreamController as ReadableStreamDefaultController<Uint8Array> | null)?.error(new DOMException("aborted", "AbortError")); } catch { /* */ }
-            await first.catch(() => {});
+            assertEquals(err.code, "no-chapter");
+            assertEquals(err.httpStatus, 400);
           } finally {
-            globalThis.fetch = originalFetch;
+            await Deno.remove(tmpDir, { recursive: true });
           }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
+
+      await t.step(
+        "executeContinue translates ContinuePromptError(no-content) → ChatError(no-content, 400)",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_xlate_no_" });
+          try {
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            const err = await assertRejects(
+              () =>
+                executeContinue({
+                  series: "s1",
+                  name: "n1",
+                  config: buildConfig(tmpDir),
+                  safePath: createSafePath(tmpDir),
+                  hookDispatcher: new HookDispatcher(),
+                  buildContinuePromptFromStory: () => {
+                    throw new ContinuePromptError("no-content", "empty chapter", 400);
+                  },
+                }),
+              ChatError,
+            );
+            assertEquals(err.code, "no-content");
+            assertEquals(err.httpStatus, 400);
+          } finally {
+            await Deno.remove(tmpDir, { recursive: true });
+          }
+        },
+      );
+
+      // ───────────────────────────────────────────────────────────
+      await t.step(
+        "concurrent generation lock: second executeContinue → ChatError(concurrent, 409)",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_continue_concurrent_" });
+          try {
+            const original = "<user_message>q</user_message>\n\nseed";
+            await setupStory(tmpDir, "s1", "n1", original);
+
+            // Use a fetch stub whose body never closes until we tell it to. This
+            // keeps the first executeContinue mid-flight while we kick off a
+            // second invocation that must collide with the per-story lock.
+            const originalFetch = globalThis.fetch;
+            let firstStreamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+            globalThis.fetch = ((url: string | URL | Request, opts?: RequestInit) => {
+              if (typeof url === "string" && url.includes("chat/completions")) {
+                const sig = opts?.signal as AbortSignal | undefined;
+                return Promise.resolve(
+                  new Response(
+                    new ReadableStream<Uint8Array>({
+                      start(c) {
+                        firstStreamController = c;
+                        if (sig) {
+                          const onAbort = () => {
+                            try {
+                              c.error(sig.reason ?? new DOMException("aborted", "AbortError"));
+                            } catch { /* */ }
+                          };
+                          if (sig.aborted) onAbort();
+                          else sig.addEventListener("abort", onAbort, { once: true });
+                        }
+                      },
+                    }),
+                    { status: 200 },
+                  ),
+                );
+              }
+              return originalFetch(url as string, opts);
+            }) as typeof fetch;
+
+            try {
+              const buildPrompt = () => Promise.resolve(makePromptResult(original, "seed", "q"));
+              const ctrl = new AbortController();
+              const first = executeContinue({
+                series: "s1",
+                name: "n1",
+                config: buildConfig(tmpDir),
+                safePath: createSafePath(tmpDir),
+                hookDispatcher: new HookDispatcher(),
+                buildContinuePromptFromStory: buildPrompt,
+                signal: ctrl.signal,
+              });
+              // Yield so the first call has marked the generation lock.
+              await new Promise((r) => setTimeout(r, 30));
+
+              const err = await assertRejects(
+                () =>
+                  executeContinue({
+                    series: "s1",
+                    name: "n1",
+                    config: buildConfig(tmpDir),
+                    safePath: createSafePath(tmpDir),
+                    hookDispatcher: new HookDispatcher(),
+                    buildContinuePromptFromStory: buildPrompt,
+                  }),
+                ChatError,
+              );
+              assertEquals(err.code, "concurrent");
+              assertEquals(err.httpStatus, 409);
+
+              // Release the first call so it can finish and clear the lock.
+              ctrl.abort();
+              try {
+                (firstStreamController as ReadableStreamDefaultController<Uint8Array> | null)
+                  ?.error(new DOMException("aborted", "AbortError"));
+              } catch { /* */ }
+              await first.catch(() => {});
+            } finally {
+              globalThis.fetch = originalFetch;
+            }
+          } finally {
+            await Deno.remove(tmpDir, { recursive: true });
+          }
+        },
+      );
 
       // ───────────────────────────────────────────────────────────
       await t.step("abort signal aborts the stream → ChatAbortError", async () => {
@@ -444,10 +481,15 @@ Deno.test({
           globalThis.fetch = ((_url: string | URL | Request, init?: RequestInit) =>
             new Promise<Response>((_, reject) => {
               const sig = init?.signal as AbortSignal | undefined;
-              if (!sig) { reject(new Error("test fetch stub requires signal")); return; }
-              const onAbort = () => reject(sig.reason ?? new DOMException("aborted", "AbortError"));
-              if (sig.aborted) onAbort();
-              else sig.addEventListener("abort", onAbort, { once: true });
+              if (!sig) {
+                reject(new Error("test fetch stub requires signal"));
+                return;
+              }
+              const onAbort = () =>
+                reject(sig.reason ?? new DOMException("aborted", "AbortError"));
+              if (sig.aborted) {
+                onAbort();
+              } else sig.addEventListener("abort", onAbort, { once: true });
             })) as typeof fetch;
 
           try {
@@ -462,7 +504,9 @@ Deno.test({
                 Promise.resolve(makePromptResult(original, "seed", "q")),
               signal: ctrl.signal,
             });
-            await new Promise((r) => setTimeout(r, 5));
+            await new Promise((r) =>
+              setTimeout(r, 5)
+            );
             ctrl.abort();
             await assertRejects(() => promise, ChatAbortError);
             // File untouched.

@@ -96,7 +96,9 @@ function stubFetch(chunks: string[]): () => void {
     }
     return original(url as string, _opts);
   }) as FetchFn;
-  return () => { globalThis.fetch = original; };
+  return () => {
+    globalThis.fetch = original;
+  };
 }
 
 function fullUsageChunks(): string[] {
@@ -159,40 +161,43 @@ Deno.test({
     Deno.env.set("LLM_API_KEY", "k");
     try {
       // ───────────────────────────────────────────────────────────
-      await t.step("4.1 write-new-chapter: usage populated, source=chat, endpoint set", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-new-" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          const hd = new HookDispatcher();
-          const cap = captureNextPostResponse(hd);
-          const restore = stubFetch(fullUsageChunks());
+      await t.step(
+        "4.1 write-new-chapter: usage populated, source=chat, endpoint set",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-new-" });
           try {
-            await executeChat({
-              series: "s1",
-              name: "n1",
-              message: "Hi",
-              config: buildConfig(tmpDir),
-              safePath: createSafePath(tmpDir),
-              hookDispatcher: hd,
-              buildPromptFromStory: buildPromptStub(),
-            });
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            const hd = new HookDispatcher();
+            const cap = captureNextPostResponse(hd);
+            const restore = stubFetch(fullUsageChunks());
+            try {
+              await executeChat({
+                series: "s1",
+                name: "n1",
+                message: "Hi",
+                config: buildConfig(tmpDir),
+                safePath: createSafePath(tmpDir),
+                hookDispatcher: hd,
+                buildPromptFromStory: buildPromptStub(),
+              });
+            } finally {
+              restore();
+            }
+            const p = cap.current;
+            assert(p, "post-response payload must be captured");
+            assertEquals(p!.source, "chat");
+            assertEquals(p!.endpoint, ENDPOINT);
+            assert(p!.usage, "usage must be non-null");
+            assertEquals(p!.usage!.promptTokens, 80);
+            assertEquals(p!.usage!.completionTokens, 40);
+            assertEquals(p!.usage!.totalTokens, 120);
+            assertEquals(p!.usage!.chapter, 1);
+            assertEquals(p!.usage!.model, "default-model");
           } finally {
-            restore();
+            await Deno.remove(tmpDir, { recursive: true });
           }
-          const p = cap.current;
-          assert(p, "post-response payload must be captured");
-          assertEquals(p!.source, "chat");
-          assertEquals(p!.endpoint, ENDPOINT);
-          assert(p!.usage, "usage must be non-null");
-          assertEquals(p!.usage!.promptTokens, 80);
-          assertEquals(p!.usage!.completionTokens, 40);
-          assertEquals(p!.usage!.totalTokens, 120);
-          assertEquals(p!.usage!.chapter, 1);
-          assertEquals(p!.usage!.model, "default-model");
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
 
       // ───────────────────────────────────────────────────────────
       await t.step("4.1b continue-last-chapter: source=continue, usage populated", async () => {
@@ -234,87 +239,97 @@ Deno.test({
       });
 
       // ───────────────────────────────────────────────────────────
-      await t.step("4.2 + 4.3 append-to-existing-chapter: source=plugin-action, usage+appendedTag, _usage.json grows", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-append-" });
-        try {
-          const dir = join(tmpDir, "s1", "n1");
-          await Deno.mkdir(dir, { recursive: true });
-          await Deno.writeTextFile(join(dir, "001.md"), "existing\n");
-          const hd = new HookDispatcher();
-          const cap = captureNextPostResponse(hd);
-          const config = buildConfig(tmpDir);
-          const restore = stubFetch(fullUsageChunks());
+      await t.step(
+        "4.2 + 4.3 append-to-existing-chapter: source=plugin-action, usage+appendedTag, _usage.json grows",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-append-" });
           try {
-            await streamLlmAndPersist({
-              messages: [{ role: "user", content: "p" }],
-              llmConfig: config.llmDefaults,
-              series: "s1",
-              name: "n1",
-              storyDir: dir,
-              rootDir: config.ROOT_DIR,
-              writeMode: { kind: "append-to-existing-chapter", appendTag: "UpdateVariable", pluginName: "my-plugin" },
-              hookDispatcher: hd,
-              config,
-              correlationId: "test-corr-append",
-            });
+            const dir = join(tmpDir, "s1", "n1");
+            await Deno.mkdir(dir, { recursive: true });
+            await Deno.writeTextFile(join(dir, "001.md"), "existing\n");
+            const hd = new HookDispatcher();
+            const cap = captureNextPostResponse(hd);
+            const config = buildConfig(tmpDir);
+            const restore = stubFetch(fullUsageChunks());
+            try {
+              await streamLlmAndPersist({
+                messages: [{ role: "user", content: "p" }],
+                llmConfig: config.llmDefaults,
+                series: "s1",
+                name: "n1",
+                storyDir: dir,
+                rootDir: config.ROOT_DIR,
+                writeMode: {
+                  kind: "append-to-existing-chapter",
+                  appendTag: "UpdateVariable",
+                  pluginName: "my-plugin",
+                },
+                hookDispatcher: hd,
+                config,
+                correlationId: "test-corr-append",
+              });
+            } finally {
+              restore();
+            }
+            const p = cap.current;
+            assert(p);
+            assertEquals(p!.source, "plugin-action");
+            assertEquals(p!.pluginName, "my-plugin");
+            assertEquals(p!.appendedTag, "UpdateVariable");
+            assertEquals(p!.endpoint, ENDPOINT);
+            assert(p!.usage);
+            assertEquals(p!.usage!.totalTokens, 120);
+            // Regression: _usage.json must grow by exactly one record after plugin-action append
+            const records = await readUsage(dir);
+            assertEquals(records.length, 1);
+            assertEquals(records[0]!.totalTokens, 120);
           } finally {
-            restore();
+            await Deno.remove(tmpDir, { recursive: true });
           }
-          const p = cap.current;
-          assert(p);
-          assertEquals(p!.source, "plugin-action");
-          assertEquals(p!.pluginName, "my-plugin");
-          assertEquals(p!.appendedTag, "UpdateVariable");
-          assertEquals(p!.endpoint, ENDPOINT);
-          assert(p!.usage);
-          assertEquals(p!.usage!.totalTokens, 120);
-          // Regression: _usage.json must grow by exactly one record after plugin-action append
-          const records = await readUsage(dir);
-          assertEquals(records.length, 1);
-          assertEquals(records[0]!.totalTokens, 120);
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
 
       // ───────────────────────────────────────────────────────────
-      await t.step("4.1c replace-last-chapter: source=chat (plugin-action source literal)", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-replace-" });
-        try {
-          const dir = join(tmpDir, "s1", "n1");
-          await Deno.mkdir(dir, { recursive: true });
-          await Deno.writeTextFile(join(dir, "001.md"), "original\n");
-          const hd = new HookDispatcher();
-          const cap = captureNextPostResponse(hd);
-          const config = buildConfig(tmpDir);
-          const restore = stubFetch(fullUsageChunks());
+      await t.step(
+        "4.1c replace-last-chapter: source=chat (plugin-action source literal)",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-replace-" });
           try {
-            await streamLlmAndPersist({
-              messages: [{ role: "user", content: "p" }],
-              llmConfig: config.llmDefaults,
-              series: "s1",
-              name: "n1",
-              storyDir: dir,
-              rootDir: config.ROOT_DIR,
-              writeMode: { kind: "replace-last-chapter", pluginName: "polish" },
-              hookDispatcher: hd,
-              config,
-              correlationId: "test-corr-replace",
-            });
+            const dir = join(tmpDir, "s1", "n1");
+            await Deno.mkdir(dir, { recursive: true });
+            await Deno.writeTextFile(join(dir, "001.md"), "original\n");
+            const hd = new HookDispatcher();
+            const cap = captureNextPostResponse(hd);
+            const config = buildConfig(tmpDir);
+            const restore = stubFetch(fullUsageChunks());
+            try {
+              await streamLlmAndPersist({
+                messages: [{ role: "user", content: "p" }],
+                llmConfig: config.llmDefaults,
+                series: "s1",
+                name: "n1",
+                storyDir: dir,
+                rootDir: config.ROOT_DIR,
+                writeMode: { kind: "replace-last-chapter", pluginName: "polish" },
+                hookDispatcher: hd,
+                config,
+                correlationId: "test-corr-replace",
+              });
+            } finally {
+              restore();
+            }
+            const p = cap.current;
+            assert(p);
+            assertEquals(p!.source, "plugin-action");
+            assertEquals(p!.pluginName, "polish");
+            assertEquals(p!.endpoint, ENDPOINT);
+            assert(p!.usage);
+            assertEquals(p!.usage!.totalTokens, 120);
           } finally {
-            restore();
+            await Deno.remove(tmpDir, { recursive: true });
           }
-          const p = cap.current;
-          assert(p);
-          assertEquals(p!.source, "plugin-action");
-          assertEquals(p!.pluginName, "polish");
-          assertEquals(p!.endpoint, ENDPOINT);
-          assert(p!.usage);
-          assertEquals(p!.usage!.totalTokens, 120);
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
 
       // ───────────────────────────────────────────────────────────
       await t.step("4.4 usage is explicitly null when upstream omits token counts", async () => {
@@ -348,46 +363,55 @@ Deno.test({
       });
 
       // ───────────────────────────────────────────────────────────
-      await t.step("4.5a payload is fully frozen — usage reassignment + content reassignment + nested mutation throw", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-nowrite1-" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          const hd = new HookDispatcher();
-          const cap = captureNextPostResponse(hd);
-          const restore = stubFetch(fullUsageChunks());
+      await t.step(
+        "4.5a payload is fully frozen — usage reassignment + content reassignment + nested mutation throw",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-nowrite1-" });
           try {
-            await executeChat({
-              series: "s1",
-              name: "n1",
-              message: "Hi",
-              config: buildConfig(tmpDir),
-              safePath: createSafePath(tmpDir),
-              hookDispatcher: hd,
-              buildPromptFromStory: buildPromptStub(),
-            });
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            const hd = new HookDispatcher();
+            const cap = captureNextPostResponse(hd);
+            const restore = stubFetch(fullUsageChunks());
+            try {
+              await executeChat({
+                series: "s1",
+                name: "n1",
+                message: "Hi",
+                config: buildConfig(tmpDir),
+                safePath: createSafePath(tmpDir),
+                hookDispatcher: hd,
+                buildPromptFromStory: buildPromptStub(),
+              });
+            } finally {
+              restore();
+            }
+            const p = cap.current as unknown as PostResponsePayload;
+            assert(p);
+            // The whole payload is frozen.
+            assert(Object.isFrozen(p), "PostResponsePayload must be Object.isFrozen");
+            assert(Object.isFrozen(p.usage), "non-null usage value must also be frozen");
+            // Reassigning any top-level slot must throw.
+            assertThrows(() => {
+              (p as unknown as { usage: TokenUsageRecord | null }).usage = null;
+            }, TypeError);
+            assertThrows(() => {
+              (p as unknown as { content: string }).content = "mutated";
+            }, TypeError);
+            assertThrows(() => {
+              (p as unknown as { endpoint: string }).endpoint = "https://evil.test";
+            }, TypeError);
+            // Nested mutation on usage must throw.
+            assertThrows(() => {
+              (p.usage as unknown as { totalTokens: number }).totalTokens = 0;
+            }, TypeError);
+            assertThrows(() => {
+              (p.usage as unknown as Record<string, unknown>).cost = 0.0042;
+            }, TypeError);
           } finally {
-            restore();
+            await Deno.remove(tmpDir, { recursive: true });
           }
-          const p = cap.current as unknown as PostResponsePayload;
-          assert(p);
-          // The whole payload is frozen.
-          assert(Object.isFrozen(p), "PostResponsePayload must be Object.isFrozen");
-          assert(Object.isFrozen(p.usage), "non-null usage value must also be frozen");
-          // Reassigning any top-level slot must throw.
-          assertThrows(() => { (p as unknown as { usage: TokenUsageRecord | null }).usage = null; }, TypeError);
-          assertThrows(() => { (p as unknown as { content: string }).content = "mutated"; }, TypeError);
-          assertThrows(() => { (p as unknown as { endpoint: string }).endpoint = "https://evil.test"; }, TypeError);
-          // Nested mutation on usage must throw.
-          assertThrows(() => {
-            (p.usage as unknown as { totalTokens: number }).totalTokens = 0;
-          }, TypeError);
-          assertThrows(() => {
-            (p.usage as unknown as Record<string, unknown>).cost = 0.0042;
-          }, TypeError);
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
 
       // ───────────────────────────────────────────────────────────
       await t.step("4.5b + 4.6 payload is frozen even when usage is null", async () => {
@@ -425,7 +449,9 @@ Deno.test({
               timestamp: "2024-01-01T00:00:00.000Z",
             };
           }, TypeError);
-          assertThrows(() => { (p as unknown as { content: string }).content = "mutated"; }, TypeError);
+          assertThrows(() => {
+            (p as unknown as { content: string }).content = "mutated";
+          }, TypeError);
         } finally {
           await Deno.remove(tmpDir, { recursive: true });
         }
@@ -481,7 +507,10 @@ Deno.test({
               restore();
             }
             assertEquals(cap.current!.endpoint, ENDPOINT);
-            assert(Object.isFrozen(cap.current), "append-to-existing-chapter payload must be frozen");
+            assert(
+              Object.isFrozen(cap.current),
+              "append-to-existing-chapter payload must be frozen",
+            );
           }
           // continue-last-chapter
           {
@@ -498,7 +527,11 @@ Deno.test({
                 name: "n1",
                 storyDir: dir,
                 rootDir: config.ROOT_DIR,
-                writeMode: { kind: "continue-last-chapter", targetChapterNumber: 1, existingContent: existing },
+                writeMode: {
+                  kind: "continue-last-chapter",
+                  targetChapterNumber: 1,
+                  existingContent: existing,
+                },
                 hookDispatcher: hd,
                 config,
                 correlationId: "c-con",

@@ -207,7 +207,8 @@ Deno.test("checkUnknownVariables: for-of binder counted as known, helpers ignore
   // `user` appears only inside string literal → ignored.
   // `item` is a for-binder → ignored.
   // `unknown_thing` is not in catalog → reported.
-  const src = `{{# comment #}}{{ for item of series_name }}{{ message "user" }}{{ item }}{{ unknown_thing }}{{ /message }}{{ /for }}`;
+  const src =
+    `{{# comment #}}{{ for item of series_name }}{{ message "user" }}{{ item }}{{ unknown_thing }}{{ /message }}{{ /for }}`;
   // deno-lint-ignore no-explicit-any
   const diags = checkUnknownVariables(null as any, src, catalog);
   const names = diags.map((d) => d.message);

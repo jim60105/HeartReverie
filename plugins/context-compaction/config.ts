@@ -117,7 +117,9 @@ async function loadPluginSettings(
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }
-    onWarn?.("context-compaction plugin settings file is not a JSON object", { path: settingsPath });
+    onWarn?.("context-compaction plugin settings file is not a JSON object", {
+      path: settingsPath,
+    });
     return {};
   } catch (err) {
     onWarn?.("context-compaction plugin settings file is not valid JSON", {

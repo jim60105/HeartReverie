@@ -27,24 +27,27 @@ const log = createLogger("ws");
  * Must be called BEFORE body-limit and auth middleware to bypass them.
  */
 export function registerWebSocketRoutes(app: Hono, deps: AppDeps): void {
-  app.get("/api/ws", upgradeWebSocket((_c) => {
-    const conn = new WsConnection(deps);
-    return {
-      onOpen(_evt: Event, ws: WSContext) {
-        log.info("WebSocket connection established", { event: "connected" });
-        conn.resetIdleTimer(ws);
-      },
-      onMessage(evt: MessageEvent, ws: WSContext) {
-        return conn.onMessage(ws, evt);
-      },
-      onClose(_evt: CloseEvent) {
-        log.info("WebSocket connection closed", { event: "closed" });
-        conn.dispose();
-      },
-      onError(evt: Event) {
-        log.error("WebSocket error", { event: "error", detail: String(evt) });
-        conn.dispose();
-      },
-    };
-  }));
+  app.get(
+    "/api/ws",
+    upgradeWebSocket((_c) => {
+      const conn = new WsConnection(deps);
+      return {
+        onOpen(_evt: Event, ws: WSContext) {
+          log.info("WebSocket connection established", { event: "connected" });
+          conn.resetIdleTimer(ws);
+        },
+        onMessage(evt: MessageEvent, ws: WSContext) {
+          return conn.onMessage(ws, evt);
+        },
+        onClose(_evt: CloseEvent) {
+          log.info("WebSocket connection closed", { event: "closed" });
+          conn.dispose();
+        },
+        onError(evt: Event) {
+          log.error("WebSocket error", { event: "error", detail: String(evt) });
+          conn.dispose();
+        },
+      };
+    }),
+  );
 }

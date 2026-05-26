@@ -8,13 +8,8 @@
 
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import {
-  validatePathValue,
-} from "../../../writer/lib/path-allowlist.ts";
-import {
-  computeHiddenPaths,
-  excludeHiddenFromDiff,
-} from "../../../writer/lib/settings-diff.ts";
+import { validatePathValue } from "../../../writer/lib/path-allowlist.ts";
+import { computeHiddenPaths, excludeHiddenFromDiff } from "../../../writer/lib/settings-diff.ts";
 
 Deno.test("path-allowlist: symlink to outside the root is rejected", async () => {
   const tmp = await Deno.makeTempDir({ prefix: "hr-allowlist-" });

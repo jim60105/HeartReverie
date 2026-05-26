@@ -13,11 +13,8 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-  useChapterEditor,
-  __resetForTests,
-} from "@/composables/useChapterEditor";
+import { beforeEach, describe, expect, it } from "vitest";
+import { __resetForTests, useChapterEditor } from "@/composables/useChapterEditor";
 
 beforeEach(() => {
   __resetForTests();
@@ -25,8 +22,7 @@ beforeEach(() => {
 
 describe("useChapterEditor", () => {
   it("beginEdit sets state correctly", () => {
-    const { beginEdit, isEditing, editBuffer, editingChapterIndex } =
-      useChapterEditor();
+    const { beginEdit, isEditing, editBuffer, editingChapterIndex } = useChapterEditor();
 
     beginEdit(2, "# Chapter content");
 
@@ -99,8 +95,7 @@ describe("useChapterEditor", () => {
   });
 
   it("__resetForTests clears everything", () => {
-    const { beginEdit, isEditing, editBuffer, editingChapterIndex } =
-      useChapterEditor();
+    const { beginEdit, isEditing, editBuffer, editingChapterIndex } = useChapterEditor();
 
     beginEdit(7, "Will be cleared");
     __resetForTests();

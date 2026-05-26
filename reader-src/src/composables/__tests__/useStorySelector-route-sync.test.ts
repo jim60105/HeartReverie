@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { reactive, ref, nextTick } from "vue";
+import { nextTick, reactive, ref } from "vue";
 import { stubSessionStorage } from "@/__tests__/setup";
 
 const route = reactive({

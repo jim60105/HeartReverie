@@ -318,7 +318,9 @@ describe("useAutoresize", () => {
     void exposed;
     await flushFrame();
     // First width-bearing entry initialises lastObservedWidth.
-    roCallback!([{ contentBoxSize: [{ inlineSize: 200, blockSize: 60 }] } as unknown as ResizeObserverEntry]);
+    roCallback!([
+      { contentBoxSize: [{ inlineSize: 200, blockSize: 60 }] } as unknown as ResizeObserverEntry,
+    ]);
     await flushFrame();
     // Now spy on style.height writes.
     let writes = 0;
@@ -334,11 +336,15 @@ describe("useAutoresize", () => {
       },
     });
     // Height-only change with the same width MUST be ignored.
-    roCallback!([{ contentBoxSize: [{ inlineSize: 200, blockSize: 999 }] } as unknown as ResizeObserverEntry]);
+    roCallback!([
+      { contentBoxSize: [{ inlineSize: 200, blockSize: 999 }] } as unknown as ResizeObserverEntry,
+    ]);
     await flushFrame();
     expect(writes).toBe(0);
     // Width change DOES recompute.
-    roCallback!([{ contentBoxSize: [{ inlineSize: 220, blockSize: 60 }] } as unknown as ResizeObserverEntry]);
+    roCallback!([
+      { contentBoxSize: [{ inlineSize: 220, blockSize: 60 }] } as unknown as ResizeObserverEntry,
+    ]);
     await flushFrame();
     expect(writes).toBeGreaterThan(0);
     vi.unstubAllGlobals();

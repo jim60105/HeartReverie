@@ -44,10 +44,7 @@ import type {
 } from "@/types";
 import { useStorySelector } from "@/composables/useStorySelector";
 import { apiFetch } from "@/lib/api";
-import {
-  parseSystemTemplate,
-  serializeMessageCards,
-} from "@/lib/template-parser";
+import { parseSystemTemplate, serializeMessageCards } from "@/lib/template-parser";
 
 // ── Singleton module-level state ──
 
@@ -74,9 +71,7 @@ const useRawFallback = ref(false);
 const parseError = ref<string | null>(null);
 const topLevelContentDropped = ref(false);
 
-const mode = computed<"cards" | "raw">(() =>
-  useRawFallback.value ? "raw" : "cards"
-);
+const mode = computed<"cards" | "raw">(() => useRawFallback.value ? "raw" : "cards");
 
 // ── Helpers ──
 
@@ -359,9 +354,7 @@ async function previewTemplate(
   }
 
   const res = await apiFetch(
-    `/api/stories/${encodeURIComponent(series)}/${
-      encodeURIComponent(story)
-    }/preview-prompt`,
+    `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/preview-prompt`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

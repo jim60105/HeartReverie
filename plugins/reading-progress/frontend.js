@@ -16,23 +16,23 @@
 // Plugin: reading-progress — Multi-device reading progress sync
 // (chapter index + scroll ratio + W3C Text Fragment anchor)
 
-'use strict';
+"use strict";
 
-import { createPluginLogger, getPluginSettings } from '../_shared/utils.js';
+import { createPluginLogger, getPluginSettings } from "../_shared/utils.js";
 
 // ---------------------------------------------------------------------------
 // Helpers (module-level, stateless)
 // ---------------------------------------------------------------------------
 
 function getPassphrase() {
-  return sessionStorage.getItem('passphrase') || '';
+  return sessionStorage.getItem("passphrase") || "";
 }
 
 function getClientId() {
-  let id = localStorage.getItem('reading-progress-client-id');
+  let id = localStorage.getItem("reading-progress-client-id");
   if (!id) {
     id = crypto.randomUUID();
-    localStorage.setItem('reading-progress-client-id', id);
+    localStorage.setItem("reading-progress-client-id", id);
   }
   return id;
 }
@@ -57,7 +57,9 @@ function clampRatio(r) {
 }
 
 function navigateToChapter(series, story, chapterNumber) {
-  window.location.href = `/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapter/${chapterNumber}`;
+  window.location.href = `/${encodeURIComponent(series)}/${
+    encodeURIComponent(story)
+  }/chapter/${chapterNumber}`;
 }
 
 function handleCrossChapter(remoteChapterIndex, series, story, confirmRemoteJump) {
@@ -100,11 +102,11 @@ function registerIdempotentChapterReady(hooks, onFreshChapter) {
   const containerState = new WeakMap();
   let currentIdentity = null;
 
-  hooks.register('story:switch', () => {
+  hooks.register("story:switch", () => {
     currentIdentity = null;
   });
 
-  hooks.register('chapter:dom:ready', (ctx) => {
+  hooks.register("chapter:dom:ready", (ctx) => {
     if (!ctx.series || !ctx.story) return;
     const container = ctx.container;
     if (!(container instanceof HTMLElement)) return;
@@ -144,7 +146,7 @@ function registerIdempotentChapterReady(hooks, onFreshChapter) {
     });
   }, 50);
 
-  hooks.register('chapter:dom:dispose', (ctx) => {
+  hooks.register("chapter:dom:dispose", (ctx) => {
     const container = ctx.container;
     if (!(container instanceof HTMLElement)) return;
     const state = containerState.get(container);
@@ -156,7 +158,9 @@ function registerIdempotentChapterReady(hooks, onFreshChapter) {
 
   return {
     getCurrentIdentity: () => currentIdentity,
-    setCurrentIdentity: (next) => { currentIdentity = next; },
+    setCurrentIdentity: (next) => {
+      currentIdentity = next;
+    },
   };
 }
 
@@ -180,7 +184,10 @@ function makeThrottledSync(waitMs, putFn) {
       pending = entry;
       const remaining = waitMs - (Date.now() - lastInvoke);
       if (remaining <= 0) {
-        if (timer) { clearTimeout(timer); timer = null; }
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
         invoke(entry);
       } else if (!timer) {
         timer = setTimeout(() => {
@@ -190,11 +197,17 @@ function makeThrottledSync(waitMs, putFn) {
       }
     },
     flush() {
-      if (timer) { clearTimeout(timer); timer = null; }
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
       if (pending) invoke(pending);
     },
     cancel() {
-      if (timer) { clearTimeout(timer); timer = null; }
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
       pending = null;
     },
   };
@@ -225,7 +238,7 @@ function captureTextFragmentAnchor(container) {
     if (absBottom < viewportTop) continue;
     if (absTop > viewportBottom) break;
 
-    const text = (node.textContent || '').trim();
+    const text = (node.textContent || "").trim();
     if (text.length < 4) continue;
 
     const anchor = { textStart: text.slice(0, 32) };
@@ -233,7 +246,7 @@ function captureTextFragmentAnchor(container) {
     // Capture prefix from preceding text node for disambiguation
     const prev = node.previousSibling;
     if (prev && prev.nodeType === Node.TEXT_NODE) {
-      const prevText = (prev.textContent || '').trim();
+      const prevText = (prev.textContent || "").trim();
       if (prevText.length > 0) {
         anchor.prefix = prevText.slice(-32);
       }
@@ -245,11 +258,11 @@ function captureTextFragmentAnchor(container) {
 
 function getPreviousText(container, targetNode) {
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  let result = '';
+  let result = "";
   let node;
   while ((node = walker.nextNode())) {
     if (node === targetNode) break;
-    result += node.textContent || '';
+    result += node.textContent || "";
   }
   return result;
 }
@@ -260,7 +273,7 @@ function findTextFragmentAnchor(container, anchor) {
   const candidates = [];
   let node;
   while ((node = walker.nextNode())) {
-    const text = node.textContent || '';
+    const text = node.textContent || "";
     const idx = text.indexOf(anchor.textStart);
     if (idx === -1) continue;
     candidates.push({ node, offset: idx });
@@ -292,50 +305,50 @@ function getRelativeTop(container, node) {
 // ---------------------------------------------------------------------------
 
 function showConflictDialog(remoteChapterNumber, series, story, onDismiss) {
-  const slot = document.getElementById('plugin-panel-slot');
+  const slot = document.getElementById("plugin-panel-slot");
   if (!slot) return;
 
   // Remove any existing dialog
-  const existing = slot.querySelector('.reading-progress-conflict-dialog');
+  const existing = slot.querySelector(".reading-progress-conflict-dialog");
   if (existing) existing.remove();
 
-  const dialog = document.createElement('div');
-  dialog.className = 'reading-progress-conflict-dialog';
+  const dialog = document.createElement("div");
+  dialog.className = "reading-progress-conflict-dialog";
   dialog.style.cssText = [
-    'position:fixed',
-    'bottom:20px',
-    'right:20px',
-    'background:#1e1e2e',
-    'color:#cdd6f4',
-    'border:1px solid #585b70',
-    'border-radius:8px',
-    'padding:16px 20px',
-    'max-width:320px',
-    'box-shadow:0 4px 12px rgba(0,0,0,0.4)',
-    'font-size:14px',
-    'z-index:100',
-    'pointer-events:auto',
-  ].join(';');
+    "position:fixed",
+    "bottom:20px",
+    "right:20px",
+    "background:#1e1e2e",
+    "color:#cdd6f4",
+    "border:1px solid #585b70",
+    "border-radius:8px",
+    "padding:16px 20px",
+    "max-width:320px",
+    "box-shadow:0 4px 12px rgba(0,0,0,0.4)",
+    "font-size:14px",
+    "z-index:100",
+    "pointer-events:auto",
+  ].join(";");
 
-  const msg = document.createElement('p');
-  msg.style.cssText = 'margin:0 0 12px 0;line-height:1.5';
+  const msg = document.createElement("p");
+  msg.style.cssText = "margin:0 0 12px 0;line-height:1.5";
   msg.textContent = `您在另一裝置讀到第 ${remoteChapterNumber} 章，要跳過去嗎？`;
   dialog.appendChild(msg);
 
-  const btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:8px;justify-content:flex-end";
 
-  const btnBase = 'border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px';
+  const btnBase = "border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px";
 
-  const jumpBtn = document.createElement('button');
-  jumpBtn.setAttribute('data-action', 'jump');
+  const jumpBtn = document.createElement("button");
+  jumpBtn.setAttribute("data-action", "jump");
   jumpBtn.style.cssText = `${btnBase};background:#89b4fa;color:#1e1e2e`;
-  jumpBtn.textContent = '跳過去';
+  jumpBtn.textContent = "跳過去";
 
-  const stayBtn = document.createElement('button');
-  stayBtn.setAttribute('data-action', 'stay');
+  const stayBtn = document.createElement("button");
+  stayBtn.setAttribute("data-action", "stay");
   stayBtn.style.cssText = `${btnBase};background:#45475a;color:#cdd6f4`;
-  stayBtn.textContent = '留在這裡';
+  stayBtn.textContent = "留在這裡";
 
   jumpBtn.onclick = () => {
     dialog.remove();
@@ -353,29 +366,29 @@ function showConflictDialog(remoteChapterNumber, series, story, onDismiss) {
 }
 
 function showScrollHint(onDismiss) {
-  const slot = document.getElementById('plugin-panel-slot');
+  const slot = document.getElementById("plugin-panel-slot");
   if (!slot) return;
 
-  const existing = slot.querySelector('.reading-progress-scroll-hint');
+  const existing = slot.querySelector(".reading-progress-scroll-hint");
   if (existing) existing.remove();
 
-  const hint = document.createElement('div');
-  hint.className = 'reading-progress-scroll-hint';
+  const hint = document.createElement("div");
+  hint.className = "reading-progress-scroll-hint";
   hint.style.cssText = [
-    'position:fixed',
-    'bottom:20px',
-    'right:20px',
-    'background:#313244',
-    'color:#a6adc8',
-    'border:1px solid #45475a',
-    'border-radius:6px',
-    'padding:10px 16px',
-    'font-size:13px',
-    'z-index:100',
-    'pointer-events:auto',
-    'cursor:pointer',
-  ].join(';');
-  hint.textContent = '另一裝置的閱讀位置已更新';
+    "position:fixed",
+    "bottom:20px",
+    "right:20px",
+    "background:#313244",
+    "color:#a6adc8",
+    "border:1px solid #45475a",
+    "border-radius:6px",
+    "padding:10px 16px",
+    "font-size:13px",
+    "z-index:100",
+    "pointer-events:auto",
+    "cursor:pointer",
+  ].join(";");
+  hint.textContent = "另一裝置的閱讀位置已更新";
   hint.onclick = () => {
     hint.remove();
     if (onDismiss) onDismiss();
@@ -429,7 +442,8 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
   // so the caller knows no programmatic scroll event will fire (the
   // applyingRemote flag must not be set in that case).
   const maxScrollForSnap = Math.max(1, scrollEl.scrollHeight - window.innerHeight);
-  const savedTop = (typeof saved.scrollRatio === 'number' ? saved.scrollRatio : 0) * maxScrollForSnap;
+  const savedTop = (typeof saved.scrollRatio === "number" ? saved.scrollRatio : 0) *
+    maxScrollForSnap;
   if (savedTop < 1) return false;
 
   // Try text fragment anchor first, then scrollRatio fallback
@@ -441,7 +455,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
   function applyScroll() {
     if (targetTop !== null) {
       scrollEl.scrollTop = targetTop;
-    } else if (typeof saved.scrollRatio === 'number') {
+    } else if (typeof saved.scrollRatio === "number") {
       const maxScroll = Math.max(1, scrollEl.scrollHeight - window.innerHeight);
       scrollEl.scrollTop = saved.scrollRatio * maxScroll;
     }
@@ -458,9 +472,15 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
   }
 
   function cleanup() {
-    if (stabilizeTimer) { clearTimeout(stabilizeTimer); stabilizeTimer = null; }
-    if (observer) { observer.disconnect(); observer = null; }
-    window.removeEventListener('scroll', cancelOnUserScroll);
+    if (stabilizeTimer) {
+      clearTimeout(stabilizeTimer);
+      stabilizeTimer = null;
+    }
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    window.removeEventListener("scroll", cancelOnUserScroll);
   }
 
   function cancelOnUserScroll() {
@@ -468,7 +488,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
   }
 
   // Cancel if user scrolls (once) — listen on window since that's what scrolls
-  window.addEventListener('scroll', cancelOnUserScroll, { once: true, passive: true });
+  window.addEventListener("scroll", cancelOnUserScroll, { once: true, passive: true });
 
   // Initial apply
   applyScroll();
@@ -485,10 +505,10 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
   } catch { /* ResizeObserver not available */ }
 
   // Wait for images
-  const images = container.querySelectorAll('img');
+  const images = container.querySelectorAll("img");
   for (const img of images) {
     if (!img.complete) {
-      img.addEventListener('load', () => {
+      img.addEventListener("load", () => {
         if (!cancelled) applyScroll();
       }, { once: true });
     }
@@ -521,7 +541,7 @@ function initLocalMode(hooks, settings) {
       const raw = localStorage.getItem(storageKey(ctx.series, ctx.story));
       if (raw) {
         const saved = JSON.parse(raw);
-        if (saved.chapterIndex === ctx.chapterIndex && typeof saved.scrollRatio === 'number') {
+        if (saved.chapterIndex === ctx.chapterIndex && typeof saved.scrollRatio === "number") {
           const scrollEl = getScrollElement();
           const maxScroll = Math.max(1, scrollEl.scrollHeight - window.innerHeight);
           const targetTop = saved.scrollRatio * maxScroll;
@@ -538,16 +558,19 @@ function initLocalMode(hooks, settings) {
       const identity = getIdentity();
       if (!identity) return;
       try {
-        localStorage.setItem(storageKey(identity.series, identity.story), JSON.stringify({
-          chapterIndex: identity.chapterIndex,
-          scrollRatio: clampRatio(computeScrollRatio()),
-          lastReadAt: new Date().toISOString(),
-        }));
+        localStorage.setItem(
+          storageKey(identity.series, identity.story),
+          JSON.stringify({
+            chapterIndex: identity.chapterIndex,
+            scrollRatio: clampRatio(computeScrollRatio()),
+            lastReadAt: new Date().toISOString(),
+          }),
+        );
       } catch { /* storage full */ }
     }
 
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   });
 }
 
@@ -556,7 +579,7 @@ function initLocalMode(hooks, settings) {
 // ---------------------------------------------------------------------------
 
 function initFileMode(hooks, context, settings) {
-  const logger = createPluginLogger(context, 'reading-progress');
+  const logger = createPluginLogger(context, "reading-progress");
 
   // -- Core state --
   let cachedRevision = 0;
@@ -580,7 +603,7 @@ function initFileMode(hooks, context, settings) {
   let getIdentity = () => null;
   let setIdentity = () => {};
 
-  const syncIntervalMs = ((settings.syncIntervalSeconds ?? 5) * 1000);
+  const syncIntervalMs = (settings.syncIntervalSeconds ?? 5) * 1000;
 
   // -- 4.7 — Network functions --
 
@@ -588,12 +611,14 @@ function initFileMode(hooks, context, settings) {
     if (syncDisabled) return;
     try {
       const res = await fetch(
-        `/api/plugins/reading-progress/progress/${encodeURIComponent(entry.series)}/${encodeURIComponent(entry.story)}`,
+        `/api/plugins/reading-progress/progress/${encodeURIComponent(entry.series)}/${
+          encodeURIComponent(entry.story)
+        }`,
         {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json',
-            'X-Passphrase': getPassphrase(),
+            "Content-Type": "application/json",
+            "X-Passphrase": getPassphrase(),
           },
           body: JSON.stringify({
             chapterIndex: entry.chapterIndex,
@@ -606,7 +631,10 @@ function initFileMode(hooks, context, settings) {
           keepalive,
         },
       );
-      if (res.status === 401) { syncDisabled = true; return; }
+      if (res.status === 401) {
+        syncDisabled = true;
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       cachedRevision = data.revision;
@@ -622,17 +650,24 @@ function initFileMode(hooks, context, settings) {
     if (syncDisabled) return null;
     try {
       const res = await fetch(
-        `/api/plugins/reading-progress/progress/${encodeURIComponent(series)}/${encodeURIComponent(story)}`,
+        `/api/plugins/reading-progress/progress/${encodeURIComponent(series)}/${
+          encodeURIComponent(story)
+        }`,
         {
-          method: 'GET',
-          headers: { 'X-Passphrase': getPassphrase() },
+          method: "GET",
+          headers: { "X-Passphrase": getPassphrase() },
         },
       );
-      if (res.status === 401) { syncDisabled = true; return null; }
+      if (res.status === 401) {
+        syncDisabled = true;
+        return null;
+      }
       if (!res.ok) return null;
       const data = await res.json();
       return data || null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   // -- Throttled sync --
@@ -701,7 +736,7 @@ function initFileMode(hooks, context, settings) {
       throttle.push(entry);
     }
 
-    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
 
     // Capture the per-story-load cross-chapter guard SYNCHRONOUSLY here, before
     // the queueMicrotask boundary. Two back-to-back fresh `chapter:dom:ready`
@@ -766,15 +801,18 @@ function initFileMode(hooks, context, settings) {
       if (!didRestore) applyingRemote = false;
     });
 
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
   });
   getIdentity = idRef.getCurrentIdentity;
   setIdentity = idRef.setCurrentIdentity;
 
   // -- 4.4 — chapter:change --
 
-  hooks.register('chapter:change', (ctx) => {
-    if (ctx.previousIndex !== null && ctx.previousIndex !== undefined && ctx.previousIndex !== ctx.index) {
+  hooks.register("chapter:change", (ctx) => {
+    if (
+      ctx.previousIndex !== null && ctx.previousIndex !== undefined &&
+      ctx.previousIndex !== ctx.index
+    ) {
       throttle.flush();
     }
     const identity = getIdentity();
@@ -785,7 +823,7 @@ function initFileMode(hooks, context, settings) {
 
   // -- 4.5 — chapter:dom:dispose (throttle flush; helper handles container cleanup) --
 
-  hooks.register('chapter:dom:dispose', (ctx) => {
+  hooks.register("chapter:dom:dispose", (ctx) => {
     if (lastEntryByIndex.has(ctx.chapterIndex)) {
       throttle.flush();
     }
@@ -794,7 +832,7 @@ function initFileMode(hooks, context, settings) {
 
   // -- story:switch (helper clears identity; reset mode-specific state) --
 
-  hooks.register('story:switch', (ctx) => {
+  hooks.register("story:switch", (ctx) => {
     flushAll();
     throttle.cancel();
     lastEntryByIndex.clear();
@@ -808,9 +846,9 @@ function initFileMode(hooks, context, settings) {
   // -- 4.6 — Visibility / lifecycle --
 
   function onVisibilityChange() {
-    if (document.visibilityState === 'hidden') {
+    if (document.visibilityState === "hidden") {
       flushAll(true);
-    } else if (document.visibilityState === 'visible') {
+    } else if (document.visibilityState === "visible") {
       if (settings.pollOnFocus !== false) {
         queueMicrotask(() => checkRemoteConflict());
       }
@@ -821,8 +859,8 @@ function initFileMode(hooks, context, settings) {
     flushAll(true);
   }
 
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  window.addEventListener('pagehide', onPageHide);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", onPageHide);
 
   // -- 6.4 — Periodic polling --
 
@@ -847,13 +885,13 @@ function initFileMode(hooks, context, settings) {
  */
 export function collectLocalEntries() {
   const entries = [];
-  const prefix = 'reading-progress:';
+  const prefix = "reading-progress:";
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(prefix)) continue;
     try {
       const identity = key.slice(prefix.length);
-      const slashIdx = identity.indexOf('/');
+      const slashIdx = identity.indexOf("/");
       if (slashIdx === -1) continue;
       const series = identity.slice(0, slashIdx);
       const story = identity.slice(slashIdx + 1);
@@ -881,17 +919,19 @@ export async function importLocalToServer(options = {}) {
   const entries = collectLocalEntries();
   if (entries.length === 0) return { written: 0, conflicts: 0, skipped: 0 };
   try {
-    const res = await fetch('/api/plugins/reading-progress/import-local', {
-      method: 'POST',
+    const res = await fetch("/api/plugins/reading-progress/import-local", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'X-Passphrase': getPassphrase(),
+        "Content-Type": "application/json",
+        "X-Passphrase": getPassphrase(),
       },
       body: JSON.stringify({ entries, dryRun: options.dryRun === true }),
     });
     if (!res.ok) return null;
     return await res.json();
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // TODO: Custom settings UI for listing/deleting individual progress entries
@@ -906,7 +946,7 @@ export function register(hooks, context) {
   const settings = getPluginSettings(hooks);
   if (settings.enabled === false) return;
 
-  if (settings.storageBackend === 'local') {
+  if (settings.storageBackend === "local") {
     initLocalMode(hooks, settings);
     return;
   }

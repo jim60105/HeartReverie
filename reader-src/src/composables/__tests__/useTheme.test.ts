@@ -114,7 +114,10 @@ describe("useTheme", () => {
   });
 
   it("listThemes populates the themes ref", async () => {
-    mockFetchSequence([{ status: 200, body: [{ id: "default", label: "預設" }, { id: "light", label: "Light" }] }]);
+    mockFetchSequence([{
+      status: 200,
+      body: [{ id: "default", label: "預設" }, { id: "light", label: "Light" }],
+    }]);
     const { listThemes, themes } = await getUseTheme();
     await listThemes();
     expect(themes.value.length).toBe(2);

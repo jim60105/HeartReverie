@@ -53,7 +53,7 @@ function buildConfig(tmpDir: string): AppConfig {
       topA: 1,
       reasoningEnabled: true,
       reasoningEffort: "high",
-    maxCompletionTokens: 4096,
+      maxCompletionTokens: 4096,
     },
     THEME_DIR: "./themes/",
     PROMPT_FILE: "nonexistent",
@@ -64,20 +64,24 @@ function mockFetchFromChunks(chunks: string[]): () => void {
   const original = globalThis.fetch;
   globalThis.fetch = ((url: string | URL | Request, opts?: RequestInit) => {
     if (typeof url === "string" && url.includes("chat/completions")) {
-      return Promise.resolve(new Response(
-        new ReadableStream({
-          start(controller) {
-            const encoder = new TextEncoder();
-            for (const c of chunks) controller.enqueue(encoder.encode(c));
-            controller.close();
-          },
-        }),
-        { status: 200 },
-      ));
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              for (const c of chunks) controller.enqueue(encoder.encode(c));
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        ),
+      );
     }
     return original(url as string, opts);
   }) as typeof fetch;
-  return () => { globalThis.fetch = original; };
+  return () => {
+    globalThis.fetch = original;
+  };
 }
 
 interface RunOptions {
@@ -101,14 +105,15 @@ async function runChat(tmpDir: string, opts: RunOptions) {
       config: buildConfig(tmpDir),
       safePath: createSafePath(tmpDir),
       hookDispatcher: opts.hookDispatcher,
-      buildPromptFromStory: (() => Promise.resolve({
-        messages: [{ role: "user" as const, content: "test prompt" }],
-        previousContext: [],
-        isFirstRound: true,
-        ventoError: null,
-        chapterFiles: [],
-        chapters: [],
-      } as BuildPromptResult)),
+      buildPromptFromStory: () =>
+        Promise.resolve({
+          messages: [{ role: "user" as const, content: "test prompt" }],
+          previousContext: [],
+          isFirstRound: true,
+          ventoError: null,
+          chapterFiles: [],
+          chapters: [],
+        } as BuildPromptResult),
       onDelta: opts.onDelta,
     });
   } finally {

@@ -22,7 +22,12 @@ describe("TextWidget", () => {
     const { wrapper } = mountWidget(TextWidget, {
       schema: { type: "string" },
       modelValue: "",
-      errors: [{ path: "", keyword: "minLength", messageKey: "minLength", params: { minLength: 3 } }],
+      errors: [{
+        path: "",
+        keyword: "minLength",
+        messageKey: "minLength",
+        params: { minLength: 3 },
+      }],
     });
     expect(wrapper.find(".widget-error").exists()).toBe(true);
     expect(wrapper.text()).toContain("不可少於 3");

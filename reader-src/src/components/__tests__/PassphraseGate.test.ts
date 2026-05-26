@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import PassphraseGate from "@/components/PassphraseGate.vue";
 
 const verifyMock = vi.fn();

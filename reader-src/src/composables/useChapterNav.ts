@@ -1,11 +1,11 @@
-import { ref, shallowRef, triggerRef, computed, watch } from "vue";
+import { computed, ref, shallowRef, triggerRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import router from "@/router";
 import type {
-  UseChapterNavReturn,
+  ChapterChangeContext,
   ChapterData,
   StorySwitchContext,
-  ChapterChangeContext,
+  UseChapterNavReturn,
 } from "@/types";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { apiFetch, apiFetchJson } from "@/lib/api";
@@ -105,8 +105,7 @@ function dispatchChapterChange(
 ): void {
   if (prevIndex === nextIndex) return;
   if (!currentSeries.value || !currentStory.value) return;
-  const chapterNumber =
-    chapters.value[nextIndex]?.number ?? nextIndex + 1;
+  const chapterNumber = chapters.value[nextIndex]?.number ?? nextIndex + 1;
   const ctx: ChapterChangeContext = {
     previousIndex: prevIndex,
     index: nextIndex,
@@ -241,15 +240,25 @@ async function pollBackend(): Promise<void> {
     if (nums.length > 0 && chapters.value.length > 0) {
       const lastNum = nums[nums.length - 1]!;
       const chRes = await apiFetch(
-        `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/${lastNum}`,
+        `/api/stories/${encodeURIComponent(series)}/${
+          encodeURIComponent(story)
+        }/chapters/${lastNum}`,
         { throwOnError: false },
       );
       if (series !== currentSeries.value || story !== currentStory.value) return;
       if (!chRes.ok) return;
-      const { content, stateDiff } = (await chRes.json()) as { content: string; stateDiff?: import("@/types").StateDiffPayload };
+      const { content, stateDiff } = (await chRes.json()) as {
+        content: string;
+        stateDiff?: import("@/types").StateDiffPayload;
+      };
       const lastIdx = chapters.value.length - 1;
       if (content !== chapters.value[lastIdx]?.content) {
-        chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, number: lastNum as number, content, stateDiff };
+        chapters.value[lastIdx] = {
+          ...chapters.value[lastIdx]!,
+          number: lastNum as number,
+          content,
+          stateDiff,
+        };
         if (currentIndex.value === lastIdx) {
           commitContent(content);
         }
@@ -308,7 +317,9 @@ async function loadFromBackendInternal(
   story: string,
 ): Promise<ChapterData[]> {
   const loaded = await apiFetchJson<ChapterData[]>(
-    `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters?include=content`,
+    `/api/stories/${encodeURIComponent(series)}/${
+      encodeURIComponent(story)
+    }/chapters?include=content`,
     { errorMessage: "Failed to load chapters" },
   );
 
@@ -347,9 +358,7 @@ async function loadFromBackend(
     return;
   }
 
-  const startIdx = startChapter
-    ? Math.max(0, Math.min(startChapter - 1, loaded.length - 1))
-    : 0;
+  const startIdx = startChapter ? Math.max(0, Math.min(startChapter - 1, loaded.length - 1)) : 0;
 
   // Atomic update: assign currentIndex and chapters in the same synchronous
   // block (no await, no nextTick) BEFORE any plugin-hook dispatch, so that
@@ -458,7 +467,7 @@ function sendSubscribeIfConnected(): void {
   if (!currentSeries.value || !currentStory.value) return;
   const { isConnected, isAuthenticated, send } = useWebSocket();
   if (isConnected.value && isAuthenticated.value) {
-    send({ type: 'subscribe', series: currentSeries.value, story: currentStory.value });
+    send({ type: "subscribe", series: currentSeries.value, story: currentStory.value });
   }
 }
 
@@ -505,9 +514,7 @@ function initRouteSync(): void {
       const st = newStory as string;
       if (s === currentSeries.value && st === currentStory.value) return;
       const chapterParam = route.params.chapter;
-      const startChapter = chapterParam
-        ? parseInt(chapterParam as string, 10)
-        : undefined;
+      const startChapter = chapterParam ? parseInt(chapterParam as string, 10) : undefined;
       await loadFromBackend(s, st, startChapter);
     },
   );
@@ -517,7 +524,7 @@ function initRouteSync(): void {
   const { isConnected, onMessage: wsOnMessage } = useWebSocket();
 
   // chapters:updated — reload chapters when count changes
-  wsOnMessage('chapters:updated', async (msg) => {
+  wsOnMessage("chapters:updated", async (msg) => {
     if (msg.series !== currentSeries.value || msg.story !== currentStory.value) return;
     const prevLen = chapters.value.length;
     const loaded = await loadFromBackendInternal(msg.series, msg.story);
@@ -552,19 +559,23 @@ function initRouteSync(): void {
   });
 
   // chapters:content — update chapter content in-place
-  wsOnMessage('chapters:content', (msg) => {
+  wsOnMessage("chapters:content", (msg) => {
     if (msg.series !== currentSeries.value || msg.story !== currentStory.value) return;
     const lastIdx = chapters.value.length - 1;
     if (lastIdx < 0) return;
     if (msg.chapter !== chapters.value[lastIdx]!.number) return;
-    chapters.value[lastIdx] = { ...chapters.value[lastIdx]!, content: msg.content, stateDiff: msg.stateDiff };
+    chapters.value[lastIdx] = {
+      ...chapters.value[lastIdx]!,
+      content: msg.content,
+      stateDiff: msg.stateDiff,
+    };
     if (currentIndex.value === lastIdx) {
       commitContent(msg.content);
     }
   });
 
   // Re-subscribe on reconnect
-  wsOnMessage('auth:ok', () => {
+  wsOnMessage("auth:ok", () => {
     sendSubscribeIfConnected();
   });
 

@@ -13,10 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import {
-  useNotification,
-  __resetNotificationStateForTests,
-} from "@/composables/useNotification";
+import { __resetNotificationStateForTests, useNotification } from "@/composables/useNotification";
 
 function installNotificationStub(options: {
   permission?: NotificationPermission;
@@ -46,7 +43,10 @@ describe("useNotification additional coverage", () => {
   });
 
   it("system/default requests permission when page is visible", async () => {
-    const stub = installNotificationStub({ permission: "default", requestImpl: async () => "granted" });
+    const stub = installNotificationStub({
+      permission: "default",
+      requestImpl: async () => "granted",
+    });
     __resetNotificationStateForTests();
 
     const { notify } = useNotification();
@@ -89,7 +89,10 @@ describe("useNotification additional coverage", () => {
   });
 
   it("auto/default visible requests permission and shows toast when denied", async () => {
-    const stub = installNotificationStub({ permission: "default", requestImpl: async () => "denied" });
+    const stub = installNotificationStub({
+      permission: "default",
+      requestImpl: async () => "denied",
+    });
     __resetNotificationStateForTests();
 
     const { notify, toasts } = useNotification();

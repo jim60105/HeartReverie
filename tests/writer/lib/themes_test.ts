@@ -14,12 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals, assertExists, assertRejects } from "@std/assert";
-import {
-  loadThemes,
-  getTheme,
-  listThemes,
-  refreshThemes,
-} from "../../../writer/lib/themes.ts";
+import { getTheme, listThemes, loadThemes, refreshThemes } from "../../../writer/lib/themes.ts";
 
 const VALID_TOML = `
 id = "test-theme"
@@ -329,7 +324,10 @@ Deno.test("themes: loadThemes rethrows non-NotFound directory errors", async () 
 
 Deno.test("themes: refreshThemes delegates to loadThemes", async () => {
   await withTmpDir(async (dir) => {
-    await Deno.writeTextFile(`${dir}/refresh-me.toml`, VALID_TOML.replace(/test-theme/g, "refresh-me"));
+    await Deno.writeTextFile(
+      `${dir}/refresh-me.toml`,
+      VALID_TOML.replace(/test-theme/g, "refresh-me"),
+    );
     const result = await refreshThemes(dir);
     assertEquals(result.loaded, 1);
     assertExists(getTheme("refresh-me"));

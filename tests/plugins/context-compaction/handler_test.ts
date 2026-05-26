@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assert } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { createLogger } from "../../../writer/lib/logger.ts";
 import { register } from "../../../plugins/context-compaction/handler.ts";
@@ -32,8 +32,11 @@ Deno.test("context-compaction prompt-assembly hook", async (t) => {
     await Deno.mkdir(storyDir, { recursive: true });
 
     const previousContext = [
-      "ch1 stripped", "ch2 stripped", "ch3 stripped",
-      "ch4 stripped", "ch5 stripped",
+      "ch1 stripped",
+      "ch2 stripped",
+      "ch3 stripped",
+      "ch4 stripped",
+      "ch5 stripped",
     ];
     const rawChapters = [
       "ch1 raw <chapter_summary>第 1 章：摘要 A</chapter_summary>",
@@ -106,12 +109,18 @@ Deno.test("context-compaction prompt-assembly hook", async (t) => {
     );
 
     const previousContext = [
-      "ch1", "ch2", "ch3", "ch4", "ch5",
+      "ch1",
+      "ch2",
+      "ch3",
+      "ch4",
+      "ch5",
     ];
     const rawChapters = [
       "ch1 <chapter_summary>摘要</chapter_summary>",
       "ch2 <chapter_summary>摘要</chapter_summary>",
-      "ch3", "ch4", "ch5",
+      "ch3",
+      "ch4",
+      "ch5",
     ];
 
     const context: Record<string, unknown> = {

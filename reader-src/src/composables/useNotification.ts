@@ -15,10 +15,10 @@
 
 import { ref } from "vue";
 import type {
-  NotifyOptions,
-  ToastNotification,
   NotificationLevel,
   NotificationPosition,
+  NotifyOptions,
+  ToastNotification,
   UseNotificationReturn,
 } from "@/types";
 
@@ -30,8 +30,8 @@ function defaultDuration(level: NotificationLevel): number {
 }
 
 function hasNotificationApi(): boolean {
-  return typeof globalThis !== "undefined"
-    && typeof (globalThis as { Notification?: unknown }).Notification !== "undefined";
+  return typeof globalThis !== "undefined" &&
+    typeof (globalThis as { Notification?: unknown }).Notification !== "undefined";
 }
 
 function readInitialPermission(): NotificationPermission | "unsupported" {

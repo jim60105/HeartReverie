@@ -17,11 +17,11 @@ import { assertEquals, assertStringIncludes } from "@std/assert";
 import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import {
-  initLogger,
+  _resetLogger,
+  closeLogger,
   createLogger,
   getLogLevel,
-  closeLogger,
-  _resetLogger,
+  initLogger,
 } from "../../../writer/lib/logger.ts";
 import type { LogEntry } from "../../../writer/lib/logger.ts";
 
@@ -492,30 +492,33 @@ Deno.test("Logger", async (t) => {
   });
 
   await t.step("sensitive data handling", async (t) => {
-    await t.step("data values are included as-is (caller is responsible for exclusion)", async () => {
-      _resetLogger();
-      const tmpDir = await Deno.makeTempDir();
-      const logFile = join(tmpDir, "sensitive.jsonl");
-      const logStub = stub(console, "log", () => {});
-      try {
-        await initLogger({ level: "debug", filePath: logFile, llmFilePath: null });
-        const log = createLogger("auth");
-
-        // The logger does not filter data — callers must never pass sensitive fields
-        log.info("Auth attempt", { method: "POST", path: "/api/auth/verify" });
-
-        await new Promise((r) => setTimeout(r, 50));
-
-        const content = await Deno.readTextFile(logFile);
-        const entry: LogEntry = JSON.parse(content.trim());
-        assertEquals(entry.data?.method, "POST");
-        assertEquals(entry.data?.path, "/api/auth/verify");
-      } finally {
-        logStub.restore();
+    await t.step(
+      "data values are included as-is (caller is responsible for exclusion)",
+      async () => {
         _resetLogger();
-        await Deno.remove(tmpDir, { recursive: true });
-      }
-    });
+        const tmpDir = await Deno.makeTempDir();
+        const logFile = join(tmpDir, "sensitive.jsonl");
+        const logStub = stub(console, "log", () => {});
+        try {
+          await initLogger({ level: "debug", filePath: logFile, llmFilePath: null });
+          const log = createLogger("auth");
+
+          // The logger does not filter data — callers must never pass sensitive fields
+          log.info("Auth attempt", { method: "POST", path: "/api/auth/verify" });
+
+          await new Promise((r) => setTimeout(r, 50));
+
+          const content = await Deno.readTextFile(logFile);
+          const entry: LogEntry = JSON.parse(content.trim());
+          assertEquals(entry.data?.method, "POST");
+          assertEquals(entry.data?.path, "/api/auth/verify");
+        } finally {
+          logStub.restore();
+          _resetLogger();
+          await Deno.remove(tmpDir, { recursive: true });
+        }
+      },
+    );
   });
 
   await t.step("closeLogger flushes pending writes", async () => {

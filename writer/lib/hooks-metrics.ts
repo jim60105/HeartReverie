@@ -129,7 +129,9 @@ export class HookMetricsCollector {
     }
 
     for (const cb of this.#sseSubscribers) {
-      try { cb(metric); } catch { /* subscriber error must not break dispatch */ }
+      try {
+        cb(metric);
+      } catch { /* subscriber error must not break dispatch */ }
     }
   }
 }

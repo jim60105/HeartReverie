@@ -56,12 +56,15 @@ describe("useChapterActions", () => {
   });
 
   it("editChapter throws on error with server detail", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ detail: "generation active" }), {
-        status: 409,
-        headers: { "Content-Type": "application/json" },
-      }),
-    ));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "generation active" }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
 
     const { editChapter } = useChapterActions();
     await expect(editChapter("s", "n", 1, "x")).rejects.toThrow("generation active");

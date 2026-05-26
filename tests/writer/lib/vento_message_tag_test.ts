@@ -48,7 +48,9 @@ async function render(
 
 Deno.test("vento-message-tag: literal role rendering", async (t) => {
   await t.step("system role produces single system message", async () => {
-    const r = await render(`{{ message "system" }}content{{ /message }}{{ message "user" }}u{{ /message }}`);
+    const r = await render(
+      `{{ message "system" }}content{{ /message }}{{ message "user" }}u{{ /message }}`,
+    );
     assertEquals(r.error, null);
     assertEquals(r.messages, [
       { role: "system", content: "content" },
@@ -327,12 +329,15 @@ Deno.test("vento-message-tag: malformed tag shapes rejected", async (t) => {
 });
 
 Deno.test("vento-message-tag: assertHasUserMessage", async (t) => {
-  await t.step("no user message produces no-user-message error from renderSystemPrompt", async () => {
-    const r = await render(`{{ message "system" }}only system{{ /message }}`);
-    assertExists(r.error);
-    assertEquals(r.error?.type, "multi-message:no-user-message");
-    assertEquals(r.messages, []);
-  });
+  await t.step(
+    "no user message produces no-user-message error from renderSystemPrompt",
+    async () => {
+      const r = await render(`{{ message "system" }}only system{{ /message }}`);
+      assertExists(r.error);
+      assertEquals(r.error?.type, "multi-message:no-user-message");
+      assertEquals(r.messages, []);
+    },
+  );
 
   await t.step("direct unit: assertHasUserMessage throws on no user", () => {
     assertThrows(
@@ -620,14 +625,17 @@ Deno.test("vento-message-tag: empty / whitespace-only message content silently d
     assertEquals(r.messages, []);
   });
 
-  await t.step("whitespace-only assistant alongside valid user → assistant dropped, user kept", async () => {
-    const r = await render(
-      `{{ message "user" }}u{{ /message }}{{ message "assistant" }}\n  \n{{ /message }}`,
-    );
-    assertEquals(r.error, null);
-    assertEquals(r.messages.length, 1);
-    assertEquals(r.messages[0]?.role, "user");
-  });
+  await t.step(
+    "whitespace-only assistant alongside valid user → assistant dropped, user kept",
+    async () => {
+      const r = await render(
+        `{{ message "user" }}u{{ /message }}{{ message "assistant" }}\n  \n{{ /message }}`,
+      );
+      assertEquals(r.error, null);
+      assertEquals(r.messages.length, 1);
+      assertEquals(r.messages[0]?.role, "user");
+    },
+  );
 
   await t.step("mix: valid user + whitespace-only user → empty dropped, valid kept", async () => {
     const r = await render(
@@ -651,13 +659,16 @@ Deno.test("vento-message-tag: empty / whitespace-only message content silently d
     assertEquals(result.kept[1]?.content, "ok");
   });
 
-  await t.step("direct unit: assertNoEmptyMessages still throws for empty content (opt-in strict check)", () => {
-    assertThrows(
-      () => assertNoEmptyMessages([{ role: "user", content: "   " }]),
-      Error,
-      "multi-message:empty-message",
-    );
-  });
+  await t.step(
+    "direct unit: assertNoEmptyMessages still throws for empty content (opt-in strict check)",
+    () => {
+      assertThrows(
+        () => assertNoEmptyMessages([{ role: "user", content: "   " }]),
+        Error,
+        "multi-message:empty-message",
+      );
+    },
+  );
 
   await t.step("direct unit: assertNoEmptyMessages passes for non-empty content", () => {
     assertNoEmptyMessages([

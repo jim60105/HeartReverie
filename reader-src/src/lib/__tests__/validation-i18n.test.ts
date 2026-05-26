@@ -50,26 +50,28 @@ describe("validation-i18n", () => {
   });
 
   it("knows the documented keys", () => {
-    for (const k of [
-      "type",
-      "required",
-      "enum",
-      "const",
-      "pattern",
-      "minLength",
-      "maxLength",
-      "minimum",
-      "maximum",
-      "exclusiveMinimum",
-      "exclusiveMaximum",
-      "multipleOf",
-      "minItems",
-      "maxItems",
-      "uniqueItems",
-      "additionalProperties",
-      "format",
-      "schema_version_mismatch",
-    ]) {
+    for (
+      const k of [
+        "type",
+        "required",
+        "enum",
+        "const",
+        "pattern",
+        "minLength",
+        "maxLength",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+        "additionalProperties",
+        "format",
+        "schema_version_mismatch",
+      ]
+    ) {
       expect(hasMessageKey(k)).toBe(true);
     }
   });

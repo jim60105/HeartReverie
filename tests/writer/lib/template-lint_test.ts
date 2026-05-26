@@ -6,10 +6,7 @@ import { assert, assertEquals } from "@std/assert";
 import vento from "ventojs";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
-import {
-  lintTemplate,
-  TEMPLATE_LINT_MAX_LENGTH,
-} from "../../../writer/lib/template-lint.ts";
+import { lintTemplate, TEMPLATE_LINT_MAX_LENGTH } from "../../../writer/lib/template-lint.ts";
 
 function mkEnv() {
   return vento();

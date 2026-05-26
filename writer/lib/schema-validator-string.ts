@@ -14,10 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { intersectXPathRoots, validatePathValue } from "./path-allowlist.ts";
-import {
-  FORMAT_WHITELIST,
-  type InternalContext,
-} from "./schema-validator-types.ts";
+import { FORMAT_WHITELIST, type InternalContext } from "./schema-validator-types.ts";
 
 export async function stringChecks(
   schema: Record<string, unknown>,
@@ -139,9 +136,7 @@ async function pathFormatCheck(
 
   // Resolve per-field x-path-roots intersection.
   const xpr = schema["x-path-roots"];
-  const xprArr = Array.isArray(xpr)
-    ? xpr.filter((s): s is string => typeof s === "string")
-    : null;
+  const xprArr = Array.isArray(xpr) ? xpr.filter((s): s is string => typeof s === "string") : null;
   const effectiveDisplay = intersectXPathRoots(hardcodedPathRoots, xprArr);
 
   // Map effective display roots back to absolute roots via index alignment

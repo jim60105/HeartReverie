@@ -17,11 +17,7 @@ import type { Context, Next } from "@hono/hono";
 import type { PluginManager } from "../lib/plugin-manager.ts";
 import type { HookDispatcher } from "../lib/hooks.ts";
 import type { ReasoningEffort } from "./llm.ts";
-import type {
-  BuildContinuePromptFn,
-  BuildPromptFn,
-  TemplateEngine,
-} from "./story.ts";
+import type { BuildContinuePromptFn, BuildPromptFn, TemplateEngine } from "./story.ts";
 
 /** Application configuration resolved from environment variables and defaults. */
 export interface AppConfig {

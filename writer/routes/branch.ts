@@ -15,7 +15,7 @@
 
 import { join } from "@std/path";
 import { isValidParam, validateParams } from "../lib/middleware.ts";
-import { problemJson, errorMessage } from "../lib/errors.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { copyChapterFile, listChapterFiles } from "../lib/story.ts";
 import { copyUsage } from "../lib/usage.ts";
@@ -85,7 +85,10 @@ export function registerBranchRoutes(
         }
         const message = errorMessage(err);
         log.error(`[POST /api/stories/:series/:name/branch] ${message}`);
-        return c.json(problemJson("Internal Server Error", 500, "Failed to access source story"), 500);
+        return c.json(
+          problemJson("Internal Server Error", 500, "Failed to access source story"),
+          500,
+        );
       }
 
       let body: unknown;
@@ -102,8 +105,14 @@ export function registerBranchRoutes(
       const fromChapterRaw = (body as Record<string, unknown>).fromChapter;
       const newNameRaw = (body as Record<string, unknown>).newName;
 
-      if (typeof fromChapterRaw !== "number" || !Number.isInteger(fromChapterRaw) || fromChapterRaw < 1) {
-        return c.json(problemJson("Bad Request", 400, "Field 'fromChapter' must be a positive integer"), 400);
+      if (
+        typeof fromChapterRaw !== "number" || !Number.isInteger(fromChapterRaw) ||
+        fromChapterRaw < 1
+      ) {
+        return c.json(
+          problemJson("Bad Request", 400, "Field 'fromChapter' must be a positive integer"),
+          400,
+        );
       }
       const fromChapter = fromChapterRaw;
 
@@ -113,7 +122,11 @@ export function registerBranchRoutes(
         : 0;
       if (fromChapter > maxChapter) {
         return c.json(
-          problemJson("Bad Request", 400, `Field 'fromChapter' exceeds highest existing chapter (${maxChapter})`),
+          problemJson(
+            "Bad Request",
+            400,
+            `Field 'fromChapter' exceeds highest existing chapter (${maxChapter})`,
+          ),
           400,
         );
       }
@@ -123,7 +136,9 @@ export function registerBranchRoutes(
         newName = `${name}-branch-${Date.now()}`;
       } else if (typeof newNameRaw !== "string") {
         return c.json(problemJson("Bad Request", 400, "Field 'newName' must be a string"), 400);
-      } else if (newNameRaw.length === 0 || !isValidParam(newNameRaw) || newNameRaw.startsWith(".")) {
+      } else if (
+        newNameRaw.length === 0 || !isValidParam(newNameRaw) || newNameRaw.startsWith(".")
+      ) {
         return c.json(problemJson("Bad Request", 400, "Field 'newName' is invalid"), 400);
       } else {
         newName = newNameRaw;
@@ -141,8 +156,15 @@ export function registerBranchRoutes(
           return c.json(problemJson("Conflict", 409, "Destination story already exists"), 409);
         }
         const errMsg = errorMessage(err);
-        log.warn("Failed to create branch destination", { op: "mkdir", path: destDir, error: errMsg });
-        return c.json(problemJson("Internal Server Error", 500, "Failed to create destination story"), 500);
+        log.warn("Failed to create branch destination", {
+          op: "mkdir",
+          path: destDir,
+          error: errMsg,
+        });
+        return c.json(
+          problemJson("Internal Server Error", 500, "Failed to create destination story"),
+          500,
+        );
       }
 
       const copiedChapters: number[] = [];
@@ -195,13 +217,20 @@ export function registerBranchRoutes(
         }
 
         // Copy image metadata filtered to branched chapters (excluding "generating" entries)
-        let filteredEntries: Array<{ filename: string; chapter: number; [key: string]: unknown }> = [];
+        let filteredEntries: Array<{ filename: string; chapter: number; [key: string]: unknown }> =
+          [];
         try {
           const metaRaw = await Deno.readTextFile(join(srcDir, "_images", "_metadata.json"));
-          const metadata = JSON.parse(metaRaw) as { images: Array<{ filename: string; chapter: number; status: string; [key: string]: unknown }> };
+          const metadata = JSON.parse(metaRaw) as {
+            images: Array<
+              { filename: string; chapter: number; status: string; [key: string]: unknown }
+            >;
+          };
           filteredEntries = metadata.images.filter(
-            (entry) => entry.chapter <= fromChapter && entry.status !== "generating" &&
-              typeof entry.filename === "string" && SAFE_FILENAME_RE.test(entry.filename) && !entry.filename.includes(".."),
+            (entry) =>
+              entry.chapter <= fromChapter && entry.status !== "generating" &&
+              typeof entry.filename === "string" && SAFE_FILENAME_RE.test(entry.filename) &&
+              !entry.filename.includes(".."),
           );
           if (filteredEntries.length > 0) {
             await Deno.mkdir(join(destDir, "_images"), { recursive: true });
@@ -228,7 +257,9 @@ export function registerBranchRoutes(
               );
             } catch (err: unknown) {
               if (!(err instanceof Deno.errors.NotFound)) {
-                log.warn(`[branch] Failed to copy image file ${entry.filename}: ${errorMessage(err)}`);
+                log.warn(
+                  `[branch] Failed to copy image file ${entry.filename}: ${errorMessage(err)}`,
+                );
               }
             }
           }
@@ -253,7 +284,11 @@ export function registerBranchRoutes(
         );
       } catch (err: unknown) {
         const errMsg = errorMessage(err);
-        log.warn("Branch copy failed; cleaning up destination", { op: "branch", dest: destDir, error: errMsg });
+        log.warn("Branch copy failed; cleaning up destination", {
+          op: "branch",
+          dest: destDir,
+          error: errMsg,
+        });
         try {
           await Deno.remove(destDir, { recursive: true });
         } catch {

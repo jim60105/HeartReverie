@@ -54,10 +54,7 @@ import {
   validateFrontendStyles,
   validateHookDeclarations,
 } from "./plugin-validators.ts";
-import {
-  auditSettingsSchema,
-  type SettingsAudit,
-} from "./plugin-settings-audit.ts";
+import { auditSettingsSchema, type SettingsAudit } from "./plugin-settings-audit.ts";
 import { parseManifestFile } from "./plugin-loader-manifest.ts";
 import {
   buildManifestHookMap,

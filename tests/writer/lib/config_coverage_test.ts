@@ -26,9 +26,8 @@ import { join, resolve } from "@std/path";
 // temporary directory and import the repo module by absolute URL.
 
 const ROOT = resolve(import.meta.dirname!, "../../..");
-const CONFIG_MODULE_URL =
-  new URL("../../../writer/lib/config.ts", import.meta.url)
-    .href;
+const CONFIG_MODULE_URL = new URL("../../../writer/lib/config.ts", import.meta.url)
+  .href;
 const COV_DIR = Deno.env.get("DENO_COVERAGE_DIR");
 
 let scriptCounter = 0;
@@ -39,8 +38,7 @@ async function runConfigSubprocess(
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   const subEnv: Record<string, string> = { ...env, NO_COLOR: "1" };
   const scriptDir = await Deno.makeTempDir({ prefix: "config-cov-subscript-" });
-  const scriptName =
-    `._config_cov_subscript_${Date.now()}_${++scriptCounter}.ts`;
+  const scriptName = `._config_cov_subscript_${Date.now()}_${++scriptCounter}.ts`;
   const scriptPath = join(scriptDir, scriptName);
   await Deno.writeTextFile(scriptPath, body);
   try {

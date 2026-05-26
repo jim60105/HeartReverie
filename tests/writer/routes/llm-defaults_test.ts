@@ -73,9 +73,16 @@ function createTestApp(): Hono {
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
-    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+    buildContinuePromptFromStory: (async () => ({
+      messages: [],
+      ventoError: null,
+      targetChapterNumber: 0,
+      existingContent: "",
+      userMessageText: "",
+      assistantPrefill: "",
+    })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     templateEngine: null,
-      verifyPassphrase,
+    verifyPassphrase,
   } as AppDeps);
 }
 
@@ -134,7 +141,8 @@ Deno.test({
 });
 
 Deno.test({
-  name: "GET /api/llm-defaults: maxCompletionTokens is null when env LLM_MAX_COMPLETION_TOKENS is unset",
+  name:
+    "GET /api/llm-defaults: maxCompletionTokens is null when env LLM_MAX_COMPLETION_TOKENS is unset",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
@@ -174,9 +182,16 @@ Deno.test({
         } as unknown as PluginManager,
         hookDispatcher: new HookDispatcher(),
         buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
-        buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+        buildContinuePromptFromStory: (async () => ({
+          messages: [],
+          ventoError: null,
+          targetChapterNumber: 0,
+          existingContent: "",
+          userMessageText: "",
+          assistantPrefill: "",
+        })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
         templateEngine: null,
-      verifyPassphrase,
+        verifyPassphrase,
       });
       const res = await app.fetch(
         new Request("http://localhost/api/llm-defaults", {

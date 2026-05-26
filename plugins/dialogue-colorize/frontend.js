@@ -18,19 +18,19 @@
 // never mutates the DOM: it registers Range objects on named Highlight
 // instances and lets `::highlight(name)` CSS rules paint them.
 
-import { createPluginLogger, getPluginSettings } from '../_shared/utils.js';
+import { createPluginLogger, getPluginSettings } from "../_shared/utils.js";
 
 const PAIRS = [
   // [openerChar, closerChar, suffix]
-  ['"', '"', 'straight'],
-  ['\u201C', '\u201D', 'curly'],
-  ['\u00AB', '\u00BB', 'guillemet'],
-  ['\u300C', '\u300D', 'corner'],
-  ['\uFF62', '\uFF63', 'corner-half'],
-  ['\u300A', '\u300B', 'book'],
+  ['"', '"', "straight"],
+  ["\u201C", "\u201D", "curly"],
+  ["\u00AB", "\u00BB", "guillemet"],
+  ["\u300C", "\u300D", "corner"],
+  ["\uFF62", "\uFF63", "corner-half"],
+  ["\u300A", "\u300B", "book"],
 ];
 
-const SKIP_ANCESTORS = new Set(['CODE', 'PRE', 'KBD', 'SAMP']);
+const SKIP_ANCESTORS = new Set(["CODE", "PRE", "KBD", "SAMP"]);
 
 // Module-scoped Highlight registry, lazily populated.
 const highlightBySuffix = new Map();
@@ -48,21 +48,21 @@ function ensureHighlight(suffix) {
 }
 
 function escapeForCharClass(ch) {
-  return ch.replace(/[\\\]^-]/g, '\\$&');
+  return ch.replace(/[\\\]^-]/g, "\\$&");
 }
 
 function buildPairRegexes() {
   return PAIRS.map(([open, close, suffix]) => {
     const sameChar = open === close;
-    const openEsc = open.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const closeEsc = close.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const openEsc = open.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const closeEsc = close.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     // For symmetric pairs ("…"), forbid the same char inside the body so we
     // greedy-match shortest pair. For asymmetric, forbid the closer.
     const forbidden = sameChar
       ? `[^${escapeForCharClass(close)}\\n]`
       : `[^${escapeForCharClass(close)}\\n]`;
     const pattern = `${openEsc}(${forbidden}+?)${closeEsc}`;
-    return { regex: new RegExp(pattern, 'g'), suffix };
+    return { regex: new RegExp(pattern, "g"), suffix };
   });
 }
 
@@ -132,7 +132,7 @@ function clearPriorRanges(container) {
 function colorize(container, enabledStylesSet = null) {
   clearPriorRanges(container);
 
-  const text = container.textContent ?? '';
+  const text = container.textContent ?? "";
   if (!containsAnyOpener(text)) return;
 
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
@@ -145,7 +145,7 @@ function colorize(container, enabledStylesSet = null) {
   const newRanges = [];
   let node = walker.nextNode();
   while (node) {
-    const data = node.nodeValue ?? '';
+    const data = node.nodeValue ?? "";
     if (data.length > 0 && containsAnyOpener(data)) {
       const matches = collectMatchesInText(data, enabledStylesSet);
       for (const { start, end, suffix } of matches) {
@@ -165,19 +165,19 @@ function colorize(container, enabledStylesSet = null) {
 }
 
 function applyPluginColorOverride(color) {
-  const existing = document.getElementById('plugin-dialogue-color-override');
-  if (!color || !CSS.supports('color', color)) {
+  const existing = document.getElementById("plugin-dialogue-color-override");
+  if (!color || !CSS.supports("color", color)) {
     if (existing) existing.remove();
     return;
   }
-  const el = existing ?? document.createElement('style');
-  el.id = 'plugin-dialogue-color-override';
-  const suffixes = ['straight', 'curly', 'guillemet', 'corner', 'corner-half', 'book'];
+  const el = existing ?? document.createElement("style");
+  el.id = "plugin-dialogue-color-override";
+  const suffixes = ["straight", "curly", "guillemet", "corner", "corner-half", "book"];
   el.textContent = suffixes
     .map((suffix) => `::highlight(dialogue-quote-${suffix}) { color: ${color}; }`)
-    .join('\n');
+    .join("\n");
   if (!existing) {
-    const themeOverride = document.getElementById('theme-highlight-override');
+    const themeOverride = document.getElementById("theme-highlight-override");
     if (themeOverride && themeOverride.nextSibling) {
       document.head.insertBefore(el, themeOverride.nextSibling);
     } else {
@@ -188,48 +188,52 @@ function applyPluginColorOverride(color) {
 
 function isHighlightApiAvailable() {
   return (
-    typeof globalThis !== 'undefined' &&
-    typeof globalThis.CSS !== 'undefined' &&
+    typeof globalThis !== "undefined" &&
+    typeof globalThis.CSS !== "undefined" &&
     globalThis.CSS &&
-    typeof globalThis.CSS.highlights !== 'undefined' &&
-    typeof globalThis.Highlight === 'function'
+    typeof globalThis.CSS.highlights !== "undefined" &&
+    typeof globalThis.Highlight === "function"
   );
 }
 
 export function register(hooks, context) {
-  const logger = createPluginLogger(context, 'dialogue-colorize');
+  const logger = createPluginLogger(context, "dialogue-colorize");
 
   if (!isHighlightApiAvailable()) {
     logger.info(
-      'CSS Custom Highlight API unavailable; dialogue-colorize is a no-op on this browser',
+      "CSS Custom Highlight API unavailable; dialogue-colorize is a no-op on this browser",
     );
     return;
   }
 
   const initialSettings = getPluginSettings(hooks);
-  applyPluginColorOverride(typeof initialSettings.dialogueColor === 'string' ? initialSettings.dialogueColor : '');
+  applyPluginColorOverride(
+    typeof initialSettings.dialogueColor === "string" ? initialSettings.dialogueColor : "",
+  );
 
   hooks.register(
-    'chapter:dom:ready',
+    "chapter:dom:ready",
     (ctx) => {
       const settings = getPluginSettings(hooks);
       const enabled = settings.enabled !== false;
       if (!enabled) {
         clearAllHighlights();
-        applyPluginColorOverride('');
+        applyPluginColorOverride("");
         return;
       }
       const enabledStyles = Array.isArray(settings.enabledQuoteStyles)
         ? new Set(settings.enabledQuoteStyles)
         : null;
-      applyPluginColorOverride(typeof settings.dialogueColor === 'string' ? settings.dialogueColor : '');
+      applyPluginColorOverride(
+        typeof settings.dialogueColor === "string" ? settings.dialogueColor : "",
+      );
       const container = ctx && ctx.container;
       if (!(container instanceof HTMLElement)) return;
       try {
         colorize(container, enabledStyles);
       } catch (err) {
         logger.info(
-          'dialogue-colorize handler error:',
+          "dialogue-colorize handler error:",
           err && err.message ? err.message : err,
         );
       }
@@ -238,7 +242,7 @@ export function register(hooks, context) {
   );
 
   hooks.register(
-    'chapter:dom:dispose',
+    "chapter:dom:dispose",
     (ctx) => {
       const settings = getPluginSettings(hooks);
       const container = ctx && ctx.container;
@@ -251,7 +255,7 @@ export function register(hooks, context) {
         }
       } catch (err) {
         logger.info(
-          'dialogue-colorize dispose error:',
+          "dialogue-colorize dispose error:",
           err && err.message ? err.message : err,
         );
       }

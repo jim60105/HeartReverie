@@ -183,8 +183,7 @@ export async function buildVariableCatalog(
         type: "string",
         source: "plugin-fragment",
         pluginName: meta.plugin,
-        description:
-          `Prompt fragment variable from plugin '${meta.plugin}' (${meta.file})`,
+        description: `Prompt fragment variable from plugin '${meta.plugin}' (${meta.file})`,
       });
     }
   } catch (err: unknown) {
@@ -266,9 +265,7 @@ async function collectLoreVars(
         name,
         type: name === "lore_tags" ? "array" : "string",
         source: "lore" as const,
-        description: `Lore variable resolved from ${opts.series}/${
-          opts.story ?? "(series scope)"
-        }`,
+        description: `Lore variable resolved from ${opts.series}/${opts.story ?? "(series scope)"}`,
       }));
   } catch (err: unknown) {
     warnings.push(`resolveLoreVariables() failed: ${errorMessage(err)}`);

@@ -23,10 +23,7 @@
  * the top-level `x-legacy` toggle.
  */
 
-import {
-  getHardcodedPathRoots,
-  intersectXPathRoots,
-} from "./path-allowlist.ts";
+import { getHardcodedPathRoots, intersectXPathRoots } from "./path-allowlist.ts";
 import { createLogger } from "./logger.ts";
 import type { PluginManifest } from "../types.ts";
 
@@ -108,8 +105,7 @@ export function auditSettingsSchema(
   const previousNames = new Map<string, string>();
   const previousNamesSeen = new Map<string, string>(); // string → owning property
   const writeOnlyKeys = new Set<string>();
-  const topLevelLegacy =
-    (schema as Record<string, unknown>)["x-legacy"] === true;
+  const topLevelLegacy = (schema as Record<string, unknown>)["x-legacy"] === true;
 
   const failures: string[] = [];
 

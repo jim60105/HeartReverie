@@ -16,21 +16,14 @@
 import { assert as assertTrue, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
-import {
-  createSafePath,
-  verifyPassphrase,
-} from "../../../writer/lib/middleware.ts";
+import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 import { createTemplateEngine } from "../../../writer/lib/template.ts";
 import { createStoryEngine } from "../../../writer/lib/story.ts";
 import { runPluginActionWithDeps } from "../../../writer/routes/plugin-actions.ts";
 import type { Hono } from "@hono/hono";
-import type {
-  AppConfig,
-  AppDeps,
-  BuildPromptResult,
-} from "../../../writer/types.ts";
+import type { AppConfig, AppDeps, BuildPromptResult } from "../../../writer/types.ts";
 
 interface ScenarioOpts {
   readonly promptContent?: string;
@@ -138,7 +131,14 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<Scenario> {
     pluginManager,
     hookDispatcher,
     buildPromptFromStory: storyEngine.buildPromptFromStory,
-    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+    buildContinuePromptFromStory: (async () => ({
+      messages: [],
+      ventoError: null,
+      targetChapterNumber: 0,
+      existingContent: "",
+      userMessageText: "",
+      assistantPrefill: "",
+    })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     verifyPassphrase,
   } as AppDeps;
 
@@ -208,8 +208,7 @@ function mockLLMHangThenAbort(): void {
     if (typeof url === "string" && url.includes("chat/completions")) {
       const sig = opts?.signal as AbortSignal | undefined;
       return new Promise<Response>((_resolve, reject) => {
-        const onAbort = () =>
-          reject(sig?.reason ?? new DOMException("aborted", "AbortError"));
+        const onAbort = () => reject(sig?.reason ?? new DOMException("aborted", "AbortError"));
         if (sig?.aborted) onAbort();
         else sig?.addEventListener("abort", onAbort, { once: true });
       });
@@ -545,8 +544,7 @@ Deno.test({
         // slug. Empty content alone is now silently filtered, so we need a
         // template that actually throws during render.
         const { app, cleanup } = await makeScenario({
-          promptContent:
-            '{{ message "user" }}{{ undefined_variable_xyz.length }}{{ /message }}',
+          promptContent: '{{ message "user" }}{{ undefined_variable_xyz.length }}{{ /message }}',
         });
         try {
           const res = await callRoute(app, "tester", {
@@ -592,9 +590,7 @@ Deno.test({
           // upstream fetch.
           await new Promise((r) => setTimeout(r, 50));
           ctrl.abort();
-          const res = await Promise.resolve(reqPromise).catch((err: unknown) =>
-            err as Error
-          );
+          const res = await Promise.resolve(reqPromise).catch((err: unknown) => err as Error);
           if (res instanceof Error) {
             // Some Hono/Deno versions reject app.fetch when the request signal
             // fires. Either behaviour is acceptable per the spec — the key
@@ -742,8 +738,7 @@ Deno.test({
       "valid scalar extraVariables flow through validation",
       async () => {
         const { app, cleanup } = await makeScenario({
-          promptContent:
-            '{{ message "user" }}\n{{ flag }} {{ count }}\n{{ /message }}',
+          promptContent: '{{ message "user" }}\n{{ flag }} {{ count }}\n{{ /message }}',
         });
         try {
           mockLLMSuccess("OK");

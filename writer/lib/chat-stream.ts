@@ -128,7 +128,9 @@ export async function consumeLlmStream(args: {
       if (!file) return Promise.resolve(0);
       return file.write(encoder.encode(bytes));
     };
-    const notifyDelta = (bytes: string): void => { onDelta?.(bytes); };
+    const notifyDelta = (bytes: string): void => {
+      onDelta?.(bytes);
+    };
 
     const closeThinkBlockOnExit = async (): Promise<void> => {
       if (!inThinkBlock || !file) return;
@@ -167,7 +169,9 @@ export async function consumeLlmStream(args: {
       try {
         raw = JSON.parse(payload);
       } catch (_err: unknown) {
-        log.debug(`[chat:stream] Malformed JSON chunk (${payload.length} bytes): ${payload.slice(0, 200)}`);
+        log.debug(
+          `[chat:stream] Malformed JSON chunk (${payload.length} bytes): ${payload.slice(0, 200)}`,
+        );
         return;
       }
       if (typeof raw !== "object" || raw === null) return;
@@ -199,8 +203,8 @@ export async function consumeLlmStream(args: {
 
       // Reasoning bytes — only frame as `<think>` for chapter-writing modes.
       const reasoningText = extractReasoningText(delta);
-      const isChapterWritingMode = writeMode.kind === "write-new-chapter"
-        || writeMode.kind === "continue-last-chapter";
+      const isChapterWritingMode = writeMode.kind === "write-new-chapter" ||
+        writeMode.kind === "continue-last-chapter";
       if (reasoningText.length > 0 && isChapterWritingMode) {
         if (!inThinkBlock) {
           await writeFile("<think>\n");

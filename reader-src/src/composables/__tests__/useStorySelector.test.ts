@@ -32,7 +32,7 @@ function mockFetch(body: unknown, status = 200) {
         json: () => Promise.resolve(body),
         text: () => Promise.resolve(JSON.stringify(body)),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }

@@ -41,7 +41,7 @@ describe("PromptPreview", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(String(options.body)).toContain("\"template\":\"{{ x }}\"");
+    expect(String(options.body)).toContain('"template":"{{ x }}"');
     const cards = wrapper.findAll(".message-card");
     expect(cards).toHaveLength(2);
     expect(cards[0]!.classes()).toContain("message-card--system");

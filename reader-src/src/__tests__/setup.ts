@@ -13,7 +13,7 @@ export function mockFetchJson(body: unknown, status = 200): void {
         json: () => Promise.resolve(body),
         text: () => Promise.resolve(JSON.stringify(body)),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }
@@ -29,7 +29,7 @@ export function mockFetchText(text: string, status = 200): void {
         json: () => Promise.resolve(JSON.parse(text)),
         text: () => Promise.resolve(text),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }
@@ -60,7 +60,7 @@ export function mockFetchStream(
         status,
         body: stream,
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }

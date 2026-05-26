@@ -120,7 +120,7 @@ ingress:
 persistence:
   enabled: true
   existingClaim: ""
-  storageClass: ""        # empty → cluster default StorageClass
+  storageClass: "" # empty → cluster default StorageClass
   accessModes:
     - ReadWriteOnce
   size: 10Gi
@@ -198,12 +198,12 @@ readinessProbe:
 # Pod scheduling and resources
 # ─────────────────────────────────────────────────────────────────
 resources: {}
-  # limits:
-  #   cpu: 1000m
-  #   memory: 1Gi
-  # requests:
-  #   cpu: 200m
-  #   memory: 512Mi
+# limits:
+#   cpu: 1000m
+#   memory: 1Gi
+# requests:
+#   cpu: 200m
+#   memory: 512Mi
 
 nodeSelector: {}
 tolerations: []

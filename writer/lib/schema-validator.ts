@@ -150,7 +150,6 @@ function numericChecks(
   }
 }
 
-
 /**
  * Validate `value` against `schema`. Returns the collected errors in a stable
  * order (parent before child, properties iterated in declaration order).
@@ -331,10 +330,9 @@ async function objectChecks(
   }
 
   const properties = schema.properties;
-  const propsRec =
-    properties && typeof properties === "object" && !Array.isArray(properties)
-      ? properties as Record<string, unknown>
-      : null;
+  const propsRec = properties && typeof properties === "object" && !Array.isArray(properties)
+    ? properties as Record<string, unknown>
+    : null;
 
   if (propsRec) {
     for (const [k, propSchema] of Object.entries(propsRec)) {

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assert as assertTrue } from "@std/assert";
+import { assert as assertTrue, assertEquals } from "@std/assert";
 import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
@@ -135,21 +135,24 @@ Deno.test("PluginManager", async (t) => {
     });
 
     await t.step("getCombinedStripTagPatterns", async (t) => {
-      await t.step("returns null when neither promptStripTags nor displayStripTags declared", async () => {
-        const pluginDir = join(tmpDir, "combined-none");
-        const pDir = join(pluginDir, "none-plugin");
-        await Deno.mkdir(pDir, { recursive: true });
-        await Deno.writeTextFile(
-          join(pDir, "plugin.json"),
-          JSON.stringify({ name: "none-plugin", displayName: "none-plugin", version: "1.0.0" }),
-        );
+      await t.step(
+        "returns null when neither promptStripTags nor displayStripTags declared",
+        async () => {
+          const pluginDir = join(tmpDir, "combined-none");
+          const pDir = join(pluginDir, "none-plugin");
+          await Deno.mkdir(pDir, { recursive: true });
+          await Deno.writeTextFile(
+            join(pDir, "plugin.json"),
+            JSON.stringify({ name: "none-plugin", displayName: "none-plugin", version: "1.0.0" }),
+          );
 
-        const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
-        await pm.init();
+          const hd = new HookDispatcher();
+          const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
+          await pm.init();
 
-        assertEquals(pm.getCombinedStripTagPatterns(), null);
-      });
+          assertEquals(pm.getCombinedStripTagPatterns(), null);
+        },
+      );
 
       await t.step("includes promptStripTags only", async () => {
         const pluginDir = join(tmpDir, "combined-prompt-only");
@@ -219,7 +222,8 @@ Deno.test("PluginManager", async (t) => {
         const re = pm.getCombinedStripTagPatterns();
         assertTrue(re instanceof RegExp);
         // `replaceAll` exercises the combined regex across all three inputs.
-        const scrubbed = "<user_message>a</user_message> <imgthink>b</imgthink> [hidden]".replaceAll(re, "_");
+        const scrubbed = "<user_message>a</user_message> <imgthink>b</imgthink> [hidden]"
+          .replaceAll(re, "_");
         assertEquals(scrubbed, "_ _ _");
       });
 
@@ -343,11 +347,21 @@ Deno.test("PluginManager", async (t) => {
         await Deno.mkdir(ePlugin, { recursive: true });
         await Deno.writeTextFile(
           join(bPlugin, "plugin.json"),
-          JSON.stringify({ name: "shared-plugin", displayName: "shared-plugin", version: "1.0.0", description: "builtin" }),
+          JSON.stringify({
+            name: "shared-plugin",
+            displayName: "shared-plugin",
+            version: "1.0.0",
+            description: "builtin",
+          }),
         );
         await Deno.writeTextFile(
           join(ePlugin, "plugin.json"),
-          JSON.stringify({ name: "shared-plugin", displayName: "shared-plugin", version: "2.0.0", description: "external" }),
+          JSON.stringify({
+            name: "shared-plugin",
+            displayName: "shared-plugin",
+            version: "2.0.0",
+            description: "external",
+          }),
         );
 
         const hd = new HookDispatcher();
@@ -390,9 +404,7 @@ Deno.test("PluginManager", async (t) => {
 
         assertEquals(pm.getPlugins().length, 0);
         assertTrue(
-          warnStub.calls.some((c) =>
-            String(c.args[0]).includes("missing required 'name' field")
-          ),
+          warnStub.calls.some((c) => String(c.args[0]).includes("missing required 'name' field")),
         );
       });
     });
@@ -410,7 +422,12 @@ Deno.test("PluginManager", async (t) => {
         );
         await Deno.writeTextFile(
           join(pDir, "plugin.json"),
-          JSON.stringify({ name: "backend-plugin", displayName: "backend-plugin", version: "1.0.0", backendModule: "backend.js" }),
+          JSON.stringify({
+            name: "backend-plugin",
+            displayName: "backend-plugin",
+            version: "1.0.0",
+            backendModule: "backend.js",
+          }),
         );
 
         const hd = new HookDispatcher();
@@ -443,9 +460,7 @@ Deno.test("PluginManager", async (t) => {
         await pm.init();
 
         assertTrue(
-          warnStub.calls.some((c) =>
-            String(c.args[0]).includes("escapes plugin directory")
-          ),
+          warnStub.calls.some((c) => String(c.args[0]).includes("escapes plugin directory")),
         );
       });
 
@@ -472,9 +487,7 @@ Deno.test("PluginManager", async (t) => {
         await pm.init();
 
         assertTrue(
-          warnStub.calls.some((c) =>
-            String(c.args[0]).includes("no register() or default export")
-          ),
+          warnStub.calls.some((c) => String(c.args[0]).includes("no register() or default export")),
         );
       });
 
@@ -497,9 +510,7 @@ Deno.test("PluginManager", async (t) => {
         await pm.init();
 
         assertTrue(
-          errorStub.calls.some((c) =>
-            String(c.args[0]).includes("Failed to load backend module")
-          ),
+          errorStub.calls.some((c) => String(c.args[0]).includes("Failed to load backend module")),
         );
       });
     });
@@ -555,9 +566,7 @@ Deno.test("PluginManager", async (t) => {
         const pv = await pm.getPromptVariables();
         assertEquals(pv.fragments.length, 0);
         assertTrue(
-          warnStub.calls.some((c) =>
-            String(c.args[0]).includes("escapes plugin directory")
-          ),
+          warnStub.calls.some((c) => String(c.args[0]).includes("escapes plugin directory")),
         );
       });
 
@@ -712,11 +721,21 @@ Deno.test("PluginManager", async (t) => {
       await Deno.mkdir(ePlugin, { recursive: true });
       await Deno.writeTextFile(
         join(bPlugin, "plugin.json"),
-        JSON.stringify({ name: "dup-plugin", displayName: "dup-plugin", version: "1.0.0", description: "first" }),
+        JSON.stringify({
+          name: "dup-plugin",
+          displayName: "dup-plugin",
+          version: "1.0.0",
+          description: "first",
+        }),
       );
       await Deno.writeTextFile(
         join(ePlugin, "plugin.json"),
-        JSON.stringify({ name: "dup-plugin", displayName: "dup-plugin", version: "2.0.0", description: "second" }),
+        JSON.stringify({
+          name: "dup-plugin",
+          displayName: "dup-plugin",
+          version: "2.0.0",
+          description: "second",
+        }),
       );
 
       // Reset warnStub calls to isolate this test
@@ -732,9 +751,7 @@ Deno.test("PluginManager", async (t) => {
 
       // Warning was logged about the override
       assertTrue(
-        warnStub.calls.some((c) =>
-          String(c.args[0]).includes("Plugin override")
-        ),
+        warnStub.calls.some((c) => String(c.args[0]).includes("Plugin override")),
       );
     });
 
@@ -744,7 +761,12 @@ Deno.test("PluginManager", async (t) => {
       await Deno.mkdir(pDir, { recursive: true });
       await Deno.writeTextFile(
         join(pDir, "plugin.json"),
-        JSON.stringify({ name: "data-plugin", displayName: "data-plugin", version: "1.0.0", description: "data only" }),
+        JSON.stringify({
+          name: "data-plugin",
+          displayName: "data-plugin",
+          version: "1.0.0",
+          description: "data only",
+        }),
       );
 
       const hd = new HookDispatcher();
@@ -758,28 +780,31 @@ Deno.test("PluginManager", async (t) => {
     });
 
     await t.step("frontendStyles", async (t) => {
-      await t.step("valid array of CSS paths is parsed and exposed via getPluginStyles", async () => {
-        const pluginDir = join(tmpDir, "styles-valid");
-        const pDir = join(pluginDir, "style-plugin");
-        await Deno.mkdir(pDir, { recursive: true });
-        await Deno.writeTextFile(join(pDir, "a.css"), "/* a */");
-        await Deno.writeTextFile(join(pDir, "b.css"), "/* b */");
-        await Deno.writeTextFile(
-          join(pDir, "plugin.json"),
-          JSON.stringify({
-            name: "style-plugin",
-            displayName: "style-plugin",
-            version: "1.0.0",
-            frontendStyles: ["a.css", "b.css"],
-          }),
-        );
+      await t.step(
+        "valid array of CSS paths is parsed and exposed via getPluginStyles",
+        async () => {
+          const pluginDir = join(tmpDir, "styles-valid");
+          const pDir = join(pluginDir, "style-plugin");
+          await Deno.mkdir(pDir, { recursive: true });
+          await Deno.writeTextFile(join(pDir, "a.css"), "/* a */");
+          await Deno.writeTextFile(join(pDir, "b.css"), "/* b */");
+          await Deno.writeTextFile(
+            join(pDir, "plugin.json"),
+            JSON.stringify({
+              name: "style-plugin",
+              displayName: "style-plugin",
+              version: "1.0.0",
+              frontendStyles: ["a.css", "b.css"],
+            }),
+          );
 
-        const hd = new HookDispatcher();
-        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
-        await pm.init();
+          const hd = new HookDispatcher();
+          const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
+          await pm.init();
 
-        assertEquals(pm.getPluginStyles("style-plugin"), ["a.css", "b.css"]);
-      });
+          assertEquals(pm.getPluginStyles("style-plugin"), ["a.css", "b.css"]);
+        },
+      );
 
       await t.step("missing CSS file is skipped with a warning", async () => {
         const pluginDir = join(tmpDir, "styles-missing");
@@ -813,7 +838,8 @@ Deno.test("PluginManager", async (t) => {
         const pluginDir = join(tmpDir, "styles-traversal");
         const pDir = join(pluginDir, "trav-plugin");
         await Deno.mkdir(pDir, { recursive: true });
-        await Deno.writeTextFile(join(pDir, "plugin.json"),
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
           JSON.stringify({
             name: "trav-plugin",
             displayName: "trav-plugin",
@@ -833,7 +859,8 @@ Deno.test("PluginManager", async (t) => {
         const pluginDir = join(tmpDir, "styles-nonarray");
         const pDir = join(pluginDir, "na-plugin");
         await Deno.mkdir(pDir, { recursive: true });
-        await Deno.writeTextFile(join(pDir, "plugin.json"),
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
           JSON.stringify({
             name: "na-plugin",
             displayName: "na-plugin",
@@ -854,7 +881,8 @@ Deno.test("PluginManager", async (t) => {
         const pDir = join(pluginDir, "ext-plugin");
         await Deno.mkdir(pDir, { recursive: true });
         await Deno.writeTextFile(join(pDir, "style.js"), "/* not css */");
-        await Deno.writeTextFile(join(pDir, "plugin.json"),
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
           JSON.stringify({
             name: "ext-plugin",
             displayName: "ext-plugin",
@@ -875,7 +903,8 @@ Deno.test("PluginManager", async (t) => {
         const pDir = join(pluginDir, "pref-plugin");
         await Deno.mkdir(pDir, { recursive: true });
         await Deno.writeTextFile(join(pDir, "main.css"), "/* m */");
-        await Deno.writeTextFile(join(pDir, "plugin.json"),
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
           JSON.stringify({
             name: "pref-plugin",
             displayName: "pref-plugin",
@@ -896,7 +925,8 @@ Deno.test("PluginManager", async (t) => {
         const pDir = join(pluginDir, "dup-plugin");
         await Deno.mkdir(pDir, { recursive: true });
         await Deno.writeTextFile(join(pDir, "s.css"), "/* s */");
-        await Deno.writeTextFile(join(pDir, "plugin.json"),
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
           JSON.stringify({
             name: "dup-plugin",
             displayName: "dup-plugin",
@@ -916,7 +946,8 @@ Deno.test("PluginManager", async (t) => {
         const pluginDir = join(tmpDir, "styles-abs");
         const pDir = join(pluginDir, "abs-plugin");
         await Deno.mkdir(pDir, { recursive: true });
-        await Deno.writeTextFile(join(pDir, "plugin.json"),
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
           JSON.stringify({
             name: "abs-plugin",
             displayName: "abs-plugin",
@@ -976,7 +1007,8 @@ Deno.test("PluginManager", async (t) => {
         const vars = await pm.getDynamicVariables(ctx);
         assertEquals(vars.echo_chapter, "3");
 
-        const captured = (globalThis as unknown as { __richPluginCapturedCtx?: typeof ctx }).__richPluginCapturedCtx;
+        const captured = (globalThis as unknown as { __richPluginCapturedCtx?: typeof ctx })
+          .__richPluginCapturedCtx;
         assertEquals(captured?.series, "fantasy");
         assertEquals(captured?.name, "quest");
         assertEquals(captured?.storyDir, "/tmp/quest");
@@ -1034,7 +1066,13 @@ Deno.test("PluginManager", async (t) => {
             displayName: "ab-plugin",
             version: "1.0.0",
             actionButtons: [
-              { id: "bad", label: "Bad", promptFile: "p.md", mode: "discard", visibleWhen: "always" },
+              {
+                id: "bad",
+                label: "Bad",
+                promptFile: "p.md",
+                mode: "discard",
+                visibleWhen: "always",
+              },
               { id: "good", label: "Good", promptFile: "p.md", mode: "discard" },
             ],
           }),

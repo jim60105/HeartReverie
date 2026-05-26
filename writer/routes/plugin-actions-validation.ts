@@ -200,7 +200,11 @@ export function validateModeCombo(
   appendTag: unknown,
   replace: unknown,
 ):
-  | { ok: true; mode: "append-to-existing-chapter" | "replace-last-chapter" | "discard"; appendTag: string | null }
+  | {
+    ok: true;
+    mode: "append-to-existing-chapter" | "replace-last-chapter" | "discard";
+    appendTag: string | null;
+  }
   | ValidationFailure {
   if (
     mode !== "append-to-existing-chapter" && mode !== "discard" &&

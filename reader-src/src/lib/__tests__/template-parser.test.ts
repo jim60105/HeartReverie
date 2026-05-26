@@ -14,10 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { describe, expect, it } from "vitest";
-import {
-  parseSystemTemplate,
-  serializeMessageCards,
-} from "@/lib/template-parser";
+import { parseSystemTemplate, serializeMessageCards } from "@/lib/template-parser";
 import type { MessageCard } from "@/types";
 
 function stripIds(cards: MessageCard[] | null): Array<Omit<MessageCard, "id">> {
@@ -26,8 +23,7 @@ function stripIds(cards: MessageCard[] | null): Array<Omit<MessageCard, "id">> {
 
 describe("parseSystemTemplate", () => {
   it("parses a canonical three-message template", () => {
-    const src =
-      `{{ message "system" }}\nS\n{{ /message }}\n\n` +
+    const src = `{{ message "system" }}\nS\n{{ /message }}\n\n` +
       `{{ message "user" }}\nU\n{{ /message }}\n\n` +
       `{{ message "assistant" }}\nA\n{{ /message }}\n`;
     const result = parseSystemTemplate(src);
@@ -123,8 +119,7 @@ describe("parseSystemTemplate", () => {
   });
 
   it("drops trailing top-level content and sets the dropped flag", () => {
-    const src =
-      `{{ message "system" }}\nS\n{{ /message }}\n\nleftover-text\n`;
+    const src = `{{ message "system" }}\nS\n{{ /message }}\n\nleftover-text\n`;
     const result = parseSystemTemplate(src);
     expect(result.parseError).toBeNull();
     expect(result.topLevelContentDropped).toBe(true);
@@ -132,8 +127,7 @@ describe("parseSystemTemplate", () => {
   });
 
   it("drops inter-block top-level content and sets the dropped flag", () => {
-    const src =
-      `{{ message "system" }}\nS\n{{ /message }}\n\nbetween-text\n\n` +
+    const src = `{{ message "system" }}\nS\n{{ /message }}\n\nbetween-text\n\n` +
       `{{ message "user" }}\nU\n{{ /message }}\n`;
     const result = parseSystemTemplate(src);
     expect(result.parseError).toBeNull();
@@ -166,8 +160,7 @@ describe("parseSystemTemplate", () => {
   });
 
   it("returns a parse error for nested message blocks", () => {
-    const src =
-      `{{ message "system" }}\n` +
+    const src = `{{ message "system" }}\n` +
       `{{ message "user" }}inner{{ /message }}\n` +
       `{{ /message }}`;
     const result = parseSystemTemplate(src);
@@ -209,8 +202,7 @@ describe("parseSystemTemplate", () => {
     // literal string `{{ message "user" }}`. The scanner MUST NOT treat the
     // inner braces as a real opener — the whole expression is opaque body
     // content of the surrounding card.
-    const src =
-      `{{ message "system" }}\n` +
+    const src = `{{ message "system" }}\n` +
       `prefix {{ "{{ message \\"user\\" }}" }} suffix\n` +
       `{{ /message }}\n`;
     const result = parseSystemTemplate(src);
@@ -227,8 +219,7 @@ describe("parseSystemTemplate", () => {
     // `{{# … #}}` is a Vento comment; anything until `#}}` is non-code and
     // MUST NOT trigger an opener match. Place the comment inside a message
     // block so it's captured as body content rather than top-level text.
-    const src =
-      `{{ message "system" }}\n` +
+    const src = `{{ message "system" }}\n` +
       `{{# {{ message "user" }} should-not-match #}}\n` +
       `body\n` +
       `{{ /message }}\n`;
@@ -251,7 +242,7 @@ describe("serializeMessageCards", () => {
     ]);
     expect(out).toBe(
       `{{ message "system" }}\nS\n{{ /message }}\n\n` +
-      `{{ message "user" }}\nU\n{{ /message }}\n`,
+        `{{ message "user" }}\nU\n{{ /message }}\n`,
     );
   });
 
@@ -272,7 +263,7 @@ describe("serializeMessageCards", () => {
       serializeMessageCards([
         { id: "a", role: "system", body: "x" },
         { id: "b", role: "tool" as MessageCard["role"], body: "y" },
-      ]),
+      ])
     ).toThrow(/index 1/);
   });
 });

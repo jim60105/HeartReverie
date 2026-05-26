@@ -20,11 +20,7 @@ import type {
   PluginDescriptor,
   RunPluginPromptOptions,
 } from "@/types";
-import {
-  pluginSettingsStore,
-  settingsRevision,
-  usePlugins,
-} from "@/composables/usePlugins";
+import { pluginSettingsStore, settingsRevision, usePlugins } from "@/composables/usePlugins";
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useChapterEditor } from "@/composables/useChapterEditor";
 import { useChatApi } from "@/composables/useChatApi";
@@ -39,9 +35,7 @@ export interface VisibleActionButton extends ActionButtonDescriptor {
 const pendingKey = ref<string | null>(null);
 
 function resolvePriority(d: ActionButtonDescriptor): number {
-  return typeof d.priority === "number" && Number.isFinite(d.priority)
-    ? d.priority
-    : 100;
+  return typeof d.priority === "number" && Number.isFinite(d.priority) ? d.priority : 100;
 }
 
 function resolveVisibleWhen(
@@ -139,13 +133,10 @@ export function usePluginActions() {
         return;
       }
       const ctx = getBackendContext();
-      const lastChapterIndex = chapters.value.length > 0
-        ? chapters.value.length - 1
-        : null;
+      const lastChapterIndex = chapters.value.length > 0 ? chapters.value.length - 1 : null;
 
       // Gate replace-mode buttons when editor has unsaved buffer
-      const { hasUnsavedBufferForChapter, forceCloseEditor } =
-        useChapterEditor();
+      const { hasUnsavedBufferForChapter, forceCloseEditor } = useChapterEditor();
       if (
         buttonId === "polish" && lastChapterIndex !== null &&
         hasUnsavedBufferForChapter(lastChapterIndex)

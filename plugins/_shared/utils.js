@@ -19,8 +19,8 @@
  * @returns {string}
  */
 export function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
 }
 
 /**
@@ -30,9 +30,9 @@ export function escapeHtml(str) {
  * @returns {Record<string, unknown>}
  */
 export function getPluginSettings(hooks) {
-  if (!hooks || typeof hooks.getSettings !== 'function') return {};
+  if (!hooks || typeof hooks.getSettings !== "function") return {};
   const value = hooks.getSettings();
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value;
 }
 
@@ -46,10 +46,10 @@ export function getPluginSettings(hooks) {
  * @returns {{ info: (...args: unknown[]) => void }}
  */
 export function createPluginLogger(context, tag) {
-  if (context && context.logger && typeof context.logger.info === 'function') {
+  if (context && context.logger && typeof context.logger.info === "function") {
     return context.logger;
   }
-  const prefix = tag ? `[${tag}]` : '[plugin]';
+  const prefix = tag ? `[${tag}]` : "[plugin]";
   return {
     info: (...args) => console.info(prefix, ...args),
   };

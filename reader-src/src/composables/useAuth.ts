@@ -1,5 +1,5 @@
-import { ref, readonly } from "vue";
-import type { UseAuthReturn, AuthHeaders } from "@/types";
+import { readonly, ref } from "vue";
+import type { AuthHeaders, UseAuthReturn } from "@/types";
 import { renderDebug } from "@/lib/render-debug";
 
 const STORAGE_KEY = "passphrase";

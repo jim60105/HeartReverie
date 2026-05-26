@@ -6,7 +6,7 @@
 // (at your option) any later version.
 
 import { assert, assertEquals } from "@std/assert";
-import { join, fromFileUrl, dirname } from "@std/path";
+import { dirname, fromFileUrl, join } from "@std/path";
 
 const here = dirname(fromFileUrl(import.meta.url));
 const scriptPath = join(here, "..", "introspect-hooks.ts");
@@ -43,7 +43,9 @@ Deno.test({
       assertEquals(out.code, 0, `non-zero exit; stderr=${stderr}`);
 
       const json = JSON.parse(stdout);
-      for (const k of ["backend", "manifestDeclarations", "stripTags", "pipelineFields", "generatedAt"]) {
+      for (
+        const k of ["backend", "manifestDeclarations", "stripTags", "pipelineFields", "generatedAt"]
+      ) {
         assert(k in json, `missing key '${k}' in CLI output`);
       }
       assert(!stdout.includes(sentinel), "passphrase sentinel leaked to stdout");

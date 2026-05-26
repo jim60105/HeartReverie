@@ -157,10 +157,19 @@ Deno.test({
         // system.md always present
         assert(entries.some((e) => e.templatePath === "system.md"));
         // global lore
-        assert(entries.some((e) => e.templatePath === "lore:global:world.md"), "global lore missing");
-        assert(entries.some((e) => e.templatePath === "lore:global:sub/nested.md"), "nested lore missing");
+        assert(
+          entries.some((e) => e.templatePath === "lore:global:world.md"),
+          "global lore missing",
+        );
+        assert(
+          entries.some((e) => e.templatePath === "lore:global:sub/nested.md"),
+          "nested lore missing",
+        );
         // series lore
-        assert(entries.some((e) => e.templatePath === "lore:series:MySeries:char.md"), "series lore missing");
+        assert(
+          entries.some((e) => e.templatePath === "lore:series:MySeries:char.md"),
+          "series lore missing",
+        );
         // story lore
         assert(
           entries.some((e) => e.templatePath === "lore:story:MySeries:MyStory:note.md"),
@@ -174,14 +183,17 @@ Deno.test({
         assert(typeof globalEntry.sizeBytes === "number" && globalEntry.sizeBytes > 0);
       });
 
-      await t.step("GET /api/templates — _lore root that is a file (not dir) is skipped", async () => {
-        // Create a file named _lore (not a dir) in a series dir — should not crash
-        const weirdSeries = join(tmpDir, "WeirdSeries");
-        await Deno.mkdir(weirdSeries, { recursive: true });
-        await Deno.writeTextFile(join(weirdSeries, "_lore"), "I am a file, not a dir");
-        const res = await makeRequest(app, "GET", "/api/templates");
-        assertEquals(res.status, 200);
-      });
+      await t.step(
+        "GET /api/templates — _lore root that is a file (not dir) is skipped",
+        async () => {
+          // Create a file named _lore (not a dir) in a series dir — should not crash
+          const weirdSeries = join(tmpDir, "WeirdSeries");
+          await Deno.mkdir(weirdSeries, { recursive: true });
+          await Deno.writeTextFile(join(weirdSeries, "_lore"), "I am a file, not a dir");
+          const res = await makeRequest(app, "GET", "/api/templates");
+          assertEquals(res.status, 200);
+        },
+      );
 
       await t.step("GET /api/templates — _-prefix and lost+found dirs are skipped", async () => {
         // Directories whose name starts with _ or is lost+found should be skipped
@@ -283,7 +295,11 @@ Deno.test({
       // ── lore paths ────────────────────────────────────────────────
 
       await t.step("lore:global missing relative → 400", async () => {
-        const res = await makeRequest(app, "GET", "/api/templates/source?templatePath=lore:global:");
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=lore:global:",
+        );
         assertEquals(res.status, 400);
       });
 
@@ -293,7 +309,11 @@ Deno.test({
       });
 
       await t.step("lore:series missing parts → 400", async () => {
-        const res = await makeRequest(app, "GET", "/api/templates/source?templatePath=lore:series:MySeries");
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=lore:series:MySeries",
+        );
         assertEquals(res.status, 400);
       });
 
@@ -359,7 +379,11 @@ Deno.test({
       });
 
       await t.step("plugin: empty name → 400", async () => {
-        const res = await makeRequest(app, "GET", "/api/templates/source?templatePath=plugin::file.md");
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=plugin::file.md",
+        );
         assertEquals(res.status, 400);
       });
 
@@ -526,14 +550,17 @@ Deno.test({
         assertEquals(res.status, 400);
       });
 
-      await t.step("lint source-form — kind=lore scope=story without series/story → 400", async () => {
-        const res = await makeRequest(app, "POST", "/api/templates/lint", {
-          kind: "lore",
-          source: "hello",
-          scope: "story",
-        });
-        assertEquals(res.status, 400);
-      });
+      await t.step(
+        "lint source-form — kind=lore scope=story without series/story → 400",
+        async () => {
+          const res = await makeRequest(app, "POST", "/api/templates/lint", {
+            kind: "lore",
+            source: "hello",
+            scope: "story",
+          });
+          assertEquals(res.status, 400);
+        },
+      );
 
       await t.step("lint source-form — kind=lore scope=story missing story → 400", async () => {
         const res = await makeRequest(app, "POST", "/api/templates/lint", {
@@ -545,28 +572,34 @@ Deno.test({
         assertEquals(res.status, 400);
       });
 
-      await t.step("lint source-form — kind=lore scope=series with valid series → 200", async () => {
-        const res = await makeRequest(app, "POST", "/api/templates/lint", {
-          kind: "lore",
-          source: "Some lore text",
-          scope: "series",
-          series: "MySeries",
-        });
-        assertEquals(res.status, 200);
-        assertExists(res.body.diagnostics);
-      });
+      await t.step(
+        "lint source-form — kind=lore scope=series with valid series → 200",
+        async () => {
+          const res = await makeRequest(app, "POST", "/api/templates/lint", {
+            kind: "lore",
+            source: "Some lore text",
+            scope: "series",
+            series: "MySeries",
+          });
+          assertEquals(res.status, 200);
+          assertExists(res.body.diagnostics);
+        },
+      );
 
-      await t.step("lint source-form — kind=lore scope=story with valid series/story → 200", async () => {
-        const res = await makeRequest(app, "POST", "/api/templates/lint", {
-          kind: "lore",
-          source: "Story lore text",
-          scope: "story",
-          series: "MySeries",
-          story: "MyStory",
-        });
-        assertEquals(res.status, 200);
-        assertExists(res.body.diagnostics);
-      });
+      await t.step(
+        "lint source-form — kind=lore scope=story with valid series/story → 200",
+        async () => {
+          const res = await makeRequest(app, "POST", "/api/templates/lint", {
+            kind: "lore",
+            source: "Story lore text",
+            scope: "story",
+            series: "MySeries",
+            story: "MyStory",
+          });
+          assertEquals(res.status, 200);
+          assertExists(res.body.diagnostics);
+        },
+      );
 
       await t.step("lint source-form — kind=lore scope=global → 200", async () => {
         const res = await makeRequest(app, "POST", "/api/templates/lint", {
@@ -613,19 +646,22 @@ Deno.test({
         assertEquals(res.status, 200);
       });
 
-      await t.step("lint source-form — prompt-message-body long-template passes through", async () => {
-        // vento.long-template is a whole-template diagnostic that should be preserved
-        // even in prompt-message-body mode. Generate a long source.
-        const longSource = "{{ user_input }}\n".repeat(500);
-        const res = await makeRequest(app, "POST", "/api/templates/lint", {
-          kind: "prompt-message-body",
-          role: "user",
-          source: longSource,
-        });
-        assertEquals(res.status, 200);
-        // Just verify we get a result (long-template may or may not trigger)
-        assertExists(res.body.diagnostics);
-      });
+      await t.step(
+        "lint source-form — prompt-message-body long-template passes through",
+        async () => {
+          // vento.long-template is a whole-template diagnostic that should be preserved
+          // even in prompt-message-body mode. Generate a long source.
+          const longSource = "{{ user_input }}\n".repeat(500);
+          const res = await makeRequest(app, "POST", "/api/templates/lint", {
+            kind: "prompt-message-body",
+            role: "user",
+            source: longSource,
+          });
+          assertEquals(res.status, 200);
+          // Just verify we get a result (long-template may or may not trigger)
+          assertExists(res.body.diagnostics);
+        },
+      );
     } finally {
       await cleanup(tmpDir, pluginsDir);
     }
@@ -738,10 +774,13 @@ Deno.test({
         // Seed a minimal story so the route hits the 'current' branch
         const storyDir = join(tmpDir, "TestSeries", "TestStory");
         await Deno.mkdir(storyDir, { recursive: true });
-        await Deno.writeTextFile(join(storyDir, "story.json"), JSON.stringify({
-          name: "TestStory",
-          series: "TestSeries",
-        }));
+        await Deno.writeTextFile(
+          join(storyDir, "story.json"),
+          JSON.stringify({
+            name: "TestStory",
+            series: "TestSeries",
+          }),
+        );
         const res = await makeRequest(app, "POST", "/api/templates/preview", {
           templatePath: "system.md",
           source: `{{ message "user" }}test{{ /message }}`,
@@ -1065,12 +1104,15 @@ Deno.test({
         assertEquals(sys.sizeBytes, 0);
       });
 
-      await t.step("GET /api/templates/source system.md returns empty when neither exists", async () => {
-        const res = await makeRequest(app, "GET", "/api/templates/source?templatePath=system.md");
-        assertEquals(res.status, 200);
-        // ROOT_DIR/system.md also doesn't exist → falls through to empty
-        assertEquals(res.body.source, "");
-      });
+      await t.step(
+        "GET /api/templates/source system.md returns empty when neither exists",
+        async () => {
+          const res = await makeRequest(app, "GET", "/api/templates/source?templatePath=system.md");
+          assertEquals(res.status, 200);
+          // ROOT_DIR/system.md also doesn't exist → falls through to empty
+          assertEquals(res.body.source, "");
+        },
+      );
     } finally {
       await cleanup(tmpDir, pluginsDir);
     }

@@ -281,9 +281,12 @@ Deno.test("computeEffectiveTags", async (t) => {
     assertEquals(computeEffectiveTags([], "loc"), ["loc"]);
   });
 
-  await t.step("duplicate between frontmatter and directory is deduplicated (case-insensitive)", () => {
-    assertEquals(computeEffectiveTags(["Chars"], "chars"), ["chars"]);
-  });
+  await t.step(
+    "duplicate between frontmatter and directory is deduplicated (case-insensitive)",
+    () => {
+      assertEquals(computeEffectiveTags(["Chars"], "chars"), ["chars"]);
+    },
+  );
 
   await t.step("filename tag is included when provided", () => {
     assertEquals(computeEffectiveTags(["a"], null, "hero"), ["a", "hero"]);
@@ -431,14 +434,18 @@ Deno.test("collectPassagesFromScope", async (t) => {
     const tmpDir = await Deno.makeTempDir();
     try {
       const loreDir = join(tmpDir, "_lore");
-      await writePassageFile(loreDir, "hero.md", [
-        "---",
-        "tags: [character]",
-        "priority: 1",
-        "enabled: true",
-        "---",
-        "The hero.",
-      ].join("\n"));
+      await writePassageFile(
+        loreDir,
+        "hero.md",
+        [
+          "---",
+          "tags: [character]",
+          "priority: 1",
+          "enabled: true",
+          "---",
+          "The hero.",
+        ].join("\n"),
+      );
 
       const passages = await collectPassagesFromScope(loreDir, "global");
       assertEquals(passages.length, 1);
@@ -481,12 +488,16 @@ Deno.test("collectPassagesFromScope", async (t) => {
     const tmpDir = await Deno.makeTempDir();
     try {
       const loreDir = join(tmpDir, "_lore");
-      await writePassageFile(loreDir, "off.md", [
-        "---",
-        "enabled: false",
-        "---",
-        "Disabled.",
-      ].join("\n"));
+      await writePassageFile(
+        loreDir,
+        "off.md",
+        [
+          "---",
+          "enabled: false",
+          "---",
+          "Disabled.",
+        ].join("\n"),
+      );
 
       const passages = await collectPassagesFromScope(loreDir, "global");
       assertEquals(passages.length, 1);
@@ -630,32 +641,44 @@ Deno.test("resolveLoreVariables", async (t) => {
   await t.step("multi-scope resolution: global + series + story", async () => {
     const tmpDir = await Deno.makeTempDir();
     try {
-      await writePassageFile(join(tmpDir, "_lore"), "world.md", [
-        "---",
-        "tags: [world]",
-        "priority: 10",
-        "enabled: true",
-        "---",
-        "World lore.",
-      ].join("\n"));
+      await writePassageFile(
+        join(tmpDir, "_lore"),
+        "world.md",
+        [
+          "---",
+          "tags: [world]",
+          "priority: 10",
+          "enabled: true",
+          "---",
+          "World lore.",
+        ].join("\n"),
+      );
 
-      await writePassageFile(join(tmpDir, "fantasy", "_lore"), "magic.md", [
-        "---",
-        "tags: [magic]",
-        "priority: 5",
-        "enabled: true",
-        "---",
-        "Magic system.",
-      ].join("\n"));
+      await writePassageFile(
+        join(tmpDir, "fantasy", "_lore"),
+        "magic.md",
+        [
+          "---",
+          "tags: [magic]",
+          "priority: 5",
+          "enabled: true",
+          "---",
+          "Magic system.",
+        ].join("\n"),
+      );
 
-      await writePassageFile(join(tmpDir, "fantasy", "quest", "_lore"), "quest.md", [
-        "---",
-        "tags: [quest]",
-        "priority: 1",
-        "enabled: true",
-        "---",
-        "Quest details.",
-      ].join("\n"));
+      await writePassageFile(
+        join(tmpDir, "fantasy", "quest", "_lore"),
+        "quest.md",
+        [
+          "---",
+          "tags: [quest]",
+          "priority: 1",
+          "enabled: true",
+          "---",
+          "Quest details.",
+        ].join("\n"),
+      );
 
       const { variables: vars } = await resolveLoreVariables(tmpDir, "fantasy", "quest");
       // lore_all should contain all three, sorted by priority desc

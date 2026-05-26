@@ -1,5 +1,5 @@
 import { stubSessionStorage } from "@/__tests__/setup";
-import type { RenderToken, HtmlToken } from "@/types";
+import type { HtmlToken, RenderToken } from "@/types";
 
 describe("useMarkdownRenderer — chapter:render:after hook", () => {
   beforeEach(() => {
@@ -13,7 +13,7 @@ describe("useMarkdownRenderer — chapter:render:after hook", () => {
           status: 200,
           json: () => Promise.resolve([]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
   });

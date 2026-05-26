@@ -56,7 +56,12 @@ describe("useMediaQuery", () => {
       },
     });
     const wrapper = mount(Test);
-    return { wrapper, get exposed() { return exposed!; } };
+    return {
+      wrapper,
+      get exposed() {
+        return exposed!;
+      },
+    };
   }
 
   it("returns the initial matchMedia value", () => {

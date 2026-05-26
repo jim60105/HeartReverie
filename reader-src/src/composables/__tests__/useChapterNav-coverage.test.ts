@@ -90,7 +90,9 @@ describe("useChapterNav coverage branches", () => {
     wsSend.mockReset();
     wsHandlers.clear();
     wsOnMessage.mockClear();
-    vi.spyOn(globalThis, "setInterval").mockReturnValue(1 as unknown as ReturnType<typeof setInterval>);
+    vi.spyOn(globalThis, "setInterval").mockReturnValue(
+      1 as unknown as ReturnType<typeof setInterval>,
+    );
     vi.spyOn(globalThis, "clearInterval").mockImplementation(() => {});
   });
 
@@ -263,7 +265,8 @@ describe("useChapterNav coverage branches", () => {
     const nav = await getNav();
     await nav.loadFromBackend("series-a", "story-a");
 
-    const firstPollFn = (setInterval as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as () => Promise<void>;
+    const firstPollFn = (setInterval as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+      ?.[0] as () => Promise<void>;
     expect(firstPollFn).toBeTypeOf("function");
 
     await firstPollFn();
@@ -285,7 +288,8 @@ describe("useChapterNav coverage branches", () => {
     const nav = await getNav();
     await nav.loadFromBackend("series-a", "story-a");
 
-    const pollFn = (setInterval as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as () => Promise<void>;
+    const pollFn = (setInterval as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as () =>
+      Promise<void>;
     expect(pollFn).toBeTypeOf("function");
     await pollFn();
 

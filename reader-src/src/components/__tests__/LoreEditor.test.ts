@@ -38,12 +38,17 @@ describe("LoreEditor", () => {
       content: "內文",
     });
 
-    const wrapper = mount(LoreEditor, { props: { scope: "story", path: "a.md", series: "s", story: "t" } });
+    const wrapper = mount(LoreEditor, {
+      props: { scope: "story", path: "a.md", series: "s", story: "t" },
+    });
     await flushPromises();
 
     expect(mockReadPassage).toHaveBeenCalledWith("story", "a.md", "s", "t");
-    expect((wrapper.find('input[placeholder="example.md"]').element as HTMLInputElement).value).toBe("a.md");
-    expect((wrapper.find('textarea.mock-vento-editor').element as HTMLTextAreaElement).value).toBe("內文");
+    expect((wrapper.find('input[placeholder="example.md"]').element as HTMLInputElement).value)
+      .toBe("a.md");
+    expect((wrapper.find("textarea.mock-vento-editor").element as HTMLTextAreaElement).value).toBe(
+      "內文",
+    );
     expect(wrapper.text()).toContain("停用");
   });
 
@@ -68,7 +73,7 @@ describe("LoreEditor", () => {
 
     await wrapper.find('input[placeholder="example.md"]').setValue("new.md");
     await wrapper.find('input[placeholder="角色, 世界觀, 設定"]').setValue("角色, 設定");
-    await wrapper.find('textarea.mock-vento-editor').setValue("lore text");
+    await wrapper.find("textarea.mock-vento-editor").setValue("lore text");
     await wrapper.find(".toolbar-btn--save").trigger("click");
     await flushPromises();
 

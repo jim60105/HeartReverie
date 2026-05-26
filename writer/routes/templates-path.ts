@@ -110,7 +110,13 @@ export function parseTemplatePath(
     if (scope === "global") {
       const rel = parts.slice(2).join(":");
       if (!isValidLoreRelative(rel)) {
-        return { ok: false, err: { status: 400, detail: "Lore relative path must be a .md file with no dotfile segments" } };
+        return {
+          ok: false,
+          err: {
+            status: 400,
+            detail: "Lore relative path must be a .md file with no dotfile segments",
+          },
+        };
       }
       return { ok: true, value: { kind: "lore", loreScope: "global", relativeFile: rel } };
     }
@@ -124,7 +130,13 @@ export function parseTemplatePath(
         return { ok: false, err: { status: 400, detail: "Invalid series segment" } };
       }
       if (!isValidLoreRelative(rel)) {
-        return { ok: false, err: { status: 400, detail: "Lore relative path must be a .md file with no dotfile segments" } };
+        return {
+          ok: false,
+          err: {
+            status: 400,
+            detail: "Lore relative path must be a .md file with no dotfile segments",
+          },
+        };
       }
       return { ok: true, value: { kind: "lore", loreScope: "series", series, relativeFile: rel } };
     }
@@ -139,9 +151,18 @@ export function parseTemplatePath(
         return { ok: false, err: { status: 400, detail: "Invalid series/story segment" } };
       }
       if (!isValidLoreRelative(rel)) {
-        return { ok: false, err: { status: 400, detail: "Lore relative path must be a .md file with no dotfile segments" } };
+        return {
+          ok: false,
+          err: {
+            status: 400,
+            detail: "Lore relative path must be a .md file with no dotfile segments",
+          },
+        };
       }
-      return { ok: true, value: { kind: "lore", loreScope: "story", series, story, relativeFile: rel } };
+      return {
+        ok: true,
+        value: { kind: "lore", loreScope: "story", series, story, relativeFile: rel },
+      };
     }
     return { ok: false, err: { status: 400, detail: `Unknown lore scope: ${scope}` } };
   }

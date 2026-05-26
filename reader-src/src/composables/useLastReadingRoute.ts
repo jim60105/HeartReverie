@@ -13,11 +13,8 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { ref, type Ref } from "vue";
-import type {
-  RouteLocationNormalizedLoaded,
-  RouteLocationRaw,
-} from "vue-router";
+import { type Ref, ref } from "vue";
+import type { RouteLocationNormalizedLoaded, RouteLocationRaw } from "vue-router";
 import { isReadingRoute } from "@/router/isReadingRoute";
 
 /**

@@ -1,7 +1,4 @@
-import {
-  doubleNewlines,
-  reinjectPlaceholders,
-} from "@/lib/markdown-pipeline";
+import { doubleNewlines, reinjectPlaceholders } from "@/lib/markdown-pipeline";
 
 describe("doubleNewlines", () => {
   it("doubles newlines for markdown paragraph breaks", () => {
@@ -67,8 +64,7 @@ describe("reinjectPlaceholders", () => {
     const map = new Map([
       ["<!--STATUS_BLOCK_0-->", '<div class="status">ok</div>'],
     ]);
-    const html =
-      "<p>chapter start</p><!--STATUS_BLOCK_0--><p>chapter end</p>";
+    const html = "<p>chapter start</p><!--STATUS_BLOCK_0--><p>chapter end</p>";
     expect(reinjectPlaceholders(html, map)).toBe(
       '<p>chapter start</p><div class="status">ok</div><p>chapter end</p>',
     );

@@ -14,15 +14,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export function register(hooks) {
-  hooks.register('action-button:click', async (ctx) => {
-    if (ctx.pluginName !== 'polish' || ctx.buttonId !== 'polish') return;
+  hooks.register(
+    "action-button:click",
+    async (ctx) => {
+      if (ctx.pluginName !== "polish" || ctx.buttonId !== "polish") return;
 
-    const result = await ctx.runPluginPrompt('polish-instruction.md', {
-      replace: true,
-    });
+      const result = await ctx.runPluginPrompt("polish-instruction.md", {
+        replace: true,
+      });
 
-    if (result.chapterReplaced) {
-      await ctx.reload();
-    }
-  }, 100, 'polish');
+      if (result.chapterReplaced) {
+        await ctx.reload();
+      }
+    },
+    100,
+    "polish",
+  );
 }

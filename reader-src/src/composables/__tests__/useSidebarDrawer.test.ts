@@ -15,8 +15,12 @@ function createMockMql(initial: boolean): MockMql {
   const listeners = new Set<ChangeListener>();
   return {
     matches: initial,
-    addEventListener: (_e, cb) => { listeners.add(cb); },
-    removeEventListener: (_e, cb) => { listeners.delete(cb); },
+    addEventListener: (_e, cb) => {
+      listeners.add(cb);
+    },
+    removeEventListener: (_e, cb) => {
+      listeners.delete(cb);
+    },
     _fire(matches: boolean) {
       this.matches = matches;
       for (const cb of listeners) cb({ matches });
@@ -60,10 +64,21 @@ describe("useSidebarDrawer", () => {
         api = useSidebarDrawer();
         return () =>
           h("div", [
-            h("button", { ref: (el) => { api!.triggerRef.value = el as HTMLElement; }, class: "trigger" }, "toggle"),
+            h("button", {
+              ref: (el) => {
+                api!.triggerRef.value = el as HTMLElement;
+              },
+              class: "trigger",
+            }, "toggle"),
             h(
               "aside",
-              { ref: (el) => { api!.drawerRef.value = el as HTMLElement; }, class: "drawer", onKeydown: api!.onKeydownTrap },
+              {
+                ref: (el) => {
+                  api!.drawerRef.value = el as HTMLElement;
+                },
+                class: "drawer",
+                onKeydown: api!.onKeydownTrap,
+              },
               [
                 h("button", { class: "back-btn" }, "back"),
                 h("a", { href: "#a", class: "link-a" }, "A"),
@@ -74,7 +89,12 @@ describe("useSidebarDrawer", () => {
       },
     });
     const wrapper = mount(Test, { attachTo: document.body });
-    return { wrapper, get api() { return api!; } };
+    return {
+      wrapper,
+      get api() {
+        return api!;
+      },
+    };
   }
 
   it("starts closed and exposes open/close/toggle", async () => {
@@ -161,7 +181,12 @@ describe("useSidebarDrawer", () => {
     expect(document.activeElement).toBe(back);
 
     back.focus();
-    const ev2 = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
+    const ev2 = new KeyboardEvent("keydown", {
+      key: "Tab",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
     drawer.dispatchEvent(ev2);
     expect(document.activeElement).toBe(linkB);
   });

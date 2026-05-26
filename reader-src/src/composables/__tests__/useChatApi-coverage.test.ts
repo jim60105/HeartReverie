@@ -99,7 +99,14 @@ describe("useChatApi additional coverage", () => {
 
     wsHandlers["chat:done"]?.({
       id: sent.id,
-      usage: { chapter: 1, promptTokens: 1, completionTokens: 1, totalTokens: 2, model: "m", timestamp: "t" },
+      usage: {
+        chapter: 1,
+        promptTokens: 1,
+        completionTokens: 1,
+        totalTokens: 2,
+        model: "m",
+        timestamp: "t",
+      },
     });
 
     expect(await pending).toBe(true);
@@ -126,8 +133,18 @@ describe("useChatApi additional coverage", () => {
   it("resendMessage HTTP handles post failure and json fallback load", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({}), headers: new Headers() })
-      .mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({}), headers: new Headers() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+        headers: new Headers(),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+        headers: new Headers(),
+      });
     vi.stubGlobal("fetch", fetchMock);
 
     const api = await getApi();
@@ -136,8 +153,18 @@ describe("useChatApi additional coverage", () => {
 
     fetchMock.mockReset();
     fetchMock
-      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({}), headers: new Headers() })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.reject(new Error("bad json")), headers: new Headers() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+        headers: new Headers(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(new Error("bad json")),
+        headers: new Headers(),
+      });
 
     expect(await api.resendMessage("s", "t", "m")).toBe(true);
     expect(usageLoad).toHaveBeenCalledWith("s", "t");

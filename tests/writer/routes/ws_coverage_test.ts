@@ -16,10 +16,7 @@
 import { assert as assertTrue, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
-import {
-  createSafePath,
-  verifyPassphrase,
-} from "../../../writer/lib/middleware.ts";
+import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 import { createTemplateEngine } from "../../../writer/lib/template.ts";
@@ -123,8 +120,7 @@ function mockLLMHangThenAbort(): void {
     if (typeof url === "string" && url.includes("chat/completions")) {
       const sig = opts?.signal as AbortSignal | undefined;
       return new Promise<Response>((_resolve, reject) => {
-        const onAbort = () =>
-          reject(sig?.reason ?? new DOMException("aborted", "AbortError"));
+        const onAbort = () => reject(sig?.reason ?? new DOMException("aborted", "AbortError"));
         if (sig?.aborted) onAbort();
         else sig?.addEventListener("abort", onAbort, { once: true });
       });
@@ -202,11 +198,11 @@ Deno.test({
 
     const hookDispatcher = new HookDispatcher();
     const pluginManager = new PluginManager(
-    pluginsRoot,
-    undefined,
-    hookDispatcher,
-    Deno.makeTempDirSync(),
-  );
+      pluginsRoot,
+      undefined,
+      hookDispatcher,
+      Deno.makeTempDirSync(),
+    );
     await pluginManager.init();
 
     const templateEngine = createTemplateEngine(pluginManager);
@@ -223,7 +219,14 @@ Deno.test({
       pluginManager,
       hookDispatcher,
       buildPromptFromStory: storyEngine.buildPromptFromStory,
-      buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+      buildContinuePromptFromStory: (async () => ({
+        messages: [],
+        ventoError: null,
+        targetChapterNumber: 0,
+        existingContent: "",
+        userMessageText: "",
+        assistantPrefill: "",
+      })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
       verifyPassphrase,
     } as AppDeps;
 
