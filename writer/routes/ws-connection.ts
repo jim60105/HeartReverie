@@ -24,10 +24,7 @@ import {
   handleChatResend,
   handleChatSend,
 } from "./ws-chat.ts";
-import {
-  handlePluginActionAbort,
-  handlePluginActionRun,
-} from "./ws-plugin-action.ts";
+import { handlePluginActionAbort, handlePluginActionRun } from "./ws-plugin-action.ts";
 
 const log = createLogger("ws");
 const authLog = createLogger("auth");
@@ -206,7 +203,7 @@ export class WsConnection {
       case "plugin-action:abort":
         handlePluginActionAbort(this, msg);
         break;
-      // Unknown types: silently ignore
+        // Unknown types: silently ignore
     }
   }
 }

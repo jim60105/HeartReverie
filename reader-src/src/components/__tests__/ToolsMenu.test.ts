@@ -1,4 +1,4 @@
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import ToolsMenu from "@/components/ToolsMenu.vue";

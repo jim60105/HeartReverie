@@ -19,11 +19,7 @@
  */
 
 import { createLogger, type Logger } from "./logger.ts";
-import type {
-  ActionButtonDescriptor,
-  ActionButtonVisibility,
-  PluginManifest,
-} from "../types.ts";
+import type { ActionButtonDescriptor, ActionButtonVisibility, PluginManifest } from "../types.ts";
 
 const log = createLogger("plugin");
 

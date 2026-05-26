@@ -35,10 +35,7 @@
 
 import { dirname, join } from "@std/path";
 import { errorMessage } from "./errors.ts";
-import {
-  getHardcodedPathRoots,
-  resolveDisplayRoots,
-} from "./path-allowlist.ts";
+import { getHardcodedPathRoots, resolveDisplayRoots } from "./path-allowlist.ts";
 import type { ValidationError } from "./schema-validator.ts";
 import { createLogger } from "./logger.ts";
 import { extractSchemaDefaults } from "./plugin-validators.ts";

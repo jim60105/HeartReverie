@@ -26,8 +26,7 @@ const backendDiff = diff(backend);
 const frontendDiff = diff(frontend);
 const mirrorDrift = backend.join(",") !== frontend.join(",");
 
-const fail =
-  backendDiff.missing.length > 0 ||
+const fail = backendDiff.missing.length > 0 ||
   backendDiff.extra.length > 0 ||
   frontendDiff.missing.length > 0 ||
   frontendDiff.extra.length > 0 ||

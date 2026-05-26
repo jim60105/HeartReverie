@@ -14,13 +14,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson, errorMessage } from "../lib/errors.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import {
   readStoryLlmConfig,
-  writeStoryLlmConfig,
   StoryConfigNotFoundError,
   StoryConfigValidationError,
+  writeStoryLlmConfig,
 } from "../lib/story-config.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
@@ -54,7 +54,10 @@ export function registerStoryConfigRoutes(
         }
         const message = errorMessage(err);
         log.error(`[GET /api/:series/:name/config] ${message}`);
-        return c.json(problemJson("Internal Server Error", 500, "Failed to stat story directory"), 500);
+        return c.json(
+          problemJson("Internal Server Error", 500, "Failed to stat story directory"),
+          500,
+        );
       }
       try {
         const overrides = await readStoryLlmConfig(storyDir);
@@ -65,7 +68,10 @@ export function registerStoryConfigRoutes(
         }
         const message = errorMessage(err);
         log.error(`[GET /api/:series/:name/config] ${message}`);
-        return c.json(problemJson("Internal Server Error", 500, "Failed to read story config"), 500);
+        return c.json(
+          problemJson("Internal Server Error", 500, "Failed to read story config"),
+          500,
+        );
       }
     },
   );
@@ -94,7 +100,10 @@ export function registerStoryConfigRoutes(
         }
         const message = errorMessage(err);
         log.error(`[PUT /api/:series/:name/config] ${message}`);
-        return c.json(problemJson("Internal Server Error", 500, "Failed to stat story directory"), 500);
+        return c.json(
+          problemJson("Internal Server Error", 500, "Failed to stat story directory"),
+          500,
+        );
       }
 
       let body: unknown;
@@ -106,7 +115,12 @@ export function registerStoryConfigRoutes(
 
       try {
         const persisted = await writeStoryLlmConfig(storyDir, body);
-        log.info("Story config written", { op: "write", series, story: name, fieldCount: Object.keys(persisted).length });
+        log.info("Story config written", {
+          op: "write",
+          series,
+          story: name,
+          fieldCount: Object.keys(persisted).length,
+        });
         return c.json(persisted);
       } catch (err) {
         if (err instanceof StoryConfigValidationError) {
@@ -117,7 +131,10 @@ export function registerStoryConfigRoutes(
         }
         const message = errorMessage(err);
         log.error(`[PUT /api/:series/:name/config] ${message}`);
-        return c.json(problemJson("Internal Server Error", 500, "Failed to write story config"), 500);
+        return c.json(
+          problemJson("Internal Server Error", 500, "Failed to write story config"),
+          500,
+        );
       }
     },
   );

@@ -236,7 +236,8 @@ describe("ContentArea", () => {
         stubs: {
           ChapterContent: {
             props: ["rawMarkdown", "isLastChapter"],
-            template: `<div class='chapter-stub'><div class='plugin-sidebar'><span>status: idle</span></div></div>`,
+            template:
+              `<div class='chapter-stub'><div class='plugin-sidebar'><span>status: idle</span></div></div>`,
           },
         },
       },
@@ -275,7 +276,8 @@ describe("ContentArea", () => {
         stubs: {
           ChapterContent: {
             props: ["rawMarkdown", "isLastChapter"],
-            template: `<div class='chapter-stub'><div class='plugin-sidebar'><span>v1</span></div></div>`,
+            template:
+              `<div class='chapter-stub'><div class='plugin-sidebar'><span>v1</span></div></div>`,
           },
         },
       },

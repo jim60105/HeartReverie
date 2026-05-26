@@ -10,7 +10,7 @@ function mockFetch(status: number) {
         json: () => Promise.resolve({}),
         text: () => Promise.resolve(""),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }

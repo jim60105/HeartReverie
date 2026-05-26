@@ -17,10 +17,7 @@ import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
 import { errorMessage, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
-import {
-  lintTemplate,
-  type TemplateKind,
-} from "../lib/template-lint.ts";
+import { lintTemplate, type TemplateKind } from "../lib/template-lint.ts";
 import {
   type FixtureBag,
   loadDefaultFixture,
@@ -64,8 +61,8 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
       return c.json(problemJson("Internal Server Error", 500, "Template engine unavailable"), 500);
     }
 
-    const hasTemplatePath = typeof body.templatePath === "string"
-      && (body.templatePath as string).length > 0;
+    const hasTemplatePath = typeof body.templatePath === "string" &&
+      (body.templatePath as string).length > 0;
 
     // ─── Source-form branch ──────────────────────────────────────
     if (!hasTemplatePath) {
@@ -78,7 +75,11 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
       ];
       if (typeof kindRaw !== "string" || !allowedKinds.includes(kindRaw as TemplateKind)) {
         return c.json(
-          problemJson("Bad Request", 400, `Missing or invalid 'kind' (got ${JSON.stringify(kindRaw)})`),
+          problemJson(
+            "Bad Request",
+            400,
+            `Missing or invalid 'kind' (got ${JSON.stringify(kindRaw)})`,
+          ),
           400,
         );
       }
@@ -98,7 +99,11 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
         const r = body.role;
         if (r !== "system" && r !== "user" && r !== "assistant") {
           return c.json(
-            problemJson("Bad Request", 400, "kind='prompt-message-body' requires role ∈ {system,user,assistant}"),
+            problemJson(
+              "Bad Request",
+              400,
+              "kind='prompt-message-body' requires role ∈ {system,user,assistant}",
+            ),
             400,
           );
         }
@@ -109,7 +114,11 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
         if (s !== undefined) {
           if (s !== "global" && s !== "series" && s !== "story") {
             return c.json(
-              problemJson("Bad Request", 400, "kind='lore' scope must be one of global|series|story"),
+              problemJson(
+                "Bad Request",
+                400,
+                "kind='lore' scope must be one of global|series|story",
+              ),
               400,
             );
           }
@@ -121,7 +130,11 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
           }
           if (s === "story" && (!series || !story)) {
             return c.json(
-              problemJson("Bad Request", 400, "kind='lore' scope='story' requires 'series' and 'story'"),
+              problemJson(
+                "Bad Request",
+                400,
+                "kind='lore' scope='story' requires 'series' and 'story'",
+              ),
               400,
             );
           }
@@ -191,7 +204,12 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
     // ─── Path-form branch (unchanged) ────────────────────────────
     const templatePath = body.templatePath;
     const parsed = parseTemplatePath(templatePath);
-    if (!parsed.ok) return c.json(problemJson("Bad Request", parsed.err.status, parsed.err.detail), parsed.err.status as 400);
+    if (!parsed.ok) {
+      return c.json(
+        problemJson("Bad Request", parsed.err.status, parsed.err.detail),
+        parsed.err.status as 400,
+      );
+    }
 
     try {
       const diagnostics = await lintTemplate({
@@ -228,7 +246,12 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
       return c.json(problemJson("Bad Request", 400, "source must be a string"), 400);
     }
     const parsed = parseTemplatePath(body.templatePath);
-    if (!parsed.ok) return c.json(problemJson("Bad Request", parsed.err.status, parsed.err.detail), parsed.err.status as 400);
+    if (!parsed.ok) {
+      return c.json(
+        problemJson("Bad Request", parsed.err.status, parsed.err.detail),
+        parsed.err.status as 400,
+      );
+    }
     const ventoEnv = deps.templateEngine?.ventoEnv;
     if (!ventoEnv) {
       return c.json(problemJson("Internal Server Error", 500, "Template engine unavailable"), 500);
@@ -241,7 +264,10 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
         const series = typeof body.series === "string" ? body.series : "";
         const story = typeof body.story === "string" ? body.story : "";
         if (!series || !story) {
-          return c.json(problemJson("Bad Request", 400, "series and story are required for fixture='current'"), 400);
+          return c.json(
+            problemJson("Bad Request", 400, "series and story are required for fixture='current'"),
+            400,
+          );
         }
         args = {
           mode: "current",
@@ -270,7 +296,10 @@ export function registerTemplateValidateRoutes(app: Hono, deps: AppDeps): void {
           fixture: fixture as FixtureBag,
         };
       } else {
-        return c.json(problemJson("Bad Request", 400, "fixture must be 'default', 'current', or an object"), 400);
+        return c.json(
+          problemJson("Bad Request", 400, "fixture must be 'default', 'current', or an object"),
+          400,
+        );
       }
       const result = await renderSystemPromptForPreview(args);
       return c.json(result);

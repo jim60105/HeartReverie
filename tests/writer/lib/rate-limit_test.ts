@@ -31,56 +31,61 @@ function makeReq(app: Hono, ip = "127.0.0.1") {
   );
 }
 
-Deno.test({ name: "rateLimiter", sanitizeOps: false, sanitizeResources: false, fn: async (t) => {
-  await t.step("requests within limit succeed", async () => {
-    const app = createRateLimitApp({ windowMs: 60_000, limit: 3 });
-    for (let i = 0; i < 3; i++) {
+Deno.test({
+  name: "rateLimiter",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async (t) => {
+    await t.step("requests within limit succeed", async () => {
+      const app = createRateLimitApp({ windowMs: 60_000, limit: 3 });
+      for (let i = 0; i < 3; i++) {
+        const res = await makeReq(app);
+        assertEquals(res.status, 200);
+      }
+    });
+
+    await t.step("requests over limit get 429", async () => {
+      const app = createRateLimitApp({ windowMs: 60_000, limit: 3 });
+      for (let i = 0; i < 3; i++) {
+        await makeReq(app);
+      }
       const res = await makeReq(app);
-      assertEquals(res.status, 200);
-    }
-  });
+      assertEquals(res.status, 429);
+      const body = await res.json();
+      assertEquals(body.status, 429);
+    });
 
-  await t.step("requests over limit get 429", async () => {
-    const app = createRateLimitApp({ windowMs: 60_000, limit: 3 });
-    for (let i = 0; i < 3; i++) {
-      await makeReq(app);
-    }
-    const res = await makeReq(app);
-    assertEquals(res.status, 429);
-    const body = await res.json();
-    assertEquals(body.status, 429);
-  });
+    await t.step("window reset allows new requests", async () => {
+      const app = createRateLimitApp({ windowMs: 50, limit: 1 });
+      const res1 = await makeReq(app);
+      assertEquals(res1.status, 200);
 
-  await t.step("window reset allows new requests", async () => {
-    const app = createRateLimitApp({ windowMs: 50, limit: 1 });
-    const res1 = await makeReq(app);
-    assertEquals(res1.status, 200);
+      const res2 = await makeReq(app);
+      assertEquals(res2.status, 429);
 
-    const res2 = await makeReq(app);
-    assertEquals(res2.status, 429);
+      // Wait for window to expire
+      await new Promise((r) => setTimeout(r, 100));
 
-    // Wait for window to expire
-    await new Promise((r) => setTimeout(r, 100));
+      const res3 = await makeReq(app);
+      assertEquals(res3.status, 200);
+    });
 
-    const res3 = await makeReq(app);
-    assertEquals(res3.status, 200);
-  });
+    await t.step("different IPs are tracked independently", async () => {
+      const app = createRateLimitApp({ windowMs: 60_000, limit: 1 });
 
-  await t.step("different IPs are tracked independently", async () => {
-    const app = createRateLimitApp({ windowMs: 60_000, limit: 1 });
+      const res1 = await makeReq(app, "10.0.0.1");
+      assertEquals(res1.status, 200);
 
-    const res1 = await makeReq(app, "10.0.0.1");
-    assertEquals(res1.status, 200);
+      const res2 = await makeReq(app, "10.0.0.2");
+      assertEquals(res2.status, 200);
 
-    const res2 = await makeReq(app, "10.0.0.2");
-    assertEquals(res2.status, 200);
+      // First IP is now over limit
+      const res3 = await makeReq(app, "10.0.0.1");
+      assertEquals(res3.status, 429);
 
-    // First IP is now over limit
-    const res3 = await makeReq(app, "10.0.0.1");
-    assertEquals(res3.status, 429);
-
-    // Second IP is now over limit
-    const res4 = await makeReq(app, "10.0.0.2");
-    assertEquals(res4.status, 429);
-  });
-} });
+      // Second IP is now over limit
+      const res4 = await makeReq(app, "10.0.0.2");
+      assertEquals(res4.status, 429);
+    });
+  },
+});

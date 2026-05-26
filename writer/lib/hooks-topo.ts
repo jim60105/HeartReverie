@@ -69,7 +69,9 @@ export function computeTopoLayers(
     for (const dep of e.dependsOn) {
       if (!byPlugin.has(dep)) {
         log.error("dependsOn references unknown plugin; falling back to priority-only", {
-          plugin: e.plugin, unknownDep: dep, stage,
+          plugin: e.plugin,
+          unknownDep: dep,
+          stage,
         });
         return [parallel];
       }
@@ -103,9 +105,10 @@ export function computeTopoLayers(
     }
     if (layer.length === 0) {
       // Cycle detected — fall back to priority-only
-      const cyclePlugins = [...remaining].map(e => e.plugin).filter(Boolean);
+      const cyclePlugins = [...remaining].map((e) => e.plugin).filter(Boolean);
       log.error("dependsOn cycle detected in parallel bucket; falling back to priority-only", {
-        plugins: cyclePlugins, stage,
+        plugins: cyclePlugins,
+        stage,
       });
       return [parallel];
     }

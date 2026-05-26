@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { flushPromises, mount } from "@vue/test-utils";
-import { ref, nextTick } from "vue";
+import { nextTick, ref } from "vue";
 import ChapterContent from "@/components/ChapterContent.vue";
 
 const mockState = vi.hoisted(() => {
@@ -27,11 +27,13 @@ const mockState = vi.hoisted(() => {
     remountTokenRef: null as unknown as { value: number },
     pluginsReadyRef: { value: true },
     pluginsSettledRef: { value: true },
-    backendContextRef: { value: {
-      series: "series-a" as string | null,
-      story: "story-a" as string | null,
-      isBackendMode: true,
-    } },
+    backendContextRef: {
+      value: {
+        series: "series-a" as string | null,
+        story: "story-a" as string | null,
+        isBackendMode: true,
+      },
+    },
     reloadToLastMock: vi.fn().mockResolvedValue(undefined),
     refreshAfterEditMock: vi.fn().mockResolvedValue(undefined),
     forceTokenRemountMock: vi.fn(),
@@ -108,7 +110,11 @@ describe("ChapterContent", () => {
     mockState.remountTokenRef.value = 0;
     mockState.pluginsReadyRef.value = true;
     mockState.pluginsSettledRef.value = true;
-    mockState.backendContextRef.value = { series: "series-a", story: "story-a", isBackendMode: true };
+    mockState.backendContextRef.value = {
+      series: "series-a",
+      story: "story-a",
+      isBackendMode: true,
+    };
     mockState.chaptersRef.value = [{ number: 2, stateDiff: { hp: "+1" } }];
     mockState.renderChapterMock.mockClear();
     mockState.editChapterMock.mockClear();
@@ -164,7 +170,12 @@ describe("ChapterContent", () => {
     await wrapper.findAll("button")[0]!.trigger("click");
     await flushPromises();
 
-    expect(mockState.editChapterMock).toHaveBeenCalledWith("series-a", "story-a", 2, "updated chapter");
+    expect(mockState.editChapterMock).toHaveBeenCalledWith(
+      "series-a",
+      "story-a",
+      2,
+      "updated chapter",
+    );
     expect(mockState.refreshAfterEditMock).toHaveBeenCalledWith(1);
     expect(mockState.reloadToLastMock).not.toHaveBeenCalled();
     expect(wrapper.find("textarea.chapter-editor").exists()).toBe(false);

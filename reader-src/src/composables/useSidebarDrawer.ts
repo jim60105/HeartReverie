@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, type Ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, type Ref, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useMediaQuery } from "@/composables/useMediaQuery";
 

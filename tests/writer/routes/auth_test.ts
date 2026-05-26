@@ -18,7 +18,7 @@ import { createApp } from "../../../writer/app.ts";
 import { verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import type { Hono } from "@hono/hono";
-import type { AppDeps, AppConfig } from "../../../writer/types.ts";
+import type { AppConfig, AppDeps } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
 async function makeRequest(
@@ -46,34 +46,47 @@ async function makeRequest(
   return { status: res.status, body: parsed, headers: Object.fromEntries(res.headers) };
 }
 
-Deno.test({ name: "GET /api/auth/verify", sanitizeOps: false, sanitizeResources: false, fn: async (t) => {
-  Deno.env.set("PASSPHRASE", "test-pass");
+Deno.test({
+  name: "GET /api/auth/verify",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async (t) => {
+    Deno.env.set("PASSPHRASE", "test-pass");
 
-  const app = createApp({
-    config: {
-      READER_DIR: "/nonexistent-reader",
-      PLAYGROUND_DIR: "/nonexistent-playground",
-      ROOT_DIR: "/nonexistent-root",
-    } as unknown as AppConfig,
-    safePath: () => null,
-    pluginManager: {
-      getPlugins: () => [],
-      getParameters: () => [],
-      getPluginDir: () => null,
+    const app = createApp({
+      config: {
+        READER_DIR: "/nonexistent-reader",
+        PLAYGROUND_DIR: "/nonexistent-playground",
+        ROOT_DIR: "/nonexistent-root",
+      } as unknown as AppConfig,
+      safePath: () => null,
+      pluginManager: {
+        getPlugins: () => [],
+        getParameters: () => [],
+        getPluginDir: () => null,
         getBuiltinDir: () => "/nonexistent-plugins",
-      getPromptVariables: async () => ({ variables: {}, fragments: [] }),
-      getStripTagPatterns: () => null,
-    } as unknown as PluginManager,
-    hookDispatcher: new HookDispatcher(),
-    buildPromptFromStory: async () => ({}) as unknown as import("../../../writer/types.ts").BuildPromptResult,
-    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
-    templateEngine: null,
+        getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+        getStripTagPatterns: () => null,
+      } as unknown as PluginManager,
+      hookDispatcher: new HookDispatcher(),
+      buildPromptFromStory: async () =>
+        ({}) as unknown as import("../../../writer/types.ts").BuildPromptResult,
+      buildContinuePromptFromStory: (async () => ({
+        messages: [],
+        ventoError: null,
+        targetChapterNumber: 0,
+        existingContent: "",
+        userMessageText: "",
+        assistantPrefill: "",
+      })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+      templateEngine: null,
       verifyPassphrase,
-  } as AppDeps);
+    } as AppDeps);
 
-  await t.step("returns { ok: true }", async () => {
-    const res = await makeRequest(app, "GET", "/api/auth/verify");
-    assertEquals(res.status, 200);
-    assertEquals(res.body, { ok: true });
-  });
-} });
+    await t.step("returns { ok: true }", async () => {
+      const res = await makeRequest(app, "GET", "/api/auth/verify");
+      assertEquals(res.status, 200);
+      assertEquals(res.body, { ok: true });
+    });
+  },
+});

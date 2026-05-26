@@ -17,11 +17,11 @@ import { assertEquals, assertStringIncludes } from "@std/assert";
 import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import {
-  initLogger,
-  createLogger,
-  createLlmLogger,
-  closeLogger,
   _resetLogger,
+  closeLogger,
+  createLlmLogger,
+  createLogger,
+  initLogger,
 } from "../../../writer/lib/logger.ts";
 import type { LogEntry } from "../../../writer/lib/logger.ts";
 

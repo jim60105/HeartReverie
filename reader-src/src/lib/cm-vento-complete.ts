@@ -33,8 +33,7 @@ import { VENTO_HELPERS, type VentoHelper } from "@/lib/template";
 import type { VariableEntry } from "@/lib/template-api";
 
 const HELPER_DOCS: Record<VentoHelper, string> = {
-  empty:
-    "若值為 null/undefined/空字串/空陣列/空物件則回傳指定預設值，否則回傳原值。",
+  empty: "若值為 null/undefined/空字串/空陣列/空物件則回傳指定預設值，否則回傳原值。",
   escape: "將值轉換為 HTML 實體（&、<、>、\"、' → &amp; 等）。",
   unescape: "將 HTML 實體還原為原始字元。",
 };

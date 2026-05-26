@@ -112,7 +112,12 @@ function captureUpstreamFetch(
     }
     return original(url as string, opts);
   }) as typeof fetch;
-  return { restore: () => { globalThis.fetch = original; }, captured };
+  return {
+    restore: () => {
+      globalThis.fetch = original;
+    },
+    captured,
+  };
 }
 
 const buildPromptStub = () =>
@@ -280,8 +285,7 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "chat-shared: upstream 400 with body surfaces upstream body in ChatError detail",
+  name: "chat-shared: upstream 400 with body surfaces upstream body in ChatError detail",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {

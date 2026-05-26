@@ -24,7 +24,7 @@ function mockFetchOnce(body: unknown, status = 200) {
         status,
         json: () => Promise.resolve(body),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }
@@ -95,7 +95,7 @@ describe("usePlugins readiness gate", () => {
             json: () => Promise.resolve(body),
             headers: new Headers(),
           });
-      }),
+      })
     );
     vi.stubGlobal("fetch", fetchMock);
 

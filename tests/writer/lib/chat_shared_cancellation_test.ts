@@ -15,19 +15,11 @@
 
 import { assert, assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { join } from "@std/path";
-import {
-  ChatAbortError,
-  ChatError,
-  executeChat,
-} from "../../../writer/lib/chat-shared.ts";
+import { ChatAbortError, ChatError, executeChat } from "../../../writer/lib/chat-shared.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { createSafePath } from "../../../writer/lib/middleware.ts";
 import { _resetLogger, initLogger } from "../../../writer/lib/logger.ts";
-import type {
-  AppConfig,
-  BuildPromptResult,
-  LlmConfig,
-} from "../../../writer/types.ts";
+import type { AppConfig, BuildPromptResult, LlmConfig } from "../../../writer/types.ts";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -123,7 +115,9 @@ function controllableFetchStub(): {
     return original(url as string, init);
   }) as typeof fetch;
   return {
-    restore: () => { globalThis.fetch = original; },
+    restore: () => {
+      globalThis.fetch = original;
+    },
     enqueue: (s: string) => controller?.enqueue(enc.encode(s)),
     closeStream: () => controller?.close(),
     errorStream: (err: Error) => controller?.error(err),
@@ -142,7 +136,9 @@ async function readLlmLog(path: string): Promise<Array<Record<string, unknown>>>
   } catch {
     return [];
   }
-  return text.split("\n").filter((l) => l.length > 0).map((l) => JSON.parse(l) as Record<string, unknown>);
+  return text.split("\n").filter((l) => l.length > 0).map((l) =>
+    JSON.parse(l) as Record<string, unknown>
+  );
 }
 
 async function withInitLogger(llmLogPath: string, fn: () => Promise<void>): Promise<void> {
@@ -165,55 +161,62 @@ Deno.test({
     const previousKey = Deno.env.get("LLM_API_KEY");
     Deno.env.set("LLM_API_KEY", "k");
     try {
-      await t.step("abort while initial fetch is pending throws ChatAbortError and creates no chapter file", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-1-" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          const original = globalThis.fetch;
-          // Fetch resolves only when the signal aborts (rejects with the reason).
-          globalThis.fetch = ((_url: string | URL | Request, init?: RequestInit) =>
-            new Promise<Response>((_resolve, reject) => {
-              const sig = init?.signal as AbortSignal | undefined;
-              if (!sig) {
-                reject(new Error("test fetch stub requires signal"));
-                return;
-              }
-              const onAbort = () => reject(sig.reason ?? new DOMException("aborted", "AbortError"));
-              if (sig.aborted) onAbort();
-              else sig.addEventListener("abort", onAbort, { once: true });
-            })) as typeof fetch;
-          const ctrl = new AbortController();
-          const promise = executeChat({
-            series: "s1",
-            name: "n1",
-            message: "Hi",
-            config: buildConfig(tmpDir),
-            safePath: createSafePath(tmpDir),
-            hookDispatcher: new HookDispatcher(),
-            buildPromptFromStory: buildPromptStub,
-            signal: ctrl.signal,
-          });
-          // Yield to let executeChat enter the fetch.
-          await new Promise((r) => setTimeout(r, 5));
-          ctrl.abort();
+      await t.step(
+        "abort while initial fetch is pending throws ChatAbortError and creates no chapter file",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-1-" });
           try {
-            await assertRejects(() => promise, ChatAbortError);
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            const original = globalThis.fetch;
+            // Fetch resolves only when the signal aborts (rejects with the reason).
+            globalThis.fetch = ((_url: string | URL | Request, init?: RequestInit) =>
+              new Promise<Response>((_resolve, reject) => {
+                const sig = init?.signal as AbortSignal | undefined;
+                if (!sig) {
+                  reject(new Error("test fetch stub requires signal"));
+                  return;
+                }
+                const onAbort = () =>
+                  reject(sig.reason ?? new DOMException("aborted", "AbortError"));
+                if (sig.aborted) {
+                  onAbort();
+                } else sig.addEventListener("abort", onAbort, { once: true });
+              })) as typeof fetch;
+            const ctrl = new AbortController();
+            const promise = executeChat({
+              series: "s1",
+              name: "n1",
+              message: "Hi",
+              config: buildConfig(tmpDir),
+              safePath: createSafePath(tmpDir),
+              hookDispatcher: new HookDispatcher(),
+              buildPromptFromStory: buildPromptStub,
+              signal: ctrl.signal,
+            });
+            // Yield to let executeChat enter the fetch.
+            await new Promise((r) =>
+              setTimeout(r, 5)
+            );
+            ctrl.abort();
+            try {
+              await assertRejects(() => promise, ChatAbortError);
+            } finally {
+              globalThis.fetch = original;
+            }
+            // No chapter file should exist.
+            let exists = true;
+            try {
+              await Deno.stat(join(tmpDir, "s1", "n1", "001.md"));
+            } catch (err) {
+              if (err instanceof Deno.errors.NotFound) exists = false;
+              else throw err;
+            }
+            assertEquals(exists, false, "no chapter file should be created on initial-fetch abort");
           } finally {
-            globalThis.fetch = original;
+            await Deno.remove(tmpDir, { recursive: true });
           }
-          // No chapter file should exist.
-          let exists = true;
-          try {
-            await Deno.stat(join(tmpDir, "s1", "n1", "001.md"));
-          } catch (err) {
-            if (err instanceof Deno.errors.NotFound) exists = false;
-            else throw err;
-          }
-          assertEquals(exists, false, "no chapter file should be created on initial-fetch abort");
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
 
       await t.step("pre-aborted controller throws ChatAbortError", async () => {
         const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-2-" });
@@ -227,20 +230,23 @@ Deno.test({
           globalThis.fetch = ((_url: string | URL | Request, init?: RequestInit) =>
             new Promise<Response>((_, reject) => {
               const sig = init?.signal as AbortSignal | undefined;
-              if (sig?.aborted) reject(sig.reason ?? new DOMException("aborted", "AbortError"));
+              if (sig?.aborted) {
+                reject(sig.reason ?? new DOMException("aborted", "AbortError"));
+              }
             })) as typeof fetch;
           try {
             await assertRejects(
-              () => executeChat({
-                series: "s1",
-                name: "n1",
-                message: "Hi",
-                config: buildConfig(tmpDir),
-                safePath: createSafePath(tmpDir),
-                hookDispatcher: new HookDispatcher(),
-                buildPromptFromStory: buildPromptStub,
-                signal: ctrl.signal,
-              }),
+              () =>
+                executeChat({
+                  series: "s1",
+                  name: "n1",
+                  message: "Hi",
+                  config: buildConfig(tmpDir),
+                  safePath: createSafePath(tmpDir),
+                  hookDispatcher: new HookDispatcher(),
+                  buildPromptFromStory: buildPromptStub,
+                  signal: ctrl.signal,
+                }),
               ChatAbortError,
             );
           } finally {
@@ -251,57 +257,67 @@ Deno.test({
         }
       });
 
-      await t.step("abort during streaming preserves partial chapter and logs aborted=true", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-3-" });
-        const llmLogPath = join(tmpDir, "llm.jsonl");
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          await withInitLogger(llmLogPath, async () => {
-            const stub = controllableFetchStub();
-            const ctrl = new AbortController();
-            let firstSeen = false;
-            const onDelta = (s: string): void => {
-              if (s === "hello " && !firstSeen) {
-                firstSeen = true;
-                queueMicrotask(() => ctrl.abort());
+      await t.step(
+        "abort during streaming preserves partial chapter and logs aborted=true",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-3-" });
+          const llmLogPath = join(tmpDir, "llm.jsonl");
+          try {
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            await withInitLogger(llmLogPath, async () => {
+              const stub = controllableFetchStub();
+              const ctrl = new AbortController();
+              let firstSeen = false;
+              const onDelta = (s: string): void => {
+                if (s === "hello " && !firstSeen) {
+                  firstSeen = true;
+                  queueMicrotask(() => ctrl.abort());
+                }
+              };
+              try {
+                const promise = executeChat({
+                  series: "s1",
+                  name: "n1",
+                  message: "Hi",
+                  config: buildConfig(tmpDir),
+                  safePath: createSafePath(tmpDir),
+                  hookDispatcher: new HookDispatcher(),
+                  buildPromptFromStory: buildPromptStub,
+                  signal: ctrl.signal,
+                  onDelta,
+                });
+                // Push the first chunk only; abort fires inside onDelta.
+                // Yield several microtasks so executeChat opens the file and starts reading.
+                await new Promise((r) => setTimeout(r, 10));
+                stub.enqueue('data: {"choices":[{"delta":{"content":"hello "}}]}\n\n');
+                await assertRejects(() => promise, ChatAbortError);
+              } finally {
+                stub.restore();
               }
-            };
-            try {
-              const promise = executeChat({
-                series: "s1",
-                name: "n1",
-                message: "Hi",
-                config: buildConfig(tmpDir),
-                safePath: createSafePath(tmpDir),
-                hookDispatcher: new HookDispatcher(),
-                buildPromptFromStory: buildPromptStub,
-                signal: ctrl.signal,
-                onDelta,
+
+              const fileContent = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
+              assertStringIncludes(fileContent, "hello ");
+              assertEquals(
+                fileContent.includes("world"),
+                false,
+                "post-abort chunks must not appear",
+              );
+
+              const logEntries = await readLlmLog(llmLogPath);
+              const abortedEntries = logEntries.filter((e) => {
+                const data = e.data as Record<string, unknown> | undefined;
+                return data?.aborted === true;
               });
-              // Push the first chunk only; abort fires inside onDelta.
-              // Yield several microtasks so executeChat opens the file and starts reading.
-              await new Promise((r) => setTimeout(r, 10));
-              stub.enqueue('data: {"choices":[{"delta":{"content":"hello "}}]}\n\n');
-              await assertRejects(() => promise, ChatAbortError);
-            } finally {
-              stub.restore();
-            }
-
-            const fileContent = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
-            assertStringIncludes(fileContent, "hello ");
-            assertEquals(fileContent.includes("world"), false, "post-abort chunks must not appear");
-
-            const logEntries = await readLlmLog(llmLogPath);
-            const abortedEntries = logEntries.filter((e) => {
-              const data = e.data as Record<string, unknown> | undefined;
-              return data?.aborted === true;
+              assert(
+                abortedEntries.length >= 1,
+                "expected at least one log entry with aborted: true",
+              );
             });
-            assert(abortedEntries.length >= 1, "expected at least one log entry with aborted: true");
-          });
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+          } finally {
+            await Deno.remove(tmpDir, { recursive: true });
+          }
+        },
+      );
 
       await t.step("abort with custom Error reason still produces ChatAbortError", async () => {
         const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-4-" });
@@ -361,7 +377,9 @@ Deno.test({
               await new Promise((r) => setTimeout(r, 10));
               stub.enqueue('data: {"choices":[{"delta":{"content":"partial "}}]}\n\n');
               await new Promise((r) => setTimeout(r, 5));
-              stub.enqueue('data: {"id":"x","object":"chat.completion.chunk","created":1,"error":{"message":"Provider connection lost","code":502},"choices":[{"finish_reason":"error","delta":{}}]}\n\n');
+              stub.enqueue(
+                'data: {"id":"x","object":"chat.completion.chunk","created":1,"error":{"message":"Provider connection lost","code":502},"choices":[{"finish_reason":"error","delta":{}}]}\n\n',
+              );
               stub.enqueue("data: [DONE]\n\n");
               stub.closeStream();
               const err = await assertRejects(() => promise, ChatError);
@@ -380,48 +398,61 @@ Deno.test({
               const data = e.data as Record<string, unknown> | undefined;
               return data?.errorCode === "stream-error";
             });
-            assertEquals(streamErrorEntries.length, 1, "expected exactly one stream-error log entry");
+            assertEquals(
+              streamErrorEntries.length,
+              1,
+              "expected exactly one stream-error log entry",
+            );
             const duplicateStream = logEntries.filter((e) => {
               const data = e.data as Record<string, unknown> | undefined;
               return data?.errorCode === "stream";
             });
-            assertEquals(duplicateStream.length, 0, "must not log a duplicate generic 'stream' error");
+            assertEquals(
+              duplicateStream.length,
+              0,
+              "must not log a duplicate generic 'stream' error",
+            );
           });
         } finally {
           await Deno.remove(tmpDir, { recursive: true });
         }
       });
 
-      await t.step("mid-stream error without explicit message falls back to a non-empty string", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-6-" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          const stub = controllableFetchStub();
+      await t.step(
+        "mid-stream error without explicit message falls back to a non-empty string",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-6-" });
           try {
-            const promise = executeChat({
-              series: "s1",
-              name: "n1",
-              message: "Hi",
-              config: buildConfig(tmpDir),
-              safePath: createSafePath(tmpDir),
-              hookDispatcher: new HookDispatcher(),
-              buildPromptFromStory: buildPromptStub,
-            });
-            await new Promise((r) => setTimeout(r, 10));
-            stub.enqueue('data: {"choices":[{"delta":{"content":"x"}}]}\n\n');
-            await new Promise((r) => setTimeout(r, 5));
-            stub.enqueue('data: {"error":{"code":502},"choices":[{"finish_reason":"error","delta":{}}]}\n\n');
-            stub.closeStream();
-            const err = await assertRejects(() => promise, ChatError);
-            assertEquals(err.code, "llm-stream");
-            assert(err.message.length > 0, "ChatError message must be non-empty");
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            const stub = controllableFetchStub();
+            try {
+              const promise = executeChat({
+                series: "s1",
+                name: "n1",
+                message: "Hi",
+                config: buildConfig(tmpDir),
+                safePath: createSafePath(tmpDir),
+                hookDispatcher: new HookDispatcher(),
+                buildPromptFromStory: buildPromptStub,
+              });
+              await new Promise((r) => setTimeout(r, 10));
+              stub.enqueue('data: {"choices":[{"delta":{"content":"x"}}]}\n\n');
+              await new Promise((r) => setTimeout(r, 5));
+              stub.enqueue(
+                'data: {"error":{"code":502},"choices":[{"finish_reason":"error","delta":{}}]}\n\n',
+              );
+              stub.closeStream();
+              const err = await assertRejects(() => promise, ChatError);
+              assertEquals(err.code, "llm-stream");
+              assert(err.message.length > 0, "ChatError message must be non-empty");
+            } finally {
+              stub.restore();
+            }
           } finally {
-            stub.restore();
+            await Deno.remove(tmpDir, { recursive: true });
           }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
 
       await t.step("mid-stream error indicated only by finish_reason", async () => {
         const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-7-" });
@@ -453,88 +484,102 @@ Deno.test({
         }
       });
 
-      await t.step("downstream error during streaming (non-abort) is NOT misclassified as abort", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-8-" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          const stub = controllableFetchStub();
-          // onDelta is called inside persistChunk (outside the narrow abort
-          // try around reader.read()); throwing from it must propagate as
-          // itself rather than being misclassified as a client abort.
-          const failingOnDelta = (_s: string): void => {
-            throw new Error("simulated downstream failure");
-          };
+      await t.step(
+        "downstream error during streaming (non-abort) is NOT misclassified as abort",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-8-" });
           try {
-            const promise = executeChat({
-              series: "s1",
-              name: "n1",
-              message: "Hi",
-              config: buildConfig(tmpDir),
-              safePath: createSafePath(tmpDir),
-              hookDispatcher: new HookDispatcher(),
-              buildPromptFromStory: buildPromptStub,
-              onDelta: failingOnDelta,
-            });
-            await new Promise((r) => setTimeout(r, 10));
-            stub.enqueue('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n');
-            stub.closeStream();
-            const err = await assertRejects(() => promise, Error);
-            // Must NOT be misclassified as ChatAbortError or ChatError.
-            assertEquals(err instanceof ChatAbortError, false, "non-abort error must not be misclassified as ChatAbortError");
-            assertEquals(err instanceof ChatError, false, "non-abort error must not be wrapped as ChatError");
-            assertStringIncludes(err.message, "simulated downstream failure");
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            const stub = controllableFetchStub();
+            // onDelta is called inside persistChunk (outside the narrow abort
+            // try around reader.read()); throwing from it must propagate as
+            // itself rather than being misclassified as a client abort.
+            const failingOnDelta = (_s: string): void => {
+              throw new Error("simulated downstream failure");
+            };
+            try {
+              const promise = executeChat({
+                series: "s1",
+                name: "n1",
+                message: "Hi",
+                config: buildConfig(tmpDir),
+                safePath: createSafePath(tmpDir),
+                hookDispatcher: new HookDispatcher(),
+                buildPromptFromStory: buildPromptStub,
+                onDelta: failingOnDelta,
+              });
+              await new Promise((r) => setTimeout(r, 10));
+              stub.enqueue('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n');
+              stub.closeStream();
+              const err = await assertRejects(() => promise, Error);
+              // Must NOT be misclassified as ChatAbortError or ChatError.
+              assertEquals(
+                err instanceof ChatAbortError,
+                false,
+                "non-abort error must not be misclassified as ChatAbortError",
+              );
+              assertEquals(
+                err instanceof ChatError,
+                false,
+                "non-abort error must not be wrapped as ChatError",
+              );
+              assertStringIncludes(err.message, "simulated downstream failure");
+            } finally {
+              stub.restore();
+            }
           } finally {
-            stub.restore();
+            await Deno.remove(tmpDir, { recursive: true });
           }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
 
-      await t.step("downstream error during streaming concurrent with abort is NOT misclassified as ChatAbortError", async () => {
-        // Critical regression guard for the narrowed-catch design: if a
-        // downstream operation (onDelta / hook / file write) throws AT THE
-        // SAME TIME as the client abort, the original error MUST propagate
-        // — it must NOT be silently swallowed as a ChatAbortError.
-        const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-9-" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          const stub = controllableFetchStub();
-          const ctrl = new AbortController();
-          const concurrentOnDelta = (_s: string): void => {
-            // First abort, then throw — both happen "concurrently" relative to
-            // the streaming catch from the executor's point of view.
-            ctrl.abort();
-            throw new Error("downstream failure during abort");
-          };
+      await t.step(
+        "downstream error during streaming concurrent with abort is NOT misclassified as ChatAbortError",
+        async () => {
+          // Critical regression guard for the narrowed-catch design: if a
+          // downstream operation (onDelta / hook / file write) throws AT THE
+          // SAME TIME as the client abort, the original error MUST propagate
+          // — it must NOT be silently swallowed as a ChatAbortError.
+          const tmpDir = await Deno.makeTempDir({ prefix: "chat-cancel-9-" });
           try {
-            const promise = executeChat({
-              series: "s1",
-              name: "n1",
-              message: "Hi",
-              config: buildConfig(tmpDir),
-              safePath: createSafePath(tmpDir),
-              hookDispatcher: new HookDispatcher(),
-              buildPromptFromStory: buildPromptStub,
-              signal: ctrl.signal,
-              onDelta: concurrentOnDelta,
-            });
-            await new Promise((r) => setTimeout(r, 10));
-            stub.enqueue('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n');
-            const err = await assertRejects(() => promise, Error);
-            assertEquals(
-              err instanceof ChatAbortError,
-              false,
-              "concurrent-abort downstream error must not be silently misclassified as ChatAbortError",
-            );
-            assertStringIncludes(err.message, "downstream failure during abort");
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            const stub = controllableFetchStub();
+            const ctrl = new AbortController();
+            const concurrentOnDelta = (_s: string): void => {
+              // First abort, then throw — both happen "concurrently" relative to
+              // the streaming catch from the executor's point of view.
+              ctrl.abort();
+              throw new Error("downstream failure during abort");
+            };
+            try {
+              const promise = executeChat({
+                series: "s1",
+                name: "n1",
+                message: "Hi",
+                config: buildConfig(tmpDir),
+                safePath: createSafePath(tmpDir),
+                hookDispatcher: new HookDispatcher(),
+                buildPromptFromStory: buildPromptStub,
+                signal: ctrl.signal,
+                onDelta: concurrentOnDelta,
+              });
+              await new Promise((r) => setTimeout(r, 10));
+              stub.enqueue('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n');
+              const err = await assertRejects(() => promise, Error);
+              assertEquals(
+                err instanceof ChatAbortError,
+                false,
+                "concurrent-abort downstream error must not be silently misclassified as ChatAbortError",
+              );
+              assertStringIncludes(err.message, "downstream failure during abort");
+            } finally {
+              stub.restore();
+            }
           } finally {
-            stub.restore();
+            await Deno.remove(tmpDir, { recursive: true });
           }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
     } finally {
       if (previousKey === undefined) {
         Deno.env.delete("LLM_API_KEY");

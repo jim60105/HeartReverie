@@ -19,7 +19,9 @@ import { Hono } from "@hono/hono";
 import { registerImageRoutes } from "../../../writer/routes/images.ts";
 import { createSafePath } from "../../../writer/lib/middleware.ts";
 
-async function setupTmpStory(): Promise<{ root: string; series: string; story: string; storyDir: string; cleanup: () => Promise<void> }> {
+async function setupTmpStory(): Promise<
+  { root: string; series: string; story: string; storyDir: string; cleanup: () => Promise<void> }
+> {
   const root = await Deno.makeTempDir();
   const series = "series-A";
   const story = "story-1";

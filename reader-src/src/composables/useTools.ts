@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, ref, type ComputedRef, type Ref } from "vue";
+import { computed, type ComputedRef, onScopeDispose, type Ref, ref } from "vue";
 import { toolsChildren } from "@/router";
 
 export interface ToolMenuItem {
@@ -47,7 +47,7 @@ export function useTools(): UseToolsReturn {
       .map((r) => ({
         name: r.name as string,
         title: r.meta!.title as string,
-      })),
+      }))
   );
 
   function open() {

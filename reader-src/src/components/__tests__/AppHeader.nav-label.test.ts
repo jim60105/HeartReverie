@@ -78,8 +78,8 @@ describe("AppHeader nav-label collapse (Issue 4)", () => {
   });
 
   it("declares the @media (max-width: 409px) { .nav-label { display: none } } rule", () => {
-    const testFilePath = (import.meta as { filename?: string }).filename
-      ?? fileURLToPath(import.meta.url);
+    const testFilePath = (import.meta as { filename?: string }).filename ??
+      fileURLToPath(import.meta.url);
     const sfcPath = resolve(dirname(testFilePath), "..", "AppHeader.vue");
     const source = readFileSync(sfcPath, "utf8");
     const m = source.match(/@media\s*\(\s*max-width:\s*409px\s*\)\s*\{([\s\S]*?)\n\}/);
@@ -88,8 +88,8 @@ describe("AppHeader nav-label collapse (Issue 4)", () => {
   });
 
   it("constrains .chapter-progress with overflow / ellipsis / min-width / flex-shrink", () => {
-    const testFilePath = (import.meta as { filename?: string }).filename
-      ?? fileURLToPath(import.meta.url);
+    const testFilePath = (import.meta as { filename?: string }).filename ??
+      fileURLToPath(import.meta.url);
     const sfcPath = resolve(dirname(testFilePath), "..", "AppHeader.vue");
     const source = readFileSync(sfcPath, "utf8");
     const m = source.match(/\n\.chapter-progress\s*\{([^}]*)\}/);

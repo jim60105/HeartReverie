@@ -282,8 +282,18 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
     // GET #2 still pending; second dispatch should have wasFirstCheck=false.
 
     // Resolve #2 first, then #1, both with mismatched chapter.
-    resolve2({ chapterIndex: 5, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 });
-    resolve1({ chapterIndex: 5, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 });
+    resolve2({
+      chapterIndex: 5,
+      scrollRatio: 0.1,
+      lastReadAt: "2026-05-22T00:00:00Z",
+      revision: 7,
+    });
+    resolve1({
+      chapterIndex: 5,
+      scrollRatio: 0.1,
+      lastReadAt: "2026-05-22T00:00:00Z",
+      revision: 7,
+    });
     await flushAsync();
     await flushAsync();
 
@@ -373,7 +383,12 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
     await flushAsync();
     // Identity is now chapter 3. Resolve the stale GET#1 with a mismatched
     // chapter that WOULD trigger handleCrossChapter without the stale guard.
-    resolve1({ chapterIndex: 7, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 });
+    resolve1({
+      chapterIndex: 7,
+      scrollRatio: 0.1,
+      lastReadAt: "2026-05-22T00:00:00Z",
+      revision: 7,
+    });
     await flushAsync();
     await flushAsync();
 

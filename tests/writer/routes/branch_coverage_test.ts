@@ -16,17 +16,10 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
-import {
-  createSafePath,
-      verifyPassphrase,
-} from "../../../writer/lib/middleware.ts";
+import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import type { Hono } from "@hono/hono";
-import type {
-  AppConfig,
-  AppDeps,
-  BuildPromptResult,
-} from "../../../writer/types.ts";
+import type { AppConfig, AppDeps, BuildPromptResult } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
 async function makeRequest(
@@ -40,8 +33,7 @@ async function makeRequest(
     headers: { "x-passphrase": "test-pass" },
   };
   if (body) {
-    (init.headers as Record<string, string>)["Content-Type"] =
-      "application/json";
+    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
     init.body = JSON.stringify(body);
   }
   const res = await app.fetch(new Request(`http://localhost${urlPath}`, init));
@@ -73,9 +65,16 @@ function buildApp(playgroundDir: string): Hono {
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
-    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+    buildContinuePromptFromStory: (async () => ({
+      messages: [],
+      ventoError: null,
+      targetChapterNumber: 0,
+      existingContent: "",
+      userMessageText: "",
+      assistantPrefill: "",
+    })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     templateEngine: null,
-      verifyPassphrase,
+    verifyPassphrase,
   } as AppDeps);
 }
 

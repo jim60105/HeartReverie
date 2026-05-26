@@ -20,7 +20,7 @@
 import "@std/dotenv/load";
 
 import * as config from "../writer/lib/config.ts";
-import { initLogger, closeLogger } from "../writer/lib/logger.ts";
+import { closeLogger, initLogger } from "../writer/lib/logger.ts";
 import { HookDispatcher } from "../writer/lib/hooks.ts";
 import { PluginManager } from "../writer/lib/plugin-manager.ts";
 import { buildIntrospectionDump } from "../writer/lib/introspection-dump.ts";

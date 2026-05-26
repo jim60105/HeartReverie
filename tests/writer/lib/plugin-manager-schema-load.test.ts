@@ -39,7 +39,9 @@ async function makePluginDirs(
     JSON.stringify({
       name,
       displayName: name,
-      version: "1.0.0", ...manifest }),
+      version: "1.0.0",
+      ...manifest,
+    }),
   );
   return { pluginsDir, playgroundDir };
 }

@@ -1,17 +1,17 @@
 import { errorMessage } from "@/lib/errors";
 import type {
-  HookStage,
-  HookHandler,
-  FrontendRenderContext,
-  NotificationContext,
-  ChatSendBeforeContext,
-  ChapterRenderAfterContext,
-  ChapterDomReadyContext,
-  ChapterDomDisposeContext,
-  StorySwitchContext,
-  ChapterChangeContext,
   ActionButtonClickContext,
+  ChapterChangeContext,
+  ChapterDomDisposeContext,
+  ChapterDomReadyContext,
+  ChapterRenderAfterContext,
+  ChatSendBeforeContext,
+  FrontendRenderContext,
+  HookHandler,
   HookInspectorReport,
+  HookStage,
+  NotificationContext,
+  StorySwitchContext,
 } from "@/types";
 import { useNotification } from "@/composables/useNotification";
 
@@ -101,7 +101,9 @@ export class FrontendHookDispatcher {
         "AsyncFunction"
     ) {
       throw new Error(
-        `Frontend hook handler for stage '${stage}'${originPluginName ? ` (plugin '${originPluginName}')` : ""} must be synchronous. Wrap async work: register(stage, (ctx) => { void doAsync(ctx).catch(log.error); })`,
+        `Frontend hook handler for stage '${stage}'${
+          originPluginName ? ` (plugin '${originPluginName}')` : ""
+        } must be synchronous. Wrap async work: register(stage, (ctx) => { void doAsync(ctx).catch(log.error); })`,
       );
     }
     // Reject duplicate (plugin, stage) registrations ONLY for
@@ -176,9 +178,7 @@ export class FrontendHookDispatcher {
       const declaredFrontend = new Set<HookStage>(
         entry.hooks
           .map((h) => h.stage)
-          .filter((s): s is HookStage =>
-            KNOWN_FRONTEND_STAGES.has(s as HookStage)
-          ),
+          .filter((s): s is HookStage => KNOWN_FRONTEND_STAGES.has(s as HookStage)),
       );
       const observed = this.#observedRegistrations.get(entry.plugin) ?? new Set<HookStage>();
       const declaredOnly: HookStage[] = [];

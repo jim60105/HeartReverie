@@ -13,10 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import type {
-  PluginRunPromptResponse,
-  ProblemDetail,
-} from "../types.ts";
+import type { PluginRunPromptResponse, ProblemDetail } from "../types.ts";
 
 /**
  * Reserved Vento variable names that plugin-action callers MUST NOT override

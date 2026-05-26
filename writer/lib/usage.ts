@@ -152,7 +152,11 @@ async function readForAppend(storyDir: string): Promise<TokenUsageRecord[]> {
       log.warn("Backed up malformed _usage.json", { op: "backup", path: backupPath, error: msg });
     } catch (backupErr) {
       const bmsg = errorMessage(backupErr);
-      log.warn("Failed to back up malformed _usage.json", { op: "backup", path: backupPath, error: bmsg });
+      log.warn("Failed to back up malformed _usage.json", {
+        op: "backup",
+        path: backupPath,
+        error: bmsg,
+      });
     }
     return [];
   }

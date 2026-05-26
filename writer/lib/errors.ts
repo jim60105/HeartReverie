@@ -16,7 +16,12 @@
 import { basename } from "@std/path";
 import type { ProblemDetail, VentoError } from "../types.ts";
 
-export function problemJson(title: string, status: number, detail: string, extra: Record<string, unknown> = {}): ProblemDetail {
+export function problemJson(
+  title: string,
+  status: number,
+  detail: string,
+  extra: Record<string, unknown> = {},
+): ProblemDetail {
   return { type: "about:blank", title, status, detail, ...extra };
 }
 
@@ -35,7 +40,12 @@ export const pluginActionProblems = {
     return { type: "plugin-action:non-md-prompt", title: "Bad Request", status: 400, detail };
   },
   promptFileNotFound(detail = "Prompt file not found"): ProblemDetail {
-    return { type: "plugin-action:prompt-file-not-found", title: "Bad Request", status: 400, detail };
+    return {
+      type: "plugin-action:prompt-file-not-found",
+      title: "Bad Request",
+      status: 400,
+      detail,
+    };
   },
   unknownPlugin(detail = "Plugin is not loaded"): ProblemDetail {
     return { type: "plugin-action:unknown-plugin", title: "Not Found", status: 404, detail };
@@ -46,17 +56,40 @@ export const pluginActionProblems = {
   invalidAppendTag(detail = "appendTag is missing or invalid"): ProblemDetail {
     return { type: "plugin-action:invalid-append-tag", title: "Bad Request", status: 400, detail };
   },
-  concurrentGeneration(detail = "Another generation is already in flight for this story"): ProblemDetail {
+  concurrentGeneration(
+    detail = "Another generation is already in flight for this story",
+  ): ProblemDetail {
     return { type: "plugin-action:concurrent-generation", title: "Conflict", status: 409, detail };
   },
-  invalidExtraVariables(detail = "extraVariables values must be string, number, or boolean"): ProblemDetail {
-    return { type: "plugin-action:invalid-extra-variables", title: "Bad Request", status: 400, detail };
+  invalidExtraVariables(
+    detail = "extraVariables values must be string, number, or boolean",
+  ): ProblemDetail {
+    return {
+      type: "plugin-action:invalid-extra-variables",
+      title: "Bad Request",
+      status: 400,
+      detail,
+    };
   },
-  extraVariablesCollision(detail = "extraVariables key collides with a reserved system variable"): ProblemDetail {
-    return { type: "plugin-action:extra-variables-collision", title: "Bad Request", status: 400, detail };
+  extraVariablesCollision(
+    detail = "extraVariables key collides with a reserved system variable",
+  ): ProblemDetail {
+    return {
+      type: "plugin-action:extra-variables-collision",
+      title: "Bad Request",
+      status: 400,
+      detail,
+    };
   },
-  invalidReplaceCombo(detail = "append and replace are mutually exclusive; replace cannot be combined with appendTag"): ProblemDetail {
-    return { type: "plugin-action:invalid-replace-combo", title: "Bad Request", status: 400, detail };
+  invalidReplaceCombo(
+    detail = "append and replace are mutually exclusive; replace cannot be combined with appendTag",
+  ): ProblemDetail {
+    return {
+      type: "plugin-action:invalid-replace-combo",
+      title: "Bad Request",
+      status: 400,
+      detail,
+    };
   },
   noChapter(detail = "Story directory contains no chapter file"): ProblemDetail {
     return { type: "plugin-action:no-chapter", title: "Bad Request", status: 400, detail };
@@ -66,7 +99,12 @@ export const pluginActionProblems = {
   },
 } as const;
 
-export function buildVentoError(err: Error, templatePath: string, knownVariables: { variables?: Record<string, string> }, extraKnownVars?: string[]): VentoError {
+export function buildVentoError(
+  err: Error,
+  templatePath: string,
+  knownVariables: { variables?: Record<string, string> },
+  extraKnownVars?: string[],
+): VentoError {
   const error: VentoError = {
     type: "vento-error",
     stage: "prompt-assembly",
@@ -91,7 +129,7 @@ export function buildVentoError(err: Error, templatePath: string, knownVariables
   }
 
   const varMatch = err.message.match(
-    /(?:Variable|variable) ['"]?(\w+)['"]? (?:is )?not defined/i
+    /(?:Variable|variable) ['"]?(\w+)['"]? (?:is )?not defined/i,
   );
   if (varMatch) {
     const missing = varMatch[1]!;
@@ -160,7 +198,7 @@ function multiMessageSuggestion(
     case "multi-message:nested":
       return "Split the inner {{ message }} block out to the top level — nested message blocks are not supported.";
     case "multi-message:no-user-message":
-      return "Add a {{ message \"user\" }}{{ user_input }}{{ /message }} block (typically at the end of the template) so the request ends on a user turn.";
+      return 'Add a {{ message "user" }}{{ user_input }}{{ /message }} block (typically at the end of the template) so the request ends on a user turn.';
     case "multi-message:empty-message":
       return "Every {{ message }} block must contain non-whitespace content. Either add content or remove the block.";
     case "multi-message:assembly-corrupt":
@@ -187,12 +225,13 @@ export function levenshtein(a: string, b: string): number {
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0) as number[]);
   for (let i = 0; i <= m; i++) dp[i]![0] = i;
   for (let j = 0; j <= n; j++) dp[0]![j] = j;
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i]![j] =
-        a[i - 1] === b[j - 1]
-          ? dp[i - 1]![j - 1]!
-          : 1 + Math.min(dp[i - 1]![j]!, dp[i]![j - 1]!, dp[i - 1]![j - 1]!);
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i]![j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1]![j - 1]!
+        : 1 + Math.min(dp[i - 1]![j]!, dp[i]![j - 1]!, dp[i - 1]![j - 1]!);
+    }
+  }
   return dp[m]![n]!;
 }
 

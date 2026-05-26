@@ -9,7 +9,7 @@ function mockFetch(body: unknown, status = 200) {
         status,
         json: () => Promise.resolve(body),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }
@@ -168,16 +168,12 @@ describe("usePlugins - CSS injection", () => {
   beforeEach(() => {
     vi.resetModules();
     stubSessionStorage();
-    document.head.querySelectorAll("link[data-plugin]").forEach((el) =>
-      el.remove()
-    );
+    document.head.querySelectorAll("link[data-plugin]").forEach((el) => el.remove());
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    document.head.querySelectorAll("link[data-plugin]").forEach((el) =>
-      el.remove()
-    );
+    document.head.querySelectorAll("link[data-plugin]").forEach((el) => el.remove());
   });
 
   async function getPlugins() {

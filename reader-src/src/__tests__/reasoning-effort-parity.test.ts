@@ -4,7 +4,7 @@
 // literal import (the backend file uses Deno-flavored imports that won't
 // resolve under Vite). Instead, we read the backend source from disk and
 // regex-extract the tuple at test time.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";

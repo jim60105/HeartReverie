@@ -24,14 +24,16 @@ describe("extractVentoErrors", () => {
   });
 
   it("extracts source and line number", () => {
-    const text = "<vento-error><message>err</message><source>a.vto</source><line>42</line></vento-error>";
+    const text =
+      "<vento-error><message>err</message><source>a.vto</source><line>42</line></vento-error>";
     const result = extractVentoErrors(text);
     expect(result.blocks[0]!.data.source).toBe("a.vto");
     expect(result.blocks[0]!.data.line).toBe(42);
   });
 
   it("extracts suggestion field", () => {
-    const text = "<vento-error><message>err</message><suggestion>Try this</suggestion></vento-error>";
+    const text =
+      "<vento-error><message>err</message><suggestion>Try this</suggestion></vento-error>";
     const result = extractVentoErrors(text);
     expect(result.blocks[0]!.data.suggestion).toBe("Try this");
   });
@@ -49,7 +51,8 @@ describe("extractVentoErrors", () => {
   });
 
   it("extracts multiple errors with sequential placeholders", () => {
-    const text = "<vento-error><message>first</message></vento-error> mid <vento-error><message>second</message></vento-error> end <vento-error><message>third</message></vento-error>";
+    const text =
+      "<vento-error><message>first</message></vento-error> mid <vento-error><message>second</message></vento-error> end <vento-error><message>third</message></vento-error>";
     const result = extractVentoErrors(text);
     expect(result.blocks).toHaveLength(3);
     expect(result.blocks[0]!.placeholder).toBe("<!--VENTO_ERROR_0-->");
@@ -80,7 +83,8 @@ describe("extractVentoErrors", () => {
   });
 
   it("returns data objects that match VentoErrorCardProps shape", () => {
-    const text = "<vento-error><message>test</message><source>x.vto</source><line>1</line><suggestion>fix</suggestion></vento-error>";
+    const text =
+      "<vento-error><message>test</message><source>x.vto</source><line>1</line><suggestion>fix</suggestion></vento-error>";
     const result = extractVentoErrors(text);
     const d = result.blocks[0]!.data;
     expect(typeof d.message).toBe("string");

@@ -78,9 +78,7 @@ export async function atomicWriteWithBackup(
   } catch (err: unknown) {
     throw new PathSafetyError(
       "parent-missing",
-      `allowedBase does not exist: ${allowedBase} (${
-        errorMessage(err)
-      })`,
+      `allowedBase does not exist: ${allowedBase} (${errorMessage(err)})`,
     );
   }
 
@@ -91,9 +89,7 @@ export async function atomicWriteWithBackup(
   } catch (err: unknown) {
     throw new PathSafetyError(
       "parent-missing",
-      `target parent does not exist: ${parentDir} (${
-        errorMessage(err)
-      })`,
+      `target parent does not exist: ${parentDir} (${errorMessage(err)})`,
     );
   }
 

@@ -88,7 +88,12 @@ export async function verifyPassphrase(c: Context, next: Next): Promise<Response
   const match: boolean = (Number(lengthMatch) & Number(equal)) === 1;
 
   if (match) {
-    log.info("Authentication successful", { method: c.req.method, path: c.req.path, source: "http", success: true });
+    log.info("Authentication successful", {
+      method: c.req.method,
+      path: c.req.path,
+      source: "http",
+      success: true,
+    });
     await next();
     return;
   }

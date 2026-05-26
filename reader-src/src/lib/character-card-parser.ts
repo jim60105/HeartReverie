@@ -142,10 +142,8 @@ function normalise(data: TavernCardV2Data): ParsedCharacterCard {
   }
   const bookEntries: ParsedBookEntry[] = entries.map((entry) => {
     const keys = asStringArray(entry?.keys);
-    const firstNonEmptyKey =
-      keys.map((k) => k.trim()).find(Boolean) ?? "";
-    const name =
-      nonEmptyTrimmed(entry?.comment) ||
+    const firstNonEmptyKey = keys.map((k) => k.trim()).find(Boolean) ?? "";
+    const name = nonEmptyTrimmed(entry?.comment) ||
       nonEmptyTrimmed(entry?.name) ||
       firstNonEmptyKey ||
       "";

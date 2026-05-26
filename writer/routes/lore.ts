@@ -15,12 +15,8 @@
 
 import { dirname, join } from "@std/path";
 import { isReservedDirectoryName, isValidParam } from "../lib/middleware.ts";
-import { problemJson, errorMessage } from "../lib/errors.ts";
-import {
-  collectPassagesFromScope,
-  filterByTag,
-  parseFrontmatter,
-} from "../lib/lore.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
+import { collectPassagesFromScope, filterByTag, parseFrontmatter } from "../lib/lore.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { LorePassage, LoreScope } from "../lib/lore.ts";
 import type { Context, Hono } from "@hono/hono";
@@ -54,8 +50,8 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
 
   /** Validate and sanitize tag strings for safe YAML serialization. */
   function isValidTag(tag: unknown): tag is string {
-    return typeof tag === "string" && tag.length > 0 && tag.length <= 100
-      && !/[\[\],\n\r]/.test(tag);
+    return typeof tag === "string" && tag.length > 0 && tag.length <= 100 &&
+      !/[\[\],\n\r]/.test(tag);
   }
 
   /** Validate the PUT request body for passage creation/update. */
@@ -74,7 +70,10 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
     const fm = frontmatter as Record<string, unknown>;
     const tags = fm.tags ?? [];
     if (!Array.isArray(tags) || !tags.every(isValidTag)) {
-      return { valid: false, error: "Invalid tags: must be an array of non-empty strings without special characters" };
+      return {
+        valid: false,
+        error: "Invalid tags: must be an array of non-empty strings without special characters",
+      };
     }
     const priority = fm.priority ?? 0;
     if (typeof priority !== "number" || !Number.isFinite(priority)) {
@@ -131,8 +130,8 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       try {
         for await (const seriesEntry of Deno.readDir(playgroundDir)) {
           if (
-            seriesEntry.isDirectory && !seriesEntry.name.startsWith(".")
-            && !isReservedDirectoryName(seriesEntry.name)
+            seriesEntry.isDirectory && !seriesEntry.name.startsWith(".") &&
+            !isReservedDirectoryName(seriesEntry.name)
           ) {
             // Series-level lore
             allPassages.push(
@@ -148,8 +147,8 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
                 const storyEntry of Deno.readDir(join(playgroundDir, seriesEntry.name))
               ) {
                 if (
-                  storyEntry.isDirectory && !storyEntry.name.startsWith(".")
-                  && !isReservedDirectoryName(storyEntry.name)
+                  storyEntry.isDirectory && !storyEntry.name.startsWith(".") &&
+                  !isReservedDirectoryName(storyEntry.name)
                 ) {
                   allPassages.push(
                     ...await collectPassagesFromScope(
@@ -327,11 +326,19 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           isNew = true;
         } else {
           log.warn(`[lore] Stat failed for passage: ${errorMessage(err)}`);
-          return c.json(problemJson("Internal Server Error", 500, "Failed to check passage status"), 500);
+          return c.json(
+            problemJson("Internal Server Error", 500, "Failed to check passage status"),
+            500,
+          );
         }
       }
       await Deno.writeTextFile(filePath, fileContent, { mode: 0o664 });
-      log.info("Lore passage written", { op: "write", path: filePath, bytes: new TextEncoder().encode(fileContent).length, isNew });
+      log.info("Lore passage written", {
+        op: "write",
+        path: filePath,
+        bytes: new TextEncoder().encode(fileContent).length,
+        isNew,
+      });
       return c.json(
         { message: isNew ? "Passage created" : "Passage updated" },
         isNew ? 201 : 200,

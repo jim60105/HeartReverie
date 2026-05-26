@@ -47,7 +47,9 @@ function validateBackgroundImage(v: unknown): string {
   if (v === undefined || v === null || v === "") return "";
   if (typeof v !== "string" || !SAFE_BG.test(v)) {
     throw new Error(
-      `backgroundImage must be url('/same-origin'), url('data:...'), or a CSS gradient function; got ${JSON.stringify(v)}`,
+      `backgroundImage must be url('/same-origin'), url('data:...'), or a CSS gradient function; got ${
+        JSON.stringify(v)
+      }`,
     );
   }
   return v;

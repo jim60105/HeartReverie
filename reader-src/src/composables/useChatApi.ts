@@ -1,10 +1,10 @@
 import { ref, watch } from "vue";
 import type {
-  UseChatApiReturn,
   ChatSendBeforeContext,
-  TokenUsageRecord,
   RunPluginPromptOptions,
   RunPluginPromptResult,
+  TokenUsageRecord,
+  UseChatApiReturn,
 } from "@/types";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useNotification } from "@/composables/useNotification";
@@ -73,32 +73,32 @@ async function sendMessage(
     const id = crypto.randomUUID();
     currentRequestId = id;
     return new Promise<boolean>((resolve) => {
-      const unsubDelta = onMessage('chat:delta', (msg) => {
+      const unsubDelta = onMessage("chat:delta", (msg) => {
         if (msg.id !== id) return;
         streamingContent.value += msg.content;
       });
-      const unsubDone = onMessage('chat:done', (msg) => {
+      const unsubDone = onMessage("chat:done", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
+        streamingContent.value = "";
         isLoading.value = false;
         useUsage().pushRecord(msg.usage);
-        dispatchNotification('chat:done', { id });
+        dispatchNotification("chat:done", { id });
         resolve(true);
       });
-      const unsubError = onMessage('chat:error', (msg) => {
+      const unsubError = onMessage("chat:error", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
-        errorMessage.value = '發送失敗';
+        streamingContent.value = "";
+        errorMessage.value = "發送失敗";
         isLoading.value = false;
-        dispatchNotification('chat:error', { id });
+        dispatchNotification("chat:error", { id });
         resolve(false);
       });
-      const unsubAborted = onMessage('chat:aborted', (msg) => {
+      const unsubAborted = onMessage("chat:aborted", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
+        streamingContent.value = "";
         isLoading.value = false;
         resolve(false);
       });
@@ -106,8 +106,8 @@ async function sendMessage(
       const stopWatchClose = watch(isConnected, (connected) => {
         if (!connected) {
           cleanup();
-          streamingContent.value = '';
-          errorMessage.value = '連線中斷';
+          streamingContent.value = "";
+          errorMessage.value = "連線中斷";
           isLoading.value = false;
           resolve(false);
         }
@@ -116,8 +116,8 @@ async function sendMessage(
       // Timeout to prevent infinite hang (5 minutes)
       const timeout = setTimeout(() => {
         cleanup();
-        streamingContent.value = '';
-        errorMessage.value = '請求逾時';
+        streamingContent.value = "";
+        errorMessage.value = "請求逾時";
         isLoading.value = false;
         resolve(false);
       }, 300_000);
@@ -132,7 +132,7 @@ async function sendMessage(
         currentRequestId = null;
       }
 
-      send({ type: 'chat:send', id, series, story, message: outgoingMessage });
+      send({ type: "chat:send", id, series, story, message: outgoingMessage });
     });
   }
 
@@ -213,40 +213,40 @@ async function resendMessage(
     const id = crypto.randomUUID();
     currentRequestId = id;
     return new Promise<boolean>((resolve) => {
-      const unsubDelta = onMessage('chat:delta', (msg) => {
+      const unsubDelta = onMessage("chat:delta", (msg) => {
         if (msg.id !== id) return;
         streamingContent.value += msg.content;
       });
-      const unsubDone = onMessage('chat:done', (msg) => {
+      const unsubDone = onMessage("chat:done", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
+        streamingContent.value = "";
         isLoading.value = false;
         useUsage().pushRecord(msg.usage);
-        dispatchNotification('chat:done', { id });
+        dispatchNotification("chat:done", { id });
         resolve(true);
       });
-      const unsubError = onMessage('chat:error', (msg) => {
+      const unsubError = onMessage("chat:error", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
-        errorMessage.value = '重送失敗';
+        streamingContent.value = "";
+        errorMessage.value = "重送失敗";
         isLoading.value = false;
-        dispatchNotification('chat:error', { id });
+        dispatchNotification("chat:error", { id });
         resolve(false);
       });
-      const unsubAborted = onMessage('chat:aborted', (msg) => {
+      const unsubAborted = onMessage("chat:aborted", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
+        streamingContent.value = "";
         isLoading.value = false;
         resolve(false);
       });
       const stopWatchClose = watch(isConnected, (connected) => {
         if (!connected) {
           cleanup();
-          streamingContent.value = '';
-          errorMessage.value = '連線中斷';
+          streamingContent.value = "";
+          errorMessage.value = "連線中斷";
           isLoading.value = false;
           resolve(false);
         }
@@ -254,8 +254,8 @@ async function resendMessage(
 
       const timeout = setTimeout(() => {
         cleanup();
-        streamingContent.value = '';
-        errorMessage.value = '請求逾時';
+        streamingContent.value = "";
+        errorMessage.value = "請求逾時";
         isLoading.value = false;
         resolve(false);
       }, 300_000);
@@ -270,7 +270,7 @@ async function resendMessage(
         currentRequestId = null;
       }
 
-      send({ type: 'chat:resend', id, series, story, message: outgoingMessage });
+      send({ type: "chat:resend", id, series, story, message: outgoingMessage });
     });
   }
 
@@ -356,40 +356,40 @@ async function continueLastChapter(
     const id = crypto.randomUUID();
     currentRequestId = id;
     return new Promise<boolean>((resolve) => {
-      const unsubDelta = onMessage('chat:delta', (msg) => {
+      const unsubDelta = onMessage("chat:delta", (msg) => {
         if (msg.id !== id) return;
         streamingContent.value += msg.content;
       });
-      const unsubDone = onMessage('chat:done', (msg) => {
+      const unsubDone = onMessage("chat:done", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
+        streamingContent.value = "";
         isLoading.value = false;
         useUsage().pushRecord(msg.usage);
-        dispatchNotification('chat:done', { id });
+        dispatchNotification("chat:done", { id });
         resolve(true);
       });
-      const unsubError = onMessage('chat:error', (msg) => {
+      const unsubError = onMessage("chat:error", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
-        errorMessage.value = '續寫失敗';
+        streamingContent.value = "";
+        errorMessage.value = "續寫失敗";
         isLoading.value = false;
-        dispatchNotification('chat:error', { id });
+        dispatchNotification("chat:error", { id });
         resolve(false);
       });
-      const unsubAborted = onMessage('chat:aborted', (msg) => {
+      const unsubAborted = onMessage("chat:aborted", (msg) => {
         if (msg.id !== id) return;
         cleanup();
-        streamingContent.value = '';
+        streamingContent.value = "";
         isLoading.value = false;
         resolve(false);
       });
       const stopWatchClose = watch(isConnected, (connected) => {
         if (!connected) {
           cleanup();
-          streamingContent.value = '';
-          errorMessage.value = '連線中斷';
+          streamingContent.value = "";
+          errorMessage.value = "連線中斷";
           isLoading.value = false;
           resolve(false);
         }
@@ -397,8 +397,8 @@ async function continueLastChapter(
 
       const timeout = setTimeout(() => {
         cleanup();
-        streamingContent.value = '';
-        errorMessage.value = '請求逾時';
+        streamingContent.value = "";
+        errorMessage.value = "請求逾時";
         isLoading.value = false;
         resolve(false);
       }, 300_000);
@@ -413,7 +413,7 @@ async function continueLastChapter(
         currentRequestId = null;
       }
 
-      send({ type: 'chat:continue', id, series, story });
+      send({ type: "chat:continue", id, series, story });
     });
   }
 
@@ -524,9 +524,9 @@ async function runPluginPrompt(
         if (msg.correlationId !== correlationId) return;
         cleanup();
         streamingContent.value = "";
-        const detail = msg.problem?.detail
-          ?? msg.problem?.title
-          ?? "外掛操作失敗";
+        const detail = msg.problem?.detail ??
+          msg.problem?.title ??
+          "外掛操作失敗";
         errorMessage.value = detail;
         isLoading.value = false;
         reject(new Error(detail));
@@ -580,9 +580,7 @@ async function runPluginPrompt(
         ...(opts.append !== undefined ? { append: opts.append } : {}),
         ...(opts.appendTag !== undefined ? { appendTag: opts.appendTag } : {}),
         ...(opts.replace !== undefined ? { replace: opts.replace } : {}),
-        ...(opts.extraVariables !== undefined
-          ? { extraVariables: opts.extraVariables }
-          : {}),
+        ...(opts.extraVariables !== undefined ? { extraVariables: opts.extraVariables } : {}),
       });
     });
   }

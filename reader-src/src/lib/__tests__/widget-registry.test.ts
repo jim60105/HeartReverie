@@ -4,8 +4,8 @@
 
 import {
   createDefaultWidgetRegistry,
-  WidgetRegistry,
   type WidgetDescriptor,
+  WidgetRegistry,
 } from "@/lib/widget-registry";
 import { defineComponent } from "vue";
 
@@ -66,21 +66,23 @@ describe("createDefaultWidgetRegistry", () => {
   it("includes the phase-1 widget kinds", () => {
     const reg = createDefaultWidgetRegistry();
     const kinds = new Set(reg.list().map((d) => d.kind));
-    for (const k of [
-      "text",
-      "number",
-      "checkbox",
-      "select",
-      "multi-select",
-      "tags",
-      "color",
-      "masked-secret",
-      "range-number",
-      "path-picker",
-      "combobox",
-      "object-fieldset",
-      "repeater",
-    ]) {
+    for (
+      const k of [
+        "text",
+        "number",
+        "checkbox",
+        "select",
+        "multi-select",
+        "tags",
+        "color",
+        "masked-secret",
+        "range-number",
+        "path-picker",
+        "combobox",
+        "object-fieldset",
+        "repeater",
+      ]
+    ) {
       expect(kinds.has(k)).toBe(true);
     }
   });

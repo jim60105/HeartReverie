@@ -58,7 +58,9 @@ describe("useChapterNav — story:switch race condition regression", () => {
     // Simulate the race: first fetch resolves slowly, second resolves first.
     // The stale-guard discards the first call, but story:switch must still fire from the second.
     let resolveFirst: (v: unknown) => void;
-    const firstPromise = new Promise((r) => { resolveFirst = r; });
+    const firstPromise = new Promise((r) => {
+      resolveFirst = r;
+    });
     let callCount = 0;
 
     vi.stubGlobal(
@@ -112,7 +114,9 @@ describe("useChapterNav — story:switch race condition regression", () => {
 
   it("previousSeries/previousStory only update after successful dispatch, not from stale loads", async () => {
     let resolveFirst: (v: unknown) => void;
-    const firstPromise = new Promise((r) => { resolveFirst = r; });
+    const firstPromise = new Promise((r) => {
+      resolveFirst = r;
+    });
     let callCount = 0;
 
     vi.stubGlobal(

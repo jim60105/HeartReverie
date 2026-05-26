@@ -1,4 +1,4 @@
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, nextTick } from "vue";
 import SettingsLayout from "@/components/SettingsLayout.vue";
 import { useLastReadingRoute } from "@/composables/useLastReadingRoute";
@@ -51,7 +51,10 @@ function mountLayout() {
       stubs: {
         "router-link": RouterLinkStub,
         "router-view": RouterViewStub,
-        AppHeader: defineComponent({ name: "AppHeader", template: '<header class="app-header-stub"><slot name="leading" /></header>' }),
+        AppHeader: defineComponent({
+          name: "AppHeader",
+          template: '<header class="app-header-stub"><slot name="leading" /></header>',
+        }),
       },
     },
   });

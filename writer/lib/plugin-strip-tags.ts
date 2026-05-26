@@ -99,14 +99,10 @@ export function getStripTagDeclarations(
   const out: StripTagDeclaration[] = [];
   for (const { manifest } of plugins.values()) {
     const promptTags = Array.isArray(manifest.promptStripTags)
-      ? manifest.promptStripTags.filter((t): t is string =>
-        typeof t === "string"
-      )
+      ? manifest.promptStripTags.filter((t): t is string => typeof t === "string")
       : [];
     const displayTags = Array.isArray(manifest.displayStripTags)
-      ? manifest.displayStripTags.filter((t): t is string =>
-        typeof t === "string"
-      )
+      ? manifest.displayStripTags.filter((t): t is string => typeof t === "string")
       : [];
     if (promptTags.length === 0 && displayTags.length === 0) continue;
 

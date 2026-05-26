@@ -113,8 +113,7 @@ export async function buildPromptFromStory(
   // prompt-assembly hook context always observes a non-empty value.
   const effectiveCorrelationId = correlationId ?? crypto.randomUUID();
 
-  const { chapterFiles, chapters, totalChapterCount } =
-    await loadChaptersForPrompt(storyDir);
+  const { chapterFiles, chapters, totalChapterCount } = await loadChaptersForPrompt(storyDir);
   log.debug("Read story directory", {
     path: storyDir,
     chapterCount: chapterFiles.length,
@@ -126,9 +125,7 @@ export async function buildPromptFromStory(
     nonEmpty: chapters.filter((ch) => ch.content.trim().length > 0).length,
   });
 
-  const isFirstRound: boolean = chapters.every((ch) =>
-    ch.content.trim() === ""
-  );
+  const isFirstRound: boolean = chapters.every((ch) => ch.content.trim() === "");
 
   // Compute target chapter number + previous content for plugin context.
   // `previousContent` is the *unstripped* content of the chapter immediately
@@ -138,9 +135,7 @@ export async function buildPromptFromStory(
   let previousContent = "";
   const lastChapter = chapters[chapters.length - 1];
   if (lastChapter && lastChapter.content.trim() === "") {
-    const lastNonEmpty = [...chapters].reverse().find((ch) =>
-      ch.content.trim().length > 0
-    );
+    const lastNonEmpty = [...chapters].reverse().find((ch) => ch.content.trim().length > 0);
     previousContent = lastNonEmpty ? lastNonEmpty.content : "";
   } else if (lastChapter) {
     previousContent = lastChapter.content;
@@ -148,9 +143,7 @@ export async function buildPromptFromStory(
 
   // Filter to non-empty chapters first, then build both arrays from the same set
   // to keep indices aligned for the compaction plugin
-  const nonEmptyChapters = chapters.filter((ch) =>
-    ch.content.trim().length > 0
-  );
+  const nonEmptyChapters = chapters.filter((ch) => ch.content.trim().length > 0);
 
   const previousContext: string[] = nonEmptyChapters
     .map((ch) => stripPromptTags(ch.content));
@@ -173,18 +166,17 @@ export async function buildPromptFromStory(
   // may be empty if a chapter consisted only of stripped tags)
   const filteredContext = previousContext.filter((c) => c.length > 0);
 
-  const { messages, error: ventoError } =
-    await renderSystemPrompt(series, name, {
-      previousContext: filteredContext,
-      userInput: message,
-      isFirstRound,
-      storyDir,
-      chapterNumber,
-      previousContent,
-      chapterCount: totalChapterCount,
-      templateOverride: typeof template === "string" ? template : undefined,
-      extraVariables,
-    });
+  const { messages, error: ventoError } = await renderSystemPrompt(series, name, {
+    previousContext: filteredContext,
+    userInput: message,
+    isFirstRound,
+    storyDir,
+    chapterNumber,
+    previousContent,
+    chapterCount: totalChapterCount,
+    templateOverride: typeof template === "string" ? template : undefined,
+    extraVariables,
+  });
 
   return {
     messages: ventoError ? [] : messages,
@@ -218,8 +210,7 @@ export async function buildContinuePromptFromStory(
   const { stripPromptTags, renderSystemPrompt, hookDispatcher } = deps;
   const effectiveCorrelationId = correlationId ?? crypto.randomUUID();
 
-  const { chapterFiles, chapters, totalChapterCount } =
-    await loadChaptersForPrompt(storyDir);
+  const { chapterFiles, chapters, totalChapterCount } = await loadChaptersForPrompt(storyDir);
   log.debug("Read story directory (continue)", {
     path: storyDir,
     chapterCount: chapterFiles.length,
@@ -253,12 +244,8 @@ export async function buildContinuePromptFromStory(
 
   // previousContext = chapters 1..n-1 (exclude the chapter we are continuing).
   const priorChapters = chapters.slice(0, -1);
-  const nonEmptyPrior = priorChapters.filter((ch) =>
-    ch.content.trim().length > 0
-  );
-  const previousContext: string[] = nonEmptyPrior.map((ch) =>
-    stripPromptTags(ch.content)
-  );
+  const nonEmptyPrior = priorChapters.filter((ch) => ch.content.trim().length > 0);
+  const previousContext: string[] = nonEmptyPrior.map((ch) => stripPromptTags(ch.content));
   const rawChapters: string[] = nonEmptyPrior.map((ch) => ch.content);
 
   const hookContext: Record<string, unknown> = {
@@ -277,9 +264,7 @@ export async function buildContinuePromptFromStory(
   // the target — same shape as buildPromptFromStory uses for chapter N's
   // context when the target reuses an empty trailing file. For continue,
   // chapter n-1 (last non-empty prior chapter) is the natural choice.
-  const lastPriorNonEmpty = [...priorChapters].reverse().find((ch) =>
-    ch.content.trim().length > 0
-  );
+  const lastPriorNonEmpty = [...priorChapters].reverse().find((ch) => ch.content.trim().length > 0);
   const previousContent = lastPriorNonEmpty ? lastPriorNonEmpty.content : "";
 
   // `isFirstRound` mirrors the semantics of `buildPromptFromStory`: it is
@@ -292,17 +277,16 @@ export async function buildContinuePromptFromStory(
   // render with `multi-message:empty-message`.
   const isFirstRound = filteredContext.length === 0;
 
-  const { messages: renderedMessages, error: ventoError } =
-    await renderSystemPrompt(series, name, {
-      previousContext: filteredContext,
-      userInput: userMessageText,
-      isFirstRound,
-      storyDir,
-      chapterNumber: targetChapterNumber,
-      previousContent,
-      chapterCount: totalChapterCount,
-      templateOverride: typeof template === "string" ? template : undefined,
-    });
+  const { messages: renderedMessages, error: ventoError } = await renderSystemPrompt(series, name, {
+    previousContext: filteredContext,
+    userInput: userMessageText,
+    isFirstRound,
+    storyDir,
+    chapterNumber: targetChapterNumber,
+    previousContent,
+    chapterCount: totalChapterCount,
+    templateOverride: typeof template === "string" ? template : undefined,
+  });
 
   if (ventoError) {
     return {

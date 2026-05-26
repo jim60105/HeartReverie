@@ -18,12 +18,7 @@ import type { WSContext } from "@hono/hono/ws";
 import { errorMessage } from "../lib/errors.ts";
 import { isValidParam } from "../lib/middleware.ts";
 import { createLogger } from "../lib/logger.ts";
-import {
-  ChatAbortError,
-  ChatError,
-  executeChat,
-  executeContinue,
-} from "../lib/chat-shared.ts";
+import { ChatAbortError, ChatError, executeChat, executeContinue } from "../lib/chat-shared.ts";
 import { pruneUsage } from "../lib/usage.ts";
 import { MAX_MESSAGE_LENGTH } from "./ws-auth.ts";
 import type { WsConnection } from "./ws-connection.ts";
@@ -83,9 +78,7 @@ export async function handleChatSend(
       conn.wsSend(ws, { type: "chat:aborted", id });
       return;
     }
-    const detail = err instanceof ChatError
-      ? err.message
-      : "Failed to process chat request";
+    const detail = err instanceof ChatError ? err.message : "Failed to process chat request";
     if (err instanceof ChatError) {
       log.error("Chat request failed", {
         event: "chat:error",
@@ -159,9 +152,7 @@ export async function handleChatContinue(
       conn.wsSend(ws, { type: "chat:aborted", id });
       return;
     }
-    const detail = err instanceof ChatError
-      ? err.message
-      : "Failed to process chat request";
+    const detail = err instanceof ChatError ? err.message : "Failed to process chat request";
     if (err instanceof ChatError) {
       log.error("Continue request failed", {
         event: "chat:error",

@@ -38,7 +38,7 @@ const defaults: LlmConfig = {
   topA: 1,
   reasoningEnabled: true,
   reasoningEffort: "high",
-    maxCompletionTokens: 4096,
+  maxCompletionTokens: 4096,
 };
 
 Deno.test("validateStoryLlmConfig", async (t) => {
@@ -108,7 +108,7 @@ Deno.test("validateStoryLlmConfig", async (t) => {
       topA: 0.8,
       reasoningEnabled: false,
       reasoningEffort: "low" as const,
-    maxCompletionTokens: 4096,
+      maxCompletionTokens: 4096,
     };
     assertEquals(validateStoryLlmConfig(full), full);
   });
@@ -225,12 +225,15 @@ Deno.test("validateStoryLlmConfig", async (t) => {
     );
   });
 
-  await t.step("skips maxCompletionTokens when undefined (still strips undefined, only null is preserved)", () => {
-    assertEquals(
-      validateStoryLlmConfig({ model: "x", maxCompletionTokens: undefined }),
-      { model: "x" },
-    );
-  });
+  await t.step(
+    "skips maxCompletionTokens when undefined (still strips undefined, only null is preserved)",
+    () => {
+      assertEquals(
+        validateStoryLlmConfig({ model: "x", maxCompletionTokens: undefined }),
+        { model: "x" },
+      );
+    },
+  );
 });
 
 Deno.test("readStoryLlmConfig / writeStoryLlmConfig round-trip", async (t) => {
@@ -420,7 +423,9 @@ Deno.test("resolveStoryLlmConfig: missing maxCompletionTokens falls through to e
 });
 
 Deno.test("STORY_LLM_CONFIG_KEYS lock-step with validator", async () => {
-  const { STORY_LLM_CONFIG_KEYS, validateStoryLlmConfig } = await import("../../../writer/lib/story-config.ts");
+  const { STORY_LLM_CONFIG_KEYS, validateStoryLlmConfig } = await import(
+    "../../../writer/lib/story-config.ts"
+  );
   // Validator should accept every whitelisted key (with a placeholder valid value)
   const sample: Record<string, unknown> = {
     model: "m",
@@ -438,7 +443,9 @@ Deno.test("STORY_LLM_CONFIG_KEYS lock-step with validator", async () => {
   };
   for (const k of STORY_LLM_CONFIG_KEYS) {
     if (!(k in sample)) {
-      throw new Error(`STORY_LLM_CONFIG_KEYS contains '${k}' but lock-step sample does not — drift detected`);
+      throw new Error(
+        `STORY_LLM_CONFIG_KEYS contains '${k}' but lock-step sample does not — drift detected`,
+      );
     }
   }
   for (const k of Object.keys(sample)) {

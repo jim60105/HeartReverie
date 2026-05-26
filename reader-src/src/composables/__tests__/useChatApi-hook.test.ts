@@ -26,7 +26,7 @@ function mockFetch(body: unknown, status = 200) {
         status,
         json: () => Promise.resolve(body),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }

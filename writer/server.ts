@@ -17,7 +17,7 @@
 import "@std/dotenv/load";
 
 import * as config from "./lib/config.ts";
-import { initLogger, createLogger, closeLogger } from "./lib/logger.ts";
+import { closeLogger, createLogger, initLogger } from "./lib/logger.ts";
 import { HookDispatcher } from "./lib/hooks.ts";
 import { PluginManager } from "./lib/plugin-manager.ts";
 import { createSafePath, verifyPassphrase } from "./lib/middleware.ts";
@@ -36,7 +36,12 @@ if (!Deno.env.get("LLM_API_KEY")) {
 
 // ── Plugin system ───────────────────────────────────────────────
 const hookDispatcher = new HookDispatcher();
-const pluginManager = new PluginManager(config.PLUGINS_DIR, Deno.env.get("PLUGIN_DIR"), hookDispatcher, config.PLAYGROUND_DIR);
+const pluginManager = new PluginManager(
+  config.PLUGINS_DIR,
+  Deno.env.get("PLUGIN_DIR"),
+  hookDispatcher,
+  config.PLAYGROUND_DIR,
+);
 await pluginManager.init();
 
 // ── Theme system ────────────────────────────────────────────────
@@ -46,7 +51,12 @@ await loadThemes(config.THEME_DIR);
 const safePath = createSafePath(config.PLAYGROUND_DIR);
 const templateEngine = createTemplateEngine(pluginManager);
 const { renderSystemPrompt } = templateEngine;
-const { buildPromptFromStory, buildContinuePromptFromStory } = createStoryEngine(pluginManager, safePath, renderSystemPrompt, hookDispatcher);
+const { buildPromptFromStory, buildContinuePromptFromStory } = createStoryEngine(
+  pluginManager,
+  safePath,
+  renderSystemPrompt,
+  hookDispatcher,
+);
 
 const app = createApp({
   config,

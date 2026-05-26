@@ -150,9 +150,7 @@ export function computeHiddenPaths(
         else if ("notEquals" in cond) {
           visible = !deepValueEqual(sibling, cond["notEquals"]);
         } else if ("in" in cond && Array.isArray(cond["in"])) {
-          visible = (cond["in"] as unknown[]).some((v) =>
-            deepValueEqual(sibling, v)
-          );
+          visible = (cond["in"] as unknown[]).some((v) => deepValueEqual(sibling, v));
         }
         if (!visible) {
           out.push(path);

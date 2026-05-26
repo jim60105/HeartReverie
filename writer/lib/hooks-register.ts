@@ -103,14 +103,17 @@ export function resolveRegisterOptions(
     // Inline allowlist + readOnly validation (mirrors manifest validator)
     if (parallel && !PARALLEL_ALLOWED.has(stage)) {
       log.warn("parallel:true is only allowed for stages in PARALLEL_ALLOWED", {
-        plugin, stage, allowlist: [...PARALLEL_ALLOWED],
+        plugin,
+        stage,
+        allowlist: [...PARALLEL_ALLOWED],
       });
       parallel = false;
     }
     if (parallel && !readOnly) {
       if (stage === "response-stream") {
         log.error("response-stream + parallel:true requires readOnly:true", {
-          plugin, stage,
+          plugin,
+          stage,
         });
       } else {
         log.warn("parallel:true requires readOnly:true", { plugin, stage });
@@ -122,7 +125,9 @@ export function resolveRegisterOptions(
     if (concurrency !== undefined) {
       if (typeof concurrency !== "number" || !Number.isInteger(concurrency) || concurrency < 1) {
         log.warn("Invalid concurrency value; coerced to unbounded", {
-          plugin, stage, rejectedValue: concurrency,
+          plugin,
+          stage,
+          rejectedValue: concurrency,
         });
         concurrency = undefined;
       }
@@ -131,7 +136,9 @@ export function resolveRegisterOptions(
     // Priority<100 warn for parallel handlers
     if (parallel && typeof priority === "number" && priority < 100) {
       log.warn("parallel handlers run after all serial handlers regardless of priority", {
-        plugin, stage, priority,
+        plugin,
+        stage,
+        priority,
       });
     }
   }
@@ -174,9 +181,19 @@ export function warnIfHeterogeneousConcurrency(
     const pc = peer.concurrency;
     // (a) finite-vs-unbounded mismatch
     if (nc !== undefined && pc === undefined) {
-      mismatches.push({ throttler: newEntry, throttlerValue: nc, slowed: peer, slowedValue: undefined });
+      mismatches.push({
+        throttler: newEntry,
+        throttlerValue: nc,
+        slowed: peer,
+        slowedValue: undefined,
+      });
     } else if (nc === undefined && pc !== undefined) {
-      mismatches.push({ throttler: peer, throttlerValue: pc, slowed: newEntry, slowedValue: undefined });
+      mismatches.push({
+        throttler: peer,
+        throttlerValue: pc,
+        slowed: newEntry,
+        slowedValue: undefined,
+      });
     } else if (nc !== undefined && pc !== undefined && nc !== pc) {
       // (b) finite-vs-higher-finite mismatch: lower value is the throttler
       if (nc < pc) {
@@ -214,8 +231,14 @@ export function warnIfHeterogeneousConcurrency(
     .map(([p, v]) => `${p} (concurrency=${fmt(v)})`)
     .join(", ");
   const peerSample = [...slowedCites.entries()][0]!;
-  const slowedFields = [...slowedCites.entries()].map(([p, v]) => ({ plugin: p, concurrency: fmt(v) }));
-  const throttlerFields = [...throttlerCites.entries()].map(([p, v]) => ({ plugin: p, concurrency: fmt(v) }));
+  const slowedFields = [...slowedCites.entries()].map(([p, v]) => ({
+    plugin: p,
+    concurrency: fmt(v),
+  }));
+  const throttlerFields = [...throttlerCites.entries()].map(([p, v]) => ({
+    plugin: p,
+    concurrency: fmt(v),
+  }));
 
   // Determine the role of `newEntry` in this batch. It can be throttler-only,
   // slowed-only, or both (mixed bucket with >=2 heterogeneous peers).
@@ -235,7 +258,9 @@ export function warnIfHeterogeneousConcurrency(
       `This plugin declared ${newDecl}; it both throttles some peers and is throttled by others — collectively these caps throttle the entire '${stage}' parallel bucket.`;
   }
   const message =
-    `${roleSentence} Effective concurrency for this stage is now capped at ${effective}. Other plugins in this bucket (e.g. ${peerSample[0]}) declared ${fmt(peerSample[1])}. Throttlers: ${throttlersList}.`;
+    `${roleSentence} Effective concurrency for this stage is now capped at ${effective}. Other plugins in this bucket (e.g. ${
+      peerSample[0]
+    }) declared ${fmt(peerSample[1])}. Throttlers: ${throttlersList}.`;
 
   const payload = {
     plugin: newPluginLabel,

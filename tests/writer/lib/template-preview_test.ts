@@ -7,10 +7,10 @@ import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 import { createTemplateEngine } from "../../../writer/lib/template.ts";
 import {
+  _resetDefaultFixtureCache,
   fixtureToContext,
   loadDefaultFixture,
   renderSystemPromptForPreview,
-  _resetDefaultFixtureCache,
 } from "../../../writer/lib/template-preview.ts";
 
 async function mkEngine() {

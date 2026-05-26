@@ -26,7 +26,7 @@ function mockFetch(body: unknown, status = 200) {
         status,
         json: () => Promise.resolve(body),
         headers: new Headers(),
-      }),
+      })
     ),
   );
 }
@@ -89,7 +89,9 @@ describe("useChatApi", () => {
       "fetch",
       vi.fn(
         () =>
-          new Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; headers: Headers }>((resolve) => {
+          new Promise<
+            { ok: boolean; status: number; json: () => Promise<unknown>; headers: Headers }
+          >((resolve) => {
             // First call: chat POST. Subsequent: usage reconcile GET.
             if (!resolvePromise) {
               resolvePromise = () =>
@@ -103,7 +105,11 @@ describe("useChatApi", () => {
               resolve({
                 ok: true,
                 status: 200,
-                json: () => Promise.resolve({ records: [], totals: { promptTokens: 0, completionTokens: 0, totalTokens: 0, count: 0 } }),
+                json: () =>
+                  Promise.resolve({
+                    records: [],
+                    totals: { promptTokens: 0, completionTokens: 0, totalTokens: 0, count: 0 },
+                  }),
                 headers: new Headers(),
               });
             }
@@ -136,7 +142,11 @@ describe("useChatApi", () => {
       .mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ records: [], totals: { promptTokens: 0, completionTokens: 0, totalTokens: 0, count: 0 } }),
+        json: () =>
+          Promise.resolve({
+            records: [],
+            totals: { promptTokens: 0, completionTokens: 0, totalTokens: 0, count: 0 },
+          }),
         headers: new Headers(),
       });
     vi.stubGlobal("fetch", fetchMock);
@@ -336,7 +346,9 @@ describe("useChatApi", () => {
         "fetch",
         vi.fn((_url: string, init?: RequestInit) => {
           fetchAbortSignal = init?.signal as AbortSignal | undefined;
-          return new Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; headers: Headers }>(
+          return new Promise<
+            { ok: boolean; status: number; json: () => Promise<unknown>; headers: Headers }
+          >(
             (_resolve, reject) => {
               if (fetchAbortSignal) {
                 fetchAbortSignal.addEventListener("abort", () => {

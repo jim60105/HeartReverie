@@ -50,7 +50,7 @@ describe("useChapterNav", () => {
           status: 200,
           json: () => Promise.resolve([]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
   });

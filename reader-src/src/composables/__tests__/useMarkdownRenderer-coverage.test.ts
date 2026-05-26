@@ -59,7 +59,9 @@ describe("useMarkdownRenderer vento-error coverage", () => {
     const vento = tokens.find((t) => t.type === "vento-error");
     expect(vento).toBeDefined();
 
-    const html = tokens.filter((t): t is HtmlToken => t.type === "html").map((t) => t.content).join(" ");
+    const html = tokens.filter((t): t is HtmlToken => t.type === "html").map((t) => t.content).join(
+      " ",
+    );
     expect(html).toContain("before");
     expect(html).toContain("after");
   });

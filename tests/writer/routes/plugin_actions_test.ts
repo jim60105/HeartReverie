@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assert as assertTrue, assertStringIncludes } from "@std/assert";
+import { assert as assertTrue, assertEquals, assertStringIncludes } from "@std/assert";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
@@ -22,7 +22,7 @@ import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 import { createTemplateEngine } from "../../../writer/lib/template.ts";
 import { createStoryEngine } from "../../../writer/lib/story.ts";
 import type { Hono } from "@hono/hono";
-import type { AppDeps, AppConfig } from "../../../writer/types.ts";
+import type { AppConfig, AppDeps } from "../../../writer/types.ts";
 
 interface ScenarioOpts {
   readonly promptContent?: string;
@@ -47,7 +47,10 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<{
   const storyDir = join(playgroundDir, "s1", "n1");
   await Deno.mkdir(storyDir, { recursive: true });
   if (opts.chapterContent !== null) {
-    await Deno.writeTextFile(join(storyDir, "001.md"), opts.chapterContent ?? "Existing chapter content.\n");
+    await Deno.writeTextFile(
+      join(storyDir, "001.md"),
+      opts.chapterContent ?? "Existing chapter content.\n",
+    );
   }
 
   // Build a real plugin directory.
@@ -64,7 +67,7 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<{
   await Deno.writeTextFile(join(pluginDir, "plugin.json"), JSON.stringify(manifest));
   await Deno.writeTextFile(
     join(pluginDir, "prompts", "summary.md"),
-    opts.promptContent ?? "{{ message \"user\" }}\nSummarise.\n{{ /message }}",
+    opts.promptContent ?? '{{ message "user" }}\nSummarise.\n{{ /message }}',
   );
   if (opts.extraPluginFiles) {
     for (const [rel, content] of Object.entries(opts.extraPluginFiles)) {
@@ -103,10 +106,18 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<{
 
   // Provide a system.md so renderSystemPrompt has a fallback (we override
   // per-call, but the existence check is still cheap).
-  await Deno.writeTextFile(join(tmpDir, "system.md"), "{{ message \"user\" }}\nSystem.\n{{ /message }}");
+  await Deno.writeTextFile(
+    join(tmpDir, "system.md"),
+    '{{ message "user" }}\nSystem.\n{{ /message }}',
+  );
 
   const hookDispatcher = new HookDispatcher();
-  const pluginManager = new PluginManager(pluginsRoot, undefined, hookDispatcher, Deno.makeTempDirSync());
+  const pluginManager = new PluginManager(
+    pluginsRoot,
+    undefined,
+    hookDispatcher,
+    Deno.makeTempDirSync(),
+  );
   await pluginManager.init();
 
   const templateEngine = createTemplateEngine(pluginManager);
@@ -123,7 +134,14 @@ async function makeScenario(opts: ScenarioOpts = {}): Promise<{
     pluginManager,
     hookDispatcher,
     buildPromptFromStory: storyEngine.buildPromptFromStory,
-    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+    buildContinuePromptFromStory: (async () => ({
+      messages: [],
+      ventoError: null,
+      targetChapterNumber: 0,
+      existingContent: "",
+      userMessageText: "",
+      assistantPrefill: "",
+    })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     verifyPassphrase,
   } as AppDeps;
 
@@ -147,7 +165,9 @@ function mockLLMFetch(content: string) {
     if (typeof url === "string" && url.includes("chat/completions")) {
       const sse = [
         `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
-        `data: ${JSON.stringify({ usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } })}\n\n`,
+        `data: ${
+          JSON.stringify({ usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } })
+        }\n\n`,
         `data: [DONE]\n\n`,
       ];
       return new Response(
@@ -228,7 +248,11 @@ Deno.test({
           append: false,
         });
         assertEquals(res.status, 200);
-        const body = res.body as { content: string; chapterUpdated: boolean; appendedTag: string | null };
+        const body = res.body as {
+          content: string;
+          chapterUpdated: boolean;
+          appendedTag: string | null;
+        };
         assertEquals(body.chapterUpdated, false);
         assertEquals(body.appendedTag, null);
         assertEquals(body.content, "RESPONSE");
@@ -266,7 +290,10 @@ Deno.test({
         });
         assertTrue(res.status === 400);
         const body = res.body as { type: string };
-        assertTrue(body.type === "plugin-action:invalid-prompt-path" || body.type === "plugin-action:non-md-prompt");
+        assertTrue(
+          body.type === "plugin-action:invalid-prompt-path" ||
+            body.type === "plugin-action:non-md-prompt",
+        );
       } finally {
         await cleanup();
       }
@@ -495,7 +522,9 @@ Deno.test({
       const { app, tmpDir, cleanup } = await makeScenario();
       try {
         // Double wrap → only the OUTER layer is stripped, inner layer is kept.
-        mockLLMFetch("<UpdateVariable>\n<UpdateVariable>nested</UpdateVariable>\n</UpdateVariable>");
+        mockLLMFetch(
+          "<UpdateVariable>\n<UpdateVariable>nested</UpdateVariable>\n</UpdateVariable>",
+        );
         const res = await callRoute(app, "tester", {
           series: "s1",
           name: "n1",

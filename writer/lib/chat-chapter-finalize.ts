@@ -347,9 +347,7 @@ export async function finalizeStreamMode(args: {
   // Pre-clone the usage record so the value reachable through the frozen
   // hook payload stays independent of the local mutable record that
   // append-to-`_usage.json` may continue to touch.
-  const usageForDispatch: TokenUsageRecord | null = usage === null
-    ? null
-    : structuredClone(usage);
+  const usageForDispatch: TokenUsageRecord | null = usage === null ? null : structuredClone(usage);
 
   const common: FinalizeArgs = {
     chapterPath,

@@ -14,8 +14,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson, errorMessage } from "../lib/errors.ts";
-import { executeChat, executeContinue, ChatError, ChatAbortError } from "../lib/chat-shared.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
+import { ChatAbortError, ChatError, executeChat, executeContinue } from "../lib/chat-shared.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
@@ -39,8 +39,19 @@ const ERROR_TITLES: Record<string, string> = {
   "conflict": "Conflict",
 };
 
-export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "hookDispatcher" | "buildPromptFromStory" | "buildContinuePromptFromStory" | "config">): void {
-  const { safePath, hookDispatcher, buildPromptFromStory, buildContinuePromptFromStory, config } = deps;
+export function registerChatRoutes(
+  app: Hono,
+  deps: Pick<
+    AppDeps,
+    | "safePath"
+    | "hookDispatcher"
+    | "buildPromptFromStory"
+    | "buildContinuePromptFromStory"
+    | "config"
+  >,
+): void {
+  const { safePath, hookDispatcher, buildPromptFromStory, buildContinuePromptFromStory, config } =
+    deps;
 
   app.post(
     "/api/stories/:series/:name/chat",
@@ -84,7 +95,10 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
       } catch (err: unknown) {
         if (err instanceof ChatAbortError) {
           // Client disconnected — return 499 (client closed request)
-          return c.json(problemJson("Client Closed Request", 499, "Generation aborted by client"), 499 as ContentfulStatusCode);
+          return c.json(
+            problemJson("Client Closed Request", 499, "Generation aborted by client"),
+            499 as ContentfulStatusCode,
+          );
         }
         if (err instanceof ChatError) {
           log.error("Chat request failed", {
@@ -102,9 +116,12 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           return c.json(problemJson(title, err.httpStatus, err.message), status);
         }
         log.error("Unexpected chat error", { error: errorMessage(err), path: c.req.path });
-        return c.json(problemJson("Internal Server Error", 500, "Failed to process chat request"), 500);
+        return c.json(
+          problemJson("Internal Server Error", 500, "Failed to process chat request"),
+          500,
+        );
       }
-    }
+    },
   );
 
   app.post(
@@ -137,7 +154,10 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
         return c.json(result);
       } catch (err: unknown) {
         if (err instanceof ChatAbortError) {
-          return c.json(problemJson("Client Closed Request", 499, "Generation aborted by client"), 499 as ContentfulStatusCode);
+          return c.json(
+            problemJson("Client Closed Request", 499, "Generation aborted by client"),
+            499 as ContentfulStatusCode,
+          );
         }
         if (err instanceof ChatError) {
           log.error("Continue request failed", {
@@ -155,8 +175,11 @@ export function registerChatRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
           return c.json(problemJson(title, err.httpStatus, err.message), status);
         }
         log.error("Unexpected continue error", { error: errorMessage(err), path: c.req.path });
-        return c.json(problemJson("Internal Server Error", 500, "Failed to process continue request"), 500);
+        return c.json(
+          problemJson("Internal Server Error", 500, "Failed to process continue request"),
+          500,
+        );
       }
-    }
+    },
   );
 }

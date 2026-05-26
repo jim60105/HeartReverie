@@ -2,8 +2,8 @@ import {
   deriveLoreFilename,
   ensureMdExtension,
   isValidSeriesOrStoryName,
-  validateLoreFilename,
   sanitiseTags,
+  validateLoreFilename,
 } from "@/lib/lore-filename";
 
 describe("deriveLoreFilename", () => {

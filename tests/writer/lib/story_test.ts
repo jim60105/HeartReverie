@@ -79,7 +79,9 @@ Deno.test("buildPromptFromStory: chapterCount reflects true on-disk total even w
       options?: RenderOptions,
     ): Promise<RenderResult> => {
       captured = options;
-      return Promise.resolve({ messages: [{ role: "user", content: "rendered" }], error: null } as RenderResult);
+      return Promise.resolve(
+        { messages: [{ role: "user", content: "rendered" }], error: null } as RenderResult,
+      );
     };
 
     const engine = createStoryEngine(
@@ -122,7 +124,9 @@ Deno.test("buildPromptFromStory: _config.json alongside chapters is ignored in l
       dispatch: (_s: string, ctx: Record<string, unknown>) => Promise.resolve(ctx),
     } as unknown as HookDispatcher;
     const renderSystemPrompt = (): Promise<RenderResult> =>
-      Promise.resolve({ messages: [{ role: "user", content: "rendered" }], error: null } as RenderResult);
+      Promise.resolve(
+        { messages: [{ role: "user", content: "rendered" }], error: null } as RenderResult,
+      );
 
     const engine = createStoryEngine(
       pluginManagerStub,
@@ -197,8 +201,7 @@ Deno.test("parseChapterForContinue", async (t) => {
   await t.step("plugin strip pattern that removes <think>…</think> is honoured", () => {
     // When the caller's stripPromptTags removes the <think> block, that
     // removal flows through to the prefill exactly once (as documented).
-    const stripThink = (s: string): string =>
-      s.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    const stripThink = (s: string): string => s.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
     const raw = "<user_message>q</user_message>\n<think>inner</think>\n\nafter";
     const r = parseChapterForContinue(raw, stripThink);
     assertEquals(r.userMessageText, "q");
@@ -299,7 +302,8 @@ Deno.test("buildContinuePromptFromStory: appends trailing assistant prefill and 
   try {
     const ch1 = "<user_message>hello</user_message>\n\nbody so far";
     await Deno.writeTextFile(`${storyDir}/001.md`, ch1);
-    const { pluginManagerStub, hookDispatcherStub, renderSystemPrompt, getCaptured } = makeContinueDeps();
+    const { pluginManagerStub, hookDispatcherStub, renderSystemPrompt, getCaptured } =
+      makeContinueDeps();
     const engine = createStoryEngine(
       pluginManagerStub,
       (p: string) => p,
@@ -367,7 +371,8 @@ Deno.test("buildContinuePromptFromStory: previousContext built from chapters 1..
       `${storyDir}/003.md`,
       "<user_message>q3</user_message>\n\npartial three",
     );
-    const { pluginManagerStub, hookDispatcherStub, renderSystemPrompt, getCaptured } = makeContinueDeps();
+    const { pluginManagerStub, hookDispatcherStub, renderSystemPrompt, getCaptured } =
+      makeContinueDeps();
     const engine = createStoryEngine(
       pluginManagerStub,
       (p: string) => p,
@@ -401,7 +406,8 @@ Deno.test("buildContinuePromptFromStory: isFirstRound=true when no priors exist 
       `${storyDir}/001.md`,
       "<user_message>continue please</user_message>\n\nstart of one",
     );
-    const { pluginManagerStub, hookDispatcherStub, renderSystemPrompt, getCaptured } = makeContinueDeps();
+    const { pluginManagerStub, hookDispatcherStub, renderSystemPrompt, getCaptured } =
+      makeContinueDeps();
     const engine = createStoryEngine(
       pluginManagerStub,
       (p: string) => p,

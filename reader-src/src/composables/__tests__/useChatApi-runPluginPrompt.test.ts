@@ -254,7 +254,7 @@ describe("useChatApi.runPluginPrompt", () => {
             status: 200,
             json: () => Promise.resolve(final),
             headers: new Headers(),
-          }),
+          })
         ),
       );
       const api = await getApi();
@@ -285,7 +285,7 @@ describe("useChatApi.runPluginPrompt", () => {
             status: 400,
             json: () => Promise.resolve({ detail: "invalid prompt path" }),
             headers: new Headers(),
-          }),
+          })
         ),
       );
       const api = await getApi();
@@ -312,7 +312,7 @@ describe("useChatApi.runPluginPrompt", () => {
             status: 200,
             json: () => Promise.resolve(final),
             headers: new Headers(),
-          }),
+          })
         ),
       );
       const api = await getApi();

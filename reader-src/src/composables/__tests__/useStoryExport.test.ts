@@ -1,7 +1,14 @@
 import { stubSessionStorage } from "@/__tests__/setup";
 
 describe("useStoryExport", () => {
-  let createdAnchors: Array<{ href: string; download: string; click: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> }>;
+  let createdAnchors: Array<
+    {
+      href: string;
+      download: string;
+      click: ReturnType<typeof vi.fn>;
+      remove: ReturnType<typeof vi.fn>;
+    }
+  >;
   let originalCreateElement: typeof document.createElement;
 
   beforeEach(() => {
@@ -58,7 +65,7 @@ describe("useStoryExport", () => {
           status: 200,
           blob: () => Promise.resolve(new Blob(["payload"], { type: "text/markdown" })),
           headers: new Headers(),
-        }),
+        })
       ),
     );
   }
@@ -118,7 +125,7 @@ describe("useStoryExport", () => {
           status: 404,
           blob: () => Promise.resolve(new Blob()),
           headers: new Headers(),
-        }),
+        })
       ),
     );
     const { exportStory } = await getExporter();

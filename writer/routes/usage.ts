@@ -15,7 +15,7 @@
 
 import { validateParams } from "../lib/middleware.ts";
 import { problemJson } from "../lib/errors.ts";
-import { readUsage, computeTotals } from "../lib/usage.ts";
+import { computeTotals, readUsage } from "../lib/usage.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
 

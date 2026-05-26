@@ -32,8 +32,10 @@ function isEnabled(): boolean {
     // import.meta.env not available — fall through
   }
   try {
-    if (typeof localStorage !== "undefined"
-      && localStorage.getItem("RENDER_DEBUG") === "true") {
+    if (
+      typeof localStorage !== "undefined" &&
+      localStorage.getItem("RENDER_DEBUG") === "true"
+    ) {
       return true;
     }
   } catch {

@@ -107,8 +107,7 @@ describe("dialogue-colorize frontend plugin", () => {
     const highlights = installHighlightStubs();
     const mod = await freshImport();
     const container = document.createElement("div");
-    container.innerHTML =
-      '<p>外面\u300C對話\u300D</p><pre><code>"x"</code></pre>';
+    container.innerHTML = '<p>外面\u300C對話\u300D</p><pre><code>"x"</code></pre>';
     (mod as unknown as { __test__: { colorize: (c: HTMLElement) => void } })
       .__test__.colorize(container);
     const corner = highlights.get("dialogue-quote-corner");
@@ -222,8 +221,7 @@ describe("dialogue-colorize frontend plugin", () => {
     installHighlightStubs();
     const mod = await freshImport();
     const container = document.createElement("div");
-    container.innerHTML =
-      '<p>她說\u300C早安\u300D，他回應 "morning"。</p>';
+    container.innerHTML = '<p>她說\u300C早安\u300D，他回應 "morning"。</p>';
     const before = container.outerHTML;
     (mod as unknown as { __test__: { colorize: (c: HTMLElement) => void } })
       .__test__.colorize(container);

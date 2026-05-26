@@ -1,4 +1,4 @@
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import ImportCharacterCardPage from "@/components/ImportCharacterCardPage.vue";
 import type { ParsedCharacterCard } from "@/types/character-card";
@@ -91,9 +91,7 @@ function setupFetch(opts: {
     vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? "GET";
       const body = init?.body
-        ? typeof init.body === "string"
-          ? JSON.parse(init.body)
-          : init.body
+        ? typeof init.body === "string" ? JSON.parse(init.body) : init.body
         : undefined;
       calls.push({ url, method, body });
       if (method === "GET" && url.includes("/api/lore/")) {
@@ -303,7 +301,8 @@ describe("ImportCharacterCardPage", () => {
     await loadCard(wrapper);
     await wrapper.find("#ic-description").setValue("user-edit");
     parserResult = makeParsed({ description: "second" });
-    const confirmSpy = vi.fn(() => false); vi.stubGlobal("confirm", confirmSpy);
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmSpy);
     await loadCard(wrapper);
     expect(confirmSpy).toHaveBeenCalled();
     expect(
@@ -318,7 +317,8 @@ describe("ImportCharacterCardPage", () => {
     await loadCard(wrapper);
     await wrapper.find("#ic-description").setValue("user-edit");
     parserResult = makeParsed({ description: "second" });
-    const confirmSpy = vi.fn(() => true); vi.stubGlobal("confirm", confirmSpy);
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
     await loadCard(wrapper);
     expect(confirmSpy).toHaveBeenCalled();
     expect(
@@ -332,7 +332,8 @@ describe("ImportCharacterCardPage", () => {
     const { wrapper } = await mountPage();
     await loadCard(wrapper);
     parserResult = makeParsed({ description: "second" });
-    const confirmSpy = vi.fn(() => true); vi.stubGlobal("confirm", confirmSpy);
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
     await loadCard(wrapper);
     expect(confirmSpy).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
@@ -445,7 +446,8 @@ describe("ImportCharacterCardPage", () => {
     await loadCard(wrapper);
     await wrapper.find("#ic-series").setValue("user-S1");
     parserResult = makeParsed({ description: "second" });
-    const confirmSpy = vi.fn(() => false); vi.stubGlobal("confirm", confirmSpy);
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmSpy);
     await loadCard(wrapper);
     expect(confirmSpy).toHaveBeenCalled();
     expect((wrapper.find("#ic-series").element as HTMLInputElement).value).toBe("user-S1");
@@ -458,7 +460,8 @@ describe("ImportCharacterCardPage", () => {
     await loadCard(wrapper);
     await wrapper.find("#ic-story").setValue("user-Story");
     parserResult = makeParsed();
-    const confirmSpy = vi.fn(() => false); vi.stubGlobal("confirm", confirmSpy);
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmSpy);
     await loadCard(wrapper);
     expect(confirmSpy).toHaveBeenCalled();
     expect((wrapper.find("#ic-story").element as HTMLInputElement).value).toBe("user-Story");
@@ -471,7 +474,8 @@ describe("ImportCharacterCardPage", () => {
     await loadCard(wrapper);
     await wrapper.find("#ic-char-fn").setValue("My-Hero.md");
     parserResult = makeParsed();
-    const confirmSpy = vi.fn(() => false); vi.stubGlobal("confirm", confirmSpy);
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmSpy);
     await loadCard(wrapper);
     expect(confirmSpy).toHaveBeenCalled();
     expect((wrapper.find("#ic-char-fn").element as HTMLInputElement).value).toBe("My-Hero.md");
@@ -484,7 +488,8 @@ describe("ImportCharacterCardPage", () => {
     await loadCard(wrapper);
     await wrapper.find("#ic-wi-name").setValue("My Realm");
     parserResult = makeParsed();
-    const confirmSpy = vi.fn(() => false); vi.stubGlobal("confirm", confirmSpy);
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmSpy);
     await loadCard(wrapper);
     expect(confirmSpy).toHaveBeenCalled();
     expect((wrapper.find("#ic-wi-name").element as HTMLInputElement).value).toBe("My Realm");
@@ -505,21 +510,51 @@ describe("ImportCharacterCardPage", () => {
         const method = init?.method ?? "GET";
         if (method === "GET" && url.includes("/api/lore/")) {
           if (url.includes("Hero")) charGetCount++;
-          return { ok: false, status: 404, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         if (method === "POST") {
-          return { ok: true, status: 201, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         if (method === "PUT") {
           if (url.includes("Hero")) {
             charPutCount++;
-            return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({}),
+              text: async () => "{}",
+              headers: new Headers(),
+            };
           }
           wiPutCount++;
           if (wiPutFails) {
-            return { ok: false, status: 500, json: async () => ({ detail: "boom" }), text: async () => "{}", headers: new Headers() };
+            return {
+              ok: false,
+              status: 500,
+              json: async () => ({ detail: "boom" }),
+              text: async () => "{}",
+              headers: new Headers(),
+            };
           }
-          return { ok: true, status: 200, json: async () => ({}), text: async () => "{}", headers: new Headers() };
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => "{}",
+            headers: new Headers(),
+          };
         }
         throw new Error(`Unexpected ${method} ${url}`);
       }),

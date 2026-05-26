@@ -19,7 +19,7 @@ import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import type { Hono } from "@hono/hono";
-import type { AppDeps, AppConfig, BuildPromptResult } from "../../../writer/types.ts";
+import type { AppConfig, AppDeps, BuildPromptResult } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
 async function makeRequest(
@@ -65,9 +65,16 @@ function buildApp(tmpDir: string): Hono {
     } as unknown as PluginManager,
     hookDispatcher: new HookDispatcher(),
     buildPromptFromStory: async () => ({}) as unknown as BuildPromptResult,
-    buildContinuePromptFromStory: (async () => ({ messages: [], ventoError: null, targetChapterNumber: 0, existingContent: "", userMessageText: "", assistantPrefill: "" })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+    buildContinuePromptFromStory: (async () => ({
+      messages: [],
+      ventoError: null,
+      targetChapterNumber: 0,
+      existingContent: "",
+      userMessageText: "",
+      assistantPrefill: "",
+    })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
     templateEngine: null,
-      verifyPassphrase,
+    verifyPassphrase,
   } as AppDeps);
 }
 
@@ -155,7 +162,9 @@ Deno.test({
         assertEquals(loreCopy, "---\ntags: []\n---\nbody");
 
         // Series-scoped lore untouched (same file still exists only where it was)
-        const seriesLoreCopy = await Deno.readTextFile(join(tmpDir, "series1", "_lore", "series-note.md"));
+        const seriesLoreCopy = await Deno.readTextFile(
+          join(tmpDir, "series1", "_lore", "series-note.md"),
+        );
         assertEquals(seriesLoreCopy, "series-level");
       });
 

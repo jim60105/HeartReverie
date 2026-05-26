@@ -21,15 +21,13 @@ import { createLogger } from "./logger.ts";
 const log = createLogger("system");
 
 const ROOT_DIR: string = resolve(import.meta.dirname!, "../..");
-const PLAYGROUND_DIR: string =
-  Deno.env.get("PLAYGROUND_DIR") || join(ROOT_DIR, "playground");
+const PLAYGROUND_DIR: string = Deno.env.get("PLAYGROUND_DIR") || join(ROOT_DIR, "playground");
 const READER_DIR: string = Deno.env.get("READER_DIR") || join(ROOT_DIR, "reader-dist");
 const PLUGINS_DIR: string = join(ROOT_DIR, "plugins");
 const PORT: number = parseInt(Deno.env.get("PORT") || "8080", 10);
-const LLM_API_URL: string =
-  Deno.env.get("LLM_API_URL") || "https://openrouter.ai/api/v1/chat/completions";
-const LLM_MODEL: string =
-  Deno.env.get("LLM_MODEL") || "deepseek/deepseek-v4-pro";
+const LLM_API_URL: string = Deno.env.get("LLM_API_URL") ||
+  "https://openrouter.ai/api/v1/chat/completions";
+const LLM_MODEL: string = Deno.env.get("LLM_MODEL") || "deepseek/deepseek-v4-pro";
 
 /** Parse a numeric env var with a fallback default. */
 function numEnv(key: string, fallback: number): number {
@@ -63,10 +61,13 @@ function posIntOrNullEnv(key: string): number | null {
   }
   const parsed = Number(trimmed);
   if (!Number.isSafeInteger(parsed)) {
-    log.warn("Positive-integer env value exceeds safe integer range; falling back to null (no limit)", {
-      variable: key,
-      value: raw,
-    });
+    log.warn(
+      "Positive-integer env value exceeds safe integer range; falling back to null (no limit)",
+      {
+        variable: key,
+        value: raw,
+      },
+    );
     return null;
   }
   return parsed;
@@ -164,29 +165,29 @@ const PROMPT_FILE: string = (() => {
 })();
 
 export {
-  ROOT_DIR,
-  PLAYGROUND_DIR,
-  READER_DIR,
-  PLUGINS_DIR,
-  PORT,
   LLM_API_URL,
-  LLM_MODEL,
-  LLM_TEMPERATURE,
   LLM_FREQUENCY_PENALTY,
+  LLM_LOG_FILE,
+  LLM_MAX_COMPLETION_TOKENS,
+  LLM_MIN_P,
+  LLM_MODEL,
   LLM_PRESENCE_PENALTY,
+  LLM_REASONING_EFFORT,
+  LLM_REASONING_ENABLED,
+  LLM_REASONING_OMIT,
+  LLM_REPETITION_PENALTY,
+  LLM_TEMPERATURE,
+  LLM_TOP_A,
   LLM_TOP_K,
   LLM_TOP_P,
-  LLM_REPETITION_PENALTY,
-  LLM_MIN_P,
-  LLM_TOP_A,
-  LLM_REASONING_ENABLED,
-  LLM_REASONING_EFFORT,
-  LLM_REASONING_OMIT,
-  LLM_MAX_COMPLETION_TOKENS,
   llmDefaults,
-  THEME_DIR,
-  PROMPT_FILE,
-  LOG_LEVEL,
   LOG_FILE,
-  LLM_LOG_FILE,
+  LOG_LEVEL,
+  PLAYGROUND_DIR,
+  PLUGINS_DIR,
+  PORT,
+  PROMPT_FILE,
+  READER_DIR,
+  ROOT_DIR,
+  THEME_DIR,
 };

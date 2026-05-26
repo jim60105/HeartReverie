@@ -52,8 +52,9 @@ const llmSink: FileSinkState = createFileSinkState((path) => {
 function emit(entry: LogEntry): void {
   if (LEVEL_ORDER[entry.level] < LEVEL_ORDER[configuredLevel]) return;
 
-  const stream: "stdout" | "stderr" =
-    (entry.level === "warn" || entry.level === "error") ? "stderr" : "stdout";
+  const stream: "stdout" | "stderr" = (entry.level === "warn" || entry.level === "error")
+    ? "stderr"
+    : "stdout";
 
   const formatted = formatConsole(entry, shouldUseAnsiColors(stream));
   if (entry.level === "error") {
@@ -206,9 +207,7 @@ function createLoggerWithContext(
     warn: (message, data) => log("warn", message, data),
     error: (message, data) => log("error", message, data),
     withContext(ctx: LoggerContext): Logger {
-      const newBaseData = ctx.baseData
-        ? { ...baseData, ...ctx.baseData }
-        : baseData;
+      const newBaseData = ctx.baseData ? { ...baseData, ...ctx.baseData } : baseData;
       return createLoggerWithContext(
         category,
         ctx.correlationId ?? correlationId,
@@ -271,9 +270,7 @@ function createLlmLoggerWithContext(
     warn: (message, data) => log("warn", message, data),
     error: (message, data) => log("error", message, data),
     withContext(ctx: LoggerContext): Logger {
-      const newBaseData = ctx.baseData
-        ? { ...baseData, ...ctx.baseData }
-        : baseData;
+      const newBaseData = ctx.baseData ? { ...baseData, ...ctx.baseData } : baseData;
       return createLlmLoggerWithContext(
         ctx.correlationId ?? correlationId,
         newBaseData,

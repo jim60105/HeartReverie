@@ -190,9 +190,11 @@ describe("MainLayout", () => {
     const wrapper = mountMainLayout();
     await nextTick();
 
-    document.dispatchEvent(new CustomEvent("option-selected", {
-      detail: { text: "新的選項" },
-    }));
+    document.dispatchEvent(
+      new CustomEvent("option-selected", {
+        detail: { text: "新的選項" },
+      }),
+    );
     await nextTick();
 
     const textarea = wrapper.find("textarea").element as HTMLTextAreaElement;

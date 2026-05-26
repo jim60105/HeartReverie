@@ -36,22 +36,12 @@
  * Keep the sequence below in sync with the original inlined order.
  */
 
-import {
-  errorMessage,
-  pluginActionProblems,
-  problemJson,
-} from "../lib/errors.ts";
+import { errorMessage, pluginActionProblems, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { isValidPluginName } from "../lib/plugin-manager.ts";
-import {
-  resolveStoryLlmConfig,
-  StoryConfigValidationError,
-} from "../lib/story-config.ts";
+import { resolveStoryLlmConfig, StoryConfigValidationError } from "../lib/story-config.ts";
 import type { AppDeps, LlmConfig } from "../types.ts";
-import type {
-  PluginActionOutcome,
-  PluginActionRequestArgs,
-} from "./plugin-actions-shared.ts";
+import type { PluginActionOutcome, PluginActionRequestArgs } from "./plugin-actions-shared.ts";
 import {
   resolvePromptPath,
   validateAndResolveStoryDir,
@@ -101,8 +91,7 @@ export async function runPreflight(
   args: PluginActionRequestArgs,
   deps: PreflightDeps,
 ): Promise<PreflightResult> {
-  const { pluginName, series, story, promptPath, mode, appendTag, replace } =
-    args;
+  const { pluginName, series, story, promptPath, mode, appendTag, replace } = args;
   const { config, safePath, pluginManager } = deps;
 
   if (!isValidPluginName(pluginName)) {

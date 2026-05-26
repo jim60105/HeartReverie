@@ -78,8 +78,23 @@
 
   /* Typography */
   --font-base: clamp(0.8rem, 2.5vw, 0.95rem);
-  --font-system-ui: Noto Sans TC, Noto Sans JP, Noto Sans SC, Noto Sans,
-    Noto Color Emoji, Microsoft JhengHei, Heiti TC, system-ui, sans-serif;
-  --font-antique: Iansui, Superclarendon, "Bookman Old Style", "URW Bookman",
-    "URW Bookman L", "Georgia Pro", Georgia, serif;
+  --font-system-ui:
+    Noto Sans TC,
+    Noto Sans JP,
+    Noto Sans SC,
+    Noto Sans,
+    Noto Color Emoji,
+    Microsoft JhengHei,
+    Heiti TC,
+    system-ui,
+    sans-serif;
+  --font-antique:
+    Iansui,
+    Superclarendon,
+    "Bookman Old Style",
+    "URW Bookman",
+    "URW Bookman L",
+    "Georgia Pro",
+    Georgia,
+    serif;
 }

@@ -18,8 +18,8 @@ import { join } from "@std/path";
 import {
   appendUsage,
   buildRecord,
-  copyUsage,
   computeTotals,
+  copyUsage,
   pruneUsage,
   readUsage,
   USAGE_BACKUP_FILENAME,
@@ -27,7 +27,11 @@ import {
 } from "../../../writer/lib/usage.ts";
 import { stub } from "@std/testing/mock";
 
-function makeRecord(chapter: number, prompt: number, completion: number): ReturnType<typeof buildRecord> {
+function makeRecord(
+  chapter: number,
+  prompt: number,
+  completion: number,
+): ReturnType<typeof buildRecord> {
   return buildRecord({
     chapter,
     promptTokens: prompt,
@@ -151,8 +155,22 @@ Deno.test({
         await Deno.writeTextFile(
           join(dir, USAGE_FILENAME),
           JSON.stringify([
-            { chapter: 1, promptTokens: 10, completionTokens: 5, totalTokens: 15, model: "ok", timestamp: "2026-01-01T00:00:00.000Z" },
-            { chapter: "bad", promptTokens: 1, completionTokens: 1, totalTokens: 2, model: "bad", timestamp: "2026-01-01T00:00:00.000Z" },
+            {
+              chapter: 1,
+              promptTokens: 10,
+              completionTokens: 5,
+              totalTokens: 15,
+              model: "ok",
+              timestamp: "2026-01-01T00:00:00.000Z",
+            },
+            {
+              chapter: "bad",
+              promptTokens: 1,
+              completionTokens: 1,
+              totalTokens: 2,
+              model: "bad",
+              timestamp: "2026-01-01T00:00:00.000Z",
+            },
           ]),
         );
         const records = await readUsage(dir);

@@ -1,7 +1,7 @@
-import { effectScope, type EffectScope, ref, watch } from "vue";
+import { type EffectScope, effectScope, ref, watch } from "vue";
 import router from "@/router";
 import type { UseStorySelectorReturn } from "@/types";
-import { apiFetchJson, apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchJson } from "@/lib/api";
 import { useUsage } from "@/composables/useUsage";
 
 const seriesList = ref<string[]>([]);

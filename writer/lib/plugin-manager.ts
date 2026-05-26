@@ -40,11 +40,7 @@ import {
   type PromptVariables,
   validatePluginFragments as promptVarsValidatePluginFragments,
 } from "./plugin-prompt-vars.ts";
-import {
-  isValidPluginName,
-  type PluginEntry,
-  PluginLoader,
-} from "./plugin-loader.ts";
+import { isValidPluginName, type PluginEntry, PluginLoader } from "./plugin-loader.ts";
 
 export { isValidPluginName };
 
@@ -448,5 +444,4 @@ export class PluginManager {
   isSchemaVersionMismatch(name: string): boolean {
     return this.#settings.isSchemaVersionMismatch(name);
   }
-
 }

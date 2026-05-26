@@ -265,26 +265,29 @@ Deno.test("createTemplateEngine", async (t) => {
     assertEquals(captured!.chapterCount, 6);
   });
 
-  await t.step("renderSystemPrompt defaults rich context fields when caller omits them", async () => {
-    let captured: Record<string, unknown> | null = null;
-    const pluginMgr = {
-      getPromptVariables: async () => ({ variables: {}, fragments: [] }),
-      getDynamicVariables: async (ctx: Record<string, unknown>) => {
-        captured = ctx;
-        return {};
-      },
-    } as unknown as PluginManager;
-    const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
-    const result = await renderSystemPrompt("s", "n", {
-      templateOverride: `{{ message "user" }}ok{{ /message }}`,
-    });
-    assertEquals(result.error, null);
-    assertEquals(captured!.userInput, "");
-    assertEquals(captured!.chapterNumber, 1);
-    assertEquals(captured!.previousContent, "");
-    assertEquals(captured!.isFirstRound, false);
-    assertEquals(captured!.chapterCount, 0);
-  });
+  await t.step(
+    "renderSystemPrompt defaults rich context fields when caller omits them",
+    async () => {
+      let captured: Record<string, unknown> | null = null;
+      const pluginMgr = {
+        getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+        getDynamicVariables: async (ctx: Record<string, unknown>) => {
+          captured = ctx;
+          return {};
+        },
+      } as unknown as PluginManager;
+      const { renderSystemPrompt } = createTemplateEngine(pluginMgr);
+      const result = await renderSystemPrompt("s", "n", {
+        templateOverride: `{{ message "user" }}ok{{ /message }}`,
+      });
+      assertEquals(result.error, null);
+      assertEquals(captured!.userInput, "");
+      assertEquals(captured!.chapterNumber, 1);
+      assertEquals(captured!.previousContent, "");
+      assertEquals(captured!.isFirstRound, false);
+      assertEquals(captured!.chapterCount, 0);
+    },
+  );
 
   await t.step("plugin fragment renders chapter_number from chapterNumber option", async () => {
     const pluginMgr = {
@@ -416,8 +419,7 @@ Deno.test("lore Vento rendering", async (t) => {
 
     const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
     const result = await renderSystemPrompt("test", undefined, {
-      templateOverride:
-        `{{ message "user" }}[{{ lore_ref_a }}][{{ lore_ref_b }}]{{ /message }}`,
+      templateOverride: `{{ message "user" }}[{{ lore_ref_a }}][{{ lore_ref_b }}]{{ /message }}`,
     });
     assertEquals(result.error, null);
     assertExists(result.messages[0]);

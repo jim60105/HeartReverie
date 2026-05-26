@@ -28,9 +28,7 @@ const DIM = "\x1b[2m";
 export function shouldUseAnsiColors(stream: "stdout" | "stderr"): boolean {
   if (Deno.noColor) return false;
   try {
-    return stream === "stderr"
-      ? Deno.stderr.isTerminal()
-      : Deno.stdout.isTerminal();
+    return stream === "stderr" ? Deno.stderr.isTerminal() : Deno.stdout.isTerminal();
   } catch {
     return false;
   }
@@ -46,15 +44,11 @@ export function formatConsole(
   const time = entry.timestamp.slice(11, 23); // HH:MM:SS.mmm
   const categoryLabel = `[${entry.category}]`;
   const cat = useAnsiColors ? `${DIM}${categoryLabel}${RESET}` : categoryLabel;
-  const corrIdBody = entry.correlationId
-    ? `(${entry.correlationId.slice(0, 8)})`
-    : "";
+  const corrIdBody = entry.correlationId ? `(${entry.correlationId.slice(0, 8)})` : "";
   const corrId = corrIdBody
     ? (useAnsiColors ? ` ${DIM}${corrIdBody}${RESET}` : ` ${corrIdBody}`)
     : "";
   const dataBody = entry.data ? JSON.stringify(entry.data) : "";
-  const dataStr = dataBody
-    ? (useAnsiColors ? ` ${DIM}${dataBody}${RESET}` : ` ${dataBody}`)
-    : "";
+  const dataStr = dataBody ? (useAnsiColors ? ` ${DIM}${dataBody}${RESET}` : ` ${dataBody}`) : "";
   return `${time} ${levelTag} ${cat}${corrId} ${entry.message}${dataStr}`;
 }

@@ -16,7 +16,7 @@
 import { join } from "@std/path";
 import { parse as parseYaml } from "@std/yaml";
 import { validateParams } from "../lib/middleware.ts";
-import { problemJson, errorMessage } from "../lib/errors.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { atomicWriteChapter, listChapterFiles } from "../lib/story.ts";
 import { isGenerationActive } from "../lib/generation-registry.ts";
@@ -76,7 +76,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         log.error(`[GET /api/stories/:series/:name/chapters] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to list chapters"), 500);
       }
-    }
+    },
   );
 
   // GET /api/stories/:series/:name/chapters/:number — read chapter
@@ -93,7 +93,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
       const filePath = safePath(
         c.req.param("series")!,
         c.req.param("name")!,
-        `${padded}.md`
+        `${padded}.md`,
       );
       if (!filePath) {
         return c.json(problemJson("Bad Request", 400, "Invalid path"), 400);
@@ -128,7 +128,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         log.error(`[GET /api/stories/:series/:name/chapters/:number] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to read chapter"), 500);
       }
-    }
+    },
   );
 
   // DELETE /api/stories/:series/:name/chapters/last — delete last chapter
@@ -172,7 +172,7 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         log.error(`[DELETE /api/stories/:series/:name/chapters/last] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to delete chapter"), 500);
       }
-    }
+    },
   );
 
   // PUT /api/stories/:series/:name/chapters/:number — edit chapter in place
@@ -231,7 +231,12 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
 
       try {
         await atomicWriteChapter(dirPath, chapterFile, content);
-        log.info("Chapter edited", { op: "write", path: filePath, chapter: num, bytes: content.length });
+        log.info("Chapter edited", {
+          op: "write",
+          path: filePath,
+          chapter: num,
+          bytes: content.length,
+        });
 
         // Cache invalidation: delete state/diff from edited chapter onward
         const stateFiles: Promise<unknown>[] = [];
@@ -310,7 +315,10 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
           if (err instanceof Deno.errors.NotFound) continue;
           const errMsg = errorMessage(err);
           log.warn("Failed to delete chapter", { op: "delete", path, error: errMsg });
-          return c.json(problemJson("Internal Server Error", 500, "Failed to delete chapters"), 500);
+          return c.json(
+            problemJson("Internal Server Error", 500, "Failed to delete chapters"),
+            500,
+          );
         }
       }
 
@@ -362,6 +370,6 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
         log.error(`[POST /api/stories/:series/:name/init] ${message}`);
         return c.json(problemJson("Internal Server Error", 500, "Failed to initialize story"), 500);
       }
-    }
+    },
   );
 }

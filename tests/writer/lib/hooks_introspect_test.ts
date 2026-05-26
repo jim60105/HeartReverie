@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assert as assertTrue } from "@std/assert";
+import { assert as assertTrue, assertEquals } from "@std/assert";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 
 Deno.test("HookDispatcher.introspect", async (t) => {
@@ -50,9 +50,14 @@ Deno.test("HookDispatcher.introspect", async (t) => {
 
 Deno.test("HookDispatcher — errorCount increments on caught handler error", async () => {
   const hd = new HookDispatcher();
-  hd.register("prompt-assembly", async () => {
-    throw new Error("boom");
-  }, 100, "plugin-a");
+  hd.register(
+    "prompt-assembly",
+    async () => {
+      throw new Error("boom");
+    },
+    100,
+    "plugin-a",
+  );
   await hd.dispatch("prompt-assembly", { correlationId: "c1" });
   await hd.dispatch("prompt-assembly", { correlationId: "c2" });
   const entries = hd.introspect()["prompt-assembly"] ?? [];

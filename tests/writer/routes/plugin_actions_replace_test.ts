@@ -13,17 +13,10 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import {
-  assert as assertTrue,
-  assertEquals,
-  assertStringIncludes,
-} from "@std/assert";
+import { assert as assertTrue, assertEquals, assertStringIncludes } from "@std/assert";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
-import {
-  createSafePath,
-  verifyPassphrase,
-} from "../../../writer/lib/middleware.ts";
+import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 import { createTemplateEngine } from "../../../writer/lib/template.ts";
@@ -176,7 +169,9 @@ function mockLLMFetch(content: string): void {
     if (typeof url === "string" && url.includes("chat/completions")) {
       const sse = [
         `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
-        `data: ${JSON.stringify({ usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } })}\n\n`,
+        `data: ${
+          JSON.stringify({ usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } })
+        }\n\n`,
         `data: [DONE]\n\n`,
       ];
       return new Response(
@@ -345,7 +340,11 @@ Deno.test({
             append: false,
           });
           assertEquals(res.status, 200);
-          const body = res.body as { chapterUpdated: boolean; chapterReplaced: boolean; content: string };
+          const body = res.body as {
+            chapterUpdated: boolean;
+            chapterReplaced: boolean;
+            content: string;
+          };
           assertEquals(body.chapterUpdated, false);
           assertEquals(body.chapterReplaced, false);
           assertEquals(body.content, "DISCARDED");
@@ -370,8 +369,7 @@ Deno.test({
           // The prompt template references {{ draft }} — the LLM mock
           // will just echo whatever it receives, but we verify the prompt
           // was accepted (status 200) meaning the draft variable resolved.
-          promptContent:
-            '{{ message "user" }}\nPolish: {{ draft }}\n{{ /message }}',
+          promptContent: '{{ message "user" }}\nPolish: {{ draft }}\n{{ /message }}',
         });
         try {
           mockLLMFetch("Polished output.");

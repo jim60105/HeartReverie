@@ -1,9 +1,6 @@
 import { stubSessionStorage } from "@/__tests__/setup";
 import { ref } from "vue";
-import type {
-  StorySwitchContext,
-  ChapterChangeContext,
-} from "@/types";
+import type { ChapterChangeContext, StorySwitchContext } from "@/types";
 
 const mockRouteParams = ref<Record<string, string | undefined>>({});
 vi.mock("vue-router", () => ({
@@ -58,7 +55,7 @@ describe("useChapterNav — story:switch and chapter:change hooks", () => {
           status: 200,
           json: () => Promise.resolve([{ number: 1, content: "c1" }]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
 
@@ -91,7 +88,7 @@ describe("useChapterNav — story:switch and chapter:change hooks", () => {
           status: 200,
           json: () => Promise.resolve([{ number: 1, content: "c1" }]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
 
@@ -122,7 +119,7 @@ describe("useChapterNav — story:switch and chapter:change hooks", () => {
               { number: 2, content: "c2" },
             ]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
 
@@ -151,7 +148,7 @@ describe("useChapterNav — story:switch and chapter:change hooks", () => {
               { number: 3, content: "c3" },
             ]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
 
@@ -179,7 +176,7 @@ describe("useChapterNav — story:switch and chapter:change hooks", () => {
           status: 200,
           json: () => Promise.resolve([{ number: 1, content: "c1" }]),
           headers: new Headers(),
-        }),
+        })
       ),
     );
 

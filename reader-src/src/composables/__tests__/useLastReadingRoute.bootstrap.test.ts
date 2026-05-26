@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { createRouter, createMemoryHistory } from "vue-router";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { defineComponent } from "vue";
 import { useLastReadingRoute } from "@/composables/useLastReadingRoute";
 

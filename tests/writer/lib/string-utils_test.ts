@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assert as assertTrue } from "@std/assert";
-import { levenshtein, findClosestMatch } from "../../../writer/lib/errors.ts";
+import { assert as assertTrue, assertEquals } from "@std/assert";
+import { findClosestMatch, levenshtein } from "../../../writer/lib/errors.ts";
 
 Deno.test("levenshtein", async (t) => {
   await t.step("returns 0 for identical strings", () => {

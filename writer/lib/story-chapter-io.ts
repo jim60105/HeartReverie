@@ -86,8 +86,8 @@ export function parseChapterForContinue(
   const m = rawContent.match(re);
   if (m) {
     const userMessageText = (m[1] ?? "").trim();
-    const remainder = rawContent.slice(0, m.index ?? 0)
-      + rawContent.slice((m.index ?? 0) + m[0].length);
+    const remainder = rawContent.slice(0, m.index ?? 0) +
+      rawContent.slice((m.index ?? 0) + m[0].length);
     const assistantPrefill = stripPromptTags(remainder).trim();
     return { userMessageText, assistantPrefill };
   }

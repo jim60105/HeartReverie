@@ -54,7 +54,10 @@ export async function enumerateAllLore(
 ): Promise<Array<Record<string, unknown>>> {
   const out: Array<Record<string, unknown>> = [];
 
-  async function walk(scopeRoot: string, builder: (rel: string) => { tp: string; label: string; scope: "global" | "series" | "story" }) {
+  async function walk(
+    scopeRoot: string,
+    builder: (rel: string) => { tp: string; label: string; scope: "global" | "series" | "story" },
+  ) {
     let stat: Deno.FileInfo;
     try {
       stat = await Deno.stat(scopeRoot);
@@ -93,7 +96,9 @@ export async function enumerateAllLore(
   let topEntries: Deno.DirEntry[] = [];
   try {
     for await (const e of Deno.readDir(playgroundDir)) topEntries.push(e);
-  } catch { topEntries = []; }
+  } catch {
+    topEntries = [];
+  }
   for (const seriesEntry of topEntries) {
     if (!seriesEntry.isDirectory) continue;
     const seriesName = seriesEntry.name;
@@ -108,7 +113,9 @@ export async function enumerateAllLore(
     let storyEntries: Deno.DirEntry[] = [];
     try {
       for await (const e of Deno.readDir(seriesPath)) storyEntries.push(e);
-    } catch { storyEntries = []; }
+    } catch {
+      storyEntries = [];
+    }
     for (const storyEntry of storyEntries) {
       if (!storyEntry.isDirectory) continue;
       const storyName = storyEntry.name;

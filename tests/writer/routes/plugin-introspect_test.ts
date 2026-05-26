@@ -17,11 +17,7 @@ import { assert, assertEquals } from "@std/assert";
 import { createApp } from "../../../writer/app.ts";
 import { verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
-import type {
-  AppConfig,
-  AppDeps,
-  BuildPromptResult,
-} from "../../../writer/types.ts";
+import type { AppConfig, AppDeps, BuildPromptResult } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
 Deno.test({
@@ -88,13 +84,15 @@ Deno.test({
       );
       assertEquals(res.status, 200);
       const body = await res.json();
-      for (const k of [
-        "backend",
-        "manifestDeclarations",
-        "stripTags",
-        "pipelineFields",
-        "generatedAt",
-      ]) {
+      for (
+        const k of [
+          "backend",
+          "manifestDeclarations",
+          "stripTags",
+          "pipelineFields",
+          "generatedAt",
+        ]
+      ) {
         assert(k in body, `missing key '${k}'`);
       }
       // backend snapshot contains the registered handler

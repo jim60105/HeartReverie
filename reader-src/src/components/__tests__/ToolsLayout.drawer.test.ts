@@ -19,8 +19,18 @@ vi.mock("vue-router", () => ({
 vi.mock("@/router", () => ({
   default: { push: vi.fn(), replace: vi.fn() },
   toolsChildren: [
-    { path: "new-series", name: "tools-new-series", component: { template: "<div />" }, meta: { title: "新增系列" } },
-    { path: "lore-import", name: "tools-lore-import", component: { template: "<div />" }, meta: { title: "匯入" } },
+    {
+      path: "new-series",
+      name: "tools-new-series",
+      component: { template: "<div />" },
+      meta: { title: "新增系列" },
+    },
+    {
+      path: "lore-import",
+      name: "tools-lore-import",
+      component: { template: "<div />" },
+      meta: { title: "匯入" },
+    },
   ],
 }));
 
@@ -29,7 +39,7 @@ const RouterLinkStub = defineComponent({
   props: ["to", "activeClass"],
   template: '<a class="router-link-stub" href="#"><slot /></a>',
 });
-const RouterViewStub = defineComponent({ name: "RouterView", template: '<div />' });
+const RouterViewStub = defineComponent({ name: "RouterView", template: "<div />" });
 const AppHeaderStub = defineComponent({
   name: "AppHeader",
   template: '<header class="app-header-stub"><slot name="leading" /></header>',
@@ -48,7 +58,13 @@ function setupMatchMedia(initial: boolean) {
 function mountLayout() {
   return mount(ToolsLayout, {
     attachTo: document.body,
-    global: { stubs: { "router-link": RouterLinkStub, "router-view": RouterViewStub, AppHeader: AppHeaderStub } },
+    global: {
+      stubs: {
+        "router-link": RouterLinkStub,
+        "router-view": RouterViewStub,
+        AppHeader: AppHeaderStub,
+      },
+    },
   });
 }
 

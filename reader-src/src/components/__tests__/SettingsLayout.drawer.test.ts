@@ -21,8 +21,18 @@ vi.mock("vue-router", () => ({
 vi.mock("@/router", () => ({
   default: { push: vi.fn(), replace: vi.fn() },
   settingsChildren: [
-    { path: "prompt-editor", name: "settings-prompt-editor", component: { template: "<div />" }, meta: { title: "編排器" } },
-    { path: "llm", name: "settings-llm", component: { template: "<div />" }, meta: { title: "LLM" } },
+    {
+      path: "prompt-editor",
+      name: "settings-prompt-editor",
+      component: { template: "<div />" },
+      meta: { title: "編排器" },
+    },
+    {
+      path: "llm",
+      name: "settings-llm",
+      component: { template: "<div />" },
+      meta: { title: "LLM" },
+    },
   ],
 }));
 
@@ -30,14 +40,17 @@ vi.mock("@/composables/useAuth", () => ({
   useAuth: () => ({ getAuthHeaders: () => ({}) }),
 }));
 
-vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve([]) })));
+vi.stubGlobal(
+  "fetch",
+  vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve([]) })),
+);
 
 const RouterLinkStub = defineComponent({
   name: "RouterLink",
   props: ["to", "activeClass"],
   template: '<a class="router-link-stub" href="#"><slot /></a>',
 });
-const RouterViewStub = defineComponent({ name: "RouterView", template: '<div />' });
+const RouterViewStub = defineComponent({ name: "RouterView", template: "<div />" });
 const AppHeaderStub = defineComponent({
   name: "AppHeader",
   template: '<header class="app-header-stub"><slot name="leading" /></header>',
@@ -58,8 +71,12 @@ function setupMatchMedia(initial: boolean): MockMql {
   };
   const fn = vi.fn(() => ({
     matches: mql.matches,
-    addEventListener: (_e: string, cb: (e: { matches: boolean }) => void) => { listeners.add(cb); },
-    removeEventListener: (_e: string, cb: (e: { matches: boolean }) => void) => { listeners.delete(cb); },
+    addEventListener: (_e: string, cb: (e: { matches: boolean }) => void) => {
+      listeners.add(cb);
+    },
+    removeEventListener: (_e: string, cb: (e: { matches: boolean }) => void) => {
+      listeners.delete(cb);
+    },
   }));
   vi.stubGlobal("matchMedia", fn);
   (window as unknown as { matchMedia: typeof fn }).matchMedia = fn;
@@ -69,7 +86,13 @@ function setupMatchMedia(initial: boolean): MockMql {
 function mountLayout() {
   return mount(SettingsLayout, {
     attachTo: document.body,
-    global: { stubs: { "router-link": RouterLinkStub, "router-view": RouterViewStub, AppHeader: AppHeaderStub } },
+    global: {
+      stubs: {
+        "router-link": RouterLinkStub,
+        "router-view": RouterViewStub,
+        AppHeader: AppHeaderStub,
+      },
+    },
   });
 }
 
@@ -81,7 +104,10 @@ describe("SettingsLayout drawer", () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve([]) })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve([]) })),
+    );
   });
 
   it("does NOT render the toggle button on desktop", () => {

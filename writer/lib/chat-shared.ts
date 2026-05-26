@@ -28,10 +28,7 @@
  *      `streamLlmAndPersist` (re-exported here for other importers).
  */
 
-import {
-  ContinuePromptError,
-  resolveTargetChapterNumber,
-} from "./story.ts";
+import { ContinuePromptError, resolveTargetChapterNumber } from "./story.ts";
 import { createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";
 import {
@@ -51,14 +48,8 @@ import { streamLlmAndPersist } from "./chat-stream-and-persist.ts";
 import { errorMessage } from "./errors.ts";
 import { readTemplate } from "../routes/prompt.ts";
 import type { LlmConfig } from "../types.ts";
-import {
-  resolveStoryLlmConfig,
-  StoryConfigValidationError,
-} from "./story-config.ts";
-import {
-  clearGenerationActive,
-  tryMarkGenerationActive,
-} from "./generation-registry.ts";
+import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
+import { clearGenerationActive, tryMarkGenerationActive } from "./generation-registry.ts";
 
 export {
   ChatAbortError,
@@ -157,7 +148,11 @@ async function runUnderGenerationLock<T>(
   fn: () => Promise<T>,
 ): Promise<T> {
   if (!tryMarkGenerationActive(series, name)) {
-    throw new ChatError("concurrent", "Another generation is already in progress for this story", 409);
+    throw new ChatError(
+      "concurrent",
+      "Another generation is already in progress for this story",
+      409,
+    );
   }
   try {
     return await fn();
@@ -197,7 +192,13 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
 
   requireApiKey(reqLog);
   const storyDir = ensureSafeStoryDir(safePath, series, name);
-  const llmConfig = await resolveLlmConfigOrThrow(storyDir, config.llmDefaults, reqLog, series, name);
+  const llmConfig = await resolveLlmConfigOrThrow(
+    storyDir,
+    config.llmDefaults,
+    reqLog,
+    series,
+    name,
+  );
   const templateOverride = await resolveTemplateOverride(template, config, log);
 
   const {
@@ -205,7 +206,15 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
     ventoError,
     chapterFiles,
     chapters,
-  } = await buildPromptFromStory(series, name, storyDir, message, templateOverride, undefined, correlationId);
+  } = await buildPromptFromStory(
+    series,
+    name,
+    storyDir,
+    message,
+    templateOverride,
+    undefined,
+    correlationId,
+  );
 
   if (ventoError) {
     throw new ChatError("vento", "Template rendering error", 422, ventoError);
@@ -269,12 +278,24 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
 
   requireApiKey(reqLog);
   const storyDir = ensureSafeStoryDir(safePath, series, name);
-  const llmConfig = await resolveLlmConfigOrThrow(storyDir, config.llmDefaults, reqLog, series, name);
+  const llmConfig = await resolveLlmConfigOrThrow(
+    storyDir,
+    config.llmDefaults,
+    reqLog,
+    series,
+    name,
+  );
   const templateOverride = await resolveTemplateOverride(template, config, log);
 
   let promptResult;
   try {
-    promptResult = await buildContinuePromptFromStory(series, name, storyDir, templateOverride, correlationId);
+    promptResult = await buildContinuePromptFromStory(
+      series,
+      name,
+      storyDir,
+      templateOverride,
+      correlationId,
+    );
   } catch (err) {
     if (err instanceof ContinuePromptError) {
       throw new ChatError(err.code, err.message, err.httpStatus);

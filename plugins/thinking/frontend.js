@@ -15,20 +15,20 @@
 
 // Plugin: thinking — Fold <thinking> and <think> tags into collapsible details
 
-import { escapeHtml, getPluginSettings } from '../_shared/utils.js';
+import { escapeHtml, getPluginSettings } from "../_shared/utils.js";
 
 export function register(hooks) {
-  hooks.register('frontend-render', (context) => {
+  hooks.register("frontend-render", (context) => {
     const settings = getPluginSettings(hooks);
     if (settings.enabled === false) return;
 
     const defaultCollapsed = settings.defaultCollapsed !== false;
-    const completeSummaryLabel = typeof settings.completeSummaryLabel === 'string'
+    const completeSummaryLabel = typeof settings.completeSummaryLabel === "string"
       ? settings.completeSummaryLabel
-      : '思考過程';
-    const streamingSummaryLabel = typeof settings.streamingSummaryLabel === 'string'
+      : "思考過程";
+    const streamingSummaryLabel = typeof settings.streamingSummaryLabel === "string"
       ? settings.streamingSummaryLabel
-      : '思考中...';
+      : "思考中...";
 
     const result = extractThinkingBlocks(
       context.text,
@@ -59,8 +59,8 @@ export function register(hooks) {
 export function extractThinkingBlocks(
   text,
   defaultCollapsed = true,
-  completeSummaryLabel = '思考過程',
-  streamingSummaryLabel = '思考中...',
+  completeSummaryLabel = "思考過程",
+  streamingSummaryLabel = "思考中...",
 ) {
   const blocks = [];
   let index = 0;
@@ -70,11 +70,17 @@ export function extractThinkingBlocks(
     /<(think(?:ing)?)>\s*((?:(?!<\1>)[\s\S])*?)\s*<\/\1>/gi,
     (_match, _tag, inner) => {
       const placeholder = `<!--THINKING_BLOCK_${index}-->`;
-      const html = renderThinkingBlock(inner, true, defaultCollapsed, completeSummaryLabel, streamingSummaryLabel);
+      const html = renderThinkingBlock(
+        inner,
+        true,
+        defaultCollapsed,
+        completeSummaryLabel,
+        streamingSummaryLabel,
+      );
       blocks.push({ placeholder, html });
       index++;
       return placeholder;
-    }
+    },
   );
 
   // 2. Extract INCOMPLETE blocks: <think(ing)?> with no closing tag
@@ -82,11 +88,17 @@ export function extractThinkingBlocks(
     /<(think(?:ing)?)>(?![\s\S]*<\/\1>)\s*((?:(?!<\1>)[\s\S])*)\s*$/gi,
     (_match, _tag, inner) => {
       const placeholder = `<!--THINKING_BLOCK_${index}-->`;
-      const html = renderThinkingBlock(inner, false, defaultCollapsed, completeSummaryLabel, streamingSummaryLabel);
+      const html = renderThinkingBlock(
+        inner,
+        false,
+        defaultCollapsed,
+        completeSummaryLabel,
+        streamingSummaryLabel,
+      );
       blocks.push({ placeholder, html });
       index++;
       return placeholder;
-    }
+    },
   );
 
   return { text, blocks };
@@ -107,16 +119,16 @@ export function renderThinkingBlock(
   content,
   isComplete,
   defaultCollapsed = true,
-  completeSummaryLabel = '思考過程',
-  streamingSummaryLabel = '思考中...',
+  completeSummaryLabel = "思考過程",
+  streamingSummaryLabel = "思考中...",
 ) {
   const summary = isComplete ? completeSummaryLabel : streamingSummaryLabel;
   const escaped = escapeHtml(content.trim());
-  const openAttr = isComplete && defaultCollapsed ? '' : ' open';
+  const openAttr = isComplete && defaultCollapsed ? "" : " open";
 
   let html = `<details class="thinking-block fold-section"${openAttr}>`;
   html += `<summary class="fold-header"><span class="fold-icon">▼</span> ${summary}</summary>`;
   html += `<div class="fold-content"><pre class="thinking-content">${escaped}</pre></div>`;
-  html += '</details>';
+  html += "</details>";
   return html;
 }

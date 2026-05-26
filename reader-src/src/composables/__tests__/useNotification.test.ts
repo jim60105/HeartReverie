@@ -13,10 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {
-  useNotification,
-  __resetNotificationStateForTests,
-} from "@/composables/useNotification";
+import { __resetNotificationStateForTests, useNotification } from "@/composables/useNotification";
 
 function installNotificationStub(
   permission: NotificationPermission = "default",
@@ -154,8 +151,9 @@ describe("useNotification", () => {
       const { notify, toasts } = useNotification();
       notify({ title: "auto", channel: "auto", duration: 0 });
       expect(toasts.value).toHaveLength(1);
-      const reqPermission = (NotifCtor as unknown as { requestPermission: ReturnType<typeof vi.fn> })
-        .requestPermission;
+      const reqPermission =
+        (NotifCtor as unknown as { requestPermission: ReturnType<typeof vi.fn> })
+          .requestPermission;
       expect(reqPermission).not.toHaveBeenCalled();
     } finally {
       visSpy.mockRestore();
@@ -173,8 +171,9 @@ describe("useNotification", () => {
   it("requestPermission updates permissionState", async () => {
     installNotificationStub("default");
     __resetNotificationStateForTests();
-    const stub = (globalThis as unknown as { Notification: { requestPermission: ReturnType<typeof vi.fn> } })
-      .Notification;
+    const stub =
+      (globalThis as unknown as { Notification: { requestPermission: ReturnType<typeof vi.fn> } })
+        .Notification;
     stub.requestPermission.mockResolvedValue("granted");
     const { requestPermission, permissionState } = useNotification();
     const result = await requestPermission();

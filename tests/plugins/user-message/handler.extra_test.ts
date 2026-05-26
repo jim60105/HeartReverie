@@ -14,11 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { assertEquals } from "@std/assert";
-import type {
-  HookHandler,
-  HookStage,
-  PluginHooks,
-} from "../../../writer/types.ts";
+import type { HookHandler, HookStage, PluginHooks } from "../../../writer/types.ts";
 import { createLogger } from "../../../writer/lib/logger.ts";
 import { register } from "../../../plugins/user-message/handler.ts";
 
@@ -43,7 +39,9 @@ function makeRecordingHooks(): {
   > = [];
   const hooks: PluginHooks = {
     register(stage, handler, priorityOrOptions) {
-      const priority = typeof priorityOrOptions === "number" ? priorityOrOptions : priorityOrOptions?.priority;
+      const priority = typeof priorityOrOptions === "number"
+        ? priorityOrOptions
+        : priorityOrOptions?.priority;
       registered.push({ stage, handler, priority });
     },
   };

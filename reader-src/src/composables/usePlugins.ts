@@ -1,11 +1,6 @@
 import { errorMessage } from "@/lib/errors";
 import { ref } from "vue";
-import type {
-  HookHandler,
-  HookStage,
-  PluginDescriptor,
-  UsePluginsReturn,
-} from "@/types";
+import type { HookHandler, HookStage, PluginDescriptor, UsePluginsReturn } from "@/types";
 import { FrontendHookDispatcher, frontendHooks } from "@/lib/plugin-hooks";
 import { apiFetch, apiFetchJson } from "@/lib/api";
 import { useNotification } from "@/composables/useNotification";
@@ -210,8 +205,7 @@ async function doInit(): Promise<void> {
           ) => target.register(stage, handler, priority, originPluginName);
         }
         if (prop === "getSettings") {
-          return (otherName?: string) =>
-            getPluginSettingsSync(otherName ?? originPluginName);
+          return (otherName?: string) => getPluginSettingsSync(otherName ?? originPluginName);
         }
         return Reflect.get(target, prop, receiver);
       },
@@ -228,8 +222,7 @@ async function doInit(): Promise<void> {
       if (typeof mod.register === "function") {
         // Honor async register() functions so plugins that load resources
         // before registering handlers complete before pluginsReady flips.
-        const getSettings = (otherName?: string) =>
-          getPluginSettingsSync(otherName ?? p.name);
+        const getSettings = (otherName?: string) => getPluginSettingsSync(otherName ?? p.name);
         const { notify } = useNotification();
         await Promise.resolve(
           mod.register(makePluginHooksProxy(p.name), { getSettings, notify }),

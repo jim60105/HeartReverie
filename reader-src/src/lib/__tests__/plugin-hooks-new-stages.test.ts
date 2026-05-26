@@ -1,13 +1,13 @@
 import { FrontendHookDispatcher } from "@/lib/plugin-hooks";
 import type {
+  ChapterChangeContext,
+  ChapterDomDisposeContext,
+  ChapterDomReadyContext,
+  ChapterRenderAfterContext,
   ChatSendBeforeContext,
   ChatSendBeforeHandler,
-  ChapterChangeContext,
-  ChapterDomReadyContext,
-  ChapterDomDisposeContext,
-  StorySwitchContext,
-  ChapterRenderAfterContext,
   RenderToken,
+  StorySwitchContext,
 } from "@/types";
 
 function makeChatCtx(

@@ -23,12 +23,12 @@
  */
 
 import {
-  StreamLanguage,
-  LanguageSupport,
   HighlightStyle,
+  LanguageSupport,
+  StreamLanguage,
   type StreamParser,
 } from "@codemirror/language";
-import { linter, type Diagnostic as CmDiagnostic } from "@codemirror/lint";
+import { type Diagnostic as CmDiagnostic, linter } from "@codemirror/lint";
 import { EditorView } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import type { Diagnostic } from "@/lib/template-api";

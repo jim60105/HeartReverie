@@ -75,8 +75,12 @@ describe("FrontendHookDispatcher — notification stage", () => {
     const d = new FrontendHookDispatcher();
     let renderCalls = 0;
     let notifyCalls = 0;
-    d.register("frontend-render", () => { renderCalls++; });
-    d.register("notification", () => { notifyCalls++; });
+    d.register("frontend-render", () => {
+      renderCalls++;
+    });
+    d.register("notification", () => {
+      notifyCalls++;
+    });
     d.dispatch("notification", makeCtx());
     expect(renderCalls).toBe(0);
     expect(notifyCalls).toBe(1);
@@ -86,7 +90,9 @@ describe("FrontendHookDispatcher — notification stage", () => {
     const d = new FrontendHookDispatcher();
     const order: string[] = [];
     d.register("notification", () => order.push("a"), 1);
-    d.register("notification", () => { throw new Error("boom"); }, 2);
+    d.register("notification", () => {
+      throw new Error("boom");
+    }, 2);
     d.register("notification", () => order.push("c"), 3);
     d.dispatch("notification", makeCtx());
     expect(order).toEqual(["a", "c"]);

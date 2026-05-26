@@ -13,7 +13,13 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import type { HookStage, HookHandler, RegisterOptions, HandlerEventSubscriber, HandlerEventSubscriptionOptions } from "../types.ts";
+import type {
+  HandlerEventSubscriber,
+  HandlerEventSubscriptionOptions,
+  HookHandler,
+  HookStage,
+  RegisterOptions,
+} from "../types.ts";
 import { createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";
 import { KNOWN_BACKEND_STAGES, PARALLEL_ALLOWED, VALID_STAGES } from "./hooks-stages.ts";
@@ -86,15 +92,19 @@ export class HookDispatcher {
   ): void {
     if (!VALID_STAGES.has(stage)) {
       throw new Error(
-        `Invalid hook stage '${stage}'. Valid stages: ${[...VALID_STAGES].join(", ")}`
+        `Invalid hook stage '${stage}'. Valid stages: ${[...VALID_STAGES].join(", ")}`,
       );
     }
     if (typeof handler !== "function") {
       throw new Error("Hook handler must be a function");
     }
 
-    const { priority, parallel, readOnly, concurrency, dependsOn } =
-      resolveRegisterOptions(stage, priorityOrOptions, plugin, log);
+    const { priority, parallel, readOnly, concurrency, dependsOn } = resolveRegisterOptions(
+      stage,
+      priorityOrOptions,
+      plugin,
+      log,
+    );
 
     if (!this.#handlers.has(stage)) this.#handlers.set(stage, []);
     const list = this.#handlers.get(stage)!;
@@ -217,4 +227,3 @@ export class HookDispatcher {
     return this.#runner.dispatch(stage, this.#handlers.get(stage) ?? [], context);
   }
 }
-

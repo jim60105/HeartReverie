@@ -63,7 +63,9 @@ export function useChapterActions(): UseChapterActionsReturn {
     num: number,
   ): Promise<ChapterRewindResponse> {
     const res = await apiFetch(
-      `/api/stories/${encodeURIComponent(series)}/${encodeURIComponent(story)}/chapters/after/${num}`,
+      `/api/stories/${encodeURIComponent(series)}/${
+        encodeURIComponent(story)
+      }/chapters/after/${num}`,
       { method: "DELETE", throwOnError: false },
     );
     if (!res.ok) await throwFromResponse(res);

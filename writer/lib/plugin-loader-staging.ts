@@ -103,9 +103,7 @@ export function createStagingHooks(
       // happen.
       if (!VALID_STAGES.has(stage)) {
         throw new Error(
-          `Invalid hook stage '${stage}'. Valid stages: ${
-            [...VALID_STAGES].join(", ")
-          }`,
+          `Invalid hook stage '${stage}'. Valid stages: ${[...VALID_STAGES].join(", ")}`,
         );
       }
       if (typeof handler !== "function") {
@@ -126,8 +124,7 @@ export function createStagingHooks(
       // union with manifest: dependsOn arrays are concatenated, explicit
       // runtime fields take precedence for scalar values).
       const manifestDecl = manifestHookMap.get(stage);
-      const manifestDeps =
-        (manifestDecl?.dependsOn as readonly string[] | undefined) ?? [];
+      const manifestDeps = (manifestDecl?.dependsOn as readonly string[] | undefined) ?? [];
       const runtimeDeps = opts.dependsOn ?? [];
       const mergedDeps = [
         ...new Set([...manifestDeps, ...runtimeDeps]),
@@ -149,7 +146,7 @@ export function createStagingHooks(
      */
     onHandlerStart: (
       cb: (event: HandlerEvent & { kind: "handler-start" }) => void,
-    ): (() => void) => {
+    ): () => void => {
       const wrapped: HandlerEventSubscriber = (ev) => {
         if (ev.kind === "handler-start") cb(ev);
       };
@@ -173,7 +170,7 @@ export function createStagingHooks(
      */
     onHandlerEnd: (
       cb: (event: HandlerEvent & { kind: "handler-end" }) => void,
-    ): (() => void) => {
+    ): () => void => {
       const wrapped: HandlerEventSubscriber = (ev) => {
         if (ev.kind === "handler-end") cb(ev);
       };

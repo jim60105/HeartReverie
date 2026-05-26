@@ -17,11 +17,11 @@ import { errorMessage } from "./errors.ts";
 import { join } from "@std/path";
 import vento from "ventojs";
 import type { Environment as VentoEnvironment } from "ventojs/core/environment";
-import type { ChatMessage, TemplateEngine, RenderResult, RenderOptions } from "../types.ts";
+import type { ChatMessage, RenderOptions, RenderResult, TemplateEngine } from "../types.ts";
 import type { PluginManager } from "./plugin-manager.ts";
 import { PLAYGROUND_DIR, ROOT_DIR } from "./config.ts";
 import { buildVentoError } from "./errors.ts";
-import { resolveLoreVariables, generateLoreVariables } from "./lore.ts";
+import { generateLoreVariables, resolveLoreVariables } from "./lore.ts";
 import { createLogger } from "./logger.ts";
 import {
   assertHasUserMessage,
@@ -83,7 +83,7 @@ export function validateTemplate(templateStr: string): string[] {
     // Include: disallowed — potential file-inclusion vector in user templates
 
     errors.push(
-      `Unsafe template expression at position ${match.index}: {{ ${expr} }}`
+      `Unsafe template expression at position ${match.index}: {{ ${expr} }}`,
     );
   }
 
@@ -129,18 +129,15 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
           messages: [],
           error: {
             title: "Template Validation Error",
-            message:
-              "Template contains unsafe expressions that cannot be executed",
-            detail:
-              "Template contains unsafe expressions that cannot be executed",
+            message: "Template contains unsafe expressions that cannot be executed",
+            detail: "Template contains unsafe expressions that cannot be executed",
             expressions: templateErrors,
           },
         };
       }
     }
 
-    const systemTemplate: string =
-      templateOverride ||
+    const systemTemplate: string = templateOverride ||
       (await Deno.readTextFile(systemTemplatePath));
 
     // Resolve lore: raw passages + first-pass variables (snapshot for rendering context)
@@ -163,10 +160,13 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
           const result = await ventoEnv.runString(passage.content, { ...renderContext });
           return { ...passage, content: result.content };
         } catch (renderErr: unknown) {
-          log.warn(`Lore passage '${passage.relativePath}' Vento render failed, using raw content`, {
-            passage: passage.relativePath,
-            error: errorMessage(renderErr),
-          });
+          log.warn(
+            `Lore passage '${passage.relativePath}' Vento render failed, using raw content`,
+            {
+              passage: passage.relativePath,
+              error: errorMessage(renderErr),
+            },
+          );
           return passage;
         }
       }),
@@ -269,7 +269,8 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       }
       assertHasUserMessage(messages);
       const latencyMs = Math.round(performance.now() - startTime);
-      const variableCount = Object.keys(loreVars).length + Object.keys(renderedPluginVariables).length + Object.keys(dynamicVars).length + 4;
+      const variableCount = Object.keys(loreVars).length +
+        Object.keys(renderedPluginVariables).length + Object.keys(dynamicVars).length + 4;
       const roleCounts: Record<ChatMessage["role"], number> = { system: 0, user: 0, assistant: 0 };
       for (const m of messages) roleCounts[m.role]++;
       log.info("Template rendered successfully", {
@@ -280,7 +281,11 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
       });
       log.debug("Template render details", {
         templatePath: templateOverride ? "(override)" : systemTemplatePath,
-        variableNames: [...Object.keys(loreVars), ...Object.keys(renderedPluginVariables), ...Object.keys(dynamicVars)],
+        variableNames: [
+          ...Object.keys(loreVars),
+          ...Object.keys(renderedPluginVariables),
+          ...Object.keys(dynamicVars),
+        ],
         messageCount: messages.length,
         roleCounts,
       });

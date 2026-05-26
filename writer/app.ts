@@ -56,7 +56,9 @@ interface RateLimitData {
   resetTime: number;
 }
 
-function rateLimiter({ windowMs, limit }: RateLimiterOptions): (c: Context, next: Next) => Promise<Response | void> {
+function rateLimiter(
+  { windowMs, limit }: RateLimiterOptions,
+): (c: Context, next: Next) => Promise<Response | void> {
   const hits: Map<string, RateLimitData> = new Map();
 
   const cleanupInterval = setInterval(() => {
@@ -96,12 +98,15 @@ export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
   // Security headers (replaces helmet)
-  app.use("*", secureHeaders({
-    // @ts-expect-error Hono types don't model `false` to disable CSP
-    contentSecurityPolicy: false,
-    crossOriginResourcePolicy: false,
-    crossOriginOpenerPolicy: false,
-  }));
+  app.use(
+    "*",
+    secureHeaders({
+      // @ts-expect-error Hono types don't model `false` to disable CSP
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: false,
+      crossOriginOpenerPolicy: false,
+    }),
+  );
 
   // HTTP request/response logging middleware (API routes only)
   app.use("/api/*", async (c, next) => {
@@ -134,12 +139,17 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/stories/:series/:name/chat", rateLimiter({ windowMs: 60_000, limit: 30 }));
   app.use("/api/stories/:series/:name/chat/continue", rateLimiter({ windowMs: 60_000, limit: 30 }));
   app.use("/api/plugins/:pluginName/run-prompt", rateLimiter({ windowMs: 60_000, limit: 30 }));
-  app.use("/api/stories/:series/:name/preview-prompt", rateLimiter({ windowMs: 60_000, limit: 60 }));
+  app.use(
+    "/api/stories/:series/:name/preview-prompt",
+    rateLimiter({ windowMs: 60_000, limit: 60 }),
+  );
 
   // Auth middleware for API routes (skip public endpoints and WebSocket upgrade)
   app.use("/api/*", async (c, next) => {
     const pathname = new URL(c.req.url).pathname;
-    if (pathname === "/api/themes" || pathname.startsWith("/api/themes/") || pathname === "/api/ws") return next();
+    if (
+      pathname === "/api/themes" || pathname.startsWith("/api/themes/") || pathname === "/api/ws"
+    ) return next();
     return deps.verifyPassphrase(c, next);
   });
 
@@ -181,7 +191,9 @@ export function createApp(deps: AppDeps): Hono {
     // Track async registrars for initPluginRoutes
     if (result instanceof Promise) {
       (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits ??= [];
-      (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits!.push(result);
+      (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits!.push(
+        result,
+      );
     }
   }
 
@@ -198,12 +210,13 @@ export function createApp(deps: AppDeps): Hono {
   const assetsRelative = relative(Deno.cwd(), join(deps.config.ROOT_DIR, "assets"));
   app.use(
     "/assets/*",
-    serveStatic({ root: assetsRelative, rewriteRequestPath: (p) => p.replace(/^\/assets/, "") })
+    serveStatic({ root: assetsRelative, rewriteRequestPath: (p) => p.replace(/^\/assets/, "") }),
   );
 
   // Compatibility route: serve legacy /js/utils.js for third-party plugins
   app.get("/js/utils.js", (c) => {
-    const js = `export function escapeHtml(str){return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#x27;");}`;
+    const js =
+      `export function escapeHtml(str){return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#x27;");}`;
     return c.body(js, 200, { "Content-Type": "application/javascript; charset=utf-8" });
   });
 
@@ -211,7 +224,7 @@ export function createApp(deps: AppDeps): Hono {
   const readerRelative = relative(Deno.cwd(), deps.config.READER_DIR);
   app.use(
     "/*",
-    serveStatic({ root: readerRelative })
+    serveStatic({ root: readerRelative }),
   );
 
   return app;
@@ -223,7 +236,8 @@ export function createApp(deps: AppDeps): Hono {
  * (e.g. those using dynamic imports) are fully registered before serving.
  */
 export async function initPluginRoutes(app: Hono): Promise<void> {
-  const pending = (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits;
+  const pending =
+    (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits;
   if (pending?.length) {
     await Promise.all(pending);
     delete (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits;

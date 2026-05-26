@@ -305,28 +305,31 @@ Deno.test("plugin-settings coverage – GET /settings with legacy warnings", asy
   const errorStub = stub(console, "error", () => {});
 
   try {
-    await t.step("x-legacy-warnings included when validation errors exist in stored config", async () => {
-      const { app } = await setupApp(
-        "legacy-warn",
-        {
-          type: "object",
-          properties: {
-            count: { type: "integer", minimum: 10 },
+    await t.step(
+      "x-legacy-warnings included when validation errors exist in stored config",
+      async () => {
+        const { app } = await setupApp(
+          "legacy-warn",
+          {
+            type: "object",
+            properties: {
+              count: { type: "integer", minimum: 10 },
+            },
           },
-        },
-        { count: 3 }, // violates minimum → will produce legacy warning
-      );
-      const res = await app.fetch(
-        new Request("http://localhost/api/plugins/legacy-warn/settings"),
-      );
-      assertEquals(res.status, 200);
-      const body = await res.json();
-      assert(
-        Array.isArray(body["x-legacy-warnings"]),
-        "x-legacy-warnings should be present",
-      );
-      assert(body["x-legacy-warnings"].length > 0);
-    });
+          { count: 3 }, // violates minimum → will produce legacy warning
+        );
+        const res = await app.fetch(
+          new Request("http://localhost/api/plugins/legacy-warn/settings"),
+        );
+        assertEquals(res.status, 200);
+        const body = await res.json();
+        assert(
+          Array.isArray(body["x-legacy-warnings"]),
+          "x-legacy-warnings should be present",
+        );
+        assert(body["x-legacy-warnings"].length > 0);
+      },
+    );
 
     await t.step("no x-legacy-warnings when stored config is valid", async () => {
       const { app } = await setupApp(

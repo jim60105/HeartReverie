@@ -255,7 +255,11 @@ export interface RegisterOptions {
 
 /** Hook registration interface exposed to plugins (subset of HookDispatcher). */
 export interface PluginHooks {
-  register(stage: HookStage, handler: HookHandler, priorityOrOptions?: number | RegisterOptions): void;
+  register(
+    stage: HookStage,
+    handler: HookHandler,
+    priorityOrOptions?: number | RegisterOptions,
+  ): void;
   /**
    * Subscribe to per-handler `handler-start` events from the backend
    * `HookDispatcher`. Returns an unsubscribe closure that is idempotent.

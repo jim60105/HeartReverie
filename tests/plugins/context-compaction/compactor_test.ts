@@ -22,9 +22,14 @@ const DEFAULT_CONFIG: CompactionConfig = { recentChapters: 3, enabled: true };
 Deno.test("compactContext", async (t) => {
   await t.step("all three tiers present", () => {
     const previousContext = [
-      "ch1 stripped", "ch2 stripped", "ch3 stripped",
-      "ch4 stripped", "ch5 stripped",
-      "ch6 stripped", "ch7 stripped", "ch8 stripped",
+      "ch1 stripped",
+      "ch2 stripped",
+      "ch3 stripped",
+      "ch4 stripped",
+      "ch5 stripped",
+      "ch6 stripped",
+      "ch7 stripped",
+      "ch8 stripped",
     ];
     const rawChapters = [
       "ch1 raw <chapter_summary>第 1 章：事件 A</chapter_summary>",
@@ -51,11 +56,18 @@ Deno.test("compactContext", async (t) => {
 
   await t.step("no summaries available — fallback", () => {
     const previousContext = [
-      "ch1 text", "ch2 text", "ch3 text", "ch4 text", "ch5 text",
+      "ch1 text",
+      "ch2 text",
+      "ch3 text",
+      "ch4 text",
+      "ch5 text",
     ];
     const rawChapters = [
-      "ch1 raw no summary", "ch2 raw no summary",
-      "ch3 raw no summary", "ch4 raw no summary", "ch5 raw no summary",
+      "ch1 raw no summary",
+      "ch2 raw no summary",
+      "ch3 raw no summary",
+      "ch4 raw no summary",
+      "ch5 raw no summary",
     ];
 
     const result = compactContext(previousContext, rawChapters, DEFAULT_CONFIG);
@@ -71,8 +83,11 @@ Deno.test("compactContext", async (t) => {
 
   await t.step("partial summaries available", () => {
     const previousContext = [
-      "ch1 stripped", "ch2 stripped", "ch3 stripped",
-      "ch4 stripped", "ch5 stripped",
+      "ch1 stripped",
+      "ch2 stripped",
+      "ch3 stripped",
+      "ch4 stripped",
+      "ch5 stripped",
     ];
     const rawChapters = [
       "ch1 <chapter_summary>第 1 章：摘要</chapter_summary>",

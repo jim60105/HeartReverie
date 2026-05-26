@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import type { Hono } from "@hono/hono";
-import type { AppDeps, LlmDefaultsResponse, LlmConfig } from "../types.ts";
+import type { AppDeps, LlmConfig, LlmDefaultsResponse } from "../types.ts";
 import { STORY_LLM_CONFIG_KEYS } from "../lib/story-config.ts";
 
 /**

@@ -18,7 +18,7 @@ import { join } from "@std/path";
 import type { Environment as VentoEnvironment } from "ventojs/core/environment";
 import { validateTemplate } from "./template.ts";
 import { createLogger } from "./logger.ts";
-import type { AppDeps, ChatMessage, BuildPromptResult } from "../types.ts";
+import type { AppDeps, BuildPromptResult, ChatMessage } from "../types.ts";
 import {
   assertHasUserMessage,
   filterEmptyMessages,
@@ -138,7 +138,9 @@ export async function renderSystemPromptForPreview(
       ...(args.templateKind === "system" ? { messages: [] } : { content: "" }),
       variables: { injected: [] },
       ventoError: {
-        message: `Template contains unsafe expressions — ${REMEDIATION_HINT}: ${sstiErrors.join("; ")}`,
+        message: `Template contains unsafe expressions — ${REMEDIATION_HINT}: ${
+          sstiErrors.join("; ")
+        }`,
       },
       fixtureUsed: args.mode,
     } as PreviewResult;
@@ -217,7 +219,12 @@ async function renderMarkdownPure(
 ): Promise<PreviewResult> {
   try {
     const result = await ventoEnv.runString(source, { ...context });
-    return { kind: "markdown", content: result.content, variables: { injected }, fixtureUsed: mode };
+    return {
+      kind: "markdown",
+      content: result.content,
+      variables: { injected },
+      fixtureUsed: mode,
+    };
   } catch (err: unknown) {
     log.warn("Preview render (markdown) failed", {
       mode,
@@ -311,7 +318,12 @@ async function renderCurrentMode(
       chapter_number: 1,
     };
     const result = await args.ventoEnv.runString(source, ctx);
-    return { kind: "markdown", content: result.content, variables: { injected: [] }, fixtureUsed: "current" };
+    return {
+      kind: "markdown",
+      content: result.content,
+      variables: { injected: [] },
+      fixtureUsed: "current",
+    };
   } catch (err: unknown) {
     log.warn("Preview render (current/markdown) failed", {
       series,

@@ -1,4 +1,4 @@
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { ref } from "vue";
 import LlmSettingsPage from "@/components/LlmSettingsPage.vue";
 import type { StoryLlmConfig } from "@/types";
@@ -8,20 +8,22 @@ const loadConfigMock = vi.fn();
 const loadLlmDefaultsMock = vi.fn();
 const notifyMock = vi.fn();
 const overrides = ref<StoryLlmConfig>({});
-const defaultsRef = ref<{
-  model: string;
-  temperature: number;
-  frequencyPenalty: number;
-  presencePenalty: number;
-  topK: number;
-  topP: number;
-  repetitionPenalty: number;
-  minP: number;
-  topA: number;
-  reasoningEnabled: boolean;
-  reasoningEffort: string;
-  maxCompletionTokens: number;
-} | null>({
+const defaultsRef = ref<
+  {
+    model: string;
+    temperature: number;
+    frequencyPenalty: number;
+    presencePenalty: number;
+    topK: number;
+    topP: number;
+    repetitionPenalty: number;
+    minP: number;
+    topA: number;
+    reasoningEnabled: boolean;
+    reasoningEffort: string;
+    maxCompletionTokens: number;
+  } | null
+>({
   model: "default-model",
   temperature: 0.1,
   frequencyPenalty: 0.13,
@@ -148,7 +150,7 @@ describe("LlmSettingsPage", () => {
     // The reasoningEffort row should contain a <select> with all six options.
     const selects = wrapper.findAll("select");
     const effortSelect = selects.find((s) =>
-      s.findAll("option").some((o) => o.attributes("value") === "xhigh"),
+      s.findAll("option").some((o) => o.attributes("value") === "xhigh")
     );
     expect(effortSelect).toBeDefined();
     const optionValues = effortSelect!.findAll("option").map((o) => o.attributes("value"));

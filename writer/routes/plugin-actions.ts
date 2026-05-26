@@ -32,22 +32,12 @@
  */
 
 import type { Hono } from "@hono/hono";
-import {
-  errorMessage,
-  pluginActionProblems,
-  problemJson,
-} from "../lib/errors.ts";
+import { errorMessage, pluginActionProblems, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
-import {
-  clearGenerationActive,
-  tryMarkGenerationActive,
-} from "../lib/generation-registry.ts";
+import { clearGenerationActive, tryMarkGenerationActive } from "../lib/generation-registry.ts";
 import { ChatAbortError, ChatError } from "../lib/chat-shared.ts";
 import type { AppDeps } from "../types.ts";
-import type {
-  PluginActionOutcome,
-  PluginActionRequestArgs,
-} from "./plugin-actions-shared.ts";
+import type { PluginActionOutcome, PluginActionRequestArgs } from "./plugin-actions-shared.ts";
 import { runPreflight } from "./plugin-actions-preflight.ts";
 import { runUnderLock } from "./plugin-actions-execute.ts";
 
@@ -164,9 +154,7 @@ export function registerPluginActionRoutes(
       body = await c.req.json();
     } catch (err: unknown) {
       log.warn(
-        `[POST /api/plugins/run-prompt] Malformed request body: ${
-          errorMessage(err)
-        }`,
+        `[POST /api/plugins/run-prompt] Malformed request body: ${errorMessage(err)}`,
       );
       return c.json(
         problemJson("Bad Request", 400, "Invalid JSON in request body"),

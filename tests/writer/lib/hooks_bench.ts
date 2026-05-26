@@ -18,9 +18,14 @@ import { HookDispatcher } from "../../../writer/lib/hooks.ts";
 function createSerialDispatcher(count: number, delayMs: number): HookDispatcher {
   const hd = new HookDispatcher();
   for (let i = 0; i < count; i++) {
-    hd.register("prompt-assembly", async () => {
-      await new Promise((r) => setTimeout(r, delayMs));
-    }, 100 + i, `serial-${i}`);
+    hd.register(
+      "prompt-assembly",
+      async () => {
+        await new Promise((r) => setTimeout(r, delayMs));
+      },
+      100 + i,
+      `serial-${i}`,
+    );
   }
   return hd;
 }
@@ -28,9 +33,14 @@ function createSerialDispatcher(count: number, delayMs: number): HookDispatcher 
 function createParallelDispatcher(count: number, delayMs: number): HookDispatcher {
   const hd = new HookDispatcher();
   for (let i = 0; i < count; i++) {
-    hd.register("post-response", async () => {
-      await new Promise((r) => setTimeout(r, delayMs));
-    }, { parallel: true, readOnly: true, priority: 100 + i }, `parallel-${i}`);
+    hd.register(
+      "post-response",
+      async () => {
+        await new Promise((r) => setTimeout(r, delayMs));
+      },
+      { parallel: true, readOnly: true, priority: 100 + i },
+      `parallel-${i}`,
+    );
   }
   return hd;
 }

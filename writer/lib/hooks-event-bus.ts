@@ -12,7 +12,12 @@
  * handler-end boundaries).
  */
 
-import type { HandlerEvent, HandlerEventSubscriber, HandlerEventSubscriptionOptions, HookStage } from "../types.ts";
+import type {
+  HandlerEvent,
+  HandlerEventSubscriber,
+  HandlerEventSubscriptionOptions,
+  HookStage,
+} from "../types.ts";
 import { errorMessage } from "./errors.ts";
 import type { Logger } from "./logger.ts";
 

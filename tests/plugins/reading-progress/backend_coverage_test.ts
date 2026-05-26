@@ -232,7 +232,7 @@ Deno.test("PUT additional validation", async (t) => {
       assertEquals(res.status, 404);
     });
 
-    await t.step('rejects series containing null byte', async () => {
+    await t.step("rejects series containing null byte", async () => {
       const res = await putProgress(app, "abc\0def", "story", validBody());
       assertEquals(res.status, 400);
     });
@@ -274,23 +274,29 @@ Deno.test("PUT conflict response contains all required fields", async (t) => {
     // Advance to revision 2
     await putProgress(app, "cx", "s1", validBody({ scrollRatio: 0.5 }));
 
-    await t.step("conflict response has ok, revision, serverUpdatedAt, conflict, serverRevision", async () => {
-      const res = await putProgress(app, "cx", "s1", validBody({ ifMatchRevision: 1 }));
-      assertEquals(res.status, 200);
-      const json = await res.json();
-      assertEquals(json.ok, true);
-      assertEquals(json.conflict, true);
-      assertEquals(typeof json.revision, "number");
-      assertEquals(typeof json.serverUpdatedAt, "string");
-      assertEquals(json.serverRevision, json.revision);
-    });
+    await t.step(
+      "conflict response has ok, revision, serverUpdatedAt, conflict, serverRevision",
+      async () => {
+        const res = await putProgress(app, "cx", "s1", validBody({ ifMatchRevision: 1 }));
+        assertEquals(res.status, 200);
+        const json = await res.json();
+        assertEquals(json.ok, true);
+        assertEquals(json.conflict, true);
+        assertEquals(typeof json.revision, "number");
+        assertEquals(typeof json.serverUpdatedAt, "string");
+        assertEquals(json.serverRevision, json.revision);
+      },
+    );
 
-    await t.step("ifMatchRevision: 0 on first PUT does not trigger conflict (no existing entry)", async () => {
-      const res = await putProgress(app, "cx", "new-story", validBody({ ifMatchRevision: 0 }));
-      assertEquals(res.status, 200);
-      const json = await res.json();
-      assertEquals(json.conflict, undefined);
-    });
+    await t.step(
+      "ifMatchRevision: 0 on first PUT does not trigger conflict (no existing entry)",
+      async () => {
+        const res = await putProgress(app, "cx", "new-story", validBody({ ifMatchRevision: 0 }));
+        assertEquals(res.status, 200);
+        const json = await res.json();
+        assertEquals(json.conflict, undefined);
+      },
+    );
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -306,8 +312,15 @@ Deno.test("concurrent PUTs are serialized by mutex (no lost updates)", async () 
   try {
     // Fire 10 PUTs concurrently, each with a unique scrollRatio
     const N = 10;
-    const promises = Array.from({ length: N }, (_, i) =>
-      putProgress(app, "mutex-series", "mutex-story", validBody({ scrollRatio: i / N, clientId: `m-${i}` }))
+    const promises = Array.from(
+      { length: N },
+      (_, i) =>
+        putProgress(
+          app,
+          "mutex-series",
+          "mutex-story",
+          validBody({ scrollRatio: i / N, clientId: `m-${i}` }),
+        ),
     );
     const responses = await Promise.all(promises);
 
@@ -484,7 +497,13 @@ Deno.test("import-local mixed entries", async (t) => {
         // Invalid: missing series name
         { series: "", story: "s2", ...validBody() },
         // Invalid: bad chapterIndex
-        { series: "ok", story: "bad", chapterIndex: -1, scrollRatio: 0.5, lastReadAt: "2025-01-01T00:00:00Z" },
+        {
+          series: "ok",
+          story: "bad",
+          chapterIndex: -1,
+          scrollRatio: 0.5,
+          lastReadAt: "2025-01-01T00:00:00Z",
+        },
         // Valid entry
         { series: "ok", story: "s3", ...validBody({ scrollRatio: 0.8 }) },
       ];
@@ -569,7 +588,9 @@ Deno.test("import-local validation edge cases", async (t) => {
 
     await t.step("rejects oversized import body (>4096*100 bytes)", async () => {
       // 4096 * 100 = 409600 bytes limit; need body bigger than that after JSON.stringify
-      const bigBody = { entries: [{ series: "x", story: "y", ...validBody({ padding: "z".repeat(500_000) }) }] };
+      const bigBody = {
+        entries: [{ series: "x", story: "y", ...validBody({ padding: "z".repeat(500_000) }) }],
+      };
       const res = await app.request(`${BASE}/import-local`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -606,7 +627,11 @@ Deno.test("import-local dryRun reports conflicts without writing", async (t) => 
 
     await t.step("dryRun with existing entry that differs reports conflict", async () => {
       const entries = [
-        { series: "dr", story: "s1", ...validBody({ clientId: "orig", lastReadAt: "2026-01-01T00:00:00Z" }) },
+        {
+          series: "dr",
+          story: "s1",
+          ...validBody({ clientId: "orig", lastReadAt: "2026-01-01T00:00:00Z" }),
+        },
         { series: "dr", story: "new-story", ...validBody() },
       ];
       const res = await importLocal(app, { dryRun: true, entries });

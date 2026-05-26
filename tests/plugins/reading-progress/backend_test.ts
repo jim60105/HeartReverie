@@ -293,8 +293,9 @@ Deno.test("concurrent PUTs produce unique sequential revisions", async () => {
 
   try {
     const N = 50;
-    const promises = Array.from({ length: N }, (_, i) =>
-      putProgress(app, "concSeries", "concStory", validBody({ clientId: `client-${i}` }))
+    const promises = Array.from(
+      { length: N },
+      (_, i) => putProgress(app, "concSeries", "concStory", validBody({ clientId: `client-${i}` })),
     );
 
     const responses = await Promise.all(promises);
@@ -449,7 +450,11 @@ Deno.test("import-local", async (t) => {
     await t.step("import with changed entry overwrites (LWW)", async () => {
       const changed = [
         // Same series/story but different lastReadAt → conflict + overwrite
-        { series: "imp1", story: "s1", ...validBody({ clientId: "c1", lastReadAt: "2025-06-01T00:00:00Z" }) },
+        {
+          series: "imp1",
+          story: "s1",
+          ...validBody({ clientId: "c1", lastReadAt: "2025-06-01T00:00:00Z" }),
+        },
         // Brand new entry
         { series: "imp4", story: "s4", ...validBody({ clientId: "c4" }) },
       ];

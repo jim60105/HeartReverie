@@ -1,6 +1,6 @@
 // Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
 
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import PluginSettingsPage from "@/components/PluginSettingsPage.vue";
 
 const notifyMock = vi.fn();
@@ -56,11 +56,14 @@ function installFetch(plan: FetchPlan): {
       return makeResponse(200, plan.schema ?? {});
     }
     if (method === "GET" && url.endsWith("/schema-meta")) {
-      return makeResponse(200, plan.schemaMeta ?? {
-        schemaVersion: 1,
-        pathRoots: ["playground/lore/"],
-        formats: ["path"],
-      });
+      return makeResponse(
+        200,
+        plan.schemaMeta ?? {
+          schemaVersion: 1,
+          pathRoots: ["playground/lore/"],
+          formats: ["path"],
+        },
+      );
     }
     if (method === "GET" && url.endsWith("/settings")) {
       return makeResponse(200, plan.settings ?? {});

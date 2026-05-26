@@ -2,11 +2,7 @@
 
 import { ref } from "vue";
 import { apiFetch, apiFetchJson } from "@/lib/api";
-import type {
-  LorePassageMetadata,
-  LorePassageData,
-  UseLoreApiReturn,
-} from "@/types";
+import type { LorePassageData, LorePassageMetadata, UseLoreApiReturn } from "@/types";
 
 const passages = ref<LorePassageMetadata[]>([]);
 const allTags = ref<string[]>([]);
@@ -19,8 +15,9 @@ function buildScopeUrl(
   story?: string,
 ): string {
   if (scope === "global") return "/api/lore/global";
-  if (scope === "series")
+  if (scope === "series") {
     return `/api/lore/series/${encodeURIComponent(series!)}`;
+  }
   return `/api/lore/story/${encodeURIComponent(series!)}/${encodeURIComponent(story!)}`;
 }
 

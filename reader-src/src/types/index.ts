@@ -198,7 +198,7 @@ export interface PassphraseGateEmits {
 
 // ── Composable Return Types ──
 
-import type { Ref, ComputedRef, ShallowRef, DeepReadonly } from "vue";
+import type { ComputedRef, DeepReadonly, Ref, ShallowRef } from "vue";
 
 export interface UseAuthReturn {
   passphrase: DeepReadonly<Ref<string>>;
@@ -224,7 +224,12 @@ export interface UseChapterNavReturn {
   previous: () => void;
   goToFirst: () => void;
   goToLast: () => void;
-  loadFromBackend: (series: string, story: string, startChapter?: number, options?: { syncRoute?: boolean }) => Promise<void>;
+  loadFromBackend: (
+    series: string,
+    story: string,
+    startChapter?: number,
+    options?: { syncRoute?: boolean },
+  ) => Promise<void>;
   reloadToLast: () => Promise<void>;
   refreshAfterEdit: (targetChapter: number) => Promise<void>;
   notifyRenderInvalidated: () => void;
@@ -899,8 +904,6 @@ export interface UseWebSocketReturn {
   disconnect: () => void;
 }
 
-
-
 // ── Chapter Actions ──
 
 export interface ChapterEditRequest {
@@ -949,14 +952,13 @@ export interface UseChapterActionsReturn {
 
 // Hook Inspector types (re-export)
 export type {
-  HandlerInfo,
-  PipelineFieldRef,
-  ManifestHookDeclaration,
-  ManifestDeclarations,
-  StripTagDeclaration,
+  BootMismatch,
   ConflictKind,
   ConflictReport,
+  HandlerInfo,
   HookInspectorReport,
-  BootMismatch,
+  ManifestDeclarations,
+  ManifestHookDeclaration,
+  PipelineFieldRef,
+  StripTagDeclaration,
 } from "./hook-inspector";
-

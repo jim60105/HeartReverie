@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assert as assertTrue } from "@std/assert";
+import { assert as assertTrue, assertEquals } from "@std/assert";
 import { stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import { PluginManager } from "../../../writer/lib/plugin-manager.ts";
@@ -56,41 +56,44 @@ Deno.test("PluginManager — transactional registration", async (t) => {
       assertEquals(okEntry?.hooks.length, 1);
     });
 
-    await t.step("declaredOnly mismatch — plugin is rejected, no hook left registered", async () => {
-      const pluginDir = join(tmpDir, "declared-only");
-      const pDir = join(pluginDir, "decl-plugin");
-      await Deno.mkdir(pDir, { recursive: true });
-      await Deno.writeTextFile(
-        join(pDir, "backend.js"),
-        `export function register({ hooks }) {
+    await t.step(
+      "declaredOnly mismatch — plugin is rejected, no hook left registered",
+      async () => {
+        const pluginDir = join(tmpDir, "declared-only");
+        const pDir = join(pluginDir, "decl-plugin");
+        await Deno.mkdir(pDir, { recursive: true });
+        await Deno.writeTextFile(
+          join(pDir, "backend.js"),
+          `export function register({ hooks }) {
            // declares post-response in manifest but never registers it
          }`,
-      );
-      await Deno.writeTextFile(
-        join(pDir, "plugin.json"),
-        JSON.stringify({
-          name: "decl-plugin",
-          displayName: "decl-plugin",
-          version: "1.0.0",
-          backendModule: "backend.js",
-          hooks: [{ stage: "post-response" }],
-        }),
-      );
+        );
+        await Deno.writeTextFile(
+          join(pDir, "plugin.json"),
+          JSON.stringify({
+            name: "decl-plugin",
+            displayName: "decl-plugin",
+            version: "1.0.0",
+            backendModule: "backend.js",
+            hooks: [{ stage: "post-response" }],
+          }),
+        );
 
-      const hd = new HookDispatcher();
-      const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
-      await pm.init();
-      assertEquals(pm.getPlugins().length, 0);
-      // dispatcher must have no handlers for the stage
-      assertEquals(Object.keys(hd.introspect()).length, 0);
-      assertTrue(
-        errorStub.calls.some((c) =>
-          String(c.args[0]).includes("Failed to load backend module") ||
-          String(c.args[0]).includes("manifest") ||
-          String(c.args[0]).includes("declaredOnly")
-        ),
-      );
-    });
+        const hd = new HookDispatcher();
+        const pm = new PluginManager(pluginDir, undefined, hd, Deno.makeTempDirSync());
+        await pm.init();
+        assertEquals(pm.getPlugins().length, 0);
+        // dispatcher must have no handlers for the stage
+        assertEquals(Object.keys(hd.introspect()).length, 0);
+        assertTrue(
+          errorStub.calls.some((c) =>
+            String(c.args[0]).includes("Failed to load backend module") ||
+            String(c.args[0]).includes("manifest") ||
+            String(c.args[0]).includes("declaredOnly")
+          ),
+        );
+      },
+    );
 
     await t.step("registeredOnly mismatch — plugin is rejected and rolled back", async () => {
       const pluginDir = join(tmpDir, "reg-only");
