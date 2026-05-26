@@ -271,7 +271,11 @@ deno task fmt
 deno task lint
 ```
 
-CI enforces both via `deno fmt --check` and `deno lint` in the `fmt-lint` job (`.github/workflows/ci.yaml`); either failure blocks merge.
+CI runs both via `deno fmt --check` and `deno lint` in the `fmt-lint` job (`.github/workflows/ci.yaml`) on every push to `master`, every pull request targeting `master`, and `workflow_dispatch`; either command exiting non-zero marks the build red on the PR's checks list.
+
+> **Note.** Branch-protection rulesets that would actually *block* merge on a red `fmt-lint` build are **recommended** but are **not** enabled on this repository today, and enabling them requires repo-admin action. They are deliberately out of scope for this change — the `fmt-lint` job ensures failures are *visible*, not that they are *unmergeable*.
+
+**Suppression hygiene.** Any **newly added** `// deno-lint-ignore <rule>` directive introduced by a change MUST carry a trailing `-- <reason>` comment explaining why the rule is being suppressed at that site (for example, `// deno-lint-ignore no-control-regex -- deliberate control-character sanitization`). This rule applies only to new suppressions added going forward; pre-existing untouched suppressions elsewhere in the tree are not retroactively in scope and need not be cleaned up as part of unrelated work.
 
 **Scope.** The configured set covers source files only: `**/*.{ts,tsx,js,jsx,json,jsonc,yaml,yml,css}` for `deno fmt`, and `**/*.{ts,tsx,js,jsx}` for `deno lint`. A comprehensive `exclude` list in `deno.json` keeps Markdown, user story data in `playground/`, prompt content under `themes/`, generated output (`reader-dist/`, `coverage/`), vendored code (`**/vendor/`), `**/node_modules/`, Helm chart templates (`helm/heart-reverie/templates/`, which contain Go template syntax that is not parseable as YAML), and archived OpenSpec changes (`openspec/changes/archive/`) out of the formatter and linter. **Markdown is intentionally never reformatted** — prose discipline is the author's responsibility.
 
