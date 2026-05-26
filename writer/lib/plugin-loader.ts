@@ -103,6 +103,7 @@ export function isValidPluginName(name: unknown): name is string {
   return (
     typeof name === "string" &&
     name.length > 0 &&
+    // deno-lint-ignore no-control-regex -- intentional NUL byte (\x00) rejection in plugin name validation
     !/\.\.|\x00|[/\\]/.test(name)
   );
 }

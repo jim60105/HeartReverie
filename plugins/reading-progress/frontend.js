@@ -49,7 +49,7 @@ function getScrollElement() {
 
 function computeScrollRatio() {
   const scrollEl = getScrollElement();
-  return scrollEl.scrollTop / Math.max(1, scrollEl.scrollHeight - window.innerHeight);
+  return scrollEl.scrollTop / Math.max(1, scrollEl.scrollHeight - globalThis.innerHeight);
 }
 
 function clampRatio(r) {
@@ -57,7 +57,7 @@ function clampRatio(r) {
 }
 
 function navigateToChapter(series, story, chapterNumber) {
-  window.location.href = `/${encodeURIComponent(series)}/${
+  globalThis.location.href = `/${encodeURIComponent(series)}/${
     encodeURIComponent(story)
   }/chapter/${chapterNumber}`;
 }
@@ -224,7 +224,7 @@ function captureTextFragmentAnchor(container) {
   // header on the next restore.
   if (scrollEl.scrollTop === 0) return null;
   const viewportTop = scrollEl.scrollTop;
-  const viewportBottom = viewportTop + window.innerHeight;
+  const viewportBottom = viewportTop + globalThis.innerHeight;
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walker.nextNode())) {
@@ -291,7 +291,7 @@ function findTextFragmentAnchor(container, anchor) {
   return getRelativeTop(container, candidates[0].node);
 }
 
-function getRelativeTop(container, node) {
+function getRelativeTop(_container, node) {
   const range = document.createRange();
   range.selectNode(node);
   const rect = range.getBoundingClientRect();
@@ -441,7 +441,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
   // scrollRatio: 0 cannot pull the toolbar behind the header. Returns false
   // so the caller knows no programmatic scroll event will fire (the
   // applyingRemote flag must not be set in that case).
-  const maxScrollForSnap = Math.max(1, scrollEl.scrollHeight - window.innerHeight);
+  const maxScrollForSnap = Math.max(1, scrollEl.scrollHeight - globalThis.innerHeight);
   const savedTop = (typeof saved.scrollRatio === "number" ? saved.scrollRatio : 0) *
     maxScrollForSnap;
   if (savedTop < 1) return false;
@@ -456,7 +456,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
     if (targetTop !== null) {
       scrollEl.scrollTop = targetTop;
     } else if (typeof saved.scrollRatio === "number") {
-      const maxScroll = Math.max(1, scrollEl.scrollHeight - window.innerHeight);
+      const maxScroll = Math.max(1, scrollEl.scrollHeight - globalThis.innerHeight);
       scrollEl.scrollTop = saved.scrollRatio * maxScroll;
     }
   }
@@ -480,7 +480,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
       observer.disconnect();
       observer = null;
     }
-    window.removeEventListener("scroll", cancelOnUserScroll);
+    globalThis.removeEventListener("scroll", cancelOnUserScroll);
   }
 
   function cancelOnUserScroll() {
@@ -488,7 +488,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
   }
 
   // Cancel if user scrolls (once) — listen on window since that's what scrolls
-  window.addEventListener("scroll", cancelOnUserScroll, { once: true, passive: true });
+  globalThis.addEventListener("scroll", cancelOnUserScroll, { once: true, passive: true });
 
   // Initial apply
   applyScroll();
@@ -530,7 +530,7 @@ function restoreScroll(container, saved, settings, chapters, currentIdentity, pu
 // 4.1 — Local-only mode (storageBackend === 'local')
 // ---------------------------------------------------------------------------
 
-function initLocalMode(hooks, settings) {
+function initLocalMode(hooks, _settings) {
   function storageKey(series, story) {
     return `reading-progress:${series}/${story}`;
   }
@@ -543,7 +543,7 @@ function initLocalMode(hooks, settings) {
         const saved = JSON.parse(raw);
         if (saved.chapterIndex === ctx.chapterIndex && typeof saved.scrollRatio === "number") {
           const scrollEl = getScrollElement();
-          const maxScroll = Math.max(1, scrollEl.scrollHeight - window.innerHeight);
+          const maxScroll = Math.max(1, scrollEl.scrollHeight - globalThis.innerHeight);
           const targetTop = saved.scrollRatio * maxScroll;
           // Mirror restoreScroll()'s "at the top" snap: skip mutation when the
           // decoded target is sub-pixel.
@@ -569,8 +569,8 @@ function initLocalMode(hooks, settings) {
       } catch { /* storage full */ }
     }
 
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    globalThis.addEventListener("scroll", onScroll, { passive: true });
+    return () => globalThis.removeEventListener("scroll", onScroll);
   });
 }
 
@@ -579,7 +579,7 @@ function initLocalMode(hooks, settings) {
 // ---------------------------------------------------------------------------
 
 function initFileMode(hooks, context, settings) {
-  const logger = createPluginLogger(context, "reading-progress");
+  const _logger = createPluginLogger(context, "reading-progress");
 
   // -- Core state --
   let cachedRevision = 0;
@@ -587,7 +587,7 @@ function initFileMode(hooks, context, settings) {
   let applyingRemote = false;
   const lastEntryByIndex = new Map();
   let chapters = [];
-  let pollTimer = null;
+  let _pollTimer = null;
 
   // Per-story-load guard for the cross-chapter prompt on `chapter:dom:ready`.
   // The cross-chapter "jump back?" dialog SHALL fire at most once per
@@ -736,7 +736,7 @@ function initFileMode(hooks, context, settings) {
       throttle.push(entry);
     }
 
-    window.addEventListener("scroll", onScroll, { passive: true });
+    globalThis.addEventListener("scroll", onScroll, { passive: true });
 
     // Capture the per-story-load cross-chapter guard SYNCHRONOUSLY here, before
     // the queueMicrotask boundary. Two back-to-back fresh `chapter:dom:ready`
@@ -801,7 +801,7 @@ function initFileMode(hooks, context, settings) {
       if (!didRestore) applyingRemote = false;
     });
 
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => globalThis.removeEventListener("scroll", onScroll);
   });
   getIdentity = idRef.getCurrentIdentity;
   setIdentity = idRef.setCurrentIdentity;
@@ -860,13 +860,13 @@ function initFileMode(hooks, context, settings) {
   }
 
   document.addEventListener("visibilitychange", onVisibilityChange);
-  window.addEventListener("pagehide", onPageHide);
+  globalThis.addEventListener("pagehide", onPageHide);
 
   // -- 6.4 — Periodic polling --
 
   const pollIntervalMs = settings.pollIntervalMs ?? 0;
   if (pollIntervalMs > 0) {
-    pollTimer = setInterval(() => {
+    _pollTimer = setInterval(() => {
       queueMicrotask(() => checkRemoteConflict());
     }, pollIntervalMs);
   }

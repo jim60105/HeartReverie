@@ -30,6 +30,7 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
   /** Validate a wildcard passage path: must end with .md, contain no traversal, max 1 subdir. */
   function isValidPassagePath(path: string): boolean {
     if (!path || !path.endsWith(".md")) return false;
+    // deno-lint-ignore no-control-regex -- intentional NUL byte (\x00) rejection in passage path validation
     if (/\.\.|\x00/.test(path)) return false;
     const segments = path.split("/").filter((seg) => seg.length > 0);
     if (segments.length === 0 || segments.length > 2) return false;

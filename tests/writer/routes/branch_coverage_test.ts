@@ -317,14 +317,14 @@ Deno.test({
         Deno.env.set("PASSPHRASE", previousPassphrase);
       }
       // Best-effort: restore perms before recursive removal
-      async function fixPerms(p: string): Promise<void> {
+      const fixPerms = async (p: string): Promise<void> => {
         try {
           await Deno.chmod(p, 0o755);
           for await (const e of Deno.readDir(p)) {
             await fixPerms(join(p, e.name));
           }
         } catch { /* not a dir or already removed */ }
-      }
+      };
       await fixPerms(tmpDir);
       await Deno.remove(tmpDir, { recursive: true });
     }

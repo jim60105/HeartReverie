@@ -105,7 +105,7 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
     vi.unstubAllGlobals();
     // Replace location.href setter so navigateToChapter is observable but
     // does NOT actually navigate during the test.
-    originalLocation = window.location;
+    originalLocation = globalThis.location;
     locationHrefSpy = vi.fn();
     const spy = locationHrefSpy;
     Object.defineProperty(window, "location", {

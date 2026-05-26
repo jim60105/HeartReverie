@@ -61,7 +61,7 @@ function subscribeSettingsChanged(): void {
 
     if (hasRenderContrib) {
       if (reRenderTimer !== null) clearTimeout(reRenderTimer);
-      reRenderTimer = window.setTimeout(() => {
+      reRenderTimer = globalThis.setTimeout(() => {
         reRenderTimer = null;
         // A settings change does not externally mutate the rendered DOM —
         // plugins re-walk the existing chapter and re-apply. Use the

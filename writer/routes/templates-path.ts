@@ -34,6 +34,7 @@ import type { AppDeps } from "../types.ts";
 import { isPathContained } from "../lib/path-safety.ts";
 import type { TemplateKind } from "../lib/template-lint.ts";
 
+// deno-lint-ignore no-control-regex -- intentional NUL byte (\x00) rejection in path segment validation
 const SEGMENT_RE = /^[^:\/\\\x00]+$/;
 
 /**

@@ -20,7 +20,9 @@ const routeParams = reactive<Record<string, string | undefined>>({});
 const wsConnected = ref(false);
 const wsAuthenticated = ref(true);
 const wsSend = vi.fn();
+// deno-lint-ignore no-explicit-any -- test mock holds heterogeneous message payloads
 const wsHandlers = new Map<string, (msg: any) => void>();
+// deno-lint-ignore no-explicit-any -- test mock signature mirrors the production any-typed handler
 const wsOnMessage = vi.fn((type: string, handler: (msg: any) => void) => {
   wsHandlers.set(type, handler);
   return vi.fn(() => wsHandlers.delete(type));

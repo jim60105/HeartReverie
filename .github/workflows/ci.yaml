@@ -14,6 +14,35 @@ permissions:
   pull-requests: read
 
 jobs:
+  fmt-lint:
+    name: Format & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/deno
+            ~/.deno
+          key: ${{ runner.os }}-deno-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Check formatting
+        run: deno task fmt:check
+
+      - name: Lint
+        run: deno task lint
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest

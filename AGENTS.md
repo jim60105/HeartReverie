@@ -262,6 +262,21 @@ Commit messages are written in English. Always include the trailer:
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```
 
+### Before finalizing a change
+
+Both human and AI contributors MUST run the following two commands before declaring an implementation complete:
+
+```
+deno task fmt
+deno task lint
+```
+
+CI enforces both via `deno fmt --check` and `deno lint` in the `fmt-lint` job (`.github/workflows/ci.yaml`); either failure blocks merge.
+
+**Scope.** The configured set covers source files only: `**/*.{ts,tsx,js,jsx,json,jsonc,yaml,yml,css}` for `deno fmt`, and `**/*.{ts,tsx,js,jsx}` for `deno lint`. A comprehensive `exclude` list in `deno.json` keeps Markdown, user story data in `playground/`, prompt content under `themes/`, generated output (`reader-dist/`, `coverage/`), vendored code (`**/vendor/`), `**/node_modules/`, Helm chart templates (`helm/heart-reverie/templates/`, which contain Go template syntax that is not parseable as YAML), and archived OpenSpec changes (`openspec/changes/archive/`) out of the formatter and linter. **Markdown is intentionally never reformatted** — prose discipline is the author's responsibility.
+
+**Vue gap.** Deno's stable formatter does not format `.vue` Single-File Components, and Deno's linter does not lint them. Style inside `<script setup>` blocks relies on review. `.vue` type/behaviour coverage is provided by `vue-tsc --noEmit` (run via `deno task build:reader`) and Vitest (`deno task test:frontend`).
+
 ## Architecture
 
 ### Plugin System

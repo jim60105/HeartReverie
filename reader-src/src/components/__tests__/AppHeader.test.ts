@@ -147,7 +147,7 @@ describe("AppHeader", () => {
     isFirstRef.value = true;
     isLastRef.value = false;
     let wrapper = mount(AppHeader);
-    let firstBtn = wrapper.findAll("button").find((b) => b.text() === "⇇");
+    const firstBtn = wrapper.findAll("button").find((b) => b.text() === "⇇");
     expect(firstBtn!.attributes("disabled")).toBeDefined();
     await firstBtn!.trigger("click");
     expect(goToFirstMock).not.toHaveBeenCalled();

@@ -277,7 +277,7 @@ Deno.test("Subscriber error handling", async (t) => {
 
       callCount = 0;
       shouldThrow = false;
-      let throwOnStart = true;
+      const throwOnStart = true;
       const cb2 = (ev: HandlerEvent) => {
         callCount++;
         if (throwOnStart && ev.kind === "handler-start") throw new Error("start-only");

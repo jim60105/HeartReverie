@@ -11,11 +11,11 @@ import { onBeforeUnmount, onMounted, type Ref, ref } from "vue";
 export function useMediaQuery(query: string): Ref<boolean> {
   const matches = ref(false);
 
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+  if (typeof window === "undefined" || typeof globalThis.matchMedia !== "function") {
     return matches;
   }
 
-  const mql = window.matchMedia(query);
+  const mql = globalThis.matchMedia(query);
   matches.value = mql.matches;
 
   const handler = (event: MediaQueryListEvent) => {

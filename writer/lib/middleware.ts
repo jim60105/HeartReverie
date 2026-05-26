@@ -36,6 +36,7 @@ export function isReservedDirectoryName(value: string): boolean {
 }
 
 export function isValidParam(value: string): boolean {
+  // deno-lint-ignore no-control-regex -- intentional NUL byte (\x00) check for path-safety
   return !/\.\.|\x00|[/\\]/.test(value) && !isReservedDirectoryName(value);
 }
 

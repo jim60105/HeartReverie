@@ -3,7 +3,9 @@
 // Lore-filename derivation and validation helpers shared between the
 // Quick-Add tool and the Import-Character-Card tool.
 
+// deno-lint-ignore no-control-regex -- deliberate forbidden-filename-char sanitization (C0 control chars)
 const FORBIDDEN = /[\\/:*?"<>|\u0000-\u001F]/g;
+// deno-lint-ignore no-control-regex -- mirror of FORBIDDEN above for validation
 const VALID_PATTERN = /^[^\\/:*?"<>|\u0000-\u001F]+\.md$/;
 const MAX_BYTES = 255;
 
@@ -28,6 +30,7 @@ const RESERVED_PLATFORM_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
 export function isValidSeriesOrStoryName(value: string): boolean {
   const v = (value ?? "").trim();
   if (v.length === 0) return false;
+  // deno-lint-ignore no-control-regex -- intentional NUL byte (\x00) check for path-safety
   if (/\.\.|\x00|[/\\]/.test(v)) return false;
   if (v.startsWith("_")) return false;
   if (RESERVED_PLATFORM_DIRECTORY_NAMES.has(v)) return false;

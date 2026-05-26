@@ -78,7 +78,7 @@ describe("FrontendHookDispatcher", () => {
   it("returns context unchanged for unregistered stage", () => {
     const d = new FrontendHookDispatcher();
     const ctx = makeContext({ text: "value" });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // deno-lint-ignore no-explicit-any -- intentional cast to pass unknown stage value to dispatch for negative-path test
     const result = d.dispatch("frontend-render" as any, ctx);
     expect(result).toBe(ctx);
     expect(result.text).toBe("value");
