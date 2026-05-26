@@ -279,6 +279,78 @@ Deno.test({
         );
         assertEquals(res.status, 400);
       });
+
+      // ── Leading "./" normalization (fix-plugin-fragment-path-normalization) ──
+
+      await t.step("GET /api/templates/source — leading ./ accepted", async () => {
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=plugin:test-plugin:./frag.md",
+        );
+        assertEquals(res.status, 200);
+        assertEquals(res.body.source, "Plugin fragment content.");
+      });
+
+      await t.step("GET /api/templates/source — repeated leading ./ accepted", async () => {
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=plugin:test-plugin:././frag.md",
+        );
+        assertEquals(res.status, 200);
+        assertEquals(res.body.source, "Plugin fragment content.");
+      });
+
+      await t.step("GET /api/templates/source — ./ normalizing to empty → 400", async () => {
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=plugin:test-plugin:./",
+        );
+        assertEquals(res.status, 400);
+        assertEquals(res.body.detail, "Plugin path is empty");
+      });
+
+      await t.step("GET /api/templates/source — ././ normalizing to empty → 400", async () => {
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=plugin:test-plugin:././",
+        );
+        assertEquals(res.status, 400);
+        assertEquals(res.body.detail, "Plugin path is empty");
+      });
+
+      await t.step("GET /api/templates/source — backslash leading marker → 400", async () => {
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=plugin:test-plugin:.\\frag.md",
+        );
+        assertEquals(res.status, 400);
+        assertEquals(res.body.detail, "Plugin path contains dotfile segment");
+      });
+
+      await t.step("GET /api/templates/source — interior ./ segment → 400", async () => {
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=plugin:test-plugin:sub/./frag.md",
+        );
+        assertEquals(res.status, 400);
+        assertEquals(res.body.detail, "Plugin path contains dotfile segment");
+      });
+
+      await t.step("GET /api/templates/source — ../etc/passwd traversal → 400", async () => {
+        const res = await makeRequest(
+          app,
+          "GET",
+          "/api/templates/source?templatePath=plugin:test-plugin:../etc/passwd",
+        );
+        assertEquals(res.status, 400);
+        assertEquals(res.body.detail, "Plugin path contains ..");
+      });
     } finally {
       await cleanup(tmpDir, pluginsDir);
     }

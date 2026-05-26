@@ -184,7 +184,19 @@ export function resolveTemplatePath(
     if (!parsed.pluginName || !parsed.relativeFile) {
       return { ok: false, err: { status: 400, detail: "Missing plugin segments" } };
     }
-    if (parsed.relativeFile.includes("..")) {
+    // Strip any number of leading "./" segments to honour the documented
+    // plugin-fragment convention (manifests reference fragments as
+    // "./snippet.md" per docs/plugin-system.md and docs/prompt-template.md).
+    // Mirrors writer/lib/plugin-validators-frontend-imports.ts:58-65.
+    let normalized = parsed.relativeFile;
+    while (normalized.startsWith("./")) {
+      normalized = normalized.slice(2);
+    }
+    if (normalized.length === 0) {
+      return { ok: false, err: { status: 400, detail: "Plugin path is empty" } };
+    }
+    const segments = normalized.split(/[\\/]/);
+    if (segments.some((s) => s === "..")) {
       return { ok: false, err: { status: 400, detail: "Plugin path contains .." } };
     }
     // Defense-in-depth: even though `PUT /api/templates` rejects plugin:*
@@ -193,7 +205,7 @@ export function resolveTemplatePath(
     // cannot land a `.js`/`.mjs`/`.cjs`/`.html`/`.svg` file under a plugin
     // directory (which would then be served as code by the wildcard
     // `/plugins/:plugin/:path{.+\.js}` route or by the SPA static handler).
-    const lowered = parsed.relativeFile.toLowerCase();
+    const lowered = normalized.toLowerCase();
     const FORBIDDEN_PLUGIN_EXTS = [".js", ".mjs", ".cjs", ".html", ".htm", ".svg"];
     if (FORBIDDEN_PLUGIN_EXTS.some((ext) => lowered.endsWith(ext))) {
       return {
@@ -201,14 +213,14 @@ export function resolveTemplatePath(
         err: { status: 400, detail: "Plugin fragment extension is not permitted" },
       };
     }
-    if (parsed.relativeFile.split(/[\\/]/).some((s) => s.startsWith("."))) {
+    if (segments.some((s) => s.startsWith("."))) {
       return { ok: false, err: { status: 400, detail: "Plugin path contains dotfile segment" } };
     }
     const dir = pluginManager.getPluginDir(parsed.pluginName);
     if (!dir) {
       return { ok: false, err: { status: 404, detail: `Unknown plugin: ${parsed.pluginName}` } };
     }
-    const abs = resolve(dir, parsed.relativeFile);
+    const abs = resolve(dir, normalized);
     if (!isPathContained(dir, abs)) {
       return { ok: false, err: { status: 400, detail: "Plugin path escapes plugin directory" } };
     }
