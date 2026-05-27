@@ -1,0 +1,54 @@
+name: Publish docs to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-pages.yaml'
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  id-token: write
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Verify artifact contents
+        run: |
+          set -euo pipefail
+          scratch="$(mktemp -d)"
+          # The upload-pages-artifact action writes a tar to runner.temp; re-stage docs/ locally for verification.
+          cp -R docs/. "$scratch/"
+          python3 -m http.server 8000 --directory "$scratch" >/dev/null 2>&1 &
+          server_pid=$!
+          sleep 2
+          curl -fsSL http://localhost:8000/ | grep -q 'HeartReverie'
+          curl -fsSL http://localhost:8000/assets/heart.webp -o /dev/null
+          kill "$server_pid"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

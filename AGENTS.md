@@ -311,7 +311,7 @@ CI runs both via `deno fmt --check` and `deno lint` in the `fmt-lint` job (`.git
 
 ### Plugin System
 
-The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 8 built-in plugins (`context-compaction`, `dialogue-colorize`, `polish`, `reading-progress`, `response-notify`, `start-hints`, `thinking`, `user-message`) plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system.md` for additional documentation (note: that file may lag behind recent refactors).
+The plugin system uses manifest-driven discovery. Each plugin has a `plugin.json` declaring its capabilities. There are 8 built-in plugins (`context-compaction`, `dialogue-colorize`, `polish`, `reading-progress`, `response-notify`, `start-hints`, `thinking`, `user-message`) plus a `_shared/utils.js` module providing common frontend utilities (e.g., `escapeHtml`). See `docs/plugin-system/` for additional documentation (note: those files may lag behind recent refactors).
 
 Key classes:
 - `PluginManager` (`writer/lib/plugin-manager.ts`) — scans `plugins/` and optional `PLUGIN_DIR`, validates manifests, loads modules
@@ -336,7 +336,7 @@ Plugin interaction layers:
 
 ### Lore Codex
 
-File-based world-building knowledge system with scoped passages (典籍). Replaces the old `scenario.md` approach. See `docs/lore-codex.md` for full user-facing documentation.
+File-based world-building knowledge system with scoped passages (典籍). Replaces the old `scenario.md` approach. See `docs/lore-codex/` for full user-facing documentation.
 
 - **Three scopes**: global (`_lore/`), series (`<series>/_lore/`), story (`<series>/<story>/_lore/`) — co-located with story data
 - **Passage format**: `.md` files with YAML frontmatter (`tags`, `priority`, `enabled`)
@@ -386,7 +386,7 @@ The values live in a single frozen module-level constant `LLM_APP_ATTRIBUTION_HE
 
 Error tags surfaced through `buildVentoError()` for the message-tag pipeline (grep for these to find handling sites): `multi-message:invalid-role`, `multi-message:nested`, `multi-message:no-user-message`, `multi-message:assembly-corrupt`.
 
-See `docs/prompt-template.md` for the `{{ message }}` tag syntax, role validation, ordering / coalescing semantics, worked multi-turn examples, and the Prompt Editor cards-mode UI (per-message cards, raw-text fallback toggle, lossy-strip warning, pre-save validity guard).
+See `docs/prompt-template/` for the `{{ message }}` tag syntax, role validation, ordering / coalescing semantics, worked multi-turn examples, and the Prompt Editor cards-mode UI (per-message cards, raw-text fallback toggle, lossy-strip warning, pre-save validity guard).
 
 ### Frontend Rendering Pipeline
 

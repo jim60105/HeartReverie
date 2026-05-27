@@ -1,0 +1,3 @@
+- [GitHub](https://github.com/jim60105/HeartReverie)
+- [Releases](https://github.com/jim60105/HeartReverie/releases)
+- [License](https://github.com/jim60105/HeartReverie/blob/master/LICENSE)

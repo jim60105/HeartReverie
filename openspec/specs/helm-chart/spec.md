@@ -240,18 +240,18 @@ The chart SHALL define the standard Helm helper templates in `templates/_helpers
 The repository SHALL ship operator-facing documentation:
 
 1. `helm/heart-reverie/README.md` (English) covering installation, the values surface, the single-replica caveat, the credential-handling recommendation order (`secret.existingSecret` → `--set-file` → `--set`), and the two ingress recipes.
-2. `docs/helm-deployment.md` (Traditional Chinese, matching the existing docs/*.md style) covering the same material localised for zh-TW operators.
-3. The root `README.md` SHALL gain a Helm-deployment subsection that links to both `helm/heart-reverie/README.md` and `docs/helm-deployment.md`.
+2. `docs/deployment/helm.md` (Traditional Chinese, matching the existing docs/*.md style) covering the same material localised for zh-TW operators.
+3. The root `README.md` SHALL gain a Helm-deployment subsection that links to both `helm/heart-reverie/README.md` and `docs/deployment/helm.md`.
 
 #### Scenario: chart README contains the prescribed sections
 - **WHEN** an operator opens `helm/heart-reverie/README.md`
 - **THEN** the document contains sections titled (or equivalent) "Installation", "Values", "Single-replica only", and "Ingress examples", AND mentions both `secret.existingSecret` and `--set-file` as preferred mechanisms for supplying `LLM_API_KEY` and `PASSPHRASE`
 
 #### Scenario: zh-TW deployment guide exists
-- **WHEN** an operator opens `docs/helm-deployment.md`
+- **WHEN** an operator opens `docs/deployment/helm.md`
 - **THEN** the file exists and the prose is in Traditional Chinese
 
 #### Scenario: root README links to the chart docs
 - **WHEN** an operator opens the repository's root `README.md`
-- **THEN** there is a Helm subsection that links to `helm/heart-reverie/README.md` and `docs/helm-deployment.md`
+- **THEN** there is a Helm subsection that links to `helm/heart-reverie/README.md` and `docs/deployment/helm.md`
 

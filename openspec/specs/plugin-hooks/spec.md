@@ -335,7 +335,7 @@ The documentation for hook stage contexts SHALL match the actual codebase implem
 The `strip-tags` hook stage is defined in `VALID_STAGES` but is not currently dispatched anywhere in the codebase. Documentation SHALL note this stage exists for future use but is not yet active. The `response-stream` stage is now dispatched (see the Response-stream hook dispatch point requirement) and SHALL NOT appear in any list of dormant/undispatched stages.
 
 #### Scenario: Documentation lists only strip-tags as dormant
-- **WHEN** a reader consults the plugin-hooks specification or `docs/plugin-system.md` for a list of hook stages that exist but are not dispatched
+- **WHEN** a reader consults the plugin-hooks specification or `docs/plugin-system/overview.md` for a list of hook stages that exist but are not dispatched
 - **THEN** the list SHALL contain only `strip-tags` and SHALL NOT contain `response-stream`
 
 ### Requirement: TypeScript type definitions for hooks

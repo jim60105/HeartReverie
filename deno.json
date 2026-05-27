@@ -37,7 +37,8 @@
       "playground/",
       "themes/",
       "helm/heart-reverie/templates/",
-      "openspec/changes/archive/"
+      "openspec/changes/archive/",
+      "docs/index.html"
     ]
   },
   "lint": {
