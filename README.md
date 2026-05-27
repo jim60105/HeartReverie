@@ -72,14 +72,6 @@ helm install hr ./helm/heart-reverie \
 
 完整安裝指南、Ingress 範例（Traefik／nginx）、TLS／持續性／提示詞覆寫等進階情境請見 [Helm 部署文件](https://jim60105.github.io/HeartReverie/#/deployment/helm)。
 
-## 🧪 測試
-
-```bash
-deno task test            # 全部
-deno task test:backend    # 僅後端
-deno task test:frontend   # 僅前端
-```
-
 ## 📄 授權
 
 <img src="assets/AGPLv3_Logo.svg" alt="agplv3" width="300" />
