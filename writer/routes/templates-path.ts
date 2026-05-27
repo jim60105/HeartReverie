@@ -186,7 +186,7 @@ export function resolveTemplatePath(
     }
     // Strip any number of leading "./" segments to honour the documented
     // plugin-fragment convention (manifests reference fragments as
-    // "./snippet.md" per docs/plugin-system.md and docs/prompt-template.md).
+    // "./snippet.md" per docs/plugin-system/overview.md and docs/prompt-template/overview.md).
     // Mirrors writer/lib/plugin-validators-frontend-imports.ts:58-65.
     let normalized = parsed.relativeFile;
     while (normalized.startsWith("./")) {

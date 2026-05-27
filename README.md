@@ -135,7 +135,7 @@ text-main = "rgba(220, 220, 215, 1)"
 6. **前端樣式注入**：`frontendStyles` 宣告 CSS 樣式表路徑，在前端載入時自動注入為 `<link>` 元素
 7. **自訂路由**：`backendModule` 可透過 `registerRoutes(ctx)` 註冊 RESTful API 端點，掛載在 `/api/plugins/<name>/` 下
 
-完整文件請見 [`docs/plugin-system.md`][plugin-system-doc]。
+完整文件請見 [`docs/plugin-system/overview.md`][plugin-system-doc]。
 
 ### 內建外掛
 
@@ -169,7 +169,7 @@ git clone https://codeberg.org/jim60105/HeartReverie_Plugins.git
 
 使用容器部署者可直接建置含外掛的延伸映像檔，詳見 [HeartReverie_Plugins README][heartreverie-plugins]。
 
-完整外掛系統文件請見 [`docs/plugin-system.md`][plugin-system-doc]。
+完整外掛系統文件請見 [`docs/plugin-system/overview.md`][plugin-system-doc]。
 
 ### 撰寫自訂外掛
 
@@ -189,7 +189,7 @@ npx skills add https://github.com/jim60105/HeartReverie -s heartreverie-create-p
 - **Markdown 篇章**：`.md` 檔案 + YAML frontmatter（`tags`、`priority`、`enabled`）
 - **標籤系統**：frontmatter 標籤 + 目錄即標籤 + 檔名即標籤，自動注入為 Vento 模板變數（`{{ lore_<tag> }}`）
 
-完整文件請見 [`docs/lore-codex.md`][lore-codex-doc]。
+完整文件請見 [`docs/lore-codex/overview.md`][lore-codex-doc]。
 
 ## 🧰 工具選單
 
@@ -200,7 +200,7 @@ npx skills add https://github.com/jim60105/HeartReverie -s heartreverie-create-p
 
 ## ✏️ Template Editor
 
-`/settings/template-editor` 是瀏覽器內的 Vento 模板 lint／preview／編輯工具，可即時驗證 `system.md`、plugin `promptFragments`（唯讀）、與三層典籍篇章；CodeMirror 6 編輯器附 Vento 自動完成，並提供三種 preview fixture mode（`default` / `inline` / `current`）。寫入採 atomic write + `.bak` 備份。完整說明見 [`docs/prompt-template.md` 的 Template Editor 章節](docs/prompt-template.md#template-editor)。
+`/settings/template-editor` 是瀏覽器內的 Vento 模板 lint／preview／編輯工具，可即時驗證 `system.md`、plugin `promptFragments`（唯讀）、與三層典籍篇章；CodeMirror 6 編輯器附 Vento 自動完成，並提供三種 preview fixture mode（`default` / `inline` / `current`）。寫入採 atomic write + `.bak` 備份。完整說明見 [`docs/prompt-template/template-editor.md`](docs/prompt-template/template-editor.md)。
 
 ## 🧪 測試
 
@@ -223,8 +223,17 @@ helm install hr ./helm/heart-reverie \
 
 完整安裝指南、Ingress 範例（Traefik／nginx）、TLS／持續性／提示詞覆寫等進階情境請見：
 
-- 中文指南：[`docs/helm-deployment.md`](docs/helm-deployment.md)
+- 中文指南：[`docs/deployment/helm.md`](docs/deployment/helm.md)
 - Chart README（英文）：[`helm/heart-reverie/README.md`](helm/heart-reverie/README.md)
+
+## 📚 Documentation
+
+文件站採用 [docsify](https://docsify.js.org/)，可在本機預覽或透過 GitHub Pages 線上瀏覽。
+
+- 本機預覽：在 `HeartReverie/` 目錄底下執行 `npx docsify-cli serve docs`，瀏覽器打開 `http://localhost:3000/` 即可。
+- 線上版本：<https://jim60105.github.io/HeartReverie/>
+
+> 維護者備註，線上版本網址要能對外開啟，需要倉庫管理員先到 GitHub 倉庫 Settings → Pages，把 Source 設為 GitHub Actions，之後每次 push 到 master 時 workflow 才會把 `docs/` 發佈到 Pages。如果你看到 404，多半是這一步尚未完成。
 
 ## 📄 授權
 
@@ -246,7 +255,7 @@ You should have received a copy of the GNU Affero General Public License along w
 [vue]: https://vuejs.org/
 [system-md]: system.md
 [deno]: https://deno.com/
-[plugin-system-doc]: docs/plugin-system.md
+[plugin-system-doc]: docs/plugin-system/overview.md
 [heartreverie-plugins]: https://codeberg.org/jim60105/HeartReverie_Plugins
-[lore-codex-doc]: docs/lore-codex.md
+[lore-codex-doc]: docs/lore-codex/overview.md
 [license]: /LICENSE

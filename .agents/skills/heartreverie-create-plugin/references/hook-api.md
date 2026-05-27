@@ -536,7 +536,7 @@ Behaviour:
 
 Action buttons are **also** centrally gated by the universal `enabled` setting: `/api/plugins/action-buttons` filters out disabled plugins, and the click path re-checks settings to no-op stale clicks. Handlers SHOULD still bail early on `getSettings().enabled === false` as a stale-cache safety net.
 
-For the WebSocket envelope (`plugin-action:run` / `:delta` / `:done` / `:error` / `:aborted`), atomic append/replace semantics, byte-for-byte rollback on abort, and `post-response` dispatch payload, see [`docs/plugin-system.md`](../../../../docs/plugin-system.md#動作按鈕action-buttons).
+For the WebSocket envelope (`plugin-action:run` / `:delta` / `:done` / `:error` / `:aborted`), atomic append/replace semantics, byte-for-byte rollback on abort, and `post-response` dispatch payload, see [`docs/plugin-system/overview.md`](../../../../docs/plugin-system/action-buttons.md).
 
 ---
 

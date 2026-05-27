@@ -404,7 +404,7 @@ Notes:
 - `pluginName` for `runPluginPrompt` is auto-curried — the handler MUST NOT pass it.
 - Action buttons are also gated by the universal `enabled` setting at the API level (`/api/plugins/action-buttons` filters out disabled plugins) and the click path re-checks settings to no-op stale clicks. The explicit `getSettings().enabled === false` check above is still recommended as a safety net.
 - `extraVariables` accepts only scalar values (string / number / boolean) and MUST NOT clash with reserved names (`previousContext`, any `lore_*`, `status_data`, `draft`).
-- For the full append/replace lifecycle (WS envelope, `post-response` dispatch, rate limit, concurrency lock), see [`docs/plugin-system.md`](../../../docs/plugin-system.md#動作按鈕action-buttons).
+- For the full append/replace lifecycle (WS envelope, `post-response` dispatch, rate limit, concurrency lock), see [`docs/plugin-system/overview.md`](../../../docs/plugin-system/action-buttons.md).
 
 ### 8c. Stub prompt file
 

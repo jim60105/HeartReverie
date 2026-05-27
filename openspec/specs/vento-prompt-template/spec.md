@@ -317,16 +317,16 @@ The lint and preview pipelines SHALL accept template paths of the form `lore:glo
 
 ### Requirement: Documentation removes set / include examples
 
-The `docs/prompt-template.md` document SHALL NOT contain examples that use `{{ set ... }}`, `{{ /set }}`, or `{{ include "..." }}`. The document SHALL contain a top-level warning that these constructs are forbidden, with guidance to use named variables, plugin `promptFragments`, or `getDynamicVariables()` instead.
+The `docs/prompt-template/overview.md` document SHALL NOT contain examples that use `{{ set ... }}`, `{{ /set }}`, or `{{ include "..." }}`. The document SHALL contain a top-level warning that these constructs are forbidden, with guidance to use named variables, plugin `promptFragments`, or `getDynamicVariables()` instead.
 
 #### Scenario: Forbidden examples are absent
 
-- **WHEN** a reader greps `docs/prompt-template.md` for `{{ set ` or `{{ include `
+- **WHEN** a reader greps `docs/prompt-template/overview.md` for `{{ set ` or `{{ include `
 - **THEN** no occurrences are found
 
 #### Scenario: Warning paragraph present
 
-- **WHEN** a reader opens `docs/prompt-template.md`
+- **WHEN** a reader opens `docs/prompt-template/overview.md`
 - **THEN** there is a paragraph explicitly stating that `set` / `/set` / `include` are not supported and pointing to the alternative injection mechanisms
 
 ### Requirement: chapter_number is catalog-visible

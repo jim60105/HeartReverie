@@ -48,7 +48,7 @@
 | `promptStripTags` | `array` | Tags/regex to strip from `previousContext` when building prompts |
 | `displayStripTags` | `array` | Tags/regex to strip from frontend display |
 | `parameters` | `array` | Custom Vento template parameters exposed to the template editor |
-| `actionButtons` | `array` | Reader-mounted action buttons (each with `id`, `label`, optional `icon`, `tooltip`, `priority`, `visibleWhen`). Renders in `PluginActionBar` between `UsagePanel` and `ChatInput`; clicks dispatch the `action-button:click` frontend hook. See [`hook-api.md`](./hook-api.md#action-button-click-context) for the full click-context contract and [`docs/plugin-system.md`](../../../../docs/plugin-system.md#動作按鈕action-buttons) for the manifest field reference. |
+| `actionButtons` | `array` | Reader-mounted action buttons (each with `id`, `label`, optional `icon`, `tooltip`, `priority`, `visibleWhen`). Renders in `PluginActionBar` between `UsagePanel` and `ChatInput`; clicks dispatch the `action-button:click` frontend hook. See [`hook-api.md`](./hook-api.md#action-button-click-context) for the full click-context contract and [`docs/plugin-system/overview.md`](../../../../docs/plugin-system/action-buttons.md) for the manifest field reference. |
 | `hooks` | `array` | Parallel dispatch declarations for backend hook stages. Each entry specifies a `stage` and opt-in parallel fields. See [Hooks Parallel Dispatch](#hooks-parallel-dispatch). |
 | `settingsSchema` | `object` | HeartReverie schema dialect describing user-configurable settings (must be `type: "object"` with `properties` AND `x-schema-version: 1`). When present, the system exposes settings endpoints and a settings page in the reader. See [Plugin Settings](#plugin-settings). |
 

@@ -2,7 +2,7 @@
 
 本指南說明如何使用本專案內附的 Helm chart（位於 `helm/heart-reverie/`）將 HeartReverie 浮心夜夢部署到 Kubernetes 叢集。chart 將官方 OCI 映像（`ghcr.io/jim60105/heartreverie`）打包為標準 Helm release，內含 Deployment、Service、Secret、PVC、選用的 Ingress 與選用的 ServiceAccount／提示詞 ConfigMap。
 
-英文版 chart README 位於 [`helm/heart-reverie/README.md`](../helm/heart-reverie/README.md)，記錄完整的 values 介面對照表；本文件聚焦於台灣／繁體中文使用者最常遇到的情境與錯誤排除。
+英文版 chart README 位於 [`helm/heart-reverie/README.md`](https://github.com/jim60105/HeartReverie/blob/master/helm/heart-reverie/README.md)，記錄完整的 values 介面對照表；本文件聚焦於台灣／繁體中文使用者最常遇到的情境與錯誤排除。
 
 ## 前置需求
 
@@ -167,6 +167,6 @@ serviceAccount:
 
 ## 參考
 
-- 完整 values 表：[`helm/heart-reverie/README.md`](../helm/heart-reverie/README.md)
+- 完整 values 表：[`helm/heart-reverie/README.md`](https://github.com/jim60105/HeartReverie/blob/master/helm/heart-reverie/README.md)
 - 環境變數總表：專案根目錄的 `AGENTS.md` 「Environment Variables」章節
 - 應用本身的設定載入邏輯：`writer/lib/config.ts`、`writer/server.ts`、`scripts/serve.sh`
