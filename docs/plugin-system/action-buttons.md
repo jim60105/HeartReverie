@@ -4,6 +4,29 @@
 
 按鈕位於 `MainLayout.vue` 中 `UsagePanel` 與 `ChatInput` 之間的 `PluginActionBar`，沒有任何 plugin 貢獻可見按鈕時整條 bar 不渲染任何 DOM。
 
+下圖為實際章節頁底部的 `PluginActionBar`，可看到由 `polish`、`state`、`options`、`sd-webui-image-gen` 等內建／外部 plugin 貢獻的按鈕並列於故事指令輸入框上方。
+
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/悠奈悠花姊妹大冒險/放學後/
+viewport: 1440x900
+theme: default
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+  - 章節 1 已建立
+steps:
+  - wait_for: 'main'
+  - scroll_to: 'textarea[placeholder*="故事指令"]'
+capture: viewport
+output: docs/assets/screenshots/plugin-action-buttons.png
+captured_at: 2026-05-28
+app_commit: 4534325
+notes: 與 guides/writer-ui.md 的 writer-action-buttons.png 共用同一張擷取，皆呈現章節底部 PluginActionBar
+-->
+![章節底部的 PluginActionBar 列出多顆 plugin 動作按鈕](../assets/screenshots/plugin-action-buttons.png)
+
+
 ## Manifest 欄位：`actionButtons`
 
 ```json

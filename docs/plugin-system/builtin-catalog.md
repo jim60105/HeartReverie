@@ -11,5 +11,45 @@
 | user-message | full-stack | 使用者訊息標籤前端清除，pre-write hook 注入使用者訊息區塊 |
 | response-notify | full-stack | 後端 → 前端 Toast 通知系統，透過 `notification` hook 推送使用者提示 |
 
+`dialogue-colorize` 啟用後，章節內凡是被 `「」` 或對話標籤包覆的引號區段都會以主題色塊高亮，幫助讀者快速辨認對話發話者。
+
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/悠奈悠花姊妹大冒險/放學後/
+viewport: 1440x900
+theme: default
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+  - dialogue-colorize plugin 已啟用
+steps:
+  - wait_for: 'main'
+capture: viewport
+output: docs/assets/screenshots/plugin-dialogue-colorize.png
+captured_at: 2026-05-28
+app_commit: 4534325
+-->
+![章節內對話引號被對話著色 plugin 高亮顯示](../assets/screenshots/plugin-dialogue-colorize.png)
+
+`reading-progress` 會在章節捲動時持續記錄當前位置，把章節編號、捲動比例與文字片段錨點寫回 playground 或瀏覽器 storage；下次開啟同一故事時自動回到上次閱讀位置。此 plugin 在閱讀章節時靜默運作、沒有額外的 UI 元素，因此下圖改以設定頁面呈現可調整的同步開關、儲存後端、輪詢與保留天數等選項。
+
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/settings/plugins/reading-progress
+viewport: 1440x900
+theme: default
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+  - reading-progress plugin 已啟用
+steps:
+  - wait_for: 'main'
+capture: viewport
+output: docs/assets/screenshots/plugin-reading-progress.png
+captured_at: 2026-05-28
+app_commit: 4534325
+-->
+![閱讀進度 plugin 的設定頁面，可調整同步開關、進度儲存後端、輪詢間隔與保留天數](../assets/screenshots/plugin-reading-progress.png)
+
 > [!NOTE]
 > 內建 plugin 的提示詞內容必須維持 SFW（Safe For Work）。禁止包含 NSFW 內容、越獄指令（jailbreak）或年齡相關指示。使用者如有此類需求，應透過外部 plugin（`PLUGIN_DIR`）自行提供。
