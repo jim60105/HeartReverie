@@ -16,7 +16,7 @@
 
 | 層級 | 內容 | 說明 |
 |------|------|------|
-| L0 | `<story_summary>` | 所有非 L2 章節的摘要串接，作為全局故事摘要 |
+| L0 | `<story_summary>` | 所有非 L2 章節的摘要串接，作為全域故事摘要 |
 | L1 | 回退原文 | 沒有 `<chapter_summary>` 標籤的舊章節保留原文 |
 | L2 | 近期原文 | 最近 N 章保持全文（`<chapter_summary>` 已由 manifest 的 `promptStripTags` 清除） |
 
@@ -71,7 +71,7 @@ enabled: true
 
 ## 摘要格式
 
-外掛指示 LLM 在 `<chapter_summary>` 標籤內產出結構化摘要。指令採用與 `UpdateVariable` 相同的 rule/format 結構，要求 LLM 以「第 N 章：」開頭，按時序列出關鍵事件、角色狀態變化、未解伏筆，長度控制在 100-200 字以內。多章摘要直接串接即可作為全局摘要。
+外掛指示 LLM 在 `<chapter_summary>` 標籤內產出結構化摘要。指令採用與 `UpdateVariable` 相同的 rule/format 結構，要求 LLM 以「第 N 章：」開頭，按時序列出關鍵事件、角色狀態變化、未解伏筆，長度控制在 100-200 字以內。多章摘要直接串接即可作為全域摘要。
 
 範例：
 

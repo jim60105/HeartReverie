@@ -43,7 +43,7 @@ podman run -d --name heartreverie \
 
 預設於 `http://localhost:8080` 提供純 HTTP 服務，若需要 TLS 請在上游反向代理或 Ingress controller 終結。
 
-本地部署、自行建置映像、完整環境變數清單、主題客製化請見 [入門指南](https://jim60105.github.io/HeartReverie/#/getting-started/installation)。
+本地部署、自行建置映像、完整環境變數清單、主題客製化請見 [入門指南](https://jim60105.github.io/HeartReverie/#/self-host/installation)。
 
 ## 🔌 外掛與生態
 
@@ -53,11 +53,25 @@ podman run -d --name heartreverie \
 > **強烈建議搭配 [HeartReverie_Plugins][heartreverie-plugins] 使用。**
 > 這組選用外掛提供變數狀態追蹤、角色狀態面板、選項面板、破限等進階功能，能大幅提升互動體驗與故事品質。
 
-外掛機制完整說明、自訂外掛撰寫指南、AI 代理輔助開發流程請見 [外掛系統文件](https://jim60105.github.io/HeartReverie/#/plugin-system/overview)。
+外掛機制完整說明、自訂外掛撰寫指南、AI 代理輔助開發流程請見 [外掛系統文件](https://jim60105.github.io/HeartReverie/#/plugin-dev/overview)。
+
+## 撰寫自訂外掛
+
+撰寫第三方外掛建議從 [`heartreverie-create-plugin`][create-plugin-skill] Agent Skill 開始，把 skill 裝進 AI 代理後，代理可一鍵產出 `plugin.json` manifest、後端 hook 樣板與 `promptFragments` 範例，省去從零拼裝目錄結構與型別宣告的時間。
+
+安裝：
+
+```bash
+npx skills add https://github.com/jim60105/HeartReverie -s heartreverie-create-plugin
+```
+
+完整 hook 階段、manifest 欄位、前端註冊 API、安全約束請見 [外掛開發者文件](https://jim60105.github.io/HeartReverie/#/plugin-dev/overview)。
+
+[create-plugin-skill]: https://github.com/jim60105/HeartReverie/tree/master/.agents/skills/heartreverie-create-plugin
 
 ## 📖 典籍系統 Lore Codex
 
-以檔案為基礎的世界觀知識庫，受 SillyTavern 世界書啟發，專為檔案工作流程設計。Markdown 篇章搭配 YAML frontmatter，透過 frontmatter 標籤、目錄即標籤與檔名即標籤三條規則注入為 Vento 模板變數。詳細目錄結構、篇章格式、模板變數請見 [典籍系統文件](https://jim60105.github.io/HeartReverie/#/lore-codex/overview)。
+以檔案為基礎的世界觀知識庫，受 SillyTavern 世界書啟發，專為檔案工作流程設計。Markdown 篇章搭配 YAML frontmatter，透過 frontmatter 標籤、目錄即標籤與檔名即標籤三條規則注入為 Vento 模板變數。詳細目錄結構、篇章格式、模板變數請見 [典籍系統文件](https://jim60105.github.io/HeartReverie/#/author/lore-codex)。
 
 ## ☸️ Helm 部署
 
@@ -70,7 +84,7 @@ helm install hr ./helm/heart-reverie \
   --set env.PASSPHRASE=open-sesame
 ```
 
-完整安裝指南、Ingress 範例（Traefik／nginx）、TLS／持續性／提示詞覆寫等進階情境請見 [Helm 部署文件](https://jim60105.github.io/HeartReverie/#/deployment/helm)。
+完整安裝指南、Ingress 範例（Traefik／nginx）、TLS／持續性／提示詞覆寫等進階情境請見 [Helm 部署文件](https://jim60105.github.io/HeartReverie/#/self-host/helm)。
 
 ## 📄 授權
 

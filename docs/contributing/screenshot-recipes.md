@@ -1,4 +1,4 @@
-# 截圖配方（Screenshot Recipes）
+# 文件站截圖規範（Screenshot Recipes）
 
 本頁定義 HeartReverie 文件站「截圖配方」格式、檔名規則、替代文字守則，以及擷取截圖前需要準備的環境。每張嵌在文件中的截圖都會在 Markdown 圖片連結之上緊鄰一段 `<!-- screenshot-recipe ... -->` HTML 註解，紀錄重拍所需的全部資訊。
 
@@ -134,12 +134,12 @@ oxipng -o 6 --strip safe docs/assets/screenshots/*.png
 
 所有 in-app 截圖的配方 `url` 欄位都要以下列前綴之一開頭，否則不能用於文件：
 
-1. `http://localhost:8080/悠奈悠花姊妹大冒險/放學後/`（唯一許可的故事頁）
+1. 唯一許可的 SFW 故事章節頁（其 URL 形如 `http://localhost:8080/<series>/<story>/`，序列與故事 slug 對應儲存庫指定的 SFW 範例章節）
 2. `http://localhost:8080/tools`、`http://localhost:8080/tools/new-series`、`http://localhost:8080/tools/import-character-card`
 3. `http://localhost:8080/settings/`（含子路徑，如 `settings/template-editor`、`settings/plugins`）
 4. `http://localhost:8080/`（首頁，僅在不顯示其他故事縮圖時）
 
-畫面中側邊欄、最近開啟清單、章節下拉、列表縮圖等元素也不得出現「悠奈悠花姊妹大冒險／放學後」以外的故事或章節名稱。必要時於 `preconditions` 或 `steps` 中明文清除最近紀錄。
+畫面中側邊欄、最近開啟清單、章節下拉、列表縮圖等元素也不得出現上述許可 SFW 章節以外的故事或章節名稱。必要時於 `preconditions` 或 `steps` 中明文清除最近紀錄。
 
 ## 容器啟動程序
 
@@ -176,7 +176,7 @@ agent-browser screenshot docs/assets/screenshots/<file>.png
 
 ## 外掛延伸欄位指引
 
-外掛倉庫 `HeartReverie_Plugins` 額外定義 `status`、`surface`、`device_scale_factor`、`locale`、`plugin` 等欄位，並以 80 字上限的 alt 取代本頁的 30 字規則；外掛作者請改讀 [HeartReverie_Plugins 截圖配方指南][hrp-recipes]，本頁不再重述。
+外掛儲存庫 `HeartReverie_Plugins` 額外定義 `status`、`surface`、`device_scale_factor`、`locale`、`plugin` 等欄位，並以 80 字上限的 alt 取代本頁的 30 字規則；外掛作者請改讀 [HeartReverie_Plugins 截圖配方指南][hrp-recipes]，本頁不再重述。
 
 [hrp-recipes]: https://jim60105.github.io/HeartReverie_Plugins/#/contributing/screenshot-recipes "截圖配方（Screenshot Recipes）｜HeartReverie_Plugins"
 
