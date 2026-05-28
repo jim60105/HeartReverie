@@ -4,7 +4,51 @@ Plugin 可透過在 manifest 中宣告 `settingsSchema` 取得一組由系統提
 
 完整規格見 [`openspec/specs/plugin-settings/spec.md`](https://github.com/jim60105/HeartReverie/blob/master/openspec/specs/plugin-settings/spec.md)。
 
+進入「設定 → LLM 設定」即可在左側選單瀏覽所有已註冊 plugin 的設定頁，並在主區塊調整套用於目前故事的 LLM 連線參數。
+
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/settings/llm
+viewport: 1440x900
+theme: default
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+  - 已選取 SFW 故事「悠奈悠花姊妹大冒險 / 放學後」作為作用中的故事
+steps:
+  - wait_for: 'nav'
+  - select: ['系列', '悠奈悠花姊妹大冒險']
+  - select: ['故事', '放學後']
+capture: viewport
+output: docs/assets/screenshots/plugin-settings-list.png
+captured_at: 2026-05-28
+app_commit: 4534325
+notes: 左側為設定選單列出所有 plugin 設定入口；主區塊呈現以選取故事填入的 LLM 覆寫欄位
+-->
+![LLM 設定頁左側列出 plugin 設定入口，主區塊呈現以「放學後」故事填入的 LLM 覆寫欄位](../assets/screenshots/plugin-settings-list.png)
+
+點開單一 plugin（範例為「對話著色」）的設定頁，可依其 `settingsSchema` 渲染對應表單，欄位變動會即時寫入 `config.json`。
+
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/settings/plugins/dialogue-colorize
+viewport: 1440x900
+theme: default
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+  - dialogue-colorize plugin 已啟用
+steps:
+  - wait_for: 'main'
+capture: viewport
+output: docs/assets/screenshots/plugin-settings-detail.png
+captured_at: 2026-05-28
+app_commit: 4534325
+-->
+![對話著色 plugin 的設定欄位表單](../assets/screenshots/plugin-settings-detail.png)
+
 ## 宣告 `settingsSchema`
+
 
 `settingsSchema` 為 JSON Schema 子集（HeartReverie 自有方言；hand-rolled validator）。它必須是物件型 schema（`type: "object"`、帶 `properties`）且**必須宣告 `x-schema-version: 1`**。Plugin 載入時 PluginManager 會驗證頂層結構與 `x-*` 擴充欄位的硬性規則；不符規格者會被拒絕並記錄錯誤。
 

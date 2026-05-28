@@ -48,3 +48,5 @@
   - [CI 跨儲存庫觸發](deployment/ci-cross-repo-trigger.md)
 - 遷移指南
   - [Hook Inspector](migrations/hook-inspector.md)
+- 貢獻者文件
+  - [截圖配方](contributing/screenshot-recipes.md)

@@ -8,6 +8,25 @@
 2. **中欄 — CodeMirror 6 編輯器**：內建 Vento tokenizer 與自動完成（從 `VENTO_HELPERS` const 取得 filter 列表）。`set` / `/set` / `include` / `{{> jsExpression }}` token 會被標為紅色錯誤，並顯示「使用 `{{> include }}` 是不允許的；改用主模板具名變數、plugin promptFragments 或 `getDynamicVariables()` 注入內容」提示。
 3. **右欄 — 預覽**：對主模板與 plugin 片段以 `PromptPreview.vue` 渲染最終 messages 陣列；對 lore 條目則回退為純 Markdown 區塊。
 
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/settings/template-editor
+viewport: 1440x900
+theme: default
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+steps:
+  - wait_for: 'nav'
+capture: viewport
+output: docs/assets/screenshots/template-editor-overview.png
+captured_at: 2026-05-28
+app_commit: 4534325
+notes: 與 guides/template-editor.md 共用同一張 PNG，配方分別存在
+-->
+![Template Editor 三欄佈局與檔案樹的初始狀態](../assets/screenshots/template-editor-overview.png)
+
+
 ## Lint diagnostics
 
 每次編輯後，前端會把當前緩衝送到 `POST /api/templates/lint`，後端走 `ventoEnv.compile()` AST 路徑收集：
