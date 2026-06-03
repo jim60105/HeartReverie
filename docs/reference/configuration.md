@@ -14,19 +14,19 @@
 | 變數 | 預設值 | 說明 |
 |------|--------|------|
 | `LLM_MODEL` | `deepseek/deepseek-v4-pro` | LLM 模型 |
-| `LLM_API_URL` | `https://openrouter.ai/api/v1/chat/completions` | Chat Completions 端點 |
+| `LLM_API_URL` | `https://openrouter.ai/api/v1/chat/completions` | LLM 聊天完成端點 |
 | `LLM_TEMPERATURE` | `0.1` | 取樣溫度 |
 | `LLM_FREQUENCY_PENALTY` | `0.13` | 頻率懲罰 |
 | `LLM_PRESENCE_PENALTY` | `0.52` | 存在懲罰 |
-| `LLM_TOP_K` | `10` | Top-K |
-| `LLM_TOP_P` | `0` | Top-P |
+| `LLM_TOP_K` | `10` | Top-K 取樣 |
+| `LLM_TOP_P` | `0` | Top-P（nucleus）取樣 |
 | `LLM_REPETITION_PENALTY` | `1.2` | 重複懲罰 |
-| `LLM_MIN_P` | `0` | Min-P |
-| `LLM_TOP_A` | `1` | Top-A |
-| `LLM_MAX_COMPLETION_TOKENS` | 未設定 | 每次回應的 token 上限 |
-| `LLM_REASONING_ENABLED` | `true` | 是否在請求中附 `reasoning` 區塊 |
+| `LLM_MIN_P` | `0` | Min-P 取樣 |
+| `LLM_TOP_A` | `1` | Top-A 取樣 |
+| `LLM_MAX_COMPLETION_TOKENS` | 未設定 | 每次回應的 token 上限；留空表示不設應用層上限 |
+| `LLM_REASONING_ENABLED` | `true` | 是否在請求中附帶 `reasoning` 區塊 |
 | `LLM_REASONING_EFFORT` | `xhigh` | `reasoning.effort` 等級 |
-| `LLM_REASONING_OMIT` | `false` | `true` 時完全省略 `reasoning` 區塊 |
+| `LLM_REASONING_OMIT` | `false` | 設為 `true` 時完全省略 `reasoning` 區塊 |
 
 ## 伺服器
 
@@ -37,9 +37,88 @@
 | `PLAYGROUND_DIR` | `./playground` | 故事資料根目錄 |
 | `READER_DIR` | `./reader-dist` | 前端靜態檔案根目錄 |
 | `THEME_DIR` | `./themes/` | 主題檔案目錄 |
-| `LOG_LEVEL` | `info` | 日誌等級：debug／info／warn／error |
-| `LOG_FILE` | `playground/_logs/audit.jsonl` | 稽核日誌路徑（空字串停用） |
-| `LLM_LOG_FILE` | `playground/_logs/llm.jsonl` | LLM 互動日誌路徑 |
-| `PROMPT_FILE` | `playground/_prompts/system.md` | 自訂提示詞模板路徑 |
+| `LOG_LEVEL` | `info` | 日誌等級：debug、info、warn、error |
+| `LOG_FILE` | `playground/_logs/audit.jsonl` | 稽核日誌 JSON Lines 檔案路徑（空字串停用檔案日誌） |
+| `LLM_LOG_FILE` | `playground/_logs/llm.jsonl` | LLM 互動日誌檔案路徑 |
+| `PROMPT_FILE` | `playground/_prompts/system.md` | 自訂提示詞模板檔案路徑 |
+
+## 主題系統
+
+HeartReverie 支援透過 TOML 檔案自訂主題。主題檔案放在 `THEME_DIR` 指定的目錄下（預設 `./themes/`），內建三套主題分別是浮心夜夢（default）、晴書紙本（light）、月硯墨靜（dark）。
+
+下列三張截圖以同一場景（SFW 故事第 1 章開頭）展示三種內建主題的視覺差異，可在「設定 → 主題」即時切換。
+
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/悠奈悠花姊妹大冒險/放學後/
+viewport: 1440x900
+theme: default
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+  - 章節 1 已建立
+steps:
+  - set_theme: default
+  - wait_for: 'main'
+capture: viewport
+output: docs/assets/screenshots/theme-default.png
+captured_at: 2026-05-28
+app_commit: 4534325
+-->
+![浮心夜夢主題的章節閱讀視覺](../assets/screenshots/theme-default.png)
+
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/悠奈悠花姊妹大冒險/放學後/
+viewport: 1440x900
+theme: light
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+  - 章節 1 已建立
+steps:
+  - set_theme: light
+  - wait_for: 'main'
+capture: viewport
+output: docs/assets/screenshots/theme-light.png
+captured_at: 2026-05-28
+app_commit: 4534325
+-->
+![晴書紙本主題的章節閱讀視覺](../assets/screenshots/theme-light.png)
+
+<!-- screenshot-recipe
+schema: v1
+url: http://localhost:8080/悠奈悠花姊妹大冒險/放學後/
+viewport: 1440x900
+theme: dark
+preconditions:
+  - 容器已啟動於 localhost:8080
+  - 已通過 PASSPHRASE 登入
+  - 章節 1 已建立
+steps:
+  - set_theme: dark
+  - wait_for: 'main'
+capture: viewport
+output: docs/assets/screenshots/theme-dark.png
+captured_at: 2026-05-28
+app_commit: 4534325
+-->
+![月硯墨靜主題的章節閱讀視覺](../assets/screenshots/theme-dark.png)
+
+新增主題時，建立一個 `.toml` 檔案，格式如下：
+
+```toml
+id = "my-theme"          # 必須與檔名相同（去除 .toml）
+label = "我的主題"        # 下拉選單顯示名稱
+colorScheme = "dark"     # "light" 或 "dark"
+backgroundImage = ""     # 同源路徑或 data: URL，空字串表示無背景圖
+
+[palette]
+panel-bg = "#1a1e24"
+text-main = "rgba(220, 220, 215, 1)"
+ # ... 完整屬性請參考 themes/default.toml
+```
+
+重啟服務後新主題即可在「設定 → 主題」中選用。
 
 [project]: https://github.com/jim60105/HeartReverie

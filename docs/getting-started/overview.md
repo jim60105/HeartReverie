@@ -17,10 +17,8 @@ HeartReverie 採取 RPG 隨興式冒險敘事取向設計。
 ## 接下來該讀什麼
 
 - 第一次部署請從[快速部署][first-deploy]開始，七步完成「從零開始至寫下第一章」。
-- 已經運行起來、想調整環境變數或主題的讀者請看[設定][configuration]。
-- 想查閱完整設定檔環境變數字典的讀者請參閱[設定字典][reference-config]。
+- 已經運行起來、想調整環境變數或主題的讀者，請看[設定字典][reference-config]查閱完整環境變數說明。
 
 [project]: https://github.com/jim60105/HeartReverie
 [first-deploy]: first-deploy.md
-[configuration]: configuration.md
 [reference-config]: ../reference/configuration.md
