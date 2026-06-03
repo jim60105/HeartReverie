@@ -1,16 +1,16 @@
 # 快速部署
 
-本頁帶讀者用七個步驟，從零跑起 [HeartReverie 浮心夜夢][project] 並寫下第一章。流程涵蓋拉取鏡像、設定密語、登入、建立系列、撰寫章節、觸發 AI 生成、可選載入外掛。
+本頁帶讀者用七個步驟，從零跑起 [HeartReverie 浮心夜夢][project] 至寫下第一章。流程從拉取鏡像、設定密語、登入、建立系列，一直到撰寫章節、觸發 AI 生成、可選載入外掛等等。
 
 ## 前置條件
 
 - 已安裝 Podman 或 Docker；本頁範例以 Podman 撰寫。
 - 8080 連接埠未被占用，或自行調整 `-p` 對應埠。
-- 一組 OpenAI 相容 LLM API 金鑰（可透過 [OpenRouter][openrouter] 或自架）。
+- 一組 OpenAI 相容 LLM API 金鑰，本專案推薦使用 [OpenRouter][openrouter]。
 
 ## 流程
 
-1. **取得容器鏡像**：從 GitHub Container Registry 拉取最新版預建鏡像。
+1. **取得容器鏡像**：從 GitHub Container Registry 拉取最新版預建置鏡像。
 
     ```bash
     podman pull ghcr.io/jim60105/heartreverie:latest
