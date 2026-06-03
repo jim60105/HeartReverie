@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-03
+
+### Added
+
+- **Plugin display names**: Plugin manifests now carry a required `displayName`, and the reader surfaces the localized (zh-TW) name in the settings sidebar, plugin-settings heading, save-success toast, and template file-tree group headers. All eight built-in plugins ship localized labels (上下文壓縮, 對話著色, 文字潤飾, 閱讀進度, 回應通知, 開場提示, 思考鏈, 使用者訊息).
+- **Documentation site**: A full Docsify-powered documentation site now lives under `docs/`, organized by reader persona (getting-started, self-host, author, plugin-dev, reference, contributing), with a cover page, quick-start tutorial, an embedded screenshot gallery (Reader, Writer, Tools, Template Editor, plugin settings, themes), and a screenshot-recipe authoring guide. It publishes automatically to GitHub Pages on every push to `master`.
+
+### Changed
+
+- **Localized plugin terminology**: Built-in plugin labels, descriptions, and settings copy were rewritten for consistent Traditional Chinese terminology across the UI.
+- **Streamlined README**: The README was trimmed to a concise quickstart that links out to the new documentation site instead of duplicating the full environment-variable table, theme details, and plugin catalog inline.
+- **Reading-area sidebar scrolling**: The desktop sidebar no longer imposes a viewport-height cap or its own scroll region; it scrolls naturally with the page, and plugin-owned panels manage their own scrolling.
+
+### Fixed
+
+- **Template Editor plugin fragments**: Plugin prompt fragments referenced with the documented `./snippet.md` convention are no longer rejected, so all plugin fragments are viewable in the Template Editor again. Path validation was also tightened so legitimate names like `foo..bar.md` are accepted while traversal attempts remain blocked.
+
+### BREAKING CHANGES
+
+- **`displayName` is now a required plugin manifest field**: Plugins whose `plugin.json` omits `displayName` (or provides a non-string / empty / whitespace-only value) will fail to load. **Migration**: add a `displayName` string to each plugin manifest; the slug (`name`) continues to drive routing, API URLs, and storage keys.
+
 ## [0.8.0] - 2026-05-24
 
 ### Added
@@ -252,7 +273,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/jim60105/HeartReverie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jim60105/HeartReverie/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jim60105/HeartReverie/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jim60105/HeartReverie/compare/v0.5.0...v0.6.0
