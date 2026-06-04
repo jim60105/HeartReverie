@@ -159,7 +159,7 @@ export async function runUnderLock(
   if (validatedMode === "append-to-existing-chapter") {
     writeMode = {
       kind: "append-to-existing-chapter",
-      appendTag: validatedAppendTag!,
+      appendTag: validatedAppendTag,
       pluginName,
     };
   } else if (validatedMode === "replace-last-chapter") {

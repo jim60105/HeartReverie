@@ -194,6 +194,15 @@ export async function validateAndResolveStoryDir(
  * modes the returned `appendTag` is `null`, matching prior behavior — note
  * that `appendTag` is intentionally ignored in `discard` mode to preserve
  * existing semantics.
+ *
+ * In append mode `appendTag` is OPTIONAL: a totally-omitted (`undefined`)
+ * `appendTag` resolves to `null` (a tagless append — the model output is
+ * persisted verbatim with no wrapper element). A string matching
+ * `APPEND_TAG_RE` resolves to that tag. Any other value — including an
+ * explicit `null`, a non-string value, or a string failing the regex
+ * (such as `""`) — is rejected with `plugin-action:invalid-append-tag`.
+ * Only total omission opts into tagless append; this is symmetric with
+ * `replace` mode, which rejects any non-`undefined` `appendTag`.
  */
 export function validateModeCombo(
   mode: unknown,
@@ -246,6 +255,14 @@ export function validateModeCombo(
     };
   }
   if (mode === "append-to-existing-chapter") {
+    // Tagless append: ONLY a totally-omitted (`undefined`) `appendTag` opts
+    // into the no-wrapper append path. An explicit `null`, a non-string
+    // value, or a string failing `APPEND_TAG_RE` (including the empty
+    // string) is still rejected. This keeps the contract symmetric with
+    // `replace` mode, which rejects any non-`undefined` `appendTag`.
+    if (appendTag === undefined) {
+      return { ok: true, mode, appendTag: null };
+    }
     if (typeof appendTag !== "string" || !APPEND_TAG_RE.test(appendTag)) {
       return {
         ok: false,

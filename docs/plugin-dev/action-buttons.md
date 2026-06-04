@@ -96,7 +96,7 @@ Context 物件：
 | `notify` | `function` | 通知 helper（同 `notification` hook 中之 `notify`） |
 | `reload` | `function` | 觸發章節重新載入的便捷函式（內部呼叫 `useChapterNav.reloadToLast()`） |
 
-> **注意**：v1 **不**提供 `appendToLastChapter` helper。需要把 LLM 回應寫入章節時，請於呼叫 `runPluginPrompt` 時帶 `{ append: true, appendTag: "..." }` 或 `{ replace: true }`，由後端統一在伺服器端執行 atomic append／replace、章節重讀、`post-response` 派發等流程。
+> **注意**：v1 **不**提供 `appendToLastChapter` helper。需要把 LLM 回應寫入章節時，請於呼叫 `runPluginPrompt` 時帶 `{ append: true, appendTag: "..." }`、`{ append: true }`（無標籤附加，append 內容逐字寫入、不加任何 wrapper）或 `{ replace: true }`，由後端統一在伺服器端執行 atomic append／replace、章節重讀、`post-response` 派發等流程。
 
 任一 handler 拋出或 reject 時，dispatcher 會在 handler 自身**沒有**主動 `notify` 的情況下發出預設錯誤 toast，仍會 resolve 整體 dispatch（不留下 unhandled rejection）。
 
@@ -110,16 +110,16 @@ runPluginPrompt(
   promptFile: string,             // 相對於 plugin 目錄，必須是 .md 檔
   opts?: {
     append?: boolean;             // 預設 false
-    appendTag?: string;           // append=true 時必填，須符合 ^[a-zA-Z][a-zA-Z0-9_-]{0,30}$
+    appendTag?: string;           // append=true 時「選填」：提供時須符合 ^[a-zA-Z][a-zA-Z0-9_-]{0,30}$；完全省略則為無標籤附加（逐字寫入、不加 wrapper）；顯式傳 null 會被拒絕
     replace?: boolean;            // 預設 false；與 append 互斥
     extraVariables?: Record<string, string | number | boolean>; // 僅允許純量
   }
 ): Promise<{
-  content: string;                // append=true 時為 trim 後的「歸一化回應」；replace=true 時為寫入後的完整內容；其餘為原始 LLM 回應
+  content: string;                // append=true 時為寫入後的完整章節內容；replace=true 時為寫入後的完整內容；其餘為原始 LLM 回應
   usage: TokenUsageRecord | null; // 上游回傳的 token 用量（若有）
   chapterUpdated: boolean;        // append=true 並成功寫入時為 true
   chapterReplaced: boolean;       // replace=true 並成功覆寫時為 true
-  appendedTag: string | null;     // 實際附加的 tag（append=true 時等於 appendTag，否則為 null）
+  appendedTag: string | null;     // 有標籤附加時等於 appendTag；無標籤附加（tagless）時為 null；其餘模式為 null
 }>
 ```
 
@@ -129,7 +129,8 @@ runPluginPrompt(
 - 當 `isLoading.value === true`（一般 send 或另一個 plugin action 正在進行）時，呼叫會以 reject 回應，避免重疊。
 - 當 WebSocket 已連線時走 WS 路徑並把進度餵入 `streamingContent`；HTTP fallback 一次性回傳最終 JSON，不提供逐字串流。
 - 後端會以同一 Vento engine、同一 dynamic-variable 管線渲染 `promptFile`；`extraVariables` 必須為純量且不得撞到保留變數名（`previousContext`、任何 `lore_*`、`status_data`、`draft` 等）。`user_input` 在 plugin action 預設為空字串，但範本本身**仍須**至少 emit 一個 `{{ message "user" }}…{{ /message }}` 區塊，否則回 422 `multi-message:no-user-message`。
-- `replace` 與 `append` 互斥：同時設定 `replace: true` 與 `append: true` 會被拒絕（HTTP 400）。`replace: true` 加上 `appendTag` 也會被拒絕。
+- `replace` 與 `append` 互斥：同時設定 `replace: true` 與 `append: true` 會被拒絕（HTTP 400）。`replace: true` 加上 `appendTag`（含顯式 `null`）也會被拒絕。
+- `appendTag` 在 append 模式為**選填**：只有**完全省略**該欄位才會進入「無標籤附加」（tagless append）。提供格式錯誤的標籤（不符 `^[a-zA-Z][a-zA-Z0-9_-]{0,30}$`、空字串）或顯式傳 `null` 仍會以 HTTP 400 `plugin-action:invalid-append-tag` 拒絕。此設計與 `replace` 模式對稱：兩種模式都只能以「省略欄位」表示不使用標籤。
 
 ### WebSocket 信封流程
 
@@ -148,14 +149,21 @@ HTTP fallback（`POST /api/plugins/:pluginName/run-prompt`）僅回傳最終 JSO
 
 ## Append 行為與 `post-response` 派發
 
-當 `append: true` 時：
+當 `append: true` 且**提供** `appendTag`（有標籤附加）時：
 
 1. 後端串完 LLM 回應後，把累積內容做一次「外層 wrapper 歸一化」，若 trim 後內容剛好被一層 `<{appendTag}>…</{appendTag}>` 包住，就剝掉這唯一的最外層；最多剝一層，避免破壞合法的同名巢狀結構。
 2. 以 atomic 方式把 `\n<{appendTag}>\n{歸一化內容}\n</{appendTag}>\n` 接到故事中編號最大的章節檔尾端。
-3. 重新讀取整份章節檔，並以 deep-frozen `PostResponsePayload`：`{ correlationId, content: <append 後完整章節內容>, chapterPath, chapterNumber, storyDir, series, name, rootDir, source: "plugin-action", pluginName, appendedTag, endpoint, usage }` 派發 `post-response`。
+3. 重新讀取整份章節檔，並以 deep-frozen `PostResponsePayload`：`{ correlationId, content: <append 後完整章節內容>, chapterPath, chapterNumber, storyDir, series, name, rootDir, source: "plugin-action", pluginName, appendedTag, endpoint, usage }` 派發 `post-response`（`appendedTag` 等於提供的標籤字串）。
 4. `pre-write` 與 `response-stream` 在 `append-to-existing-chapter` 模式**不會**派發；中止（abort）發生時，append 步驟與 `post-response` 都會被略過。
 
-換句話說，正常聊天回合與 plugin action append 對 `post-response` 看到的 `content` 同樣是「append 後的完整章節內容」，下游 replay／diff 邏輯不需要區分來源。
+當 `append: true` 且**省略** `appendTag`（無標籤附加，tagless append）時：
+
+1. 後端串完 LLM 回應後，**只做 `trim()`**，**不做任何 wrapper 歸一化／剝除**，因此 LLM 自己輸出的標籤（例如多個 `<image>` 區塊）會原封不動保留。
+2. 以 atomic 方式把 `\n{trim 後內容}\n` 接到故事中編號最大的章節檔尾端——**不**加任何 wrapper 元素。
+3. 重新讀取整份章節檔並派發 `post-response`，其中 `appendedTag` 為 `null`。
+4. 同樣不派發 `pre-write` 與 `response-stream`；中止時略過 append 與 `post-response`。
+
+換句話說，正常聊天回合與 plugin action append 對 `post-response` 看到的 `content` 同樣是「append 後的完整章節內容」，下游 replay／diff 邏輯不需要區分來源；唯一差別是無標籤附加不會多包一層 wrapper，`appendedTag` 以 `null` 標示這是「無標籤附加」（與「非 append」的欄位省略區隔）。
 
 ## Replace 行為（`replace-last-chapter` WriteMode）
 

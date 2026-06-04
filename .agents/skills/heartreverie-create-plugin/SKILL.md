@@ -317,7 +317,7 @@ Ask the user whether the plugin should expose an action button. If **no**, skip 
 - **Label** (1..40 chars, often emoji + zh-TW text) — e.g. `🧮 重算狀態`
 - **`visibleWhen`** — `"last-chapter-backend"` (default; only on the last chapter while in backend mode) or `"backend-only"` (any backend-mode position where the action bar is mounted). NOTE: the action bar itself is only mounted when chat input would render — i.e. `isBackendMode && (isLastChapter || chapters.length === 0)`. So `"backend-only"` does NOT make a button appear on historical chapters; it only bypasses the per-button last-chapter filter inside that already-mounted bar.
 - **Prompt file name** (optional, but typical) — e.g. `recompute.md`. Required when the handler will call `runPluginPrompt`.
-- **`appendTag`** (optional) — XML tag name used when appending the response to the chapter (matching `^[a-zA-Z][a-zA-Z0-9_-]{0,30}$`). Required when the handler passes `{ append: true, ... }` to `runPluginPrompt`.
+- **`appendTag`** (optional) — XML tag name used when wrapping the appended response (matching `^[a-zA-Z][a-zA-Z0-9_-]{0,30}$`). OPTIONAL even with `{ append: true }`: omit it entirely for a **tagless append** (the response is appended verbatim with no wrapper element — useful when the prompt already emits its own tag structure, e.g. multiple `<image>` blocks). An explicit `null`, empty string, or malformed tag is rejected.
 
 Then emit the following stubs:
 
@@ -395,7 +395,8 @@ Action-button click context (`ctx`):
 
 `runPluginPrompt` write modes:
 
-- `{ append: true, appendTag }` — atomic append into the highest-numbered chapter, wrapped as `<appendTag>…</appendTag>`. Result `chapterUpdated: true`, `appendedTag` echoes the tag.
+- `{ append: true, appendTag }` — atomic append into the highest-numbered chapter, wrapped as `<appendTag>…</appendTag>` (strips at most one outer matching wrapper first). Result `chapterUpdated: true`, `appendedTag` echoes the tag.
+- `{ append: true }` (no `appendTag`) — **tagless append**: the response is `trim()`-ed and appended **verbatim with no wrapper element** (no wrapper-stripping pass), so any tags the model emitted survive exactly. Result `chapterUpdated: true`, `appendedTag: null`. Use this when the prompt owns its own tag structure (e.g. emits multiple `<image>` blocks). Passing an explicit `appendTag: null`, an empty string, or a malformed tag is rejected with `plugin-action:invalid-append-tag`.
 - `{ replace: true }` — atomic overwrite of the highest-numbered chapter (byte-for-byte rollback on abort/error). Result `chapterReplaced: true`. The chapter's pre-write content is exposed to the prompt as the reserved Vento variable `{{ draft }}`. `replace` is mutually exclusive with `append` and rejects when `appendTag` is also set.
 - Neither flag — runs the LLM and returns the raw content; the chapter file is untouched.
 

@@ -81,6 +81,34 @@ describe("useChatApi.runPluginPrompt", () => {
       expect((sent.correlationId as string).length).toBeGreaterThan(0);
     });
 
+    it("omits appendTag on the WS envelope when append:true with no appendTag", async () => {
+      mockWsOnMessageFn.mockImplementation(() => vi.fn());
+      const api = await getApi();
+      void api.runPluginPrompt("sd-webui-image-gen", "image-design.md", {
+        series: "S",
+        name: "T",
+        append: true,
+      }).catch(() => {});
+
+      expect(mockWsSendFn).toHaveBeenCalledTimes(1);
+      const sent = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      expect(sent.type).toBe("plugin-action:run");
+      expect(sent.append).toBe(true);
+      expect(sent).not.toHaveProperty("appendTag");
+    });
+
+    it("includes appendTag on the WS envelope when explicitly provided", async () => {
+      mockWsOnMessageFn.mockImplementation(() => vi.fn());
+      const api = await getApi();
+      void api.runPluginPrompt("state", "x.md", {
+        append: true,
+        appendTag: "X",
+      }).catch(() => {});
+
+      const sent = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      expect(sent.appendTag).toBe("X");
+    });
+
     it("streams plugin-action:delta into streamingContent and resolves on :done", async () => {
       const handlers: Record<string, (msg: unknown) => void> = {};
       mockWsOnMessageFn.mockImplementation(
@@ -274,6 +302,38 @@ describe("useChatApi.runPluginPrompt", () => {
       const body = JSON.parse(init.body as string);
       expect(body.append).toBe(true);
       expect(body.appendTag).toBe("UpdateVariable");
+    });
+
+    it("omits appendTag in the HTTP body when append:true with no appendTag", async () => {
+      const final = {
+        content: "ok",
+        usage: null,
+        chapterUpdated: true,
+        chapterReplaced: false,
+        appendedTag: null,
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(final),
+            headers: new Headers(),
+          })
+        ),
+      );
+      const api = await getApi();
+      await api.runPluginPrompt("sd-webui-image-gen", "image-design.md", {
+        series: "S",
+        name: "T",
+        append: true,
+      });
+      const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+      const init = fetchMock.mock.calls[0]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      expect(body.append).toBe(true);
+      expect(body).not.toHaveProperty("appendTag");
     });
 
     it("rejects on non-OK response with detail surfaced into errorMessage", async () => {

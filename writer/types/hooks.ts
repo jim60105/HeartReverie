@@ -108,8 +108,20 @@ export interface PostResponsePayload {
   readonly source: "chat" | "continue" | "plugin-action";
   /** Set when `source === "plugin-action"`. */
   readonly pluginName?: string;
-  /** Set when `source === "plugin-action"` and the run appended a wrapped block. */
-  readonly appendedTag?: string;
+  /**
+   * The wrapper tag applied by a plugin-action append:
+   * - a non-empty string for a tagged append (`append: true` + `appendTag`);
+   * - `null` for a tagless append (`append: true`, no `appendTag` — the model
+   *   output was appended verbatim with no wrapper element).
+   *
+   * Omitted (absent) for `source === "chat"`, `source === "continue"`,
+   * `replace`-mode plugin-action runs, and `discard`-mode runs. A `null`
+   * value therefore unambiguously indicates a tagless plugin-action append,
+   * distinct from "not an append" (omitted). Consumers MUST treat this as a
+   * possibly-absent, possibly-`null` value and MUST NOT perform
+   * unconditional string operations on it.
+   */
+  readonly appendedTag?: string | null;
   /**
    * Resolved upstream LLM API URL used for this request (the same URL
    * the engine `fetch()`-ed — sourced from `config.LLM_API_URL`). Plugins

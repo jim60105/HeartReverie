@@ -153,7 +153,7 @@ async function finalizeWriteNewChapter(args: FinalizeArgs): Promise<string> {
 
 async function finalizeAppendToExisting(
   args: FinalizeArgs & {
-    readonly appendTag: string;
+    readonly appendTag: string | null;
     readonly pluginName: string;
   },
 ): Promise<string> {
@@ -172,8 +172,16 @@ async function finalizeAppendToExisting(
   } = args;
   const { storyDir, rootDir, series, name, correlationId } = storyCtx;
 
-  const normalised = normaliseAppendContent(aiContent, appendTag);
-  const wrapped = `\n<${appendTag}>\n${normalised}\n</${appendTag}>\n`;
+  // Tagless append (`appendTag === null`): trim and append the model output
+  // verbatim with NO wrapper element and NO wrapper-stripping pass, so any
+  // XML tags the model emitted (e.g. multiple `<image>` blocks) survive
+  // exactly. Tagged append keeps the existing single-outer-strip + re-wrap.
+  const normalised = appendTag === null
+    ? aiContent.trim()
+    : normaliseAppendContent(aiContent, appendTag);
+  const wrapped = appendTag === null
+    ? `\n${normalised}\n`
+    : `\n<${appendTag}>\n${normalised}\n</${appendTag}>\n`;
   const existingChapter = await Deno.readTextFile(chapterPath);
   const newChapterContent = existingChapter + wrapped;
   const padded = String(targetNum).padStart(3, "0");

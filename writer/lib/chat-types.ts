@@ -116,11 +116,15 @@ export class ChatError extends Error {
  *   dispatch `pre-write`, write each delta after `response-stream` hook
  *   transformation, and dispatch `post-response` with `source: "chat"`.
  * - `append-to-existing-chapter`: plugin-action append mode — accumulate the
- *   stream in memory, on success normalise wrapper layers and atomically
- *   append `\n<{appendTag}>\n…\n</{appendTag}>\n` to the highest-numbered
- *   chapter file, then re-read that file and dispatch `post-response` with
- *   `source: "plugin-action"`. `pre-write` and `response-stream` are NOT
- *   dispatched.
+ *   stream in memory, on success persist it to the highest-numbered chapter
+ *   file, then re-read that file and dispatch `post-response` with
+ *   `source: "plugin-action"`. When `appendTag` is a string the engine
+ *   normalises wrapper layers and atomically appends
+ *   `\n<{appendTag}>\n…\n</{appendTag}>\n`. When `appendTag` is `null`
+ *   (tagless append) the engine trims the accumulated content WITHOUT any
+ *   wrapper-stripping pass and atomically appends `\n{trimmed content}\n`
+ *   with NO synthetic wrapper element. `pre-write` and `response-stream`
+ *   are NOT dispatched in either case.
  * - `discard`: plugin-action discard mode — accumulate the stream in memory
  *   and return it; no chapter mutation, no hook dispatches.
  * - `continue-last-chapter`: continue mode — append streaming bytes to an
@@ -152,7 +156,13 @@ export type WriteMode =
   }
   | {
     readonly kind: "append-to-existing-chapter";
-    readonly appendTag: string;
+    /**
+     * Wrapper tag to wrap the appended content in, or `null` for a tagless
+     * append. When `null` the model output is trimmed and appended verbatim
+     * (no `<{tag}>…</{tag}>` wrapper element, no wrapper-stripping pass), so
+     * any XML tags the model emitted are preserved exactly as produced.
+     */
+    readonly appendTag: string | null;
     readonly pluginName: string;
   }
   | { readonly kind: "discard" }

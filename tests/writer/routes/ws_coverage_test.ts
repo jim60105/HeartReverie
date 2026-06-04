@@ -296,6 +296,56 @@ Deno.test({
       );
 
       await t.step(
+        "plugin-action:run append with explicit null appendTag emits invalid-append-tag error",
+        async () => {
+          const ws = await openWs(addr);
+          await authenticate(ws);
+          ws.send(JSON.stringify({
+            type: "plugin-action:run",
+            correlationId: "c-null-tag",
+            pluginName: "tester",
+            series: "s1",
+            name: "n1",
+            promptFile: "prompts/summary.md",
+            append: true,
+            appendTag: null,
+          }));
+          const msg = await readUntilType(ws, "plugin-action:error", 5, 3000);
+          assertEquals(msg.correlationId, "c-null-tag");
+          const problem = msg.problem as { type: string; status: number };
+          assertEquals(problem.type, "plugin-action:invalid-append-tag");
+          assertEquals(problem.status, 400);
+          ws.close();
+          await waitForClose(ws);
+        },
+      );
+
+      await t.step(
+        "plugin-action:run replace with explicit null appendTag emits invalid-replace-combo error",
+        async () => {
+          const ws = await openWs(addr);
+          await authenticate(ws);
+          ws.send(JSON.stringify({
+            type: "plugin-action:run",
+            correlationId: "c-null-replace",
+            pluginName: "tester",
+            series: "s1",
+            name: "n1",
+            promptFile: "prompts/summary.md",
+            replace: true,
+            appendTag: null,
+          }));
+          const msg = await readUntilType(ws, "plugin-action:error", 5, 3000);
+          assertEquals(msg.correlationId, "c-null-replace");
+          const problem = msg.problem as { type: string; status: number };
+          assertEquals(problem.type, "plugin-action:invalid-replace-combo");
+          assertEquals(problem.status, 400);
+          ws.close();
+          await waitForClose(ws);
+        },
+      );
+
+      await t.step(
         "plugin-action:run discard mode streams deltas and emits plugin-action:done",
         async () => {
           const ws = await openWs(addr);
@@ -323,6 +373,42 @@ Deno.test({
             assertEquals(done.correlationId, "c-ok");
             assertEquals(done.chapterUpdated, false);
             assertEquals(done.appendedTag, null);
+          } finally {
+            globalThis.fetch = originalFetch;
+            ws.close();
+            await waitForClose(ws);
+          }
+        },
+      );
+
+      await t.step(
+        "plugin-action:run append with no appendTag performs tagless append; done has appendedTag:null",
+        async () => {
+          await Deno.writeTextFile(join(storyDir, "001.md"), "WSBASE\n");
+          const ws = await openWs(addr);
+          await authenticate(ws);
+          try {
+            mockLLMSuccess("<image>x</image>\n\nprose\n\n<image>y</image>");
+            ws.send(JSON.stringify({
+              type: "plugin-action:run",
+              correlationId: "c-tagless",
+              pluginName: "tester",
+              series: "s1",
+              name: "n1",
+              promptFile: "prompts/summary.md",
+              append: true,
+              // No appendTag → tagless append.
+            }));
+            const done = await readUntilType(ws, "plugin-action:done", 5, 3000);
+            assertEquals(done.correlationId, "c-tagless");
+            assertEquals(done.chapterUpdated, true);
+            assertEquals(done.appendedTag, null);
+            const chapter = await Deno.readTextFile(join(storyDir, "001.md"));
+            // Verbatim append: no wrapper element, both <image> blocks intact.
+            assertEquals(
+              chapter,
+              "WSBASE\n\n<image>x</image>\n\nprose\n\n<image>y</image>\n",
+            );
           } finally {
             globalThis.fetch = originalFetch;
             ws.close();

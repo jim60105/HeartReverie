@@ -529,7 +529,12 @@ async function runPluginPrompt(
           "外掛操作失敗";
         errorMessage.value = detail;
         isLoading.value = false;
-        reject(new Error(detail));
+        // Attach the RFC 9457 `type` slug as `error.code` so consumers
+        // (incl. cross-repo plugin handlers) can branch on the stable slug
+        // instead of brittle human-readable detail text.
+        const err = new Error(detail) as Error & { code?: string };
+        if (msg.problem?.type) err.code = msg.problem.type;
+        reject(err);
       });
       const unsubAborted = onMessage("plugin-action:aborted", (msg) => {
         if (msg.correlationId !== correlationId) return;
@@ -614,14 +619,25 @@ async function runPluginPrompt(
 
     if (!res.ok) {
       let detail = `HTTP ${res.status}`;
+      let problemType: string | undefined;
       try {
-        const problem = await res.json() as { detail?: string; title?: string };
+        const problem = await res.json() as {
+          detail?: string;
+          title?: string;
+          type?: string;
+        };
         detail = problem?.detail ?? problem?.title ?? detail;
+        problemType = problem?.type;
       } catch {
         // Body not JSON; keep status string.
       }
       errorMessage.value = detail;
-      throw new Error(detail);
+      // Attach the RFC 9457 `type` slug as `error.code` so consumers (incl.
+      // cross-repo plugin handlers) can branch on the stable slug instead of
+      // brittle human-readable detail text.
+      const err = new Error(detail) as Error & { code?: string };
+      if (problemType) err.code = problemType;
+      throw err;
     }
 
     const result = await res.json() as RunPluginPromptResult;

@@ -381,7 +381,34 @@ Deno.test({
       }
     });
 
-    await t.step("missing appendTag in append mode returns 400", async () => {
+    await t.step("omitted appendTag in append mode is accepted as tagless append", async () => {
+      const { app, tmpDir, cleanup } = await makeScenario({ chapterContent: "BASE\n" });
+      try {
+        mockLLMFetch("<image>a</image>\n\nprose\n\n<image>b</image>");
+        const res = await callRoute(app, "tester", {
+          series: "s1",
+          name: "n1",
+          promptFile: "prompts/summary.md",
+          append: true,
+        });
+        assertEquals(res.status, 200);
+        const body = res.body as { chapterUpdated: boolean; appendedTag: string | null };
+        assertEquals(body.chapterUpdated, true);
+        assertEquals(body.appendedTag, null);
+        const chapter = await Deno.readTextFile(join(tmpDir, "play", "s1", "n1", "001.md"));
+        // Verbatim append: no wrapper element added, both <image> blocks intact.
+        assertEquals(
+          chapter,
+          "BASE\n\n<image>a</image>\n\nprose\n\n<image>b</image>\n",
+        );
+        assertTrue(!chapter.includes("<null>"), "no synthetic wrapper element");
+      } finally {
+        globalThis.fetch = originalFetch;
+        await cleanup();
+      }
+    });
+
+    await t.step("explicit null appendTag in append mode returns 400", async () => {
       const { app, cleanup } = await makeScenario();
       try {
         const res = await callRoute(app, "tester", {
@@ -389,6 +416,7 @@ Deno.test({
           name: "n1",
           promptFile: "prompts/summary.md",
           append: true,
+          appendTag: null,
         });
         assertEquals(res.status, 400);
         const body = res.body as { type: string };
@@ -397,6 +425,45 @@ Deno.test({
         await cleanup();
       }
     });
+
+    await t.step("empty-string appendTag in append mode returns 400", async () => {
+      const { app, cleanup } = await makeScenario();
+      try {
+        const res = await callRoute(app, "tester", {
+          series: "s1",
+          name: "n1",
+          promptFile: "prompts/summary.md",
+          append: true,
+          appendTag: "",
+        });
+        assertEquals(res.status, 400);
+        const body = res.body as { type: string };
+        assertEquals(body.type, "plugin-action:invalid-append-tag");
+      } finally {
+        await cleanup();
+      }
+    });
+
+    await t.step(
+      "replace with explicit null appendTag returns 400 invalid-replace-combo",
+      async () => {
+        const { app, cleanup } = await makeScenario({ chapterContent: "BASE\n" });
+        try {
+          const res = await callRoute(app, "tester", {
+            series: "s1",
+            name: "n1",
+            promptFile: "prompts/summary.md",
+            replace: true,
+            appendTag: null,
+          });
+          assertEquals(res.status, 400);
+          const body = res.body as { type: string };
+          assertEquals(body.type, "plugin-action:invalid-replace-combo");
+        } finally {
+          await cleanup();
+        }
+      },
+    );
 
     await t.step("invalid appendTag pattern returns 400", async () => {
       const { app, cleanup } = await makeScenario();

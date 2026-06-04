@@ -42,9 +42,9 @@ In addition to `register`, a backend module MAY export:
 | `pre-llm-fetch` | Once per upstream LLM request, immediately before `fetch(config.LLM_API_URL, …)`. Observation-only — `messages` and `requestMetadata` are deep-frozen via `structuredClone` + `Object.freeze` | `PreLlmFetchPayload` (see `writer/types.ts`): `{ correlationId, messages, model, requestMetadata, storyDir, series, name, writeMode }`. Parallel-eligible when registered with `readOnly: true` |
 | `response-stream` | For each delta chunk during chat / continue-last-chapter writes (NOT plugin-action append/replace) | `{ correlationId, chunk, series, name, storyDir, chapterPath, chapterNumber }` — **mutate `context.chunk`** to transform/redact the streamed text before it is written |
 | `pre-write` | Before opening/truncating a NEW chapter file (chat `write-new-chapter` only) — runs BEFORE any LLM streaming, so the LLM response is NOT yet available | `{ correlationId, message, chapterPath, storyDir, series, name, preContent }` — set `context.preContent` to a string that will be written to the chapter BEFORE the streamed deltas |
-| `post-response` | After the LLM response is complete and written. **The dispatched payload is a deep-frozen, `readonly` `PostResponsePayload`** (`writer/types.ts`) | `{ correlationId, content, storyDir, series, name, rootDir, chapterNumber, chapterPath, source, pluginName?, appendedTag?, endpoint, usage }` — `source` is `"chat" \| "continue" \| "plugin-action"`. `pluginName` is set for `"plugin-action"`; `appendedTag` is set ONLY for append (not replace). `endpoint` is the resolved upstream LLM URL. `usage: TokenUsageRecord \| null` carries token counts and optional `upstreamCostUsd` (see [TokenUsageRecord](#tokenusagerecord)) |
+| `post-response` | After the LLM response is complete and written. **The dispatched payload is a deep-frozen, `readonly` `PostResponsePayload`** (`writer/types.ts`) | `{ correlationId, content, storyDir, series, name, rootDir, chapterNumber, chapterPath, source, pluginName?, appendedTag?, endpoint, usage }` — `source` is `"chat" \| "continue" \| "plugin-action"`. `pluginName` is set for `"plugin-action"`; `appendedTag` (`string \| null`, optional) is the tag string for a tagged append, `null` for a tagless append, and omitted for chat/continue/replace/discard. `endpoint` is the resolved upstream LLM URL. `usage: TokenUsageRecord \| null` carries token counts and optional `upstreamCostUsd` (see [TokenUsageRecord](#tokenusagerecord)) |
 
-> **Source literal mapping.** `write-new-chapter` → `"chat"`; `continue-last-chapter` → `"continue"`; `append-to-existing-chapter` → `"plugin-action"` with `pluginName` + `appendedTag`; `replace-last-chapter` → `"plugin-action"` with `pluginName` (no `appendedTag`).
+> **Source literal mapping.** `write-new-chapter` → `"chat"`; `continue-last-chapter` → `"continue"`; `append-to-existing-chapter` → `"plugin-action"` with `pluginName` + `appendedTag` (tag string for a tagged append, `null` for a tagless append); `replace-last-chapter` → `"plugin-action"` with `pluginName` (no `appendedTag`).
 
 > **Deep-frozen payload.** The `post-response` context is recursively frozen (including nested `usage`). Both top-level reassignment AND nested mutation throw `TypeError` under Deno ESM strict mode. The per-handler `ctx.logger` is delivered via a non-mutating `Proxy` over the frozen payload — plugins must not attempt `ctx.logger = …`.
 
@@ -511,7 +511,7 @@ runPluginPrompt(
   promptFile: string,                                 // relative path under the plugin dir; must end in .md
   opts?: {
     append?: boolean;                                 // default false
-    appendTag?: string;                               // required when append=true; matches /^[a-zA-Z][a-zA-Z0-9_-]{0,30}$/
+    appendTag?: string;                               // OPTIONAL with append=true; matches /^[a-zA-Z][a-zA-Z0-9_-]{0,30}$/; OMIT for a tagless (verbatim, no-wrapper) append. Explicit null / empty / malformed is rejected.
     replace?: boolean;                                // default false; mutually exclusive with append
     extraVariables?: Record<string, string | number | boolean>;
   }
@@ -520,7 +520,7 @@ runPluginPrompt(
   usage: TokenUsageRecord | null;
   chapterUpdated: boolean;                            // true when append succeeded
   chapterReplaced: boolean;                           // true when replace succeeded
-  appendedTag: string | null;                         // mirrors appendTag when append=true; null otherwise
+  appendedTag: string | null;                         // tag string for a tagged append; null for a tagless append (and for replace/discard)
 }>
 ```
 
