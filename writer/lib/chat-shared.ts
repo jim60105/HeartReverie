@@ -46,7 +46,7 @@ import {
 import { normaliseAppendContent } from "./chat-chapter-io.ts";
 import { streamLlmAndPersist } from "./chat-stream-and-persist.ts";
 import { errorMessage } from "./errors.ts";
-import { readTemplate } from "../routes/prompt.ts";
+import { readTemplate } from "./prompt-file.ts";
 import type { LlmConfig } from "../types.ts";
 import { resolveStoryLlmConfig, StoryConfigValidationError } from "./story-config.ts";
 import { clearGenerationActive, tryMarkGenerationActive } from "./generation-registry.ts";

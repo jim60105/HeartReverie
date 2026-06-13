@@ -13,29 +13,18 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { dirname, join } from "@std/path";
+import { dirname } from "@std/path";
 import { validateParams } from "../lib/middleware.ts";
 import { errorMessage, problemJson } from "../lib/errors.ts";
 import { validateTemplate } from "../lib/template.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
+import { readTemplate } from "../lib/prompt-file.ts";
+
+export { readTemplate };
 
 const log = createLogger("file");
-
-/** Read the custom prompt file; fall back to system.md only when the custom file does not exist. */
-export async function readTemplate(
-  config: { PROMPT_FILE: string; ROOT_DIR: string },
-): Promise<{ content: string; source: "custom" | "default" }> {
-  try {
-    const content = await Deno.readTextFile(config.PROMPT_FILE);
-    return { content, source: "custom" };
-  } catch (err: unknown) {
-    if (!(err instanceof Deno.errors.NotFound)) throw err;
-    const content = await Deno.readTextFile(join(config.ROOT_DIR, "system.md"));
-    return { content, source: "default" };
-  }
-}
 
 export function registerPromptRoutes(
   app: Hono,

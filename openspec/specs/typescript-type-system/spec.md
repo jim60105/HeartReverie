@@ -87,6 +87,44 @@ All internal imports within the `writer/` directory SHALL use `.ts` file extensi
 - **WHEN** the Deno runtime loads a module with a `.ts` import specifier
 - **THEN** the module SHALL resolve and load without errors
 
+### Requirement: readTemplate signature and import convention preserved across the move
+
+The moved `readTemplate` function in `writer/lib/prompt-file.ts` SHALL retain its exact signature `(config: { PROMPT_FILE: string; ROOT_DIR: string }) => Promise<{ content: string; source: "custom" | "default" }>`, including its explicit return type annotation and JSDoc. The new module SHALL use the project's internal import convention (`.ts`-suffixed local import specifiers) for its `@std/path` `join` dependency, and SHALL carry the AGPL-3.0-or-later header required of every source file.
+
+#### Scenario: Explicit return type retained
+
+- **WHEN** `writer/lib/prompt-file.ts` is inspected
+- **THEN** the exported `readTemplate` function SHALL declare the explicit return type `Promise<{ content: string; source: "custom" | "default" }>`
+
+#### Scenario: Type check passes for the new module
+
+- **WHEN** `deno check writer/server.ts` is run after the move
+- **THEN** it SHALL exit 0 with no type errors introduced by `writer/lib/prompt-file.ts` or the updated import in `writer/lib/chat-shared.ts`
+
+#### Scenario: New library file carries the license header
+
+- **WHEN** `writer/lib/prompt-file.ts` is created
+- **THEN** it SHALL begin with the AGPL-3.0-or-later license header used across the backend source tree
+
+### Requirement: No unsafe casts for pending plugin-init tracking in app.ts
+
+`writer/app.ts` SHALL NOT use `as unknown as` casts or a smuggled `_pendingPluginInits` property to track pending async plugin route registrations. The pending registrations SHALL be stored in a statically-typed module-level `WeakMap<Hono, Promise<unknown>[]>`, so the compiler is not overruled at any touch point and no non-null assertion (`!`) is required to access the pending array.
+
+#### Scenario: No as-unknown-as casts in app.ts
+
+- **WHEN** `writer/app.ts` is searched with `grep -c "as unknown as"`
+- **THEN** the count SHALL be 0
+
+#### Scenario: No _pendingPluginInits property reference anywhere
+
+- **WHEN** the codebase is searched with `grep -rn "_pendingPluginInits" writer/ tests/`
+- **THEN** no matches SHALL be returned
+
+#### Scenario: Type check passes after the change
+
+- **WHEN** `deno check writer/server.ts` is run after the change
+- **THEN** it SHALL exit 0 with the WeakMap-based tracking fully type-checked and no suppressed type errors
+
 ### Requirement: No implicit any
 
 No `any` type SHALL appear in production source code under `writer/`. The `unknown` type SHALL be used for values whose type is genuinely not known at compile time, with explicit type narrowing before use.

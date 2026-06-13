@@ -13,13 +13,13 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { join } from "@std/path";
 import type { WSContext } from "@hono/hono/ws";
 import { errorMessage } from "../lib/errors.ts";
 import { isValidParam } from "../lib/middleware.ts";
 import { createLogger } from "../lib/logger.ts";
 import { ChatAbortError, ChatError, executeChat, executeContinue } from "../lib/chat-shared.ts";
-import { pruneUsage } from "../lib/usage.ts";
+import { deleteLastChapter } from "../lib/story-chapter-io.ts";
+import { isGenerationActive } from "../lib/generation-registry.ts";
 import { MAX_MESSAGE_LENGTH } from "./ws-auth.ts";
 import type { WsConnection } from "./ws-connection.ts";
 
@@ -209,47 +209,48 @@ export async function handleChatResend(
     return;
   }
 
-  // Delete last chapter before re-sending
+  // Delete last chapter before re-sending. Validate the path first so an
+  // invalid identifier resolves to "Invalid path" before any business guard.
   const storyDir = conn.deps.safePath(series, story);
   if (!storyDir) {
     conn.wsSend(ws, { type: "chat:error", id, detail: "Invalid path" });
     return;
   }
 
-  try {
-    const entries: string[] = [];
-    for await (const entry of Deno.readDir(storyDir)) {
-      entries.push(entry.name);
-    }
-    const chapterFiles = entries
-      .filter((f) => /^\d+\.md$/.test(f))
-      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  // Reject deletion while a generation is streaming into this story so the
+  // resend cannot unlink the chapter file mid-stream.
+  if (isGenerationActive(series, story)) {
+    conn.wsSend(ws, { type: "chat:error", id, detail: "Generation in progress for this story" });
+    return;
+  }
 
-    if (chapterFiles.length === 0) {
+  try {
+    // Distinguish a missing story directory ("Story not found") from an
+    // existing-but-empty story ("No chapters to delete"); listChapterFiles
+    // returns [] on NotFound, so stat first to preserve that distinction.
+    await Deno.stat(storyDir);
+    const result = await deleteLastChapter(storyDir);
+    if (!result.ok) {
       conn.wsSend(ws, { type: "chat:error", id, detail: "No chapters to delete" });
       return;
     }
-
-    const lastFile = chapterFiles[chapterFiles.length - 1]!;
-    const lastNum = parseInt(lastFile, 10);
-    await Deno.remove(join(storyDir, lastFile));
-    fileLog.info("Chapter deleted (resend)", { op: "delete", path: join(storyDir, lastFile) });
-
-    // Best-effort cleanup of state/diff artifacts for the deleted chapter
-    const padded = String(lastNum).padStart(3, "0");
-    await Promise.allSettled([
-      Deno.remove(join(storyDir, `${padded}-state.yaml`)),
-      Deno.remove(join(storyDir, `${padded}-state-diff.yaml`)),
-      Deno.remove(join(storyDir, "current-status.yaml")),
-    ]);
-
-    // Prune stale usage records for the deleted chapter
-    await pruneUsage(storyDir, lastNum - 1);
+    fileLog.info("Chapter deleted (resend)", {
+      op: "delete",
+      storyDir,
+      chapter: result.deleted,
+    });
   } catch (err: unknown) {
     if (err instanceof Deno.errors.NotFound) {
       conn.wsSend(ws, { type: "chat:error", id, detail: "Story not found" });
       return;
     }
+    fileLog.error("Failed to delete last chapter (resend)", {
+      op: "delete",
+      id,
+      series,
+      story,
+      error: errorMessage(err),
+    });
     conn.wsSend(ws, { type: "chat:error", id, detail: "Failed to delete last chapter" });
     return;
   }

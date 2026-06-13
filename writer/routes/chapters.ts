@@ -19,6 +19,7 @@ import { validateParams } from "../lib/middleware.ts";
 import { errorMessage, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import { atomicWriteChapter, listChapterFiles } from "../lib/story.ts";
+import { deleteLastChapter } from "../lib/story-chapter-io.ts";
 import { isGenerationActive } from "../lib/generation-registry.ts";
 import { pruneUsage } from "../lib/usage.ts";
 import type { Hono } from "@hono/hono";
@@ -136,34 +137,30 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
     "/api/stories/:series/:name/chapters/last",
     validateParams,
     async (c) => {
-      const dirPath = safePath(c.req.param("series")!, c.req.param("name")!);
+      const series = c.req.param("series")!;
+      const name = c.req.param("name")!;
+
+      // Validate the path before applying the business guard so an invalid or
+      // traversal-shaped identifier always resolves to 400, never 409.
+      const dirPath = safePath(series, name);
       if (!dirPath) {
         return c.json(problemJson("Bad Request", 400, "Invalid path"), 400);
       }
 
+      if (isGenerationActive(series, name)) {
+        return c.json(
+          problemJson("Conflict", 409, "Generation in progress for this story"),
+          409,
+        );
+      }
+
       try {
         await Deno.stat(dirPath);
-        const chapterFiles = await listChapterFiles(dirPath);
-
-        if (chapterFiles.length === 0) {
+        const result = await deleteLastChapter(dirPath);
+        if (!result.ok) {
           return c.json(problemJson("Not Found", 404, "No chapters to delete"), 404);
         }
-
-        const lastFile = chapterFiles[chapterFiles.length - 1]!;
-        const lastNum = parseInt(lastFile, 10);
-        const deletePath = join(dirPath, lastFile);
-        await Deno.remove(deletePath);
-        log.info("Chapter deleted", { op: "delete", path: deletePath, chapter: lastNum });
-
-        // Best-effort cleanup of state/diff artifacts for the deleted chapter
-        const paddedNum = String(lastNum).padStart(3, "0");
-        await Promise.allSettled([
-          Deno.remove(join(dirPath, `${paddedNum}-state.yaml`)),
-          Deno.remove(join(dirPath, `${paddedNum}-state-diff.yaml`)),
-          Deno.remove(join(dirPath, "current-status.yaml")),
-        ]);
-
-        return c.json({ deleted: lastNum });
+        return c.json({ deleted: result.deleted });
       } catch (err: unknown) {
         if (err instanceof Deno.errors.NotFound) {
           return c.json(problemJson("Not Found", 404, "Story not found"), 404);

@@ -36,6 +36,7 @@
 
 import { join } from "@std/path";
 import { createLogger } from "./logger.ts";
+import { pruneUsage } from "./usage.ts";
 import type { ChapterEntry } from "../types.ts";
 
 const log = createLogger("file");
@@ -118,6 +119,65 @@ export async function listChapterFiles(dir: string): Promise<string[]> {
   return entries
     .filter((f) => /^\d+\.md$/.test(f))
     .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+}
+
+/**
+ * Result of {@link deleteLastChapter}. On success it carries the deleted
+ * chapter number; on a no-op it explains why so the caller can map it to a
+ * transport-appropriate client response.
+ */
+export type DeleteLastChapterResult =
+  | { ok: true; deleted: number }
+  | { ok: false; reason: "no-chapters" };
+
+/**
+ * Delete a story's highest-numbered chapter and reconcile its side artifacts.
+ *
+ * This is the single shared implementation behind both the HTTP
+ * `DELETE /api/stories/:series/:name/chapters/last` route and the WebSocket
+ * `chat:resend` path so the two transports behave identically. It:
+ *
+ *  1. lists chapter files via {@link listChapterFiles};
+ *  2. removes the highest-numbered `NNN.md` file;
+ *  3. best-effort removes its sidecar artifacts (`NNN-state.yaml`,
+ *     `NNN-state-diff.yaml`, `current-status.yaml`) without failing when any
+ *     is absent; and
+ *  4. prunes the deleted chapter's usage record via
+ *     `pruneUsage(dirPath, lastNum - 1)`.
+ *
+ * The caller owns the active-generation guard and the client-response
+ * mapping: the helper is intentionally transport-agnostic. Filesystem errors
+ * other than the best-effort sidecar cleanups propagate to the caller's catch
+ * block.
+ *
+ * @param dirPath - Absolute path to the story directory.
+ * @returns `{ ok: true, deleted }` on success, or
+ *   `{ ok: false, reason: "no-chapters" }` when no chapter files exist.
+ */
+export async function deleteLastChapter(dirPath: string): Promise<DeleteLastChapterResult> {
+  const chapterFiles = await listChapterFiles(dirPath);
+  if (chapterFiles.length === 0) {
+    return { ok: false, reason: "no-chapters" };
+  }
+
+  const lastFile = chapterFiles[chapterFiles.length - 1]!;
+  const lastNum = parseInt(lastFile, 10);
+  const deletePath = join(dirPath, lastFile);
+  await Deno.remove(deletePath);
+  log.info("Chapter deleted", { op: "delete", path: deletePath, chapter: lastNum });
+
+  // Best-effort cleanup of state/diff artifacts for the deleted chapter.
+  const paddedNum = String(lastNum).padStart(3, "0");
+  await Promise.allSettled([
+    Deno.remove(join(dirPath, `${paddedNum}-state.yaml`)),
+    Deno.remove(join(dirPath, `${paddedNum}-state-diff.yaml`)),
+    Deno.remove(join(dirPath, "current-status.yaml")),
+  ]);
+
+  // Keep usage records aligned with the remaining chapters.
+  await pruneUsage(dirPath, lastNum - 1);
+
+  return { ok: true, deleted: lastNum };
 }
 
 /**

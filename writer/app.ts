@@ -46,6 +46,13 @@ import type { AppDeps } from "./types.ts";
 
 const httpLog = createLogger("http");
 
+/**
+ * Async plugin route registrations started in createApp, awaited by
+ * initPluginRoutes. Keyed by app instance so concurrent createApp calls
+ * (tests) don't share state; WeakMap entries die with the app.
+ */
+const pendingPluginInits = new WeakMap<Hono, Promise<unknown>[]>();
+
 interface RateLimiterOptions {
   readonly windowMs: number;
   readonly limit: number;
@@ -190,10 +197,9 @@ export function createApp(deps: AppDeps): Hono {
     });
     // Track async registrars for initPluginRoutes
     if (result instanceof Promise) {
-      (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits ??= [];
-      (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits!.push(
-        result,
-      );
+      const pending = pendingPluginInits.get(app) ?? [];
+      pending.push(result);
+      pendingPluginInits.set(app, pending);
     }
   }
 
@@ -236,11 +242,10 @@ export function createApp(deps: AppDeps): Hono {
  * (e.g. those using dynamic imports) are fully registered before serving.
  */
 export async function initPluginRoutes(app: Hono): Promise<void> {
-  const pending =
-    (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits;
+  const pending = pendingPluginInits.get(app);
   if (pending?.length) {
     await Promise.all(pending);
-    delete (app as unknown as { _pendingPluginInits?: Promise<unknown>[] })._pendingPluginInits;
+    pendingPluginInits.delete(app);
   }
 }
 

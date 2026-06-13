@@ -344,6 +344,79 @@ Deno.test({
         assertEquals(mdFiles.length, 0);
       });
 
+      await t.step("DELETE last chapter returns 409 when generation is active", async () => {
+        const { markGenerationActive, clearGenerationActive } = await import(
+          "../../../writer/lib/generation-registry.ts"
+        );
+        const guardDir = join(tmpDir, "del-guard", "story");
+        await Deno.mkdir(guardDir, { recursive: true });
+        await Deno.writeTextFile(join(guardDir, "001.md"), "ch1");
+        await Deno.writeTextFile(join(guardDir, "002.md"), "ch2");
+        markGenerationActive("del-guard", "story");
+        try {
+          const res = await makeRequest(
+            app,
+            "DELETE",
+            "/api/stories/del-guard/story/chapters/last",
+          );
+          assertEquals(res.status, 409);
+
+          // No file may be removed while a generation is active.
+          const left: string[] = [];
+          for await (const entry of Deno.readDir(guardDir)) {
+            if (/^\d+\.md$/.test(entry.name)) left.push(entry.name);
+          }
+          left.sort();
+          assertEquals(left, ["001.md", "002.md"]);
+        } finally {
+          clearGenerationActive("del-guard", "story");
+        }
+      });
+
+      await t.step(
+        "DELETE last chapter prunes only the deleted chapter's usage record",
+        async () => {
+          const usageDir = join(tmpDir, "del-usage", "story");
+          await Deno.mkdir(usageDir, { recursive: true });
+          await Deno.writeTextFile(join(usageDir, "001.md"), "ch1");
+          await Deno.writeTextFile(join(usageDir, "002.md"), "ch2");
+          const records = [
+            {
+              chapter: 1,
+              promptTokens: 10,
+              completionTokens: 20,
+              totalTokens: 30,
+              model: "test-model",
+              timestamp: "2026-01-01T00:00:00.000Z",
+            },
+            {
+              chapter: 2,
+              promptTokens: 40,
+              completionTokens: 50,
+              totalTokens: 90,
+              model: "test-model",
+              timestamp: "2026-01-02T00:00:00.000Z",
+            },
+          ];
+          await Deno.writeTextFile(
+            join(usageDir, "_usage.json"),
+            `${JSON.stringify(records, null, 2)}\n`,
+          );
+
+          const res = await makeRequest(
+            app,
+            "DELETE",
+            "/api/stories/del-usage/story/chapters/last",
+          );
+          assertEquals(res.status, 200);
+          assertEquals(res.body.deleted, 2);
+
+          const pruned = JSON.parse(await Deno.readTextFile(join(usageDir, "_usage.json")));
+          assertEquals(pruned.length, 1);
+          assertEquals(pruned[0].chapter, 1);
+        },
+      );
+
       // ── PUT /chapters/:number edit ──────────────────────────────────────
 
       await t.step("PUT chapter happy path updates file and returns content", async () => {
