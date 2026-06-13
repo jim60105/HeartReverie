@@ -22,7 +22,7 @@ _None._ No new user-facing capability; this consolidates the existing WS request
 
 ## Impact
 
-- **Frontend code**: `reader-src/src/composables/useChatApi.ts` (add `wsRequest`, migrate four call sites; expected to shrink from ~660 to roughly 400–450 lines).
+- **Frontend code**: `reader-src/src/composables/useChatApi.ts` (add `wsRequest`, migrate four call sites). The four duplicated ~90-line inline WS lifecycle wrappers collapse into one shared in-file helper plus four ~25-line declarative specs; the unchanged HTTP fallback paths (~410 lines combined with the function scaffolding) plus the in-file wrapper (~150 lines) set the practical floor, so the file lands at roughly 680 lines (down slightly from ~660, with the duplicated lifecycle fully removed rather than a large net line reduction). The win is structural DRY (one `setTimeout`, one disconnect watcher, one `cleanup()`), not a halved line count.
 - **Tests**: chat-API suite under `reader-src/src/composables/__tests__/` gains two new tests; existing suites are the compatibility net.
 - **Out of scope**: `useWebSocket.ts` (its `onMessage`/`send`/`isConnected` API is the fixed contract), the HTTP fallback paths, and any wire-protocol or public-signature change.
 - **Risk**: MED — this is the core chat path. A missed terminal-path state reset surfaces only under failure conditions (permanently-spinning UI), which automated tests under-cover, so a **mandatory manual container smoke test** (WS send + mid-generation disconnect + plugin action button) gates completion per the workspace integration-verification protocol.

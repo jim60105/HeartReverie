@@ -15,7 +15,11 @@
 
 import type { WSContext } from "@hono/hono/ws";
 import { runPluginActionWithDeps } from "./plugin-actions.ts";
+import { errorMessage, problemJson } from "../lib/errors.ts";
+import { createLogger } from "../lib/logger.ts";
 import type { WsConnection } from "./ws-connection.ts";
+
+const log = createLogger("ws");
 
 export async function handlePluginActionRun(
   conn: WsConnection,
@@ -83,10 +87,17 @@ export async function handlePluginActionRun(
     }
   } catch (err: unknown) {
     const detail = err instanceof Error ? err.message : "Plugin action failed";
+    log.error("Plugin action failed (unexpected)", {
+      event: "plugin-action:error",
+      correlationId,
+      pluginName,
+      error: errorMessage(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     conn.wsSend(ws, {
       type: "plugin-action:error",
       correlationId,
-      problem: { type: "about:blank", title: "Internal Server Error", status: 500, detail },
+      problem: problemJson("Internal Server Error", 500, detail),
     });
   } finally {
     conn.endGeneration(correlationId, ws);

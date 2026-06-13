@@ -178,6 +178,37 @@ describe("useChatApi.runPluginPrompt", () => {
       expect(api.errorMessage.value).toBe("bad path");
     });
 
+    it("regression: runPluginPrompt REJECTS on plugin-action:error with the type slug as error.code", async () => {
+      const handlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation(
+        (type: string, h: (msg: unknown) => void) => {
+          handlers[type] = h;
+          return vi.fn();
+        },
+      );
+
+      const api = await getApi();
+      const promise = api.runPluginPrompt("p", "x.md");
+      const sent = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      const correlationId = sent.correlationId as string;
+
+      handlers["plugin-action:error"]!({
+        type: "plugin-action:error",
+        correlationId,
+        problem: { type: "plugin-action:invalid-append-tag", detail: "bad tag" },
+      });
+
+      // Pins the reject-vs-resolve divergence the shared wrapper must not
+      // flatten: the chat flows resolve false, but runPluginPrompt rejects.
+      await expect(promise).rejects.toMatchObject({
+        message: "bad tag",
+        code: "plugin-action:invalid-append-tag",
+      });
+      expect(api.errorMessage.value).toBe("bad tag");
+      expect(api.streamingContent.value).toBe("");
+      expect(api.isLoading.value).toBe(false);
+    });
+
     it("abortCurrentRequest sends plugin-action:abort with the correlationId", async () => {
       mockWsOnMessageFn.mockImplementation(() => vi.fn());
       const api = await getApi();

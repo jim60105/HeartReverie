@@ -5,6 +5,10 @@ import type {
   RunPluginPromptResult,
   TokenUsageRecord,
   UseChatApiReturn,
+  WsChatDoneMessage,
+  WsClientMessage,
+  WsPluginActionDoneMessage,
+  WsServerMessage,
 } from "@/types";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useNotification } from "@/composables/useNotification";
@@ -23,6 +27,168 @@ let currentPluginActionId: string | null = null;
 function dispatchNotification(event: string, data: Record<string, unknown>): void {
   const { notify } = useNotification();
   frontendHooks.dispatch("notification", { event, data, notify });
+}
+
+/**
+ * Declarative spec for a single WebSocket request lifecycle.
+ *
+ * `TDone` is the concrete server `done` message type for the flow; `TResult`
+ * is the value the returned promise resolves to. The terminal callbacks
+ * (`onError`, `onAborted`, `onDisconnect`, `onTimeout`) may either return a
+ * `TResult` (resolving the promise) or `throw` (rejecting it) — this is how
+ * `runPluginPrompt` preserves its reject-on-error contract while the chat
+ * flows resolve `false`.
+ */
+interface WsRequestSpec<TDone, TResult> {
+  /** Correlation field name carried by this flow's server messages. */
+  idField: "id" | "correlationId";
+  /** Correlation id this request listens for. */
+  id: string;
+  deltaType: WsServerMessage["type"];
+  doneType: WsServerMessage["type"];
+  errorType: WsServerMessage["type"];
+  abortedType: WsServerMessage["type"];
+  /** Accumulate a streaming delta chunk. */
+  onDelta: (msg: Record<string, unknown>) => void;
+  /** Map the terminal done message to the resolved value. */
+  onDone: (msg: TDone) => TResult;
+  /** Handle the error message: return resolves, throw rejects. */
+  onError: (msg: Record<string, unknown>) => TResult;
+  /** Handle a server-confirmed abort: return resolves, throw rejects. */
+  onAborted: () => TResult;
+  /** Handle socket disconnect mid-flight: return resolves, throw rejects. */
+  onDisconnect: () => TResult;
+  /** Handle the request timeout: return resolves, throw rejects. */
+  onTimeout: () => TResult;
+  /** Set/clear the module-level current-id variable for this flow. */
+  setCurrentId: (v: string | null) => void;
+  /** Envelope to send once subscriptions are wired. */
+  envelope: WsClientMessage;
+  /** Request timeout in ms (default 300000). */
+  timeoutMs?: number;
+}
+
+/**
+ * Centralizes the WebSocket request lifecycle shared by `sendMessage`,
+ * `resendMessage`, `continueLastChapter`, and `runPluginPrompt`'s WS path:
+ * correlation-guarded delta/done/error/aborted subscriptions, a
+ * `watch(isConnected)` disconnect guard, a single timeout, and a unified
+ * `cleanup()` that tears everything down and clears the module-level
+ * current-id variable. Every terminal path (done, error, aborted, disconnect,
+ * timeout) runs `cleanup()` before its callback.
+ */
+function wsRequest<TDone, TResult>(
+  spec: WsRequestSpec<TDone, TResult>,
+): Promise<TResult> {
+  const { isConnected, send, onMessage } = useWebSocket();
+  // The spec carries dynamic message-type strings, so call the strongly-typed
+  // onMessage through a loosened local view; each handler narrows via idField.
+  const subscribe = onMessage as unknown as (
+    type: WsServerMessage["type"],
+    handler: (msg: Record<string, unknown>) => void,
+  ) => () => void;
+  const matches = (msg: Record<string, unknown>): boolean => msg[spec.idField] === spec.id;
+
+  spec.setCurrentId(spec.id);
+
+  return new Promise<TResult>((resolve, reject) => {
+    // Idempotency guard: even though `cleanup()` tears down every subscription,
+    // a second terminal source can already be queued (e.g. a Vue watcher
+    // callback flushed in the same tick as a `chat:done`, or a timeout that
+    // fired just before `done` arrived). `finish()` makes terminal handling
+    // strictly once-only so a per-call callback (and its side effects) never
+    // runs twice and the promise never double-settles.
+    let settled = false;
+    const finish = (run: () => void): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      run();
+    };
+
+    const unsubDelta = subscribe(spec.deltaType, (msg) => {
+      if (!matches(msg) || settled) return;
+      spec.onDelta(msg);
+    });
+    const unsubDone = subscribe(spec.doneType, (msg) => {
+      if (!matches(msg)) return;
+      finish(() => resolve(spec.onDone(msg as TDone)));
+    });
+    const unsubError = subscribe(spec.errorType, (msg) => {
+      if (!matches(msg)) return;
+      finish(() => {
+        try {
+          resolve(spec.onError(msg));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    const unsubAborted = subscribe(spec.abortedType, (msg) => {
+      if (!matches(msg)) return;
+      finish(() => {
+        try {
+          resolve(spec.onAborted());
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    // Single disconnect guard for the in-flight request.
+    const stopWatch = watch(isConnected, (connected) => {
+      if (connected) return;
+      finish(() => {
+        try {
+          resolve(spec.onDisconnect());
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+
+    const timeout = setTimeout(() => {
+      finish(() => {
+        try {
+          resolve(spec.onTimeout());
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }, spec.timeoutMs ?? 300_000);
+
+    // Runs on EVERY terminal path (done, error, aborted, disconnect,
+    // timeout) via `finish()`. Resetting streaming/loading state here — not in
+    // the per-call callbacks — guarantees no terminal path can leave the UI
+    // spinning.
+    function cleanup(): void {
+      clearTimeout(timeout);
+      stopWatch();
+      unsubDelta();
+      unsubDone();
+      unsubError();
+      unsubAborted();
+      spec.setCurrentId(null);
+      streamingContent.value = "";
+      isLoading.value = false;
+    }
+
+    // Guard against the socket having dropped between the caller's connected
+    // check and this point: `watch` is not `immediate`, so an already-`false`
+    // `isConnected` would otherwise never trigger the disconnect path, leaving
+    // the request to hang until timeout.
+    if (!isConnected.value) {
+      finish(() => {
+        try {
+          resolve(spec.onDisconnect());
+        } catch (err) {
+          reject(err);
+        }
+      });
+      return;
+    }
+
+    send(spec.envelope);
+  });
 }
 
 function abortCurrentRequest(): void {
@@ -50,7 +216,7 @@ async function sendMessage(
   story: string,
   message: string,
 ): Promise<boolean> {
-  const { isConnected, isAuthenticated, send, onMessage } = useWebSocket();
+  const { isConnected, isAuthenticated } = useWebSocket();
 
   // Dispatch chat:send:before hook BEFORE assigning request ids or issuing
   // any network call. Pipeline semantics: handlers may return a string to
@@ -71,68 +237,39 @@ async function sendMessage(
   if (isConnected.value && isAuthenticated.value) {
     // ── WebSocket path ──
     const id = crypto.randomUUID();
-    currentRequestId = id;
-    return new Promise<boolean>((resolve) => {
-      const unsubDelta = onMessage("chat:delta", (msg) => {
-        if (msg.id !== id) return;
-        streamingContent.value += msg.content;
-      });
-      const unsubDone = onMessage("chat:done", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
-        isLoading.value = false;
+    return wsRequest<WsChatDoneMessage, boolean>({
+      idField: "id",
+      id,
+      deltaType: "chat:delta",
+      doneType: "chat:done",
+      errorType: "chat:error",
+      abortedType: "chat:aborted",
+      setCurrentId: (v) => (currentRequestId = v),
+      // Terminal-state reset (streamingContent/isLoading) is centralized in
+      // wsRequest's cleanup(); callbacks only set flow-specific state.
+      onDelta: (msg) => {
+        streamingContent.value += msg.content as string;
+      },
+      onDone: (msg) => {
         useUsage().pushRecord(msg.usage);
         dispatchNotification("chat:done", { id });
-        resolve(true);
-      });
-      const unsubError = onMessage("chat:error", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
+        return true;
+      },
+      onError: () => {
         errorMessage.value = "發送失敗";
-        isLoading.value = false;
         dispatchNotification("chat:error", { id });
-        resolve(false);
-      });
-      const unsubAborted = onMessage("chat:aborted", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
-        isLoading.value = false;
-        resolve(false);
-      });
-      // Detect socket disconnection while waiting for response
-      const stopWatchClose = watch(isConnected, (connected) => {
-        if (!connected) {
-          cleanup();
-          streamingContent.value = "";
-          errorMessage.value = "連線中斷";
-          isLoading.value = false;
-          resolve(false);
-        }
-      });
-
-      // Timeout to prevent infinite hang (5 minutes)
-      const timeout = setTimeout(() => {
-        cleanup();
-        streamingContent.value = "";
+        return false;
+      },
+      onAborted: () => false,
+      onDisconnect: () => {
+        errorMessage.value = "連線中斷";
+        return false;
+      },
+      onTimeout: () => {
         errorMessage.value = "請求逾時";
-        isLoading.value = false;
-        resolve(false);
-      }, 300_000);
-
-      function cleanup(): void {
-        clearTimeout(timeout);
-        stopWatchClose();
-        unsubDelta();
-        unsubDone();
-        unsubError();
-        unsubAborted();
-        currentRequestId = null;
-      }
-
-      send({ type: "chat:send", id, series, story, message: outgoingMessage });
+        return false;
+      },
+      envelope: { type: "chat:send", id, series, story, message: outgoingMessage },
     });
   }
 
@@ -191,7 +328,7 @@ async function resendMessage(
   story: string,
   message: string,
 ): Promise<boolean> {
-  const { isConnected, isAuthenticated, send, onMessage } = useWebSocket();
+  const { isConnected, isAuthenticated } = useWebSocket();
 
   // Dispatch chat:send:before hook BEFORE any network call. Pipeline
   // semantics: handlers may return a string to replace ctx.message.
@@ -211,66 +348,38 @@ async function resendMessage(
   if (isConnected.value && isAuthenticated.value) {
     // ── WebSocket path ──
     const id = crypto.randomUUID();
-    currentRequestId = id;
-    return new Promise<boolean>((resolve) => {
-      const unsubDelta = onMessage("chat:delta", (msg) => {
-        if (msg.id !== id) return;
-        streamingContent.value += msg.content;
-      });
-      const unsubDone = onMessage("chat:done", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
-        isLoading.value = false;
+    return wsRequest<WsChatDoneMessage, boolean>({
+      idField: "id",
+      id,
+      deltaType: "chat:delta",
+      doneType: "chat:done",
+      errorType: "chat:error",
+      abortedType: "chat:aborted",
+      setCurrentId: (v) => (currentRequestId = v),
+      // Terminal-state reset is centralized in wsRequest's cleanup().
+      onDelta: (msg) => {
+        streamingContent.value += msg.content as string;
+      },
+      onDone: (msg) => {
         useUsage().pushRecord(msg.usage);
         dispatchNotification("chat:done", { id });
-        resolve(true);
-      });
-      const unsubError = onMessage("chat:error", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
+        return true;
+      },
+      onError: () => {
         errorMessage.value = "重送失敗";
-        isLoading.value = false;
         dispatchNotification("chat:error", { id });
-        resolve(false);
-      });
-      const unsubAborted = onMessage("chat:aborted", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
-        isLoading.value = false;
-        resolve(false);
-      });
-      const stopWatchClose = watch(isConnected, (connected) => {
-        if (!connected) {
-          cleanup();
-          streamingContent.value = "";
-          errorMessage.value = "連線中斷";
-          isLoading.value = false;
-          resolve(false);
-        }
-      });
-
-      const timeout = setTimeout(() => {
-        cleanup();
-        streamingContent.value = "";
+        return false;
+      },
+      onAborted: () => false,
+      onDisconnect: () => {
+        errorMessage.value = "連線中斷";
+        return false;
+      },
+      onTimeout: () => {
         errorMessage.value = "請求逾時";
-        isLoading.value = false;
-        resolve(false);
-      }, 300_000);
-
-      function cleanup(): void {
-        clearTimeout(timeout);
-        stopWatchClose();
-        unsubDelta();
-        unsubDone();
-        unsubError();
-        unsubAborted();
-        currentRequestId = null;
-      }
-
-      send({ type: "chat:resend", id, series, story, message: outgoingMessage });
+        return false;
+      },
+      envelope: { type: "chat:resend", id, series, story, message: outgoingMessage },
     });
   }
 
@@ -345,7 +454,7 @@ async function continueLastChapter(
     return false;
   }
 
-  const { isConnected, isAuthenticated, send, onMessage } = useWebSocket();
+  const { isConnected, isAuthenticated } = useWebSocket();
 
   isLoading.value = true;
   errorMessage.value = "";
@@ -354,66 +463,38 @@ async function continueLastChapter(
   if (isConnected.value && isAuthenticated.value) {
     // ── WebSocket path ──
     const id = crypto.randomUUID();
-    currentRequestId = id;
-    return new Promise<boolean>((resolve) => {
-      const unsubDelta = onMessage("chat:delta", (msg) => {
-        if (msg.id !== id) return;
-        streamingContent.value += msg.content;
-      });
-      const unsubDone = onMessage("chat:done", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
-        isLoading.value = false;
+    return wsRequest<WsChatDoneMessage, boolean>({
+      idField: "id",
+      id,
+      deltaType: "chat:delta",
+      doneType: "chat:done",
+      errorType: "chat:error",
+      abortedType: "chat:aborted",
+      setCurrentId: (v) => (currentRequestId = v),
+      // Terminal-state reset is centralized in wsRequest's cleanup().
+      onDelta: (msg) => {
+        streamingContent.value += msg.content as string;
+      },
+      onDone: (msg) => {
         useUsage().pushRecord(msg.usage);
         dispatchNotification("chat:done", { id });
-        resolve(true);
-      });
-      const unsubError = onMessage("chat:error", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
+        return true;
+      },
+      onError: () => {
         errorMessage.value = "續寫失敗";
-        isLoading.value = false;
         dispatchNotification("chat:error", { id });
-        resolve(false);
-      });
-      const unsubAborted = onMessage("chat:aborted", (msg) => {
-        if (msg.id !== id) return;
-        cleanup();
-        streamingContent.value = "";
-        isLoading.value = false;
-        resolve(false);
-      });
-      const stopWatchClose = watch(isConnected, (connected) => {
-        if (!connected) {
-          cleanup();
-          streamingContent.value = "";
-          errorMessage.value = "連線中斷";
-          isLoading.value = false;
-          resolve(false);
-        }
-      });
-
-      const timeout = setTimeout(() => {
-        cleanup();
-        streamingContent.value = "";
+        return false;
+      },
+      onAborted: () => false,
+      onDisconnect: () => {
+        errorMessage.value = "連線中斷";
+        return false;
+      },
+      onTimeout: () => {
         errorMessage.value = "請求逾時";
-        isLoading.value = false;
-        resolve(false);
-      }, 300_000);
-
-      function cleanup(): void {
-        clearTimeout(timeout);
-        stopWatchClose();
-        unsubDelta();
-        unsubDone();
-        unsubError();
-        unsubAborted();
-        currentRequestId = null;
-      }
-
-      send({ type: "chat:continue", id, series, story });
+        return false;
+      },
+      envelope: { type: "chat:continue", id, series, story },
     });
   }
 
@@ -487,7 +568,7 @@ async function runPluginPrompt(
     );
   }
 
-  const { isConnected, isAuthenticated, send, onMessage } = useWebSocket();
+  const { isConnected, isAuthenticated } = useWebSocket();
 
   isLoading.value = true;
   errorMessage.value = "";
@@ -499,83 +580,55 @@ async function runPluginPrompt(
   if (isConnected.value && isAuthenticated.value) {
     // ── WebSocket path ──
     const correlationId = crypto.randomUUID();
-    currentPluginActionId = correlationId;
 
-    return await new Promise<RunPluginPromptResult>((resolve, reject) => {
-      const unsubDelta = onMessage("plugin-action:delta", (msg) => {
-        if (msg.correlationId !== correlationId) return;
-        streamingContent.value += msg.chunk;
-      });
-      const unsubDone = onMessage("plugin-action:done", (msg) => {
-        if (msg.correlationId !== correlationId) return;
-        cleanup();
-        streamingContent.value = "";
-        isLoading.value = false;
+    return await wsRequest<WsPluginActionDoneMessage, RunPluginPromptResult>({
+      idField: "correlationId",
+      id: correlationId,
+      deltaType: "plugin-action:delta",
+      doneType: "plugin-action:done",
+      errorType: "plugin-action:error",
+      abortedType: "plugin-action:aborted",
+      setCurrentId: (v) => (currentPluginActionId = v),
+      // Terminal-state reset is centralized in wsRequest's cleanup(); the
+      // terminal callbacks here throw to preserve reject-on-error semantics.
+      onDelta: (msg) => {
+        streamingContent.value += msg.chunk as string;
+      },
+      onDone: (msg) => {
         if (msg.usage) useUsage().pushRecord(msg.usage);
-        resolve({
+        return {
           content: msg.content,
           usage: msg.usage,
           chapterUpdated: msg.chapterUpdated,
           chapterReplaced: msg.chapterReplaced ?? false,
           appendedTag: msg.appendedTag,
-        });
-      });
-      const unsubError = onMessage("plugin-action:error", (msg) => {
-        if (msg.correlationId !== correlationId) return;
-        cleanup();
-        streamingContent.value = "";
-        const detail = msg.problem?.detail ??
-          msg.problem?.title ??
-          "外掛操作失敗";
+        };
+      },
+      onError: (msg) => {
+        const problem = msg.problem as
+          | { type?: string; title?: string; detail?: string }
+          | undefined;
+        const detail = problem?.detail ?? problem?.title ?? "外掛操作失敗";
         errorMessage.value = detail;
-        isLoading.value = false;
         // Attach the RFC 9457 `type` slug as `error.code` so consumers
         // (incl. cross-repo plugin handlers) can branch on the stable slug
         // instead of brittle human-readable detail text.
         const err = new Error(detail) as Error & { code?: string };
-        if (msg.problem?.type) err.code = msg.problem.type;
-        reject(err);
-      });
-      const unsubAborted = onMessage("plugin-action:aborted", (msg) => {
-        if (msg.correlationId !== correlationId) return;
-        cleanup();
-        streamingContent.value = "";
-        isLoading.value = false;
-        const err = new DOMException(
-          "Plugin action aborted.",
-          "AbortError",
-        );
-        reject(err);
-      });
-      const stopWatchClose = watch(isConnected, (connected) => {
-        if (!connected) {
-          cleanup();
-          streamingContent.value = "";
-          errorMessage.value = "連線中斷";
-          isLoading.value = false;
-          reject(new Error("連線中斷"));
-        }
-      });
-
-      const timeout = setTimeout(() => {
-        cleanup();
-        streamingContent.value = "";
+        if (problem?.type) err.code = problem.type;
+        throw err;
+      },
+      onAborted: () => {
+        throw new DOMException("Plugin action aborted.", "AbortError");
+      },
+      onDisconnect: () => {
+        errorMessage.value = "連線中斷";
+        throw new Error("連線中斷");
+      },
+      onTimeout: () => {
         errorMessage.value = "請求逾時";
-        isLoading.value = false;
-        reject(new Error("請求逾時"));
-      }, 300_000);
-
-      function cleanup(): void {
-        clearTimeout(timeout);
-        stopWatchClose();
-        unsubDelta();
-        unsubDone();
-        unsubError();
-        unsubAborted();
-        currentPluginActionId = null;
-      }
-
-      send({
+        throw new Error("請求逾時");
+      },
+      envelope: {
         type: "plugin-action:run",
         correlationId,
         pluginName,
@@ -586,7 +639,7 @@ async function runPluginPrompt(
         ...(opts.appendTag !== undefined ? { appendTag: opts.appendTag } : {}),
         ...(opts.replace !== undefined ? { replace: opts.replace } : {}),
         ...(opts.extraVariables !== undefined ? { extraVariables: opts.extraVariables } : {}),
-      });
+      },
     });
   }
 

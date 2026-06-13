@@ -24,6 +24,33 @@ export function escapeHtml(str) {
 }
 
 /**
+ * Read the API passphrase from sessionStorage. Returns "" when absent or when
+ * storage access throws (private-mode browsers). Reads only the "passphrase"
+ * key written by the core (reader-src/src/composables/useAuth.ts); no legacy
+ * fallback key is consulted.
+ * @returns {string}
+ */
+export function getPassphrase() {
+  try {
+    return sessionStorage.getItem("passphrase") || "";
+  } catch (_err) {
+    return "";
+  }
+}
+
+/**
+ * Build auth headers for plugin API calls. Returns `{ "X-Passphrase": <pp> }`
+ * when a passphrase is stored and `{}` when it is empty, so unauthenticated dev
+ * deployments send no header. Defined in terms of getPassphrase() so the single
+ * "passphrase"-key read lives in exactly one place.
+ * @returns {Record<string, string>}
+ */
+export function getAuthHeaders() {
+  const p = getPassphrase();
+  return p ? { "X-Passphrase": p } : {};
+}
+
+/**
  * Read plugin settings from the hooks object, returning an empty object when
  * the host runtime does not expose `getSettings` (older engine builds, tests).
  * @param {{ getSettings?: () => Record<string, unknown> }} hooks

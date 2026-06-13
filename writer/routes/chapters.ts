@@ -63,8 +63,17 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
             if (parsed?.entries && Array.isArray(parsed.entries)) {
               stateDiff = parsed;
             }
-          } catch {
-            // No diff file
+          } catch (err: unknown) {
+            // Absent diff sidecar is the expected silent case; surface any
+            // other failure (malformed YAML, permission denied) so a corrupt
+            // state-diff is not indistinguishable from "no diff".
+            if (!(err instanceof Deno.errors.NotFound)) {
+              log.warn("Failed to read state-diff", {
+                op: "read-state-diff",
+                chapter: parseInt(file, 10),
+                error: errorMessage(err),
+              });
+            }
           }
           results.push({ number: parseInt(file, 10), content, stateDiff });
         }
@@ -117,8 +126,17 @@ export function registerChapterRoutes(app: Hono, deps: Pick<AppDeps, "safePath">
               stateDiff = parsed;
             }
           }
-        } catch {
-          // No diff file available
+        } catch (err: unknown) {
+          // Absent diff sidecar is the expected silent case; surface any
+          // other failure (malformed YAML, permission denied) so a corrupt
+          // state-diff is not indistinguishable from "no diff".
+          if (!(err instanceof Deno.errors.NotFound)) {
+            log.warn("Failed to read state-diff", {
+              op: "read-state-diff",
+              chapter: num,
+              error: errorMessage(err),
+            });
+          }
         }
         return c.json({ number: num, content, stateDiff });
       } catch (err: unknown) {

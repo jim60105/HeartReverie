@@ -17,7 +17,9 @@ import type { WSContext } from "@hono/hono/ws";
 import { errorMessage } from "../lib/errors.ts";
 import { isValidParam } from "../lib/middleware.ts";
 import { createLogger } from "../lib/logger.ts";
-import { ChatAbortError, ChatError, executeChat, executeContinue } from "../lib/chat-shared.ts";
+import { executeChat, executeContinue } from "../lib/chat-shared.ts";
+import { translateChatError } from "../lib/chat-error-translate.ts";
+import type { TranslatedChatError } from "../lib/chat-error-translate.ts";
 import { deleteLastChapter } from "../lib/story-chapter-io.ts";
 import { isGenerationActive } from "../lib/generation-registry.ts";
 import { MAX_MESSAGE_LENGTH } from "./ws-auth.ts";
@@ -25,6 +27,45 @@ import type { WsConnection } from "./ws-connection.ts";
 
 const log = createLogger("ws");
 const fileLog = createLogger("file");
+
+/**
+ * Send a translated chat error over the WebSocket. An `aborted` outcome maps to
+ * `chat:aborted`; every other outcome is logged with `event: "chat:error"` plus
+ * the translator's structured `logFields`, then sent as a `chat:error` envelope.
+ * For `vento` errors the structured payload rides additively in `ventoError`
+ * while `detail` carries a short human-readable string.
+ *
+ * @param conn Active WebSocket connection wrapper.
+ * @param ws Underlying socket context.
+ * @param id Client-supplied request id to echo back.
+ * @param t Translated chat-error outcome.
+ * @param logMessage Log message string for non-aborted outcomes.
+ * @param logCtx Extra structured fields to merge into the log entry.
+ */
+function sendChatError(
+  conn: WsConnection,
+  ws: WSContext,
+  id: string,
+  t: TranslatedChatError,
+  logMessage: string,
+  logCtx: Record<string, unknown>,
+): void {
+  if (t.kind === "aborted") {
+    conn.wsSend(ws, { type: "chat:aborted", id });
+    return;
+  }
+  log.error(logMessage, { event: "chat:error", id, ...logCtx, ...t.logFields });
+  if (t.kind === "vento") {
+    conn.wsSend(ws, {
+      type: "chat:error",
+      id,
+      detail: t.detail,
+      ventoError: t.body,
+    });
+    return;
+  }
+  conn.wsSend(ws, { type: "chat:error", id, detail: t.problem.detail });
+}
 
 export async function handleChatSend(
   conn: WsConnection,
@@ -74,33 +115,11 @@ export async function handleChatSend(
     });
     conn.wsSend(ws, { type: "chat:done", id, usage: result.usage });
   } catch (err: unknown) {
-    if (err instanceof ChatAbortError) {
-      conn.wsSend(ws, { type: "chat:aborted", id });
-      return;
-    }
-    const detail = err instanceof ChatError ? err.message : "Failed to process chat request";
-    if (err instanceof ChatError) {
-      log.error("Chat request failed", {
-        event: "chat:error",
-        id,
-        series,
-        story,
-        code: err.code,
-        httpStatus: err.httpStatus,
-        detail: err.message,
-        ventoError: err.ventoError,
-      });
-    } else {
-      log.error("Chat request failed (unexpected)", {
-        event: "chat:error",
-        id,
-        series,
-        story,
-        error: errorMessage(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-    }
-    conn.wsSend(ws, { type: "chat:error", id, detail });
+    const t = translateChatError(err, "Failed to process chat request");
+    const logMessage = t.kind === "unexpected"
+      ? "Chat request failed (unexpected)"
+      : "Chat request failed";
+    sendChatError(conn, ws, id, t, logMessage, { series, story });
   } finally {
     conn.endGeneration(id, ws);
   }
@@ -148,33 +167,11 @@ export async function handleChatContinue(
     });
     conn.wsSend(ws, { type: "chat:done", id, usage: result.usage });
   } catch (err: unknown) {
-    if (err instanceof ChatAbortError) {
-      conn.wsSend(ws, { type: "chat:aborted", id });
-      return;
-    }
-    const detail = err instanceof ChatError ? err.message : "Failed to process chat request";
-    if (err instanceof ChatError) {
-      log.error("Continue request failed", {
-        event: "chat:error",
-        id,
-        series,
-        story,
-        code: err.code,
-        httpStatus: err.httpStatus,
-        detail: err.message,
-        ventoError: err.ventoError,
-      });
-    } else {
-      log.error("Continue request failed (unexpected)", {
-        event: "chat:error",
-        id,
-        series,
-        story,
-        error: errorMessage(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-    }
-    conn.wsSend(ws, { type: "chat:error", id, detail });
+    const t = translateChatError(err, "Failed to process chat request");
+    const logMessage = t.kind === "unexpected"
+      ? "Continue request failed (unexpected)"
+      : "Continue request failed";
+    sendChatError(conn, ws, id, t, logMessage, { series, story });
   } finally {
     conn.endGeneration(id, ws);
   }

@@ -308,6 +308,39 @@ describe("useChatApi", () => {
       expect(api.isLoading.value).toBe(false);
     });
 
+    it("chat:done for a NON-matching id does not resolve the promise (correlation guard)", async () => {
+      const capturedHandlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation((type: string, handler: (msg: unknown) => void) => {
+        capturedHandlers[type] = handler;
+        return vi.fn();
+      });
+
+      const api = await getChatApi();
+      let settled = false;
+      const promise = api.sendMessage("s", "t", "hello").then((r) => {
+        settled = true;
+        return r;
+      });
+
+      const sentArg = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      const id = sentArg.id as string;
+
+      // A chat:done correlated to a DIFFERENT request id must be ignored.
+      capturedHandlers["chat:done"]!({ type: "chat:done", id: `${id}-other` });
+      // Let any pending microtasks flush.
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      // The in-flight request stays loading; correlation guard held.
+      expect(api.isLoading.value).toBe(true);
+
+      // The matching id then resolves it for real (clean teardown).
+      capturedHandlers["chat:done"]!({ type: "chat:done", id });
+      const result = await promise;
+      expect(result).toBe(true);
+      expect(settled).toBe(true);
+      expect(api.isLoading.value).toBe(false);
+    });
+
     it("abortCurrentRequest sends chat:abort when WS request active", async () => {
       const capturedHandlers: Record<string, (msg: unknown) => void> = {};
       mockWsOnMessageFn.mockImplementation((type: string, handler: (msg: unknown) => void) => {
@@ -336,6 +369,53 @@ describe("useChatApi", () => {
       // Should not throw
       api.abortCurrentRequest();
       expect(mockWsSendFn).not.toHaveBeenCalled();
+    });
+
+    it("terminal handling is idempotent: a late chat:done after chat:error does not re-settle", async () => {
+      const capturedHandlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation((type: string, handler: (msg: unknown) => void) => {
+        capturedHandlers[type] = handler;
+        return vi.fn();
+      });
+
+      const api = await getChatApi();
+      const promise = api.sendMessage("s", "t", "hello");
+      const sentArg = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      const id = sentArg.id as string;
+
+      // First terminal: error → resolves false, resets state.
+      capturedHandlers["chat:error"]!({ type: "chat:error", id, detail: "boom" });
+      const result = await promise;
+      expect(result).toBe(false);
+      expect(api.isLoading.value).toBe(false);
+
+      // A late, racing chat:done for the SAME id must be a no-op: the request
+      // is already settled, so it must not flip isLoading back on or otherwise
+      // re-run terminal side effects. (Handlers are unsubscribed, but the guard
+      // also protects against an already-queued callback.)
+      capturedHandlers["chat:done"]!({ type: "chat:done", id });
+      await Promise.resolve();
+      expect(api.isLoading.value).toBe(false);
+    });
+
+    it("disconnect that occurs while the WS request is in flight resets loading state", async () => {
+      const capturedHandlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation((type: string, handler: (msg: unknown) => void) => {
+        capturedHandlers[type] = handler;
+        return vi.fn();
+      });
+
+      const api = await getChatApi();
+      const promise = api.sendMessage("s", "t", "hello");
+      expect(api.isLoading.value).toBe(true);
+
+      // Simulate the socket dropping mid-generation; the disconnect watcher
+      // must run the terminal path so the UI does not spin forever.
+      mockWsIsConnected.value = false;
+      const result = await promise;
+      expect(result).toBe(false);
+      expect(api.isLoading.value).toBe(false);
+      expect(api.streamingContent.value).toBe("");
     });
   });
 

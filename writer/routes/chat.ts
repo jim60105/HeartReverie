@@ -15,29 +15,14 @@
 
 import { validateParams } from "../lib/middleware.ts";
 import { errorMessage, problemJson } from "../lib/errors.ts";
-import { ChatAbortError, ChatError, executeChat, executeContinue } from "../lib/chat-shared.ts";
+import { executeChat, executeContinue } from "../lib/chat-shared.ts";
+import { translateChatError } from "../lib/chat-error-translate.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { Hono } from "@hono/hono";
 import type { AppDeps } from "../types.ts";
 import type { ContentfulStatusCode } from "@hono/hono/utils/http-status";
 
 const log = createLogger("http");
-
-/** HTTP title mapping for ChatError codes. */
-const ERROR_TITLES: Record<string, string> = {
-  "api-key": "Internal Server Error",
-  "bad-path": "Bad Request",
-  "vento": "Unprocessable Entity",
-  "no-prompt": "Internal Server Error",
-  "llm-api": "AI Service Error",
-  "llm-stream": "Bad Gateway",
-  "no-body": "Bad Gateway",
-  "no-content": "Bad Gateway",
-  "story-config": "Unprocessable Entity",
-  "no-chapter": "Bad Request",
-  "concurrent": "Conflict",
-  "conflict": "Conflict",
-};
 
 export function registerChatRoutes(
   app: Hono,
@@ -93,33 +78,23 @@ export function registerChatRoutes(
 
         return c.json(result);
       } catch (err: unknown) {
-        if (err instanceof ChatAbortError) {
+        const t = translateChatError(err, "Failed to process chat request");
+        if (t.kind === "aborted") {
           // Client disconnected — return 499 (client closed request)
           return c.json(
             problemJson("Client Closed Request", 499, "Generation aborted by client"),
             499 as ContentfulStatusCode,
           );
         }
-        if (err instanceof ChatError) {
-          log.error("Chat request failed", {
-            path: c.req.path,
-            code: err.code,
-            httpStatus: err.httpStatus,
-            detail: err.message,
-            ventoError: err.ventoError,
-          });
-          if (err.code === "vento" && err.ventoError) {
-            return c.json({ type: "vento-error", ...err.ventoError }, 422);
-          }
-          const status = err.httpStatus as ContentfulStatusCode;
-          const title = ERROR_TITLES[err.code] ?? "Internal Server Error";
-          return c.json(problemJson(title, err.httpStatus, err.message), status);
+        if (t.kind === "unexpected") {
+          log.error("Unexpected chat error", { ...t.logFields, path: c.req.path });
+        } else {
+          log.error("Chat request failed", { path: c.req.path, ...t.logFields });
         }
-        log.error("Unexpected chat error", { error: errorMessage(err), path: c.req.path });
-        return c.json(
-          problemJson("Internal Server Error", 500, "Failed to process chat request"),
-          500,
-        );
+        if (t.kind === "vento") {
+          return c.json(t.body, 422);
+        }
+        return c.json(t.problem, t.status as ContentfulStatusCode);
       }
     },
   );
@@ -153,32 +128,22 @@ export function registerChatRoutes(
         // chapter so the client can replace its local copy in one shot.
         return c.json(result);
       } catch (err: unknown) {
-        if (err instanceof ChatAbortError) {
+        const t = translateChatError(err, "Failed to process continue request");
+        if (t.kind === "aborted") {
           return c.json(
             problemJson("Client Closed Request", 499, "Generation aborted by client"),
             499 as ContentfulStatusCode,
           );
         }
-        if (err instanceof ChatError) {
-          log.error("Continue request failed", {
-            path: c.req.path,
-            code: err.code,
-            httpStatus: err.httpStatus,
-            detail: err.message,
-            ventoError: err.ventoError,
-          });
-          if (err.code === "vento" && err.ventoError) {
-            return c.json({ type: "vento-error", ...err.ventoError }, 422);
-          }
-          const status = err.httpStatus as ContentfulStatusCode;
-          const title = ERROR_TITLES[err.code] ?? "Internal Server Error";
-          return c.json(problemJson(title, err.httpStatus, err.message), status);
+        if (t.kind === "unexpected") {
+          log.error("Unexpected continue error", { ...t.logFields, path: c.req.path });
+        } else {
+          log.error("Continue request failed", { path: c.req.path, ...t.logFields });
         }
-        log.error("Unexpected continue error", { error: errorMessage(err), path: c.req.path });
-        return c.json(
-          problemJson("Internal Server Error", 500, "Failed to process continue request"),
-          500,
-        );
+        if (t.kind === "vento") {
+          return c.json(t.body, 422);
+        }
+        return c.json(t.problem, t.status as ContentfulStatusCode);
       }
     },
   );

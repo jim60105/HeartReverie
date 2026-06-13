@@ -117,6 +117,13 @@ export interface WsChatErrorMessage {
   readonly type: "chat:error";
   readonly id: string;
   readonly detail: string;
+  /**
+   * Structured Vento template-error payload, carried additively for `vento`
+   * errors only. Holds the same object the HTTP transport returns as its 422
+   * `{ type: "vento-error", ... }` body so a frontend consumer can render the
+   * same `VentoErrorCard`. Existing clients ignore this unknown field.
+   */
+  readonly ventoError?: Record<string, unknown>;
 }
 
 /** Server-to-client: chapter count changed. */

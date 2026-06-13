@@ -55,7 +55,7 @@ This is a **MED-risk** change: `useChatApi.ts` is the single highest-traffic fro
 
 **Goals:**
 
-- Collapse the four duplicated WS lifecycle wrappers behind one private `wsRequest<TDone, TResult>(spec)` helper, eliminating ~340 lines of copy-paste.
+- Collapse the four duplicated WS lifecycle wrappers behind one private `wsRequest<TDone, TResult>(spec)` helper, eliminating the copy-pasted lifecycle (per-type subscriptions, disconnect watcher, timeout, `cleanup()`). The shared helper itself plus the four declarative specs offset much of the raw line count — the file ends near 680 lines (was ~660) — but the duplication is gone: exactly one `setTimeout`, one disconnect watcher, and one `cleanup()` remain. The terminal-state reset (`streamingContent`/`isLoading`) is centralized inside the helper's `cleanup()` so no terminal path can miss it.
 - Preserve every client-observable behavior exactly: envelopes sent, public signatures, zh-TW error strings, terminal-state resets, correlation guards, and `runPluginPrompt`'s reject-on-error.
 - Make future protocol changes a one-place edit.
 
@@ -98,9 +98,9 @@ Implementation requirements (all observed in the existing four copies):
 - Subscribe delta/done/error/aborted via `onMessage`, each guarded by `msg[spec.idField] !== spec.id → return`.
 - `watch(isConnected, …)` → on disconnect: `cleanup()` then resolve `spec.onDisconnect()`.
 - `setTimeout(spec.timeoutMs ?? 300_000)` → `cleanup()` then resolve `spec.onTimeout()`.
-- `cleanup()` clears the timer, stops the watcher, unsubscribes all four, and calls `spec.setCurrentId(null)`.
-- done/error/aborted handlers call `cleanup()` **before** invoking the spec callback (matching current ordering).
-- For rejection support (`runPluginPrompt`): allow `onError` to `throw` — the wrapper catches the throw and rejects the promise.
+- `cleanup()` clears the timer, stops the watcher, unsubscribes all four, calls `spec.setCurrentId(null)`, and resets `streamingContent.value = ""` and `isLoading.value = false`. Centralizing the terminal-state reset in `cleanup()` — which every terminal path runs — guarantees no terminal path (done/error/aborted/disconnect/timeout) can leave the UI spinning, so per-call callbacks no longer repeat the reset (they only set flow-specific state such as `errorMessage`, usage push, and notifications).
+- done/error/aborted handlers call `cleanup()` **before** invoking the spec callback (matching current ordering); `errorMessage` is set by the callback after `cleanup()`, preserving the prior observable end state.
+- For rejection support (`runPluginPrompt`): allow `onError` (and `onAborted`/`onDisconnect`/`onTimeout`) to `throw` — the wrapper catches the throw and rejects the promise; returning a value resolves it.
 - `spec.setCurrentId(spec.id)` before subscribing; `send(spec.envelope)` last.
 
 **Type pragmatics:** mirror whatever typing pattern the current `onMessage` callbacks use (inspect the existing handler signatures from `useWebSocket`'s `WsServerMessage` handlers before inventing generics). Reduce `TDone` to the concrete message type per call if simpler. The plan caps complexity: if reject support forces the API into >2 type parameters or callback soup worse than the duplication, **STOP and report** — "not worth doing" is an acceptable outcome.
