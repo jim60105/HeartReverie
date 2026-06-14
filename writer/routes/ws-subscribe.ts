@@ -14,10 +14,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join } from "@std/path";
-import { parse as parseYaml } from "@std/yaml";
 import type { WSContext } from "@hono/hono/ws";
-import type { StateDiffPayload } from "../types.ts";
 import { isValidParam } from "../lib/middleware.ts";
+import { listChapterFiles, readStateDiff } from "../lib/story.ts";
 import { logWsError } from "./ws-error-log.ts";
 import type { WsConnection } from "./ws-connection.ts";
 
@@ -54,19 +53,15 @@ export async function handleSubscribe(
 
   const intervalId = setInterval(async () => {
     try {
-      const entries: string[] = [];
+      let chapterFiles: string[];
       try {
-        for await (const entry of Deno.readDir(storyDir)) {
-          entries.push(entry.name);
-        }
+        // listChapterFiles returns [] on NotFound and throws otherwise;
+        // preserve the prior early-return-with-log behaviour on any throw.
+        chapterFiles = await listChapterFiles(storyDir);
       } catch (err: unknown) {
         logWsError("dir-read", err);
         return; // Directory may not exist yet
       }
-
-      const chapterFiles = entries
-        .filter((f) => /^\d+\.md$/.test(f))
-        .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
       const count = chapterFiles.length;
 
@@ -81,21 +76,14 @@ export async function handleSubscribe(
         try {
           const content = await Deno.readTextFile(join(storyDir, lastFile));
 
-          // Try to load stateDiff for the last chapter
-          let stateDiff: StateDiffPayload | undefined;
-          try {
-            const padded = String(lastNum).padStart(3, "0");
-            const diffYaml = await Deno.readTextFile(
-              join(storyDir, `${padded}-state-diff.yaml`),
-            );
-            const parsed = parseYaml(diffYaml) as StateDiffPayload;
-            if (parsed?.entries && Array.isArray(parsed.entries)) {
-              stateDiff = parsed;
-            }
-          } catch (err: unknown) {
-            logWsError("diff-read", err);
-            // No diff file — that's fine
-          }
+          // Try to load stateDiff for the last chapter. The shared helper
+          // stays silent on an absent sidecar (NotFound) and logs only real
+          // failures (malformed YAML, permission denied); route those through
+          // the existing throttled WS error logger to preserve diff-read
+          // logging on this path.
+          const stateDiff = await readStateDiff(storyDir, lastNum, {
+            warn: (_message, data) => logWsError("diff-read", data?.error),
+          });
 
           const diffJson = stateDiff ? JSON.stringify(stateDiff) : undefined;
           if (

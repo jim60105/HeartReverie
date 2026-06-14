@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Jim Chen <Jim@ChenJ.im>, licensed under AGPL-3.0-or-later
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiFetch, apiFetchJson } from "@/lib/api";
+import { ApiError, apiFetch, apiFetchJson } from "@/lib/api";
 
 const authHeaders: Record<string, string> = {};
 
@@ -164,6 +164,56 @@ describe("apiFetch", () => {
     await expect(
       apiFetch("/api/test", { errorMessage: "boom" }),
     ).rejects.toThrow("boom");
+  });
+
+  it("throws a structured ApiError carrying status/type/message on a problem body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          type: "chapter:not-found",
+          title: "Not Found",
+          status: 404,
+          detail: "Chapter not found",
+        }),
+        { status: 404, statusText: "Not Found" },
+      ),
+    );
+
+    let caught: unknown;
+    try {
+      await apiFetch("/api/test");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    const apiErr = caught as ApiError;
+    expect(apiErr.status).toBe(404);
+    expect(apiErr.type).toBe("chapter:not-found");
+    expect(apiErr.title).toBe("Not Found");
+    // message is detail-first and byte-identical to the prior contract.
+    expect(apiErr.message).toBe("Chapter not found");
+  });
+
+  it("throws an ApiError with the fallback message and undefined type on a non-JSON body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>oops</html>", {
+        status: 502,
+        statusText: "Bad Gateway",
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+
+    let caught: unknown;
+    try {
+      await apiFetch("/api/test");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    const apiErr = caught as ApiError;
+    expect(apiErr.status).toBe(502);
+    expect(apiErr.type).toBeUndefined();
+    expect(apiErr.message).toBe("Bad Gateway");
   });
 });
 

@@ -36,6 +36,7 @@ export {
   copyChapterFile,
   listChapterFiles,
   parseChapterForContinue,
+  readStateDiff,
   resolveTargetChapterNumber,
 } from "./story-chapter-io.ts";
 

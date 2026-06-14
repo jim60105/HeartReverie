@@ -13,7 +13,7 @@ import type {
 import { useWebSocket } from "@/composables/useWebSocket";
 import { useNotification } from "@/composables/useNotification";
 import { useUsage } from "@/composables/useUsage";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, apiFetchJson } from "@/lib/api";
 import { frontendHooks } from "@/lib/plugin-hooks";
 
 const isLoading = ref(false);
@@ -659,46 +659,39 @@ async function runPluginPrompt(
       body.extraVariables = opts.extraVariables;
     }
 
-    const res = await apiFetch(
+    const res = await apiFetchJson<RunPluginPromptResult>(
       `/api/plugins/${encodeURIComponent(pluginName)}/run-prompt`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: httpAbortController.signal,
-        throwOnError: false,
       },
     );
 
-    if (!res.ok) {
-      let detail = `HTTP ${res.status}`;
-      let problemType: string | undefined;
-      try {
-        const problem = await res.json() as {
-          detail?: string;
-          title?: string;
-          type?: string;
-        };
-        detail = problem?.detail ?? problem?.title ?? detail;
-        problemType = problem?.type;
-      } catch {
-        // Body not JSON; keep status string.
-      }
-      errorMessage.value = detail;
-      // Attach the RFC 9457 `type` slug as `error.code` so consumers (incl.
-      // cross-repo plugin handlers) can branch on the stable slug instead of
-      // brittle human-readable detail text.
-      const err = new Error(detail) as Error & { code?: string };
-      if (problemType) err.code = problemType;
-      throw err;
-    }
-
-    const result = await res.json() as RunPluginPromptResult;
-    if (result?.usage) useUsage().pushRecord(result.usage);
-    return result;
+    if (res?.usage) useUsage().pushRecord(res.usage);
+    return res;
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw err;
+    }
+    if (err instanceof ApiError) {
+      // Preserve the prior hand-parser's exact message: `detail ?? title ??
+      // \`HTTP <status>\``. `ApiError.message` is detail-first but falls back to
+      // statusText rather than `HTTP <status>`, so derive the message from the
+      // structured fields to stay byte-identical.
+      const b = (err.body && typeof err.body === "object")
+        ? err.body as { detail?: unknown; title?: unknown }
+        : undefined;
+      const detail = typeof b?.detail === "string" ? b.detail : undefined;
+      const message = detail ?? err.title ?? `HTTP ${err.status}`;
+      errorMessage.value = message;
+      // Attach the RFC 9457 `type` slug as `error.code` so consumers (incl.
+      // cross-repo plugin handlers) can branch on the stable slug instead of
+      // brittle human-readable detail text.
+      const rethrow = new Error(message) as Error & { code?: string };
+      if (err.type) rethrow.code = err.type;
+      throw rethrow;
     }
     if (err instanceof Error) {
       if (!errorMessage.value) errorMessage.value = err.message;

@@ -568,6 +568,168 @@ Deno.test({
         }
       });
 
+      await t.step(
+        "PUT chapter does not write while a generation lock is acquired mid-flight (TOCTOU window closed)",
+        async () => {
+          const { tryMarkGenerationActive, clearGenerationActive } = await import(
+            "../../../writer/lib/generation-registry.ts"
+          );
+          const editDir = join(tmpDir, "toctou", "story");
+          await Deno.mkdir(editDir, { recursive: true });
+          // Seed with the original content; the race winner (a generation)
+          // would stream into this same file.
+          await Deno.writeTextFile(join(editDir, "001.md"), "ORIGINAL");
+
+          // Build a PUT whose JSON body arrives only after the test releases
+          // it, so the handler parks on `await c.req.json()` AFTER passing its
+          // early `isGenerationActive` fast-fail. While parked, we acquire the
+          // generation lock (simulating the chat path winning the race) before
+          // letting the body finish. This is the exact TOCTOU interleaving:
+          // check passed → lock acquired by someone else → write attempted.
+          let releaseBody!: () => void;
+          const bodyReleased = new Promise<void>((resolve) => {
+            releaseBody = resolve;
+          });
+          let bodyStarted!: () => void;
+          const bodyStartedPromise = new Promise<void>((resolve) => {
+            bodyStarted = resolve;
+          });
+          const encoder = new TextEncoder();
+          const slowBody = new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              bodyStarted();
+              await bodyReleased;
+              controller.enqueue(encoder.encode(JSON.stringify({ content: "EDITED" })));
+              controller.close();
+            },
+          });
+
+          const reqPromise = app.fetch(
+            new Request("http://localhost/api/stories/toctou/story/chapters/1", {
+              method: "PUT",
+              headers: { "x-passphrase": "test-pass", "Content-Type": "application/json" },
+              body: slowBody,
+              // @ts-expect-error duplex is required for a streaming request body
+              duplex: "half",
+            }),
+          );
+
+          // Wait until the handler is parked reading the body (it has already
+          // cleared its early guard by now), then a competing generation wins
+          // the lock.
+          await bodyStartedPromise;
+          const acquired = tryMarkGenerationActive("toctou", "story");
+          assertEquals(acquired, true);
+
+          try {
+            // Let the parked PUT proceed to its write attempt.
+            releaseBody();
+            const res = await reqPromise;
+            const status = res.status;
+            await res.body?.cancel();
+
+            // With the atomic guard the PUT must refuse (409) and the file must
+            // stay untouched. Before the fix this returned 200 and overwrote
+            // the file while the lock was held — silent data loss.
+            assertEquals(status, 409);
+            const onDisk = await Deno.readTextFile(join(editDir, "001.md"));
+            assertEquals(onDisk, "ORIGINAL");
+          } finally {
+            clearGenerationActive("toctou", "story");
+          }
+        },
+      );
+
+      await t.step(
+        "PUT-while-PUT: concurrent edits to the same story serialize (second gets 409)",
+        async () => {
+          const editDir = join(tmpDir, "concedit", "story");
+          await Deno.mkdir(editDir, { recursive: true });
+          await Deno.writeTextFile(join(editDir, "001.md"), "ORIGINAL");
+
+          // First PUT parks on a slow body after acquiring the lock; the
+          // second PUT (normal body) must see the lock held and return 409.
+          let releaseFirst!: () => void;
+          const firstReleased = new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+          });
+          let firstHoldsLock!: () => void;
+          const firstHoldsLockPromise = new Promise<void>((resolve) => {
+            firstHoldsLock = resolve;
+          });
+          const encoder = new TextEncoder();
+          const slowBody = new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              controller.enqueue(encoder.encode(JSON.stringify({ content: "FIRST" })));
+              controller.close();
+              // The first request has now delivered its body; give the handler
+              // a microtask turn to acquire the lock and reach its write,
+              // which we delay via the FS by parking here is not possible, so
+              // instead we open the window after the body completes.
+              firstHoldsLock();
+              await firstReleased;
+            },
+          });
+
+          const firstPromise = app.fetch(
+            new Request("http://localhost/api/stories/concedit/story/chapters/1", {
+              method: "PUT",
+              headers: { "x-passphrase": "test-pass", "Content-Type": "application/json" },
+              body: slowBody,
+              // @ts-expect-error duplex is required for a streaming request body
+              duplex: "half",
+            }),
+          );
+
+          await firstHoldsLockPromise;
+          // While the first PUT is parked holding the lock, fire the second.
+          const second = await makeRequest(
+            app,
+            "PUT",
+            "/api/stories/concedit/story/chapters/1",
+            { content: "SECOND" },
+          );
+          releaseFirst();
+          const firstRes = await firstPromise;
+          await firstRes.body?.cancel();
+
+          assertEquals(firstRes.status, 200);
+          assertEquals(second.status, 409);
+          // The first edit wins; the second never wrote.
+          assertEquals(await Deno.readTextFile(join(editDir, "001.md")), "FIRST");
+        },
+      );
+
+      await t.step(
+        "PUT releases the lock on an early 404 return inside the locked block",
+        async () => {
+          const editDir = join(tmpDir, "lockrelease", "story");
+          await Deno.mkdir(editDir, { recursive: true });
+          await Deno.writeTextFile(join(editDir, "001.md"), "ORIGINAL");
+
+          // PUT a non-existent chapter (5): acquires the lock, then `Deno.stat`
+          // throws NotFound → 404 returned from inside the try. The `finally`
+          // MUST release the lock so a subsequent valid edit can proceed.
+          const missing = await makeRequest(
+            app,
+            "PUT",
+            "/api/stories/lockrelease/story/chapters/5",
+            { content: "x" },
+          );
+          assertEquals(missing.status, 404);
+
+          // If the lock leaked, this would return 409. It must succeed.
+          const ok = await makeRequest(
+            app,
+            "PUT",
+            "/api/stories/lockrelease/story/chapters/1",
+            { content: "EDITED" },
+          );
+          assertEquals(ok.status, 200);
+          assertEquals(await Deno.readTextFile(join(editDir, "001.md")), "EDITED");
+        },
+      );
+
       // ── DELETE /chapters/after/:number rewind ────────────────────────────
 
       await t.step(

@@ -18,7 +18,7 @@
  * Adds `X-Passphrase` + `Content-Type: application/json` via `apiFetch`.
  */
 
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 
 export type TemplateKind = "system" | "plugin-fragment" | "lore" | "prompt-message-body";
 export type LoreScope = "global" | "series" | "story";
@@ -148,51 +148,55 @@ export interface WriteResponse {
   backupPath?: string;
 }
 
-export interface ApiError {
-  status: number;
-  title?: string;
-  detail?: string;
-  expressions?: string[];
-  body?: unknown;
-}
-
-export class TemplateApiError extends Error {
-  readonly status: number;
+/**
+ * Template-editor-flavoured {@link ApiError} subclass. Preserves the public
+ * field names template-editor consumers branch on (`status`, `detail`,
+ * `expressions`, `body`) and the `instanceof TemplateApiError` check while
+ * unifying the underlying problem-details parsing onto the shared `ApiError`.
+ */
+export class TemplateApiError extends ApiError {
+  override readonly name = "TemplateApiError";
   readonly detail?: string;
   readonly expressions?: string[];
-  readonly body?: unknown;
 
   constructor(err: ApiError) {
-    super(err.detail ?? err.title ?? `HTTP ${err.status}`);
-    this.name = "TemplateApiError";
-    this.status = err.status;
-    this.detail = err.detail;
-    this.expressions = err.expressions;
-    this.body = err.body;
+    const b = (err.body && typeof err.body === "object")
+      ? err.body as Record<string, unknown>
+      : undefined;
+    const detail = typeof b?.detail === "string" ? b.detail : undefined;
+    const expressions = Array.isArray(b?.expressions)
+      ? b.expressions.filter((x): x is string => typeof x === "string")
+      : undefined;
+    super(
+      detail ?? err.title ?? `HTTP ${err.status}`,
+      err.status,
+      err.type,
+      err.title,
+      err.body,
+    );
+    this.detail = detail;
+    this.expressions = expressions;
   }
 }
 
 const JSON_HEADERS: Record<string, string> = { "Content-Type": "application/json" };
 
-async function parseError(res: Response): Promise<TemplateApiError> {
-  let body: unknown = undefined;
-  let detail: string | undefined;
-  let title: string | undefined;
-  let expressions: string[] | undefined;
+/**
+ * Call the shared default-throwing client and, on a non-2xx `ApiError`,
+ * rethrow it as a {@link TemplateApiError} so template-editor consumers keep
+ * their `detail`/`expressions`/`instanceof` contract.
+ */
+async function templateFetchJson<T>(
+  input: string,
+  init?: Parameters<typeof apiFetch>[1],
+): Promise<T> {
   try {
-    body = await res.json();
-    if (body && typeof body === "object") {
-      const b = body as Record<string, unknown>;
-      if (typeof b.detail === "string") detail = b.detail;
-      if (typeof b.title === "string") title = b.title;
-      if (Array.isArray(b.expressions)) {
-        expressions = b.expressions.filter((x): x is string => typeof x === "string");
-      }
-    }
-  } catch {
-    /* ignore */
+    const res = await apiFetch(input, init);
+    return await res.json() as T;
+  } catch (err: unknown) {
+    if (err instanceof ApiError) throw new TemplateApiError(err);
+    throw err;
   }
-  return new TemplateApiError({ status: res.status, detail, title, expressions, body });
 }
 
 export interface SourceResponse {
@@ -202,9 +206,7 @@ export interface SourceResponse {
 
 export async function fetchTemplateSource(templatePath: string): Promise<SourceResponse> {
   const url = `/api/templates/source?templatePath=${encodeURIComponent(templatePath)}`;
-  const res = await apiFetch(url, { throwOnError: false });
-  if (!res.ok) throw await parseError(res);
-  return await res.json() as SourceResponse;
+  return await templateFetchJson<SourceResponse>(url);
 }
 
 export async function listTemplates(
@@ -215,9 +217,7 @@ export async function listTemplates(
   if (opts.story) params.set("story", opts.story);
   const qs = params.toString();
   const url = qs ? `/api/templates?${qs}` : "/api/templates";
-  const res = await apiFetch(url, { throwOnError: false });
-  if (!res.ok) throw await parseError(res);
-  return await res.json() as ListTemplatesResponse;
+  return await templateFetchJson<ListTemplatesResponse>(url);
 }
 
 export async function getVariables(
@@ -230,40 +230,29 @@ export async function getVariables(
   if (opts.pluginName) params.set("pluginName", opts.pluginName);
   const qs = params.toString();
   const url = qs ? `/api/templates/variables?${qs}` : "/api/templates/variables";
-  const res = await apiFetch(url, { throwOnError: false });
-  if (!res.ok) throw await parseError(res);
-  return await res.json() as GetVariablesResponse;
+  return await templateFetchJson<GetVariablesResponse>(url);
 }
 
 export async function lintTemplate(body: LintBody): Promise<LintResponse> {
-  const res = await apiFetch("/api/templates/lint", {
+  return await templateFetchJson<LintResponse>("/api/templates/lint", {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
-    throwOnError: false,
   });
-  if (!res.ok) throw await parseError(res);
-  return await res.json() as LintResponse;
 }
 
 export async function previewTemplate(body: PreviewBody): Promise<PreviewResponse> {
-  const res = await apiFetch("/api/templates/preview", {
+  return await templateFetchJson<PreviewResponse>("/api/templates/preview", {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
-    throwOnError: false,
   });
-  if (!res.ok) throw await parseError(res);
-  return await res.json() as PreviewResponse;
 }
 
 export async function writeTemplate(body: WriteBody): Promise<WriteResponse> {
-  const res = await apiFetch("/api/templates", {
+  return await templateFetchJson<WriteResponse>("/api/templates", {
     method: "PUT",
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
-    throwOnError: false,
   });
-  if (!res.ok) throw await parseError(res);
-  return await res.json() as WriteResponse;
 }

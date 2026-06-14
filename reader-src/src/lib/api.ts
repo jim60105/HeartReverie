@@ -2,6 +2,29 @@
 
 import { useAuth } from "@/composables/useAuth";
 
+/**
+ * Structured RFC 9457 Problem Details error thrown by `apiFetch` on non-2xx
+ * responses. The single source of truth for problem-details parsing on the
+ * frontend.
+ *
+ * `message` is the detail-first human string (byte-identical to the prior
+ * `apiFetch` contract) so existing `err.message`-matching consumers keep
+ * working unchanged; `status`/`type`/`title`/`body` expose the richer
+ * structured fields for callers that want them.
+ */
+export class ApiError extends Error {
+  override readonly name: string = "ApiError";
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly type?: string,
+    public readonly title?: string,
+    public readonly body?: unknown,
+  ) {
+    super(message);
+  }
+}
+
 export interface ApiFetchOptions extends RequestInit {
   /**
    * If true (default), `apiFetch` throws an Error on non-2xx responses.
@@ -45,9 +68,14 @@ export async function apiFetch(
 
   if (!res.ok && throwOnError) {
     const body = await res.json().catch(() => ({}));
-    const detail = (body as { detail?: string }).detail;
-    throw new Error(
+    const problem = body as { detail?: string; type?: string; title?: string };
+    const detail = problem.detail;
+    throw new ApiError(
       detail ?? errorMessage ?? (res.statusText || `Request failed: ${url}`),
+      res.status,
+      problem.type,
+      problem.title,
+      body,
     );
   }
 

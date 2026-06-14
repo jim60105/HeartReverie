@@ -35,9 +35,11 @@
  */
 
 import { join } from "@std/path";
-import { createLogger } from "./logger.ts";
+import { parse as parseYaml } from "@std/yaml";
+import { createLogger, type Logger } from "./logger.ts";
+import { errorMessage } from "./errors.ts";
 import { pruneUsage } from "./usage.ts";
-import type { ChapterEntry } from "../types.ts";
+import type { ChapterEntry, StateDiffPayload } from "../types.ts";
 
 const log = createLogger("file");
 
@@ -119,6 +121,63 @@ export async function listChapterFiles(dir: string): Promise<string[]> {
   return entries
     .filter((f) => /^\d+\.md$/.test(f))
     .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+}
+
+/**
+ * Read and validate a chapter's `NNN-state-diff.yaml` sidecar.
+ *
+ * This is the single shared implementation behind every HTTP and WebSocket
+ * state-diff read path (the batch-list mode and single-chapter read in
+ * `chapters.ts`, and the poll loop in `ws-subscribe.ts`) so the
+ * "absent sidecar is silent, anything else is logged" contract lives in
+ * exactly one place.
+ *
+ * Behaviour:
+ *  - Reads `NNN-state-diff.yaml` for the given chapter number (zero-padded to
+ *    three digits) and parses it as YAML.
+ *  - Returns the parsed {@link StateDiffPayload} only when it carries an
+ *    `entries` array; otherwise returns `undefined`.
+ *  - An absent sidecar (`Deno.errors.NotFound`) is the expected silent case
+ *    and is never logged.
+ *  - Any other failure (malformed YAML, permission denied, …) returns
+ *    `undefined` and is logged once at warn level through the optional
+ *    `logger` argument with the operation and chapter-number context, so a
+ *    corrupt state-diff is not indistinguishable from "no diff".
+ *
+ * @param dirPath - Absolute path to the story directory.
+ * @param chapterNum - Chapter number whose sidecar to read.
+ * @param logger - Optional sink (any object with a `warn` method) for
+ *   non-NotFound read failures.
+ * @returns The parsed payload, or `undefined` when absent/unparseable/malformed.
+ */
+export async function readStateDiff(
+  dirPath: string,
+  chapterNum: number,
+  logger?: Pick<Logger, "warn">,
+): Promise<StateDiffPayload | undefined> {
+  const padded = String(chapterNum).padStart(3, "0");
+  try {
+    const diffYaml = await Deno.readTextFile(
+      join(dirPath, `${padded}-state-diff.yaml`),
+    );
+    const parsed = parseYaml(diffYaml) as StateDiffPayload;
+    if (parsed?.entries && Array.isArray(parsed.entries)) {
+      return parsed;
+    }
+    return undefined;
+  } catch (err: unknown) {
+    // Absent diff sidecar is the expected silent case; surface any other
+    // failure (malformed YAML, permission denied) so a corrupt state-diff is
+    // not indistinguishable from "no diff".
+    if (!(err instanceof Deno.errors.NotFound)) {
+      logger?.warn("Failed to read state-diff", {
+        op: "read-state-diff",
+        chapter: chapterNum,
+        error: errorMessage(err),
+      });
+    }
+    return undefined;
+  }
 }
 
 /**
