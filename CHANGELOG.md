@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-14
+
+### Added
+
+- **Tagless plugin-action append**: Plugins driving `runPluginPrompt({ append: true })` may now omit `appendTag` to append the model's trimmed output verbatim, with no wrapper element — so multi-block responses (e.g. several `<image>` blocks) survive exactly as emitted. An explicit `null`, empty string, or malformed tag is still rejected, keeping omission the single, symmetric opt-out for both append and replace modes.
+
+### Changed
+
+- **Unified frontend API errors**: All REST clients now raise a single structured `ApiError` (carrying status, type, title, and a detail-first message), replacing three separate hand-rolled error parsers across the template, chat, and plugin-action paths while preserving existing error messages and codes.
+- **Consolidated chat error handling**: HTTP and WebSocket chat paths share one error-translation routine, and the frontend routes all WebSocket requests through a shared lifecycle wrapper for consistent behavior.
+- **Internal refactors for maintainability**: Deduplicated the state-diff reader, chapter delete-last logic, and template-file reading into shared library helpers, and fixed several module-layering issues — no user-facing behavior change.
+- **Backend error visibility**: Plugin-action and state-diff failures are now logged with context instead of being swallowed silently.
+
+### Fixed
+
+- **Edit/rewind/delete race during generation**: Concurrent chapter edits, rewinds, or deletions to a story that has an in-flight LLM generation are now serialized via an atomic generation lock, closing a time-of-check/time-of-use race; conflicting concurrent edits to the same story correctly return HTTP 409.
+
 ## [0.9.0] - 2026-06-03
 
 ### Added
@@ -273,7 +290,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/jim60105/HeartReverie/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/jim60105/HeartReverie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jim60105/HeartReverie/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jim60105/HeartReverie/compare/v0.6.0...v0.7.0
