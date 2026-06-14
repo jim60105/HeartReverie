@@ -23,21 +23,60 @@ import { createTemplateEngine } from "../../../writer/lib/template.ts";
 import { createStoryEngine } from "../../../writer/lib/story.ts";
 import type { AppConfig, AppDeps } from "../../../writer/types.ts";
 
+/**
+ * Per-socket persistent message buffer.
+ *
+ * A naive one-shot `addEventListener("message")` per read drops any message
+ * that the server dispatches in the gap between two consecutive reads (e.g.
+ * `plugin-action:delta` immediately followed by `plugin-action:done`). That
+ * race surfaces as a spurious "Timeout waiting for message" under load (it is
+ * the CI flake this harness fixes). Instead we attach a single permanent
+ * listener at open time that enqueues every inbound message, and `readMessage`
+ * drains that queue — so no message is ever lost between reads.
+ */
+interface WsQueue {
+  messages: Record<string, unknown>[];
+  waiter: ((msg: Record<string, unknown>) => void) | null;
+}
+
+const wsQueues = new WeakMap<WebSocket, WsQueue>();
+
+function attachQueue(ws: WebSocket): void {
+  const queue: WsQueue = { messages: [], waiter: null };
+  wsQueues.set(ws, queue);
+  ws.addEventListener("message", (e: MessageEvent) => {
+    const parsed = JSON.parse(e.data as string) as Record<string, unknown>;
+    if (queue.waiter) {
+      const resolve = queue.waiter;
+      queue.waiter = null;
+      resolve(parsed);
+    } else {
+      queue.messages.push(parsed);
+    }
+  });
+}
+
 function readMessage(
   ws: WebSocket,
   timeoutMs = 2000,
 ): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error("Timeout waiting for message")),
-      timeoutMs,
+  const queue = wsQueues.get(ws);
+  if (!queue) {
+    return Promise.reject(
+      new Error("WebSocket queue not attached (use openWs)"),
     );
-    const handler = (e: MessageEvent) => {
+  }
+  const buffered = queue.messages.shift();
+  if (buffered) return Promise.resolve(buffered);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      queue.waiter = null;
+      reject(new Error("Timeout waiting for message"));
+    }, timeoutMs);
+    queue.waiter = (msg) => {
       clearTimeout(timer);
-      ws.removeEventListener("message", handler);
-      resolve(JSON.parse(e.data as string));
+      resolve(msg);
     };
-    ws.addEventListener("message", handler);
   });
 }
 
@@ -71,6 +110,7 @@ function waitForClose(ws: WebSocket, timeoutMs = 2000): Promise<CloseEvent> {
 
 function openWs(addr: Deno.NetAddr): Promise<WebSocket> {
   const ws = new WebSocket(`ws://localhost:${addr.port}/api/ws`);
+  attachQueue(ws);
   return new Promise((resolve, reject) => {
     ws.onopen = () => resolve(ws);
     ws.onerror = (e) => reject(e);
