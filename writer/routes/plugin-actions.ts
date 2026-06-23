@@ -106,6 +106,22 @@ export async function runPluginActionWithDeps(
           status: 400,
         };
       }
+      if (err.code === "insert-invalid-payload") {
+        return {
+          ok: false,
+          aborted: false,
+          problem: pluginActionProblems.invalidInsertPayload(err.message),
+          status: 422,
+        };
+      }
+      if (err.code === "insert-out-of-range") {
+        return {
+          ok: false,
+          aborted: false,
+          problem: pluginActionProblems.insertParagraphOutOfRange(err.message),
+          status: 422,
+        };
+      }
       return {
         ok: false,
         aborted: false,
@@ -179,6 +195,7 @@ export function registerPluginActionRoutes(
     // but we want to refuse rather than silently prefer one.
     const wantAppend = body.append === true;
     const wantReplace = body.replace === true;
+    const wantInsert = body.insert === true;
     if (wantAppend && wantReplace) {
       return c.json(pluginActionProblems.invalidReplaceCombo(), 400);
     }
@@ -190,7 +207,15 @@ export function registerPluginActionRoutes(
         400,
       );
     }
-    const resolvedMode = wantAppend
+    // Insert is mutually exclusive with append/replace and forbids appendTag
+    // (including an explicit JSON null). Reject early with a precise problem
+    // slug rather than silently picking one mode in the translation below.
+    if (wantInsert && (wantAppend || wantReplace || body.appendTag !== undefined)) {
+      return c.json(pluginActionProblems.invalidInsertCombo(), 400);
+    }
+    const resolvedMode = wantInsert
+      ? "insert-into-chapter"
+      : wantAppend
       ? "append-to-existing-chapter"
       : wantReplace
       ? "replace-last-chapter"
@@ -205,6 +230,7 @@ export function registerPluginActionRoutes(
         mode: resolvedMode,
         appendTag: body.appendTag,
         replace: body.replace,
+        insert: body.insert,
         extraVariables: body.extraVariables,
         signal: controller.signal,
       },

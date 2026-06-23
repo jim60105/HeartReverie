@@ -32,6 +32,7 @@ export const RESERVED_VARIABLE_NAMES: readonly string[] = [
   "story_name",
   "plugin_fragments",
   "draft",
+  "numbered_paragraphs",
 ];
 
 export const APPEND_TAG_RE = /^[a-zA-Z][a-zA-Z0-9_-]{0,30}$/;
@@ -62,6 +63,7 @@ export interface PluginActionRequestArgs {
   readonly mode: unknown;
   readonly appendTag?: unknown;
   readonly replace?: unknown;
+  readonly insert?: unknown;
   readonly extraVariables?: unknown;
   readonly signal?: AbortSignal;
   readonly onDelta?: (chunk: string) => void;

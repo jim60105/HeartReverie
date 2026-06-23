@@ -40,6 +40,8 @@ import { appendUsage } from "./usage.ts";
 import type { WriteMode } from "./chat-types.ts";
 import { deepFreeze } from "./chat-llm-fetch.ts";
 import type { ChapterTarget, StoryContext } from "./chat-chapter-io.ts";
+import type { ChapterParagraph } from "./chapter-paragraphs.ts";
+import { applyInsertions, parseInsertEnvelope, resolveInsertions } from "./chat-chapter-insert.ts";
 
 /**
  * Strip exactly one matching outer `<{tag}>…</{tag}>` wrapper from `content`
@@ -327,12 +329,129 @@ async function finalizeReplaceLastChapter(
 }
 
 /**
+ * Insert mode finalizer: parse the accumulated stream as a JSON insertion
+ * envelope, resolve each `insertAfterParagraph` against the canonical
+ * paragraph segmentation carried on `writeMode`, splice byte-for-byte into the
+ * same snapshot, atomically write, re-read, and dispatch `post-response`.
+ *
+ * Parse/validation failures and out-of-range indices throw `ChatError`
+ * (caught upstream and translated to the matching problem slug) BEFORE any
+ * write, so the chapter file is left byte-for-byte unchanged. An empty
+ * `insertions` array is a no-op: no write, no `post-response`, returns the
+ * snapshot unchanged with `insertedCount: 0`.
+ */
+async function finalizeInsertIntoChapter(
+  args: FinalizeArgs & {
+    readonly pluginName: string;
+    readonly chapterSnapshot: string;
+    readonly paragraphs: readonly ChapterParagraph[];
+    readonly numberedParagraphs: string;
+  },
+): Promise<{ content: string; insertedCount: number }> {
+  const {
+    chapterPath,
+    targetNum,
+    aiContent,
+    pluginName,
+    chapterSnapshot,
+    paragraphs,
+    numberedParagraphs,
+    storyCtx,
+    hookDispatcher,
+    reqFileLog,
+    encoder,
+    endpoint,
+    usage,
+    usageForDispatch,
+  } = args;
+  const { storyDir, rootDir, series, name, correlationId } = storyCtx;
+
+  // Dispatch the `insert-transform` hook (serial, mutating, NOT deep-frozen)
+  // so a plugin may convert a domain-specific LLM response into the canonical
+  // insertion envelope. Runs inside the lock-held finalize path, BEFORE any
+  // write. If a handler sets `envelope` to a non-empty string we parse THAT;
+  // otherwise we fall back to the raw accumulated response.
+  //
+  // NOTE: the hook dispatcher CATCHES and logs serial-handler exceptions (they
+  // do NOT propagate), so a throwing handler does not abort here by exception —
+  // it simply leaves `envelope` unset, and the raw-response fallback then fails
+  // `parseInsertEnvelope` (for a domain-specific response) and aborts BEFORE
+  // any write. The "no chapter write on transform failure" guarantee therefore
+  // holds whether the handler throws or just declines.
+  const transformCtx = await hookDispatcher.dispatch("insert-transform", {
+    correlationId,
+    pluginName,
+    rawResponse: aiContent,
+    numberedParagraphs,
+    series,
+    name,
+    storyDir,
+    envelope: null,
+  });
+  const produced = transformCtx.envelope;
+  const canonical = typeof produced === "string" && produced.length > 0 ? produced : aiContent;
+
+  // Parse + resolve BEFORE touching the file system. Both throw on failure so
+  // the chapter is never partially written.
+  const entries = parseInsertEnvelope(canonical);
+
+  // Empty array → accepted no-op: write nothing, dispatch nothing.
+  if (entries.length === 0) {
+    reqFileLog.info("Insert no-op (empty insertions)", {
+      op: "insert",
+      path: chapterPath,
+      pluginName,
+    });
+    return { content: chapterSnapshot, insertedCount: 0 };
+  }
+
+  const resolved = resolveInsertions(entries, paragraphs);
+  const spliced = applyInsertions(chapterSnapshot, resolved);
+
+  const padded = String(targetNum).padStart(3, "0");
+  await atomicWriteChapter(storyDir, `${padded}.md`, spliced);
+  const chapterContentAfter = await Deno.readTextFile(chapterPath);
+
+  reqFileLog.info("Chapter file inserted (plugin-action)", {
+    op: "insert",
+    path: chapterPath,
+    pluginName,
+    insertedCount: entries.length,
+    bytes: encoder.encode(spliced).length,
+  });
+
+  await persistUsageAndDispatch({
+    storyDir,
+    endpoint,
+    usage,
+    usageForDispatch,
+    hookDispatcher,
+    base: {
+      correlationId,
+      content: chapterContentAfter,
+      storyDir,
+      series,
+      name,
+      rootDir,
+      chapterNumber: targetNum,
+      chapterPath,
+      source: "plugin-action",
+      pluginName,
+    },
+  });
+
+  return { content: chapterContentAfter, insertedCount: entries.length };
+}
+
+/**
  * Mode-specific finalization that runs AFTER the streaming loop succeeded
  * (no abort, content seen). Routes to the appropriate per-mode helper.
  *
- * Returns the post-state chapter content, or `null` for `discard` and for
- * non-discard modes that arrive with an unresolved target (defensive — the
- * preceding pipeline never produces this combination in practice).
+ * Returns `{ content, insertedCount }` where `content` is the post-state
+ * chapter content (or `null` for `discard` and for non-discard modes that
+ * arrive with an unresolved target — defensive; the preceding pipeline never
+ * produces this combination in practice) and `insertedCount` is the number of
+ * insertions applied (always `0` outside insert mode).
  */
 export async function finalizeStreamMode(args: {
   writeMode: WriteMode;
@@ -345,12 +464,14 @@ export async function finalizeStreamMode(args: {
   hookDispatcher: HookDispatcher;
   reqFileLog: Logger;
   encoder: TextEncoder;
-}): Promise<string | null> {
+}): Promise<{ content: string | null; insertedCount: number }> {
   const { writeMode, target, usage } = args;
   const { chapterPath, targetNum } = target;
 
-  if (writeMode.kind === "discard") return null;
-  if (chapterPath === null || targetNum === null) return null;
+  if (writeMode.kind === "discard") return { content: null, insertedCount: 0 };
+  if (chapterPath === null || targetNum === null) {
+    return { content: null, insertedCount: 0 };
+  }
 
   // Pre-clone the usage record so the value reachable through the frozen
   // hook payload stays independent of the local mutable record that
@@ -373,19 +494,33 @@ export async function finalizeStreamMode(args: {
 
   switch (writeMode.kind) {
     case "write-new-chapter":
-      return await finalizeWriteNewChapter(common);
+      return { content: await finalizeWriteNewChapter(common), insertedCount: 0 };
     case "append-to-existing-chapter":
-      return await finalizeAppendToExisting({
-        ...common,
-        appendTag: writeMode.appendTag,
-        pluginName: writeMode.pluginName,
-      });
+      return {
+        content: await finalizeAppendToExisting({
+          ...common,
+          appendTag: writeMode.appendTag,
+          pluginName: writeMode.pluginName,
+        }),
+        insertedCount: 0,
+      };
     case "continue-last-chapter":
-      return await finalizeContinueLastChapter(common);
+      return { content: await finalizeContinueLastChapter(common), insertedCount: 0 };
     case "replace-last-chapter":
-      return await finalizeReplaceLastChapter({
+      return {
+        content: await finalizeReplaceLastChapter({
+          ...common,
+          pluginName: writeMode.pluginName,
+        }),
+        insertedCount: 0,
+      };
+    case "insert-into-chapter":
+      return await finalizeInsertIntoChapter({
         ...common,
         pluginName: writeMode.pluginName,
+        chapterSnapshot: writeMode.chapterSnapshot,
+        paragraphs: writeMode.paragraphs,
+        numberedParagraphs: writeMode.numberedParagraphs,
       });
   }
 }

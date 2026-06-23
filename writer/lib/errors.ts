@@ -94,6 +94,37 @@ export const pluginActionProblems = {
   noChapter(detail = "Story directory contains no chapter file"): ProblemDetail {
     return { type: "plugin-action:no-chapter", title: "Bad Request", status: 400, detail };
   },
+  invalidInsertCombo(
+    detail = "insert mode cannot be combined with append, replace, or appendTag",
+  ): ProblemDetail {
+    return {
+      type: "plugin-action:invalid-insert-combo",
+      title: "Bad Request",
+      status: 400,
+      detail,
+    };
+  },
+  invalidInsertPayload(
+    detail =
+      "insert response is not a valid JSON insertion envelope { insertions: [{ insertAfterParagraph, text }] }",
+  ): ProblemDetail {
+    return {
+      type: "plugin-action:invalid-insert-payload",
+      title: "Unprocessable Entity",
+      status: 422,
+      detail,
+    };
+  },
+  insertParagraphOutOfRange(
+    detail = "an insertAfterParagraph index is outside the valid range 0..N",
+  ): ProblemDetail {
+    return {
+      type: "plugin-action:insert-paragraph-out-of-range",
+      title: "Unprocessable Entity",
+      status: 422,
+      detail,
+    };
+  },
   pluginDisabled(detail = "Plugin is currently disabled in settings"): ProblemDetail {
     return { type: "plugin-action:plugin-disabled", title: "Conflict", status: 409, detail };
   },

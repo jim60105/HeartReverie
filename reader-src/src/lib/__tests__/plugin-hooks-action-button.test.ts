@@ -33,6 +33,8 @@ function makeClickCtx(
         usage: null,
         chapterUpdated: false,
         chapterReplaced: false,
+        chapterInserted: false,
+        insertedCount: 0,
         appendedTag: null,
       }),
     notify: () => {},

@@ -287,6 +287,74 @@ describe("useChatApi.runPluginPrompt", () => {
       expect(sent).not.toHaveProperty("replace");
     });
 
+    it("forwards insert: true on the WS envelope and omits append/replace/appendTag", async () => {
+      const handlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation(
+        (type: string, h: (msg: unknown) => void) => {
+          handlers[type] = h;
+          return vi.fn();
+        },
+      );
+
+      const api = await getApi();
+      const promise = api.runPluginPrompt("sd-webui-image-gen", "image-design.md", {
+        insert: true,
+      });
+
+      expect(mockWsSendFn).toHaveBeenCalledTimes(1);
+      const sent = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      expect(sent.insert).toBe(true);
+      expect(sent).not.toHaveProperty("append");
+      expect(sent).not.toHaveProperty("replace");
+      expect(sent).not.toHaveProperty("appendTag");
+
+      const correlationId = sent.correlationId as string;
+      handlers["plugin-action:done"]!({
+        type: "plugin-action:done",
+        correlationId,
+        content: "full chapter",
+        usage: null,
+        chapterUpdated: true,
+        chapterReplaced: false,
+        chapterInserted: true,
+        insertedCount: 2,
+        appendedTag: null,
+      });
+
+      const result = await promise;
+      expect(result.chapterInserted).toBe(true);
+      expect(result.insertedCount).toBe(2);
+    });
+
+    it("surfaces insert error slugs via rejected promise + error.code", async () => {
+      const handlers: Record<string, (msg: unknown) => void> = {};
+      mockWsOnMessageFn.mockImplementation(
+        (type: string, h: (msg: unknown) => void) => {
+          handlers[type] = h;
+          return vi.fn();
+        },
+      );
+
+      const api = await getApi();
+      const promise = api.runPluginPrompt("sd-webui-image-gen", "image-design.md", {
+        insert: true,
+      });
+      const sent = mockWsSendFn.mock.calls[0]![0] as Record<string, unknown>;
+      const correlationId = sent.correlationId as string;
+
+      handlers["plugin-action:error"]!({
+        type: "plugin-action:error",
+        correlationId,
+        problem: { type: "plugin-action:invalid-insert-payload", detail: "bad envelope" },
+      });
+
+      await expect(promise).rejects.toMatchObject({
+        message: "bad envelope",
+        code: "plugin-action:invalid-insert-payload",
+      });
+      expect(api.errorMessage.value).toBe("bad envelope");
+    });
+
     it("rejects when isLoading is already true", async () => {
       mockWsOnMessageFn.mockImplementation(() => vi.fn());
       const api = await getApi();
@@ -416,6 +484,42 @@ describe("useChatApi.runPluginPrompt", () => {
       const body = JSON.parse(init.body as string);
       expect(body.replace).toBe(true);
       expect(body).not.toHaveProperty("append");
+      expect(body).not.toHaveProperty("appendTag");
+    });
+
+    it("forwards insert: true in the HTTP POST body and exposes chapterInserted", async () => {
+      const final = {
+        content: "full chapter",
+        usage: null,
+        chapterUpdated: true,
+        chapterReplaced: false,
+        chapterInserted: true,
+        insertedCount: 3,
+        appendedTag: null,
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(final),
+            headers: new Headers(),
+          })
+        ),
+      );
+      const api = await getApi();
+      const result = await api.runPluginPrompt("sd-webui-image-gen", "image-design.md", {
+        insert: true,
+      });
+      expect(result.chapterInserted).toBe(true);
+      expect(result.insertedCount).toBe(3);
+      const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+      const init = fetchMock.mock.calls[0]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      expect(body.insert).toBe(true);
+      expect(body).not.toHaveProperty("append");
+      expect(body).not.toHaveProperty("replace");
       expect(body).not.toHaveProperty("appendTag");
     });
 

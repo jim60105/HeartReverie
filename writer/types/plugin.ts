@@ -179,6 +179,7 @@ export interface PluginRunPromptRequest {
   readonly append?: boolean;
   readonly appendTag?: string;
   readonly replace?: boolean;
+  readonly insert?: boolean;
   readonly extraVariables?: Record<string, string | number | boolean>;
 }
 
@@ -188,6 +189,10 @@ export interface PluginRunPromptResponse {
   readonly usage: TokenUsageRecord | null;
   readonly chapterUpdated: boolean;
   readonly chapterReplaced: boolean;
+  /** `true` for a successful non-empty insert-mode run; `false` otherwise. */
+  readonly chapterInserted: boolean;
+  /** Number of insertions applied (`0` for non-insert modes / empty inserts). */
+  readonly insertedCount: number;
   readonly appendedTag: string | null;
 }
 

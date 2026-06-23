@@ -60,6 +60,7 @@ export interface PreflightContext {
   readonly validatedMode:
     | "append-to-existing-chapter"
     | "replace-last-chapter"
+    | "insert-into-chapter"
     | "discard";
   readonly validatedAppendTag: string | null;
   readonly extras: Record<string, unknown>;

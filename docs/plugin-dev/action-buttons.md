@@ -112,13 +112,16 @@ runPluginPrompt(
     append?: boolean;             // 預設 false
     appendTag?: string;           // append=true 時「選填」：提供時須符合 ^[a-zA-Z][a-zA-Z0-9_-]{0,30}$；完全省略則為無標籤附加（逐字寫入、不加 wrapper）；顯式傳 null 會被拒絕
     replace?: boolean;            // 預設 false；與 append 互斥
+    insert?: boolean;             // 預設 false；段落錨定插入模式，與 append/replace 互斥、且不可帶 appendTag
     extraVariables?: Record<string, string | number | boolean>; // 僅允許純量
   }
 ): Promise<{
-  content: string;                // append=true 時為寫入後的完整章節內容；replace=true 時為寫入後的完整內容；其餘為原始 LLM 回應
+  content: string;                // append=true 時為寫入後的完整章節內容；replace=true 時為寫入後的完整內容；insert 成功時為插入後完整章節內容；其餘為原始 LLM 回應
   usage: TokenUsageRecord | null; // 上游回傳的 token 用量（若有）
-  chapterUpdated: boolean;        // append=true 並成功寫入時為 true
+  chapterUpdated: boolean;        // append=true 並成功寫入時為 true；非空 insert 成功時亦為 true
   chapterReplaced: boolean;       // replace=true 並成功覆寫時為 true
+  chapterInserted: boolean;       // insert=true 且至少插入一筆時為 true
+  insertedCount: number;          // insert 模式實際套用的插入筆數；其餘模式為 0
   appendedTag: string | null;     // 有標籤附加時等於 appendTag；無標籤附加（tagless）時為 null；其餘模式為 null
 }>
 ```
@@ -131,6 +134,7 @@ runPluginPrompt(
 - 後端會以同一 Vento engine、同一 dynamic-variable 管線渲染 `promptFile`；`extraVariables` 必須為純量且不得撞到保留變數名（`previousContext`、任何 `lore_*`、`status_data`、`draft` 等）。`user_input` 在 plugin action 預設為空字串，但範本本身**仍須**至少 emit 一個 `{{ message "user" }}…{{ /message }}` 區塊，否則回 422 `multi-message:no-user-message`。
 - `replace` 與 `append` 互斥：同時設定 `replace: true` 與 `append: true` 會被拒絕（HTTP 400）。`replace: true` 加上 `appendTag`（含顯式 `null`）也會被拒絕。
 - `appendTag` 在 append 模式為**選填**：只有**完全省略**該欄位才會進入「無標籤附加」（tagless append）。提供格式錯誤的標籤（不符 `^[a-zA-Z][a-zA-Z0-9_-]{0,30}$`、空字串）或顯式傳 `null` 仍會以 HTTP 400 `plugin-action:invalid-append-tag` 拒絕。此設計與 `replace` 模式對稱：兩種模式都只能以「省略欄位」表示不使用標籤。
+- `insert` 與 `append`、`replace` 三者互斥；`insert: true` 同時帶 `append: true`、`replace: true` 或任何非 `undefined` 的 `appendTag`（含顯式 `null`）會以 HTTP 400 `plugin-action:invalid-insert-combo` 拒絕。詳見下方「Insert 行為」。
 
 ### WebSocket 信封流程
 
@@ -138,10 +142,10 @@ WebSocket 通道使用以下 envelope（已加進 `WsClientMessage` / `WsServerM
 
 | 方向 | 型別 | 說明 |
 |------|------|------|
-| Client → Server | `plugin-action:run` | 啟動一次 plugin action（含 `pluginName`、`series`、`name`、`promptFile`、`append`、`appendTag`、`replace`、`extraVariables`） |
+| Client → Server | `plugin-action:run` | 啟動一次 plugin action（含 `pluginName`、`series`、`name`、`promptFile`、`append`、`appendTag`、`replace`、`insert`、`extraVariables`） |
 | Client → Server | `plugin-action:abort` | 中止目前進行中的 plugin action |
 | Server → Client | `plugin-action:delta` | 串流中的增量 chunk |
-| Server → Client | `plugin-action:done` | 完成；payload 等同 helper 回傳的 `{ content, usage, chapterUpdated, chapterReplaced, appendedTag }` |
+| Server → Client | `plugin-action:done` | 完成；payload 等同 helper 回傳的 `{ content, usage, chapterUpdated, chapterReplaced, chapterInserted, insertedCount, appendedTag }` |
 | Server → Client | `plugin-action:error` | 失敗；payload 為 RFC 9457 Problem Details |
 | Server → Client | `plugin-action:aborted` | 已中止；append 與 `post-response` 都不會發生 |
 
@@ -192,6 +196,46 @@ HTTP fallback（`POST /api/plugins/:pluginName/run-prompt`）僅回傳最終 JSO
 - `"draft"` 為系統保留的變數名稱，呼叫端**不得**透過 `extraVariables` 覆寫此值，若嘗試覆寫，後端回 HTTP 400。
 - 僅在 `replace: true` 時注入；`append` 模式或無寫入模式下不會產生 `draft` 變數。
 - 注入的內容已套用 `promptStripTags`，與 `previous_context` 的清理管線一致。
+
+## Insert 行為（`insert-into-chapter` WriteMode）
+
+`insert` 模式讓 plugin 把 LLM 產生的內容**插入到最新章節的指定段落之後**，而非附加到章節尾端或整檔覆寫。後端把整段串流回應視為一個 **JSON 插入信封**：
+
+```json
+{ "insertions": [ { "insertAfterParagraph": 3, "text": "<任意字串>" }, … ] }
+```
+
+流程（全部在 per-story generation lock 內、針對**同一份章節快照**完成）：
+
+1. 取得 per-story generation lock（已被佔用 → HTTP 409 `plugin-action:concurrent-generation`，不碰檔案）。
+2. 讀取編號最大的章節檔**一次**（insert 快照）；若故事沒有任何章節檔 → HTTP 400 `plugin-action:no-chapter`。
+3. 以「保留長度的遮罩視圖」（將每個 `promptStripTags` 命中區段以等長空白取代、保留換行）對快照做段落切分（以空行分段、1-based 編號），並把渲染好的字串注入保留變數 `numbered_paragraphs`（見下節）。
+4. 串完 LLM 回應後，先 `trim()`、最多剝除一層外層 Markdown code fence（```` ```json … ``` ````／```` ``` … ``` ````），再 `JSON.parse`。解析失敗或形狀不符 → HTTP 422 `plugin-action:invalid-insert-payload`，**不**修改章節。引擎**不**做任何啟發式撿拾。
+5. 每個 `insertAfterParagraph`（記為 `K`，對 `count` 個段落）：`1..count` → 插在段落 `K` 之後；`0` → 插在第一個可見段落之前（保留任何前置的被剝除內容；零段落章節則為 offset 0）；`K < 0` 或 `K > count` → 整批以 HTTP 422 `plugin-action:insert-paragraph-out-of-range` 拒絕，**不**做任何插入，章節**逐位元組不變**。
+6. 每個 `text` **逐位元組**插入（不 trim、不正規化內部換行）；引擎只在外層補上空行分隔，並收斂接縫使連續換行不超過兩個。多筆插入依解析 offset **由大到小**套用（避免位移彼此）；同一 offset 的多筆依陣列順序串接（不反轉）。
+7. 以 `atomicWriteChapter`（寫暫存檔 + rename）寫入；重新讀取整檔，並以 `source: "plugin-action"`、`pluginName`、`content: <插入後完整章節>` 派發 `post-response`（不設定 `appendedTag`）。`pre-write` 與 `response-stream` **不**派發。
+8. lock 於 `finally` 釋放（成功、錯誤、中止皆然）。
+
+**`insert-transform` hook（信封轉換）：** 在步驟 4 解析信封**之前**，引擎會先序列派發 `insert-transform` 後端 hook，並把 `{ correlationId, pluginName, rawResponse, numberedParagraphs, series, name, storyDir, envelope: null }` 作為**未 deep-frozen 的可變** context 傳入。若有 handler（**必須**以 `context.pluginName` 自我過濾自己的 plugin）寫入 `context.envelope` 為非空字串，引擎改為解析該字串；否則回退解析 `rawResponse`。這讓 plugin 可以讓 LLM 輸出自訂格式（例如扁平 JSON 陣列），再由 handler 在後端組裝成標準插入信封。handler 在驗證失敗時**不可 `throw`**（序列後端 hook 例外會被吞掉），而應「不設定 `envelope` 並 `return`」，使引擎回退後以 `plugin-action:invalid-insert-payload` 收場、章節不變。詳見 [hooks 文件的 `insert-transform` 章節](hooks.md#insert-transform插入信封轉換)。
+
+**空陣列為 no-op：** `{"insertions":[]}` 會回應成功但不寫入、不派發 `post-response`，回傳 `chapterInserted: false`、`insertedCount: 0`。
+
+**回應欄位：**
+
+- 成功非空插入：`chapterInserted: true`、`insertedCount: <筆數>`、`chapterUpdated: true`（章節檔確實變更，舊有的「reload on chapterUpdated」邏輯照常運作）、`chapterReplaced: false`、`appendedTag: null`、`content: <插入後完整章節>`。
+- 非 insert 模式：`chapterInserted: false`、`insertedCount: 0`。
+
+**錯誤 slug（HTTP 與 WebSocket 一致）：** `plugin-action:invalid-insert-combo`（400）、`plugin-action:invalid-insert-payload`（422）、`plugin-action:insert-paragraph-out-of-range`（422），以及沿用的 `plugin-action:no-chapter`（400）、`plugin-action:concurrent-generation`（409）。
+
+## `numbered_paragraphs` 保留變數
+
+在 `insert` 模式下，後端會把最新章節（lock 內讀取的同一份快照）切分為帶 1-based 流水編號的段落，並以保留變數 `numbered_paragraphs` 注入提示詞範本。範本可透過 `{{ numbered_paragraphs }}` 把帶編號的段落清單呈現給 LLM，讓 LLM 明確選擇要把內容插在哪個段落編號之後。
+
+規則：
+
+- `"numbered_paragraphs"` 為系統保留的變數名稱，呼叫端**不得**透過 `extraVariables` 覆寫；嘗試覆寫回 HTTP 400 `plugin-action:extra-variables-collision`，且**不**讀取任何章節內容。
+- 僅在 `insert: true` 時為非空字串；其餘模式（append／replace／discard）一律為空字串（與 `draft` 僅在 replace 模式注入對稱）。
+- 渲染所用的段落切分與 `insertAfterParagraph` 解析所用的切分**完全相同**（同一份 lock 內快照），因此 LLM 看到的編號與引擎實際插入解析的編號保證一致，不會被並行編輯錯置。
 
 ## 路徑安全
 

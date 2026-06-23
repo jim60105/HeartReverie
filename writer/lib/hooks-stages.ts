@@ -37,6 +37,7 @@ export const KNOWN_BACKEND_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
   "response-stream",
   "pre-write",
   "post-response",
+  "insert-transform",
 ]);
 
 /**
@@ -50,5 +51,6 @@ export const VALID_STAGES: ReadonlySet<HookStage> = new Set<HookStage>([
   "response-stream",
   "pre-write",
   "post-response",
+  "insert-transform",
   "strip-tags",
 ]);

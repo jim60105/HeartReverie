@@ -32,6 +32,7 @@ import type {
   VentoError,
 } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
+import type { ChapterParagraph } from "./chapter-paragraphs.ts";
 
 /** Options for executing a chat request. */
 export interface ChatOptions {
@@ -93,7 +94,9 @@ export type ChatErrorCode =
   | "story-config"
   | "no-chapter"
   | "concurrent"
-  | "conflict";
+  | "conflict"
+  | "insert-invalid-payload"
+  | "insert-out-of-range";
 
 /** Error thrown when chat execution encounters a known failure. */
 export class ChatError extends Error {
@@ -147,6 +150,18 @@ export class ChatError extends Error {
  *   file, appends one usage record (if available), and dispatches
  *   `post-response` with `source: "plugin-action"` and `pluginName`.
  *   Neither `pre-write` nor `response-stream` hooks fire in this mode.
+ * - `insert-into-chapter`: a plugin-action mode that splices LLM-produced
+ *   content into the highest-numbered chapter file after addressed
+ *   paragraphs. The full accumulated stream is parsed as a JSON insertion
+ *   envelope `{ insertions: [{ insertAfterParagraph, text }] }`, each `text`
+ *   is spliced byte-for-byte after the resolved paragraph offset, and the
+ *   result is atomically written. The `chapterSnapshot` (raw bytes read in
+ *   the execute phase under the lock) and the canonical `paragraphs`
+ *   segmentation are carried on the mode so resolution uses the SAME
+ *   snapshot the LLM was shown via `numbered_paragraphs`. On success
+ *   `post-response` is dispatched with `source: "plugin-action"` and the full
+ *   post-insert chapter; `pre-write`/`response-stream` do NOT fire. An empty
+ *   `insertions` array is a no-op (no write, no `post-response`).
  */
 export type WriteMode =
   | {
@@ -171,7 +186,20 @@ export type WriteMode =
     readonly targetChapterNumber: number;
     readonly existingContent: string;
   }
-  | { readonly kind: "replace-last-chapter"; readonly pluginName: string };
+  | { readonly kind: "replace-last-chapter"; readonly pluginName: string }
+  | {
+    readonly kind: "insert-into-chapter";
+    readonly pluginName: string;
+    /** Raw highest-numbered chapter bytes read once under the lock in execute. */
+    readonly chapterSnapshot: string;
+    /** Canonical paragraph segmentation of `chapterSnapshot` (offsets index it). */
+    readonly paragraphs: readonly ChapterParagraph[];
+    /**
+     * The rendered `numbered_paragraphs` string the LLM was shown, carried so
+     * the `insert-transform` hook can hand it to a plugin transform handler.
+     */
+    readonly numberedParagraphs: string;
+  };
 
 /** Arguments for `streamLlmAndPersist`. */
 export interface StreamLlmArgs {
@@ -205,4 +233,9 @@ export interface StreamLlmResult {
   readonly chapterNumber: number | null;
   readonly chapterContentAfter: string | null;
   readonly aborted: boolean;
+  /**
+   * For `insert-into-chapter` mode: the number of insertions applied to the
+   * chapter. `0` for an empty-array no-op insert and for all non-insert modes.
+   */
+  readonly insertedCount: number;
 }

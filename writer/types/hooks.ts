@@ -30,6 +30,7 @@ export type HookStage =
   | "response-stream"
   | "pre-write"
   | "post-response"
+  | "insert-transform"
   | "strip-tags";
 
 /**
@@ -136,6 +137,44 @@ export interface PostResponsePayload {
    * neither nested mutation nor top-level reassignment is possible.
    */
   readonly usage: TokenUsageRecord | null;
+}
+
+/**
+ * Context payload dispatched for the `insert-transform` hook stage.
+ *
+ * Dispatched by the insert finalizer (`finalizeInsertIntoChapter` in
+ * `writer/lib/chat-chapter-finalize.ts`) inside the per-story generation
+ * lock, BEFORE the insertion envelope is parsed. Lets a plugin transform a
+ * domain-specific LLM response into the canonical
+ * `{ insertions: [{ insertAfterParagraph, text }] }` envelope.
+ *
+ * This is a SERIAL, MUTATING stage: the context is NOT deep-frozen, and a
+ * handler MAY write `envelope`. Handlers MUST be origin-filtered — act only
+ * when `pluginName` equals the handler's own plugin name — so one plugin
+ * never transforms another plugin's insert run. When no handler sets
+ * `envelope`, the engine falls back to parsing `rawResponse` directly.
+ */
+export interface InsertTransformPayload {
+  /** Per-request correlation ID for this plugin-action insert run. */
+  readonly correlationId: string;
+  /** Name of the plugin that initiated the insert run (origin filter key). */
+  readonly pluginName: string;
+  /** Full accumulated LLM response, exactly as streamed (not normalised). */
+  readonly rawResponse: string;
+  /** The rendered `numbered_paragraphs` string the LLM was shown. */
+  readonly numberedParagraphs: string;
+  /** Series name under `playground/`. */
+  readonly series: string;
+  /** Story name under `playground/<series>/`. */
+  readonly name: string;
+  /** Absolute path to the story directory. */
+  readonly storyDir: string;
+  /**
+   * Output slot: a handler SHALL write the canonical insertion-envelope JSON
+   * string here to have the engine parse it instead of `rawResponse`. Initial
+   * value is `null`. This is the ONLY mutable field.
+   */
+  envelope: string | null;
 }
 
 /**

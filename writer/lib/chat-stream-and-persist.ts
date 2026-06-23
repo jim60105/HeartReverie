@@ -232,7 +232,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
   }
 
   // ── Mode-specific finalization ──
-  const chapterContentAfter = await finalizeStreamMode({
+  const { content: chapterContentAfter, insertedCount } = await finalizeStreamMode({
     writeMode,
     target,
     aiContent,
@@ -252,5 +252,6 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     chapterNumber: targetNum,
     chapterContentAfter,
     aborted: false,
+    insertedCount,
   };
 }

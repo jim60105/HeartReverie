@@ -386,6 +386,31 @@ Deno.test({
       );
 
       await t.step(
+        "plugin-action:run insert combined with append emits invalid-insert-combo error",
+        async () => {
+          const ws = await openWs(addr);
+          await authenticate(ws);
+          ws.send(JSON.stringify({
+            type: "plugin-action:run",
+            correlationId: "c-insert-append",
+            pluginName: "tester",
+            series: "s1",
+            name: "n1",
+            promptFile: "prompts/summary.md",
+            insert: true,
+            append: true,
+          }));
+          const msg = await readUntilType(ws, "plugin-action:error", 5, 3000);
+          assertEquals(msg.correlationId, "c-insert-append");
+          const problem = msg.problem as { type: string; status: number };
+          assertEquals(problem.type, "plugin-action:invalid-insert-combo");
+          assertEquals(problem.status, 400);
+          ws.close();
+          await waitForClose(ws);
+        },
+      );
+
+      await t.step(
         "plugin-action:run discard mode streams deltas and emits plugin-action:done",
         async () => {
           const ws = await openWs(addr);

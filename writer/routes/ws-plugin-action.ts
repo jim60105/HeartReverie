@@ -15,7 +15,7 @@
 
 import type { WSContext } from "@hono/hono/ws";
 import { runPluginActionWithDeps } from "./plugin-actions.ts";
-import { errorMessage, problemJson } from "../lib/errors.ts";
+import { errorMessage, pluginActionProblems, problemJson } from "../lib/errors.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { WsConnection } from "./ws-connection.ts";
 
@@ -33,6 +33,7 @@ export async function handlePluginActionRun(
   const promptFile = msg.promptFile;
   const append = msg.append === true;
   const replace = msg.replace === true;
+  const insert = msg.insert === true;
   const appendTag = msg.appendTag;
   const extraVariables = msg.extraVariables;
 
@@ -41,9 +42,24 @@ export async function handlePluginActionRun(
     return;
   }
 
+  // Insert is mutually exclusive with append/replace and forbids appendTag
+  // (including an explicit JSON null). Reject early with a precise problem slug
+  // rather than silently picking insert in the translation below — mirrors the
+  // HTTP route's guard so both transports enforce the same combo invariant.
+  if (insert && (append || replace || appendTag !== undefined)) {
+    conn.wsSend(ws, {
+      type: "plugin-action:error",
+      correlationId,
+      problem: pluginActionProblems.invalidInsertCombo(),
+    });
+    return;
+  }
+
   const signal = conn.startGeneration(correlationId);
   try {
-    const resolvedMode = append
+    const resolvedMode = insert
+      ? "insert-into-chapter"
+      : append
       ? "append-to-existing-chapter"
       : replace
       ? "replace-last-chapter"
@@ -58,6 +74,7 @@ export async function handlePluginActionRun(
         mode: resolvedMode,
         appendTag,
         replace: msg.replace,
+        insert: msg.insert,
         extraVariables,
         signal,
         onDelta: (chunk) => {
@@ -74,6 +91,8 @@ export async function handlePluginActionRun(
         usage: outcome.response.usage,
         chapterUpdated: outcome.response.chapterUpdated,
         chapterReplaced: outcome.response.chapterReplaced,
+        chapterInserted: outcome.response.chapterInserted,
+        insertedCount: outcome.response.insertedCount,
         appendedTag: outcome.response.appendedTag,
       });
     } else if (outcome.aborted) {

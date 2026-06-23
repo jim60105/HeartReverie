@@ -68,6 +68,8 @@ export async function resolveChapterTarget(
       return await resolveLastChapter(storyDir, "append");
     case "replace-last-chapter":
       return await resolveLastChapter(storyDir, "replace");
+    case "insert-into-chapter":
+      return await resolveLastChapter(storyDir, "replace");
     case "discard":
       return { targetNum: null, chapterPath: null };
   }

@@ -42,6 +42,8 @@ import { listChapterFiles } from "../lib/story.ts";
 import { streamLlmAndPersist, type WriteMode } from "../lib/chat-shared.ts";
 import type { AppDeps, PluginRunPromptResponse } from "../types.ts";
 import { pluginActionProblems } from "../lib/errors.ts";
+import { renderNumberedParagraphs, splitChapterParagraphs } from "../lib/chapter-paragraphs.ts";
+import type { ChapterParagraph } from "../lib/chapter-paragraphs.ts";
 import type { PluginActionOutcome, PluginActionRequestArgs } from "./plugin-actions-shared.ts";
 import type { PreflightContext } from "./plugin-actions-preflight.ts";
 
@@ -81,7 +83,18 @@ export async function runUnderLock(
   // variable. Done HERE (after lock, before prompt render) so the on-disk
   // bytes the LLM sees are guaranteed to match the bytes we'll later
   // overwrite atomically.
-  const renderVariables: Record<string, unknown> = { ...extras };
+  // `numbered_paragraphs` is a reserved variable provided ONLY in insert mode
+  // (symmetric with `draft` for replace mode); it is the empty string in every
+  // other mode so the template always has the variable defined.
+  const renderVariables: Record<string, unknown> = {
+    ...extras,
+    numbered_paragraphs: "",
+  };
+  // Insert-mode carries the chapter snapshot + paragraph segmentation through
+  // the WriteMode so the splice resolves against the SAME snapshot the LLM was
+  // shown via `numbered_paragraphs`.
+  let insertSnapshot: string | null = null;
+  let insertParagraphs: ChapterParagraph[] = [];
   if (validatedMode === "replace-last-chapter") {
     const chapterFiles = await listChapterFiles(storyDir);
     if (chapterFiles.length === 0) {
@@ -98,6 +111,22 @@ export async function runUnderLock(
     const stripRegex = pluginManager.getStripTagPatterns();
     const cleanDraft = stripRegex ? rawDraft.replace(stripRegex, "").trim() : rawDraft.trim();
     renderVariables.draft = cleanDraft;
+  } else if (validatedMode === "insert-into-chapter") {
+    const chapterFiles = await listChapterFiles(storyDir);
+    if (chapterFiles.length === 0) {
+      return {
+        ok: false,
+        aborted: false,
+        problem: pluginActionProblems.noChapter(),
+        status: 400,
+      };
+    }
+    const lastFile = chapterFiles[chapterFiles.length - 1]!;
+    const lastChapterPath = join(storyDir, lastFile);
+    insertSnapshot = await Deno.readTextFile(lastChapterPath);
+    const stripRegex = pluginManager.getStripTagPatterns();
+    insertParagraphs = splitChapterParagraphs(insertSnapshot, stripRegex);
+    renderVariables.numbered_paragraphs = renderNumberedParagraphs(insertParagraphs);
   }
 
   // Build messages via the shared prompt-assembly pipeline. Pass the plugin
@@ -164,6 +193,18 @@ export async function runUnderLock(
     };
   } else if (validatedMode === "replace-last-chapter") {
     writeMode = { kind: "replace-last-chapter", pluginName };
+  } else if (validatedMode === "insert-into-chapter") {
+    writeMode = {
+      kind: "insert-into-chapter",
+      pluginName,
+      // `insertSnapshot` is guaranteed non-null here: the insert branch above
+      // returns `no-chapter` when the story has no chapter file.
+      chapterSnapshot: insertSnapshot ?? "",
+      paragraphs: insertParagraphs,
+      numberedParagraphs: typeof renderVariables.numbered_paragraphs === "string"
+        ? renderVariables.numbered_paragraphs
+        : "",
+    };
   } else {
     writeMode = { kind: "discard" };
   }
@@ -183,14 +224,24 @@ export async function runUnderLock(
     correlationId,
   });
 
+  const isInsert = writeMode.kind === "insert-into-chapter";
+  // A non-empty insert applied at least one insertion; an empty-array insert
+  // is a no-op (no write, no chapter change).
+  const inserted = isInsert && result.insertedCount > 0;
   const response: PluginRunPromptResponse = {
     content: writeMode.kind === "append-to-existing-chapter" ||
-        writeMode.kind === "replace-last-chapter"
+        writeMode.kind === "replace-last-chapter" ||
+        (isInsert && inserted)
       ? (result.chapterContentAfter ?? result.content)
       : result.content,
     usage: result.usage,
-    chapterUpdated: writeMode.kind === "append-to-existing-chapter",
+    // Insert semantically updates the chapter file; set `chapterUpdated: true`
+    // for a non-empty insert so existing reload logic keeps working, while
+    // `chapterInserted` lets insert-aware callers branch precisely.
+    chapterUpdated: writeMode.kind === "append-to-existing-chapter" || inserted,
     chapterReplaced: writeMode.kind === "replace-last-chapter",
+    chapterInserted: inserted,
+    insertedCount: isInsert ? result.insertedCount : 0,
     appendedTag: validatedAppendTag,
   };
   return { ok: true, response };

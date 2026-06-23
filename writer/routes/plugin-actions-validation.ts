@@ -211,23 +211,41 @@ export function validateModeCombo(
 ):
   | {
     ok: true;
-    mode: "append-to-existing-chapter" | "replace-last-chapter" | "discard";
+    mode:
+      | "append-to-existing-chapter"
+      | "replace-last-chapter"
+      | "insert-into-chapter"
+      | "discard";
     appendTag: string | null;
   }
   | ValidationFailure {
   if (
     mode !== "append-to-existing-chapter" && mode !== "discard" &&
-    mode !== "replace-last-chapter"
+    mode !== "replace-last-chapter" && mode !== "insert-into-chapter"
   ) {
     return {
       ok: false,
       problem: problemJson(
         "Bad Request",
         400,
-        "mode must be 'append-to-existing-chapter', 'replace-last-chapter', or 'discard'",
+        "mode must be 'append-to-existing-chapter', 'replace-last-chapter', 'insert-into-chapter', or 'discard'",
       ),
       status: 400,
     };
+  }
+  // Insert mode is mutually exclusive with append/replace and rejects any
+  // non-`undefined` appendTag (including an explicit JSON null). The HTTP/WS
+  // body→mode translation only produces "insert-into-chapter" when neither
+  // append nor replace is set, but defence-in-depth keeps the invariant local.
+  if (mode === "insert-into-chapter") {
+    if (replace === true || appendTag !== undefined) {
+      return {
+        ok: false,
+        problem: pluginActionProblems.invalidInsertCombo(),
+        status: 400,
+      };
+    }
+    return { ok: true, mode, appendTag: null };
   }
   if (mode === "replace-last-chapter" && replace === false) {
     return {

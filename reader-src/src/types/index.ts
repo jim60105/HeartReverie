@@ -95,6 +95,12 @@ export interface RunPluginPromptOptions {
   append?: boolean;
   appendTag?: string;
   replace?: boolean;
+  /**
+   * Select the engine paragraph-anchored insert write mode. Mutually
+   * exclusive with `append` and `replace`; the backend rejects invalid
+   * combinations with `plugin-action:invalid-insert-combo`.
+   */
+  insert?: boolean;
   extraVariables?: Record<string, string | number | boolean>;
 }
 
@@ -104,6 +110,10 @@ export interface RunPluginPromptResult {
   usage: TokenUsageRecord | null;
   chapterUpdated: boolean;
   chapterReplaced: boolean;
+  /** `true` for a successful non-empty insert-mode run. */
+  chapterInserted: boolean;
+  /** Number of insertions applied (`0` for non-insert / empty inserts). */
+  insertedCount: number;
   appendedTag: string | null;
 }
 
@@ -753,6 +763,8 @@ export interface WsPluginActionRunMessage {
   promptFile: string;
   append?: boolean;
   appendTag?: string;
+  replace?: boolean;
+  insert?: boolean;
   extraVariables?: Record<string, string | number | boolean>;
 }
 
@@ -858,6 +870,8 @@ export interface WsPluginActionDoneMessage {
   usage: TokenUsageRecord | null;
   chapterUpdated: boolean;
   chapterReplaced: boolean;
+  chapterInserted: boolean;
+  insertedCount: number;
   appendedTag: string | null;
 }
 
