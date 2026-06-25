@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { mount } from "@vue/test-utils";
 import ChatInput from "@/components/ChatInput.vue";
+import { __resetChatInputForTests } from "@/composables/useChatInput";
 
 const isLoadingRef = ref(false);
 const errorMessageRef = ref("");
@@ -40,6 +41,7 @@ describe("ChatInput", () => {
     sessionStorage.clear();
     mockSeries = "test-series";
     mockStory = "test-story";
+    __resetChatInputForTests();
   });
 
   it("renders textarea and buttons", () => {

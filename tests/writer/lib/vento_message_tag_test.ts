@@ -593,16 +593,17 @@ Deno.test("vento-message-tag: SSTI whitelist accepts and rejects per spec", asyn
 });
 
 Deno.test("vento-message-tag: SSTI edge cases (trim markers, single quotes)", () => {
-  // Document current behaviour for cross-layer mismatches.
-  // Vento trim markers `{{- … -}}` are accepted by the frontend parser as
-  // ordinary message tags but are NOT in the backend SSTI whitelist —
-  // user-supplied templates with trim markers are rejected at the override
-  // path. The default system.md (read from disk) bypasses validateTemplate
-  // and therefore is unaffected.
+  // Vento whitespace-trim markers `{{- … -}}` are accepted by the backend SSTI
+  // whitelist: validateTemplate strips a single leading/trailing `-` (the
+  // trim-control marker, not part of the expression) before whitelist
+  // matching, so a trim-marked message/if/var tag passes — matching the
+  // frontend parser, which has always treated them as ordinary tags. This is
+  // required by the bundled polish plugin's `polish-instruction.md`, which
+  // uses `{{- if polish_instruction }}` for byte-for-byte conditional output.
   const trimErrs = validateTemplate(
     `{{- message "user" -}}x{{- /message -}}`,
   );
-  assert(trimErrs.length > 0);
+  assertEquals(trimErrs, []);
 
   // Single-quoted role literal is NOT in the whitelist (only double quotes).
   const sqErrs = validateTemplate(`{{ message 'user' }}body{{ /message }}`);

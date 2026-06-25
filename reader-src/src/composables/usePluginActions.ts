@@ -24,6 +24,7 @@ import { pluginSettingsStore, settingsRevision, usePlugins } from "@/composables
 import { useChapterNav } from "@/composables/useChapterNav";
 import { useChapterEditor } from "@/composables/useChapterEditor";
 import { useChatApi } from "@/composables/useChatApi";
+import { useChatInput } from "@/composables/useChatInput";
 import { useNotification } from "@/composables/useNotification";
 import { frontendHooks } from "@/lib/plugin-hooks";
 
@@ -187,6 +188,14 @@ export function usePluginActions() {
           });
         },
         reload: () => reloadToLast(),
+        getChatInputText: () => {
+          // Defensively reseed to the click's resolved story before reading so
+          // the accessor can never return a previously-active story's stale
+          // unsent text, even if the composable's watch has not yet fired.
+          const chatInput = useChatInput();
+          chatInput.syncToStory(series, name);
+          return chatInput.inputText.value;
+        },
       };
 
       await frontendHooks.dispatch("action-button:click", clickCtx);

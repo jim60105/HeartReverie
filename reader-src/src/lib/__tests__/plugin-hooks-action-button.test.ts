@@ -39,6 +39,7 @@ function makeClickCtx(
       }),
     notify: () => {},
     reload: () => Promise.resolve(),
+    getChatInputText: () => "",
     ...overrides,
   };
 }

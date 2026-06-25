@@ -45,7 +45,14 @@ export function validateTemplate(templateStr: string): string[] {
   let match: RegExpExecArray | null;
 
   while ((match = tagRegex.exec(templateStr)) !== null) {
-    const expr = match[1]!.trim();
+    // Strip Vento whitespace-trim markers (`{{-` … `-}}`) before whitelist
+    // matching. The leading/trailing `-` only controls surrounding-whitespace
+    // trimming and is not part of the expression; stripping a single one on
+    // each side lets safe constructs like `{{- if foo }}` / `{{- /if }}` pass
+    // the SSTI whitelist. A doubled marker (e.g. `{{-- foo }}`) leaves a
+    // residual `-` that still fails the whitelist, so this introduces no
+    // bypass.
+    const expr = match[1]!.trim().replace(/^-/, "").replace(/-$/, "").trim();
     if (!expr) continue;
 
     // Vento comments

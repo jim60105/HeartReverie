@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assertExists, assertMatch } from "@std/assert";
+import { assert, assertEquals, assertExists, assertMatch } from "@std/assert";
 import { join } from "@std/path";
 import { createTemplateEngine, validateTemplate } from "../../../writer/lib/template.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
@@ -64,6 +64,18 @@ Deno.test("validateTemplate", async (t) => {
         [],
       );
     });
+
+    await t.step("allows Vento whitespace-trim markers on if/var/end tags", () => {
+      assertEquals(
+        validateTemplate(
+          "{{- if polish_instruction }}x{{ polish_instruction }}{{- /if }}",
+        ),
+        [],
+      );
+      assertEquals(validateTemplate("{{ variable -}}"), []);
+      assertEquals(validateTemplate("{{- variable -}}"), []);
+      assertEquals(validateTemplate("{{- for x of items -}}b{{- /for -}}"), []);
+    });
   });
 
   await t.step("unsafe expressions rejected", async (t) => {
@@ -83,6 +95,22 @@ Deno.test("validateTemplate", async (t) => {
         "{{ constructor.constructor('return this')() }}",
       );
       assertEquals(errors.length, 1);
+    });
+
+    await t.step("trim-marker stripping does not open a bypass (doubled marker)", () => {
+      // A doubled marker leaves a residual `-` so the expression still fails
+      // the whitelist — the strip removes only ONE leading/trailing `-`.
+      assertMatch(
+        validateTemplate("{{-- process }}")[0] ?? "",
+        /Unsafe template expression/,
+      );
+    });
+
+    await t.step("trim markers do not whitelist member access", () => {
+      assertMatch(
+        validateTemplate("{{- process.env.SECRET -}}")[0] ?? "",
+        /Unsafe template expression/,
+      );
     });
   });
 
@@ -140,6 +168,27 @@ Deno.test("createTemplateEngine", async (t) => {
     );
     assertEquals(result.error!.expressions!.length, 1);
   });
+
+  await t.step(
+    "renders the bundled polish template (trim markers + directive) via the production override path",
+    async () => {
+      const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);
+      const polishTpl = await Deno.readTextFile("plugins/polish/polish-instruction.md");
+      // Mirror the run-prompt replace-mode path: templateOverride = the polish
+      // prompt file, draft + directive injected via extraVariables. The trim
+      // markers ({{- ... }}) must survive validateTemplate AND render.
+      const result = await renderSystemPrompt("series", "story", {
+        templateOverride: polishTpl,
+        extraVariables: { draft: "章節草稿", polish_instruction: "不做研究" },
+      });
+      assertEquals(result.error, null);
+      const user = result.messages.find((m) => m.role === "user");
+      assertExists(user);
+      assert(user!.content.includes("<polish_instruction>"));
+      assert(user!.content.includes("不做研究"));
+      assert(user!.content.includes("<draft>"));
+    },
+  );
 
   await t.step("renderSystemPrompt returns error on Vento rendering failure", async () => {
     const { renderSystemPrompt } = createTemplateEngine(mockPluginManager);

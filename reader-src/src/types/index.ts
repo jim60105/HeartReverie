@@ -140,6 +140,13 @@ export interface ActionButtonClickContext {
     body: string;
   }) => void;
   reload: () => Promise<void>;
+  /**
+   * Read-only, story-correct live accessor for the chat textarea text.
+   * Returns the *current* value (including text typed but not yet sent) for
+   * the active `<series>:<story>`. Calling it does NOT mutate, clear, or
+   * persist the chat-input state, and never returns another story's text.
+   */
+  getChatInputText: () => string;
 }
 
 export interface PluginManifest {

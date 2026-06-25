@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import type { ChatInputProps } from "@/types";
 import { useChatApi } from "@/composables/useChatApi";
 import { useChapterNav } from "@/composables/useChapterNav";
+import { useChatInput } from "@/composables/useChatInput";
 import { useAutoresize } from "@/composables/useAutoresize";
 
 const props = withDefaults(defineProps<ChatInputProps>(), {
@@ -19,39 +20,46 @@ const emit = defineEmits<{
 
 const { isLoading, errorMessage, streamingContent, abortCurrentRequest } = useChatApi();
 const { getBackendContext } = useChapterNav();
+// The textarea text is owned by the shared, story-aware `useChatInput()`
+// singleton so other reader code (the plugin action bar) can read the live
+// value — including text typed but not yet sent. This component binds its
+// `v-model` to the shared ref and delegates persistence/append to it.
+const { inputText, persistText, appendText: appendShared, syncToStory } = useChatInput();
 
-const STORAGE_KEY_PREFIX = "heartreverie:chat-input";
-
-function getStorageKey(): string {
+// Seed the shared input from this story's persisted draft synchronously during
+// setup — before the first render — so the textarea reflects the active story
+// immediately. `syncToStory` reseeds only when the active story key changes
+// (e.g. after a story-scoped `:key` remount); the composable's own watch keeps
+// it current even without a remount.
+{
   const ctx = getBackendContext();
-  return `${STORAGE_KEY_PREFIX}:${ctx.series ?? ""}:${ctx.story ?? ""}`;
+  syncToStory(ctx.series, ctx.story);
 }
 
-function loadPersistedText(): string {
-  try {
-    return sessionStorage.getItem(getStorageKey()) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function persistText(text: string): void {
-  try {
-    sessionStorage.setItem(getStorageKey(), text);
-  } catch {
-    // Silently ignore storage errors (e.g., private browsing restrictions)
-  }
-}
-
-const inputText = ref(loadPersistedText());
 const isResending = ref(false);
 const chatTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const { recompute: recomputeChatHeight } = useAutoresize(chatTextareaRef, { minLines: 3 });
 
 onMounted(() => {
-  // After the persisted draft is restored on initial mount, fit the textarea.
-  recomputeChatHeight();
+  // After the persisted draft is restored, fit the textarea to its content.
+  void nextTick().then(() => recomputeChatHeight());
 });
+
+// When the active story changes without a component remount, the shared
+// composable reseeds `inputText` from the new story's persisted draft. Refit
+// the textarea afterwards so a restored multi-line draft is fully visible.
+watch(
+  () => {
+    const ctx = getBackendContext();
+    return `${ctx.series ?? ""}:${ctx.story ?? ""}`;
+  },
+  (next, prev) => {
+    if (next === prev) return;
+    const ctx = getBackendContext();
+    syncToStory(ctx.series, ctx.story);
+    void nextTick().then(() => recomputeChatHeight());
+  },
+);
 
 function onPaste() {
   // Pasted text is inserted by the browser default action; the RAF batching
@@ -118,8 +126,8 @@ function handleContinue() {
 }
 
 function appendText(text: string) {
-  const current = inputText.value;
-  inputText.value = current ? `${current}\n${text}` : text;
+  // Delegate the newline-prepend rule to the shared composable, then refit.
+  appendShared(text);
   // Wait for v-model to flush the new value into the DOM before measuring.
   void nextTick().then(() => recomputeChatHeight());
 }

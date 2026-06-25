@@ -249,6 +249,42 @@ describe("usePluginActions", () => {
     expect(reloadToLastMock).toHaveBeenCalledTimes(1);
   });
 
+  it("exposes a read-only getChatInputText that returns the live story-correct text", async () => {
+    pluginsRef.value = [
+      {
+        name: "polish",
+        hasFrontendModule: true,
+        actionButtons: [{ id: "polish", label: "✨ 潤飾" }],
+      },
+    ] as PluginDescriptor[];
+
+    // Seed the shared chat-input singleton for the active story (series-a/story-a).
+    const { useChatInput, __resetChatInputForTests } = await import(
+      "@/composables/useChatInput"
+    );
+    __resetChatInputForTests();
+    const chatInput = useChatInput();
+    chatInput.syncToStory("series-a", "story-a");
+    chatInput.inputText.value = "讓對白更尖銳";
+
+    const { frontendHooks } = await import("@/lib/plugin-hooks");
+    let captured: string | null = null;
+    frontendHooks.register(
+      "action-button:click",
+      async (ctx) => {
+        captured = ctx.getChatInputText();
+      },
+      100,
+      "polish",
+    );
+
+    const api = await getApi();
+    await api.clickButton("polish", "polish");
+    expect(captured).toBe("讓對白更尖銳");
+    // The accessor must not have mutated the shared ref.
+    expect(chatInput.inputText.value).toBe("讓對白更尖銳");
+  });
+
   it("emits default error toast when handler rejects", async () => {
     pluginsRef.value = [
       {

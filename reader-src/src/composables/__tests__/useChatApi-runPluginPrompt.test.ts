@@ -487,6 +487,67 @@ describe("useChatApi.runPluginPrompt", () => {
       expect(body).not.toHaveProperty("appendTag");
     });
 
+    it("forwards extraVariables verbatim in the HTTP POST body (polish directive)", async () => {
+      const final = {
+        content: "polished",
+        usage: null,
+        chapterUpdated: false,
+        chapterReplaced: true,
+        appendedTag: null,
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(final),
+            headers: new Headers(),
+          })
+        ),
+      );
+      const api = await getApi();
+      await api.runPluginPrompt("polish", "polish-instruction.md", {
+        replace: true,
+        extraVariables: { polish_instruction: "讓 <emphasis> 對白更尖銳 & 不轉義" },
+      });
+      const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+      const init = fetchMock.mock.calls[0]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      expect(body.replace).toBe(true);
+      // Directive must travel verbatim — no escaping of <, >, or &.
+      expect(body.extraVariables).toEqual({
+        polish_instruction: "讓 <emphasis> 對白更尖銳 & 不轉義",
+      });
+    });
+
+    it("omits extraVariables from the HTTP POST body when not provided", async () => {
+      const final = {
+        content: "polished",
+        usage: null,
+        chapterUpdated: false,
+        chapterReplaced: true,
+        appendedTag: null,
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(final),
+            headers: new Headers(),
+          })
+        ),
+      );
+      const api = await getApi();
+      await api.runPluginPrompt("polish", "polish-instruction.md", { replace: true });
+      const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+      const init = fetchMock.mock.calls[0]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      expect(body).not.toHaveProperty("extraVariables");
+    });
+
     it("forwards insert: true in the HTTP POST body and exposes chapterInserted", async () => {
       const final = {
         content: "full chapter",

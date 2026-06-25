@@ -19,9 +19,20 @@ export function register(hooks) {
     async (ctx) => {
       if (ctx.pluginName !== "polish" || ctx.buttonId !== "polish") return;
 
-      const result = await ctx.runPluginPrompt("polish-instruction.md", {
-        replace: true,
-      });
+      // Read the live chat-input text and treat a non-empty value as a one-off
+      // directive that steers the literary rewrite. HeartReverie is single-user
+      // and self-hosted, so the directive is trusted operator input: it is
+      // passed VERBATIM (trim-only — no escaping, no length cap). An empty
+      // (after-trim) textarea preserves the default v1 polish behaviour.
+      const directive = (ctx.getChatInputText?.() ?? "").trim();
+
+      const opts = { replace: true };
+      if (directive) {
+        opts.extraVariables = { polish_instruction: directive };
+      }
+
+      // The textarea is intentionally NOT cleared after the run.
+      const result = await ctx.runPluginPrompt("polish-instruction.md", opts);
 
       if (result.chapterReplaced) {
         await ctx.reload();
