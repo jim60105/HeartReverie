@@ -146,10 +146,14 @@ export class ChatError extends Error {
  *   deltas are accumulated in memory only — no file is opened during the
  *   stream, so an aborted/errored generation leaves the on-disk chapter
  *   untouched (byte-for-byte preservation). Finalisation calls
- *   `atomicWriteChapter` with `aiContent.trimEnd() + "\n"`, re-reads the
- *   file, appends one usage record (if available), and dispatches
+ *   `atomicWriteChapter` with `preservedPrefix + aiContent.trimEnd() + "\n"`
+ *   — the carried leading `<user_message>` block (or `""`) is re-prepended so
+ *   the player's message survives the replace round byte-for-byte — re-reads
+ *   the file, appends one usage record (if available), and dispatches
  *   `post-response` with `source: "plugin-action"` and `pluginName`.
- *   Neither `pre-write` nor `response-stream` hooks fire in this mode.
+ *   Neither `pre-write` nor `response-stream` hooks fire in this mode. This
+ *   preservation is a property of the mode itself, so it applies to EVERY
+ *   replace-mode plugin (not just `polish`).
  * - `insert-into-chapter`: a plugin-action mode that splices LLM-produced
  *   content into the highest-numbered chapter file after addressed
  *   paragraphs. The full accumulated stream is parsed as a JSON insertion
@@ -186,7 +190,19 @@ export type WriteMode =
     readonly targetChapterNumber: number;
     readonly existingContent: string;
   }
-  | { readonly kind: "replace-last-chapter"; readonly pluginName: string }
+  | {
+    readonly kind: "replace-last-chapter";
+    readonly pluginName: string;
+    /**
+     * Verbatim leading `<user_message>…</user_message>` block (including its
+     * ≤2-line-break trailing separator) captured from the on-disk chapter
+     * BEFORE the strip pass, to be re-prepended ahead of the LLM's rewritten
+     * prose when the chapter is atomically replaced. `""` means there was no
+     * leading `<user_message>` block to preserve. Captured as opaque bytes:
+     * never fed to the LLM, never re-stripped, never re-wrapped.
+     */
+    readonly preservedPrefix: string;
+  }
   | {
     readonly kind: "insert-into-chapter";
     readonly pluginName: string;

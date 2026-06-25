@@ -42,6 +42,7 @@ import { deepFreeze } from "./chat-llm-fetch.ts";
 import type { ChapterTarget, StoryContext } from "./chat-chapter-io.ts";
 import type { ChapterParagraph } from "./chapter-paragraphs.ts";
 import { applyInsertions, parseInsertEnvelope, resolveInsertions } from "./chat-chapter-insert.ts";
+import { extractLeadingUserMessage } from "./user-message-prefix.ts";
 
 /**
  * Strip exactly one matching outer `<{tag}>…</{tag}>` wrapper from `content`
@@ -271,13 +272,17 @@ async function finalizeContinueLastChapter(
 }
 
 async function finalizeReplaceLastChapter(
-  args: FinalizeArgs & { readonly pluginName: string },
+  args: FinalizeArgs & {
+    readonly pluginName: string;
+    readonly preservedPrefix: string;
+  },
 ): Promise<string> {
   const {
     chapterPath,
     targetNum,
     aiContent,
     pluginName,
+    preservedPrefix,
     storyCtx,
     hookDispatcher,
     reqFileLog,
@@ -293,7 +298,29 @@ async function finalizeReplaceLastChapter(
   // Aborts / errors are caught by upstream try/catch blocks and the
   // pre-existing file remains untouched (no file handle was opened
   // during the stream phase for this mode).
-  const newContent = aiContent.trimEnd() + "\n";
+  //
+  // Re-prepend the captured leading `<user_message>` block (`""` when absent)
+  // verbatim ahead of the trimmed rewrite. The prefix already ends in the
+  // `\n\n` separator the `pre-write` hook emits, so concatenation needs no
+  // extra glue. When the model returns empty content and a prefix is present,
+  // the file becomes `preservedPrefix + "\n"` (the message is preserved even
+  // when the model emits nothing).
+  let body = aiContent.trimEnd();
+  // De-duplication guard: the LLM never sees `<user_message>` (it is stripped
+  // out of `draft`), so it should not emit one. But a misbehaving prompt/model
+  // could. When we are about to re-prepend a preserved prefix AND the model
+  // output ALSO begins with its own leading `<user_message>` block, drop the
+  // model's block so the chapter never ends up with two leading blocks. Only
+  // strips when a preserved prefix exists — a model-emitted block in a chapter
+  // that had none is left untouched (consistent with the no-block-unchanged
+  // behaviour).
+  if (preservedPrefix.length > 0) {
+    const emittedPrefix = extractLeadingUserMessage(body);
+    if (emittedPrefix.length > 0) {
+      body = body.slice(emittedPrefix.length).trimEnd();
+    }
+  }
+  const newContent = preservedPrefix + body + "\n";
   await atomicWriteChapter(storyDir, `${padded}.md`, newContent);
 
   const chapterContentAfter = await Deno.readTextFile(chapterPath);
@@ -511,6 +538,7 @@ export async function finalizeStreamMode(args: {
         content: await finalizeReplaceLastChapter({
           ...common,
           pluginName: writeMode.pluginName,
+          preservedPrefix: writeMode.preservedPrefix,
         }),
         insertedCount: 0,
       };

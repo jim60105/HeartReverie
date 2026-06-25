@@ -43,6 +43,7 @@ import { streamLlmAndPersist, type WriteMode } from "../lib/chat-shared.ts";
 import type { AppDeps, PluginRunPromptResponse } from "../types.ts";
 import { pluginActionProblems } from "../lib/errors.ts";
 import { renderNumberedParagraphs, splitChapterParagraphs } from "../lib/chapter-paragraphs.ts";
+import { extractLeadingUserMessage } from "../lib/user-message-prefix.ts";
 import type { ChapterParagraph } from "../lib/chapter-paragraphs.ts";
 import type { PluginActionOutcome, PluginActionRequestArgs } from "./plugin-actions-shared.ts";
 import type { PreflightContext } from "./plugin-actions-preflight.ts";
@@ -95,6 +96,9 @@ export async function runUnderLock(
   // shown via `numbered_paragraphs`.
   let insertSnapshot: string | null = null;
   let insertParagraphs: ChapterParagraph[] = [];
+  // Replace mode carries the captured leading `<user_message>` block on the
+  // WriteMode so the finaliser can re-prepend it verbatim. `""` when absent.
+  let replacePreservedPrefix = "";
   if (validatedMode === "replace-last-chapter") {
     const chapterFiles = await listChapterFiles(storyDir);
     if (chapterFiles.length === 0) {
@@ -108,6 +112,11 @@ export async function runUnderLock(
     const lastFile = chapterFiles[chapterFiles.length - 1]!;
     const lastChapterPath = join(storyDir, lastFile);
     const rawDraft = await Deno.readTextFile(lastChapterPath);
+    // Capture the leading `<user_message>` block from the RAW bytes BEFORE the
+    // strip pass, independent of whether `getStripTagPatterns()` is non-null.
+    // The LLM still never sees the block (it stays out of `draft`); this is
+    // re-prepended on write so the player's message survives the replace round.
+    replacePreservedPrefix = extractLeadingUserMessage(rawDraft);
     const stripRegex = pluginManager.getStripTagPatterns();
     const cleanDraft = stripRegex ? rawDraft.replace(stripRegex, "").trim() : rawDraft.trim();
     renderVariables.draft = cleanDraft;
@@ -192,7 +201,11 @@ export async function runUnderLock(
       pluginName,
     };
   } else if (validatedMode === "replace-last-chapter") {
-    writeMode = { kind: "replace-last-chapter", pluginName };
+    writeMode = {
+      kind: "replace-last-chapter",
+      pluginName,
+      preservedPrefix: replacePreservedPrefix,
+    };
   } else if (validatedMode === "insert-into-chapter") {
     writeMode = {
       kind: "insert-into-chapter",
