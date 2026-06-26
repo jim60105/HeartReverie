@@ -43,33 +43,6 @@ async function renderPolish(
   ) as RenderedMessage[];
 }
 
-/**
- * Golden baseline for the no-directive render. Captured byte-for-byte from the
- * pre-change v1 `polish-instruction.md`. Locks the without-directive branch so
- * any accidental whitespace/wording drift in the conditional template fails.
- */
-const GOLDEN_NO_DIRECTIVE: RenderedMessage[] = [
-  {
-    role: "system",
-    content: "You are a literary editor specialising in modern Chinese fiction. " +
-      "Follow these directives strictly:\n\n" +
-      "- 以優雅的現代中文散文書寫，避免過度修飾，保持流暢可讀性。\n" +
-      "- 運用「意境」概念營造豐富、沉浸式的氛圍。\n" +
-      "- 以對話推進劇情，而非旁白敘述。\n" +
-      "- 發展真實的對話，反映每個角色獨特的聲音與背景，忠於原作角色塑造。\n" +
-      "- 場景轉換時確保流暢與連貫，在場景切換間添加銜接情節，消除突兀感。\n" +
-      "- 運用「展示而非告知」(show, don't tell) 原則使場景栩栩如生。\n" +
-      "- 使用全形中文標點符號；英文內容使用 ASCII 標點。\n" +
-      "- 不使用條列格式、標題、前言或任何非散文結構。",
-  },
-  {
-    role: "user",
-    content: "\n請以文學筆觸重寫以下章節草稿。僅回傳重寫後的章節正文，" +
-      "不要加入任何前言、說明、外層標籤或思考過程。\n\n" +
-      "<draft>\nDRAFT_BODY\n</draft>\n",
-  },
-];
-
 Deno.test("polish plugin.json is valid JSON with correct structure", async () => {
   const raw = await Deno.readTextFile("plugins/polish/plugin.json");
   const manifest = JSON.parse(raw);
@@ -141,13 +114,34 @@ Deno.test("polish-instruction.md passes the SSTI whitelist (validateTemplate)", 
   assertEquals(validateTemplate(tpl), []);
 });
 
-Deno.test("polish-instruction.md renders v1 prompt byte-for-byte when no directive (golden)", async () => {
-  const noDir = await renderPolish({ draft: "DRAFT_BODY" });
-  assertEquals(noDir, GOLDEN_NO_DIRECTIVE);
+Deno.test("polish-instruction.md omits the directive branch when no directive is given", async () => {
+  // NOTE: the exact prompt prose is intentionally NOT asserted here — the
+  // wording of polish-instruction.md is author-managed and may change by hand.
+  // We only lock the structural contract of the no-directive branch: a system
+  // + user message pair, the draft wrapped verbatim, and no <polish_instruction>
+  // envelope.
+  for (const vars of [{ draft: "DRAFT_BODY" }, { draft: "DRAFT_BODY", polish_instruction: "" }]) {
+    const msgs = await renderPolish(vars);
+    assertEquals(msgs.length, 2, `expected system+user pair for ${JSON.stringify(vars)}`);
 
-  // An explicit empty string must be treated as falsy → same golden output.
-  const emptyDir = await renderPolish({ draft: "DRAFT_BODY", polish_instruction: "" });
-  assertEquals(emptyDir, GOLDEN_NO_DIRECTIVE);
+    const system = msgs.find((m) => m.role === "system")!;
+    const user = msgs.find((m) => m.role === "user")!;
+    assert(system, "must emit a system message");
+    assert(user, "must emit a user message");
+
+    assert(
+      user.content.includes("<draft>\nDRAFT_BODY\n</draft>"),
+      "draft must be wrapped verbatim",
+    );
+    assertFalse(
+      user.content.includes("<polish_instruction>"),
+      "must not render the directive envelope when no directive is given",
+    );
+    assertFalse(
+      system.content.includes("潤飾指示"),
+      "must not mention the reader directive when no directive is given",
+    );
+  }
 });
 
 Deno.test("polish-instruction.md surfaces the directive in both blocks when set", async () => {
