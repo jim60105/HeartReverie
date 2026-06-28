@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-29
+
+### Added
+
+- **Paragraph-anchored insert mode for action buttons**: Plugin action buttons can now use `insert: true` in `runPluginPrompt` to splice LLM-generated content between specific paragraphs instead of appending or replacing. The model receives a `numbered_paragraphs` Vento variable and returns a JSON insertion envelope; the backend applies edits atomically under the per-story generation lock and surfaces `chapterInserted`/`insertedCount` in the HTTP and WebSocket responses. A new `insert-transform` backend hook stage lets plugins transform the insertion envelope before it is applied.
+- **Typed directive for the polish action button**: The ✨ 潤飾 button now reads the chat textarea at click time. A non-empty value steers the chapter rewrite as a one-off directive; an empty textarea preserves the original polish behavior. A new shared `useChatInput()` composable exposes the live (typed-but-unsent) chat-input text to other reader components, tracking the active story key and reseeding from sessionStorage on story switch to prevent cross-story leakage.
+- **Playground sync script**: `scripts/sync-playground.sh` — a POSIX sh helper for syncing the local `playground/` directory with a HeartReverie pod's `/app/playground` PVC mount via `kubectl cp`. Supports push/pull directions, interactive mode, `--route` for scoped syncs, `--clean` for mirror semantics, `--dry-run`, and `--list` for a diff view. Auto-excludes underscore-prefixed system directories by default, auto-backs up before destructive cleans, and resolves the target pod via the Helm chart's label selector.
+
+### Fixed
+
+- **`<user_message>` block lost on replace-mode plugin runs**: Clicking the polish button (or any other replace-last-chapter plugin) silently discarded the user's own `<user_message>` block. Replace mode now captures the leading `<user_message>` envelope before stripping tags (so the LLM never sees it), and re-prepends it after the chapter is written — with a de-duplication guard that drops a model-emitted leading block first. This fix applies to every replace-mode plugin, not just polish.
+- **SSTI whitelist incorrectly rejected trim-marked Vento templates**: The `validateTemplate` whitelist blocked leading/trailing whitespace-trim markers (`{{-` / `-}}`), causing every polish run with a typed directive to fail with HTTP 422. Single leading/trailing trim markers are now stripped from the tag body before whitelist evaluation; doubled markers and member access still fail.
+
 ## [0.10.0] - 2026-06-14
 
 ### Added
@@ -290,7 +303,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/jim60105/HeartReverie/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/jim60105/HeartReverie/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/jim60105/HeartReverie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jim60105/HeartReverie/compare/v0.7.0...v0.8.0
