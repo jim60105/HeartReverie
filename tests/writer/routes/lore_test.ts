@@ -462,6 +462,73 @@ Deno.test({
         assertEquals(res.status, 400);
       });
 
+      // ── SSTI whitelist enforcement (Finding 2) ───────────────────────────
+
+      await t.step(
+        "PUT with unsafe Vento (env exfil) → 422 with expressions, file not written",
+        async () => {
+          const res = await makeRequest(
+            app,
+            "PUT",
+            "/api/lore/global/pwn.md",
+            passageBody(["pwn"], "{{ Deno.env.toObject() |> JSON.stringify }}"),
+          );
+          assertEquals(res.status, 422);
+          assertEquals(Array.isArray(res.body.expressions), true);
+          assertEquals(res.body.expressions.length > 0, true);
+          // Passage MUST NOT have been written to disk
+          let exists = true;
+          try {
+            await Deno.stat(join(tmpDir, "_lore", "pwn.md"));
+          } catch {
+            exists = false;
+          }
+          assertEquals(exists, false);
+        },
+      );
+
+      await t.step("PUT with constructor.constructor access → 422", async () => {
+        const res = await makeRequest(
+          app,
+          "PUT",
+          "/api/lore/global/pwn2.md",
+          passageBody(["pwn"], "{{ constructor.constructor }}"),
+        );
+        assertEquals(res.status, 422);
+        assertEquals(Array.isArray(res.body.expressions), true);
+      });
+
+      await t.step("PUT with whitelist-safe body → 201 success", async () => {
+        const res = await makeRequest(
+          app,
+          "PUT",
+          "/api/lore/global/safe.md",
+          passageBody(["safe"], "Hero: {{ series_name }}"),
+        );
+        assertEquals(res.status, 201);
+        assertEquals(res.body.message, "Passage created");
+      });
+
+      await t.step(
+        "parity: a body rejected by the lore route matches the templates SSTI whitelist",
+        async () => {
+          // Same unsafe input the templates route rejects (422) must be rejected here.
+          const unsafe = "{{ Deno.env.toObject() |> JSON.stringify }}";
+          const loreRes = await makeRequest(
+            app,
+            "PUT",
+            "/api/lore/global/parity.md",
+            passageBody(["parity"], unsafe),
+          );
+          assertEquals(loreRes.status, 422);
+          const tplRes = await makeRequest(app, "PUT", "/api/templates", {
+            templatePath: "lore:global:parity.md",
+            source: unsafe,
+          });
+          assertEquals(tplRes.status, 422);
+        },
+      );
+
       await t.step("GET non-existent passage → 404", async () => {
         const res = await makeRequest(app, "GET", "/api/lore/global/does-not-exist.md");
         assertEquals(res.status, 404);

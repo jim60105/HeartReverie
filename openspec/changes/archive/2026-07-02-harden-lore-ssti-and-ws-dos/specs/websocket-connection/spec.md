@@ -1,22 +1,4 @@
-# WebSocket Connection
-
-## Purpose
-
-Provides a persistent WebSocket connection between the frontend and backend for real-time bidirectional communication, including first-message authentication, a JSON message protocol, connection lifecycle management, and story subscription for chapter updates.
-
-## Requirements
-
-### Requirement: WebSocket upgrade endpoint
-
-The backend SHALL expose a WebSocket upgrade endpoint at `GET /api/ws` using Hono's `upgradeWebSocket()` helper from `hono/deno`. The endpoint SHALL upgrade the HTTP connection to a WebSocket connection. The endpoint SHALL NOT require authentication headers on the upgrade request itself — authentication is handled via the first WebSocket message.
-
-#### Scenario: Successful WebSocket upgrade
-- **WHEN** a client sends a GET request to `/api/ws` with appropriate WebSocket upgrade headers
-- **THEN** the server SHALL upgrade the connection to a WebSocket and keep it open awaiting the authentication message
-
-#### Scenario: Non-WebSocket request to upgrade endpoint
-- **WHEN** a client sends a regular HTTP GET to `/api/ws` without WebSocket upgrade headers
-- **THEN** the server SHALL return HTTP 426 Upgrade Required
+## MODIFIED Requirements
 
 ### Requirement: First-message authentication
 
@@ -49,26 +31,6 @@ The legitimate `auth` envelope is always a JSON **text** frame. Any **non-string
 #### Scenario: A normal auth message is within the pre-auth cap
 - **WHEN** an unauthenticated client sends a well-formed `{ type: "auth", passphrase: "…" }` message of realistic size
 - **THEN** the payload SHALL be under the pre-auth cap and SHALL be parsed and processed normally
-
-### Requirement: JSON message protocol
-
-All WebSocket messages SHALL be JSON text frames with a `type` string field as the discriminator. Client-to-server message types SHALL be: `auth`, `chat:send`, `chat:resend`, `chat:abort`, `subscribe`. Server-to-client message types SHALL be: `auth:ok`, `auth:error`, `chat:delta`, `chat:done`, `chat:error`, `chat:aborted`, `chapters:updated`, `chapters:content`, `error`. Messages with unknown `type` values SHALL be silently ignored (no error response).
-
-#### Scenario: Valid message parsed and dispatched
-- **WHEN** the server receives `{ type: "subscribe", series: "s1", story: "n1" }`
-- **THEN** the server SHALL parse the JSON, identify the message type as `subscribe`, and dispatch to the subscription handler
-
-#### Scenario: Unknown message type ignored
-- **WHEN** the server receives `{ type: "unknown-type", data: "foo" }`
-- **THEN** the server SHALL silently ignore the message without sending an error response or closing the connection
-
-#### Scenario: Malformed JSON rejected
-- **WHEN** the server receives a non-JSON text frame (e.g., `not valid json`)
-- **THEN** the server SHALL respond with `{ type: "error", detail: "Invalid JSON" }` and SHALL NOT close the connection
-
-#### Scenario: Abort message dispatched to handler
-- **WHEN** the server receives `{ type: "chat:abort", id: "msg-1" }` while a generation with `id: "msg-1"` is active
-- **THEN** the server SHALL parse the JSON, identify the message type as `chat:abort`, and dispatch to the abort handler
 
 ### Requirement: Connection lifecycle management
 
@@ -105,19 +67,3 @@ The server SHALL enforce a global cap on the number of concurrent live WebSocket
 #### Scenario: Error-then-close releases the count exactly once
 - **WHEN** a counted connection emits an `error` event and then a `close` event (or vice versa)
 - **THEN** the server SHALL release the count exactly once across both events (idempotent release), and the live count SHALL NOT go negative or be double-decremented
-
-### Requirement: Story subscription
-
-An authenticated client SHALL send `{ type: "subscribe", series: string, story: string }` to subscribe to chapter updates for a specific story. The server SHALL start a 1-second polling interval to monitor the story's chapter directory for new files. When the chapter count changes, the server SHALL push `{ type: "chapters:updated", series, story, count }`. When the last chapter's content changes, the server SHALL push `{ type: "chapters:content", series, story, chapter, content }`. Only one subscription SHALL be active per connection — a new `subscribe` message SHALL replace the previous subscription.
-
-#### Scenario: Subscribe to chapter updates
-- **WHEN** an authenticated client sends `{ type: "subscribe", series: "s1", story: "n1" }`
-- **THEN** the server SHALL start monitoring the chapter directory for `s1/n1` and push update messages when changes are detected
-
-#### Scenario: New chapter detected via server polling
-- **WHEN** a new chapter file appears in the monitored story directory
-- **THEN** the server SHALL push `{ type: "chapters:updated", series: "s1", story: "n1", count: 6 }` within 1 second
-
-#### Scenario: Subscription replacement
-- **WHEN** a client sends `subscribe` for story A, then sends `subscribe` for story B
-- **THEN** the server SHALL stop monitoring story A and start monitoring story B; only story B updates SHALL be pushed

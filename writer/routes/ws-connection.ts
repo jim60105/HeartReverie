@@ -16,7 +16,12 @@
 import type { WSContext } from "@hono/hono/ws";
 import type { AppDeps, WsServerMessage } from "../types.ts";
 import { createLogger } from "../lib/logger.ts";
-import { IDLE_TIMEOUT_MS, verifyWsPassphrase } from "./ws-auth.ts";
+import {
+  getAuthDeadlineMs,
+  IDLE_TIMEOUT_MS,
+  PRE_AUTH_PAYLOAD_CAP_BYTES,
+  verifyWsPassphrase,
+} from "./ws-auth.ts";
 import { handleSubscribe } from "./ws-subscribe.ts";
 import {
   handleChatAbort,
@@ -43,6 +48,7 @@ export class WsConnection {
   #authenticated = false;
   #subscriptionIntervalId: ReturnType<typeof setInterval> | null = null;
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
+  #authDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
   #activeGenerations = 0;
   readonly #abortControllers = new Map<string, AbortController>();
   #disposed = false;
@@ -60,6 +66,28 @@ export class WsConnection {
       }
     } catch {
       // Silently skip if WebSocket is closed or errored
+    }
+  }
+
+  /**
+   * Arm the one-shot auth-deadline timer for an unauthenticated connection.
+   * Pre-auth messages do NOT reset this timer, so an unauthenticated peer
+   * cannot keep the socket open indefinitely. Called from `onOpen`. On expiry
+   * the connection is closed with 4002. The 60s idle timer is NOT armed until
+   * authentication succeeds, so there is no pre-auth timer overlap.
+   */
+  armAuthDeadline(ws: WSContext): void {
+    if (this.#disposed) return;
+    this.#authDeadlineTimer = setTimeout(() => {
+      this.wsSend(ws, { type: "error", detail: "Authentication deadline exceeded" });
+      ws.close(4002, "Authentication deadline exceeded");
+    }, getAuthDeadlineMs());
+  }
+
+  #clearAuthDeadline(): void {
+    if (this.#authDeadlineTimer !== null) {
+      clearTimeout(this.#authDeadlineTimer);
+      this.#authDeadlineTimer = null;
     }
   }
 
@@ -122,6 +150,7 @@ export class WsConnection {
     if (this.#disposed) return;
     this.#disposed = true;
     this.clearSubscription();
+    this.#clearAuthDeadline();
     if (this.#idleTimer !== null) {
       clearTimeout(this.#idleTimer);
       this.#idleTimer = null;
@@ -139,7 +168,37 @@ export class WsConnection {
   /** Dispatch an incoming WebSocket message: auth gate, then by type. */
   async onMessage(ws: WSContext, evt: MessageEvent): Promise<void> {
     if (this.#disposed) return;
-    this.resetIdleTimer(ws);
+
+    // Pre-auth hardening (Finding 3): unauthenticated connections are governed
+    // ONLY by the auth-deadline timer (armed in onOpen). Pre-auth messages must
+    // NOT reset any timer, so we only reset the idle timer once authenticated.
+    if (this.#authenticated) {
+      this.resetIdleTimer(ws);
+    } else {
+      // The `auth` envelope is always a JSON text frame. Reject any non-string
+      // (binary Blob/ArrayBuffer/typed-array) pre-auth frame OUTRIGHT: measuring
+      // `String(evt.data).length` on a binary frame yields a tiny string like
+      // "[object Blob]", which would let a multi-MB binary payload bypass the
+      // byte cap. Closing here (1003 Unsupported Data) keeps the cap sound.
+      if (typeof evt.data !== "string") {
+        authLog.warn("WebSocket pre-auth binary frame rejected", { source: "ws" });
+        ws.close(1003, "Binary frames not supported before authentication");
+        return;
+      }
+      // Cap the pre-auth payload BEFORE JSON.parse — bodyLimit does not cover
+      // WebSocket payloads. Measure the byte length of the payload delivered to
+      // the handler (the Deno adapter reassembles fragments at the message level).
+      const byteLen = new TextEncoder().encode(evt.data).length;
+      if (byteLen > PRE_AUTH_PAYLOAD_CAP_BYTES) {
+        authLog.warn("WebSocket pre-auth payload exceeds cap", {
+          source: "ws",
+          bytes: byteLen,
+          cap: PRE_AUTH_PAYLOAD_CAP_BYTES,
+        });
+        ws.close(1009, "Message too large");
+        return;
+      }
+    }
 
     let data: unknown;
     try {
@@ -157,10 +216,13 @@ export class WsConnection {
     const msg = data as Record<string, unknown>;
     const type = msg.type;
 
-    // First message must be auth
+    // First message MUST be auth. Any other pre-auth message is a protocol
+    // violation: reply with an error and CLOSE the socket (4001) rather than
+    // leaving it open for an unauthenticated peer to hold cheaply.
     if (!this.#authenticated) {
       if (type !== "auth") {
         this.wsSend(ws, { type: "error", detail: "Not authenticated" });
+        ws.close(4001, "Not authenticated");
         return;
       }
 
@@ -173,6 +235,10 @@ export class WsConnection {
       }
 
       this.#authenticated = true;
+      // Auth succeeded: clear the auth-deadline timer and start the normal
+      // idle timer (which inbound activity resets thereafter).
+      this.#clearAuthDeadline();
+      this.resetIdleTimer(ws);
       authLog.info("WebSocket auth successful", { source: "ws", success: true });
       this.wsSend(ws, { type: "auth:ok" });
       return;

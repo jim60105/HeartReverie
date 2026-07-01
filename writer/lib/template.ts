@@ -163,6 +163,22 @@ export function createTemplateEngine(pluginManager: PluginManager): TemplateEngi
         if (!passage.content || !passage.content.includes("{{")) {
           return passage;
         }
+        // Defense-in-depth SSTI revalidation before execution: a body that
+        // reached disk through any path (direct FS edit, imported/shared lore,
+        // a future write route) MUST NOT achieve code execution at render time.
+        // On violation, use the raw body (skip runString) and warn — reusing
+        // the existing per-passage raw-content fallback contract.
+        const sstiErrors = validateTemplate(passage.content);
+        if (sstiErrors.length > 0) {
+          log.warn(
+            `Lore passage '${passage.relativePath}' failed SSTI revalidation, using raw content`,
+            {
+              passage: passage.relativePath,
+              expressions: sstiErrors,
+            },
+          );
+          return passage;
+        }
         try {
           const result = await ventoEnv.runString(passage.content, { ...renderContext });
           return { ...passage, content: result.content };

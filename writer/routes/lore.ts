@@ -17,6 +17,7 @@ import { dirname, join } from "@std/path";
 import { isReservedDirectoryName, isValidParam } from "../lib/middleware.ts";
 import { errorMessage, problemJson } from "../lib/errors.ts";
 import { collectPassagesFromScope, filterByTag, parseFrontmatter } from "../lib/lore.ts";
+import { validateTemplate } from "../lib/template.ts";
 import { createLogger } from "../lib/logger.ts";
 import type { LorePassage, LoreScope } from "../lib/lore.ts";
 import type { Context, Hono } from "@hono/hono";
@@ -313,6 +314,25 @@ export function registerLoreRoutes(app: Hono, deps: Pick<AppDeps, "safePath" | "
     const validation = validatePassageBody(body);
     if (!validation.valid) {
       return c.json(problemJson("Bad Request", 400, validation.error), 400);
+    }
+
+    // SSTI whitelist enforcement — identical control to PUT /api/templates.
+    // The same on-disk _lore/*.md file is writable through both routes, so the
+    // lore route MUST run the same validateTemplate() guard; otherwise it is an
+    // SSTI bypass. Reject unsafe expressions with 422 and never write the file.
+    const sstiErrors = validateTemplate(validation.content);
+    if (sstiErrors.length > 0) {
+      log.warn("[PUT /api/lore] Rejected unsafe passage content", {
+        path: filePath,
+        expressions: sstiErrors,
+      });
+      return c.json({
+        type: "https://heartreverie.invalid/template-validation",
+        title: "Template Validation Error",
+        status: 422,
+        detail: "Passage content contains unsafe expressions that cannot be executed",
+        expressions: sstiErrors,
+      }, 422);
     }
 
     const fileContent = serializePassage(validation.frontmatter, validation.content);

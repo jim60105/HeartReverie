@@ -478,4 +478,131 @@ Deno.test("lore Vento rendering", async (t) => {
     await Deno.remove(join(loreDir, "a.md"));
     await Deno.remove(join(loreDir, "b.md"));
   });
+
+  // ── SSTI render-time revalidation (Finding 2, defense-in-depth) ──────────
+
+  await t.step("unsafe lore body is used raw and never executed at render", async () => {
+    await Deno.writeTextFile(
+      join(loreDir, "evil.md"),
+      "---\ntags: [evil]\npriority: 10\nenabled: true\n---\n{{ Deno.env.toObject() |> JSON.stringify }}",
+    );
+    Deno.env.set("HR_SSTI_CANARY", "leaked-secret-value");
+
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map((a) => String(a)).join(" "));
+    };
+    try {
+      const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
+      const result = await renderSystemPrompt("test", undefined, {
+        templateOverride: `{{ message "user" }}{{ lore_evil }}{{ /message }}`,
+      });
+      assertEquals(result.error, null);
+      assertExists(result.messages[0]);
+      // Raw, unexecuted body — no env leak
+      assertMatch(result.messages[0]!.content, /\{\{ Deno\.env\.toObject/);
+      assert(!result.messages[0]!.content.includes("leaked-secret-value"));
+    } finally {
+      console.warn = originalWarn;
+      Deno.env.delete("HR_SSTI_CANARY");
+      await Deno.remove(join(loreDir, "evil.md"));
+    }
+    // A warn log naming the passage was emitted
+    assert(
+      warnings.some((w) => w.includes("SSTI revalidation") && w.includes("evil.md")),
+      `expected SSTI warn log, got: ${warnings.join(" | ")}`,
+    );
+  });
+
+  await t.step(
+    "unsafe body referenced via another lore variable is NOT executed transitively",
+    async () => {
+      // Second-order check: passage A safely interpolates lore_b; passage B's
+      // raw body is unsafe. B must be skipped (raw), and A's interpolation of
+      // lore_b must NOT re-execute B's braces (no double-render of values).
+      await Deno.writeTextFile(
+        join(loreDir, "b.md"),
+        "---\ntags: [xref_b]\npriority: 10\nenabled: true\n---\n{{ Deno.env.toObject() |> JSON.stringify }}",
+      );
+      await Deno.writeTextFile(
+        join(loreDir, "a.md"),
+        "---\ntags: [xref_a]\npriority: 10\nenabled: true\n---\nA=>{{ lore_xref_b }}",
+      );
+      Deno.env.set("HR_SSTI_XREF_CANARY", "leaked-xref-value");
+      const originalWarn = console.warn;
+      console.warn = () => {};
+      try {
+        const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
+        const result = await renderSystemPrompt("test", undefined, {
+          templateOverride: `{{ message "user" }}{{ lore_xref_a }}{{ /message }}`,
+        });
+        assertEquals(result.error, null);
+        assertExists(result.messages[0]);
+        // A's output contains B's RAW braces, not executed env output.
+        assertMatch(result.messages[0]!.content, /A=>/);
+        assert(!result.messages[0]!.content.includes("leaked-xref-value"));
+      } finally {
+        console.warn = originalWarn;
+        Deno.env.delete("HR_SSTI_XREF_CANARY");
+        await Deno.remove(join(loreDir, "a.md"));
+        await Deno.remove(join(loreDir, "b.md"));
+      }
+    },
+  );
+
+  await t.step("safe lore body still renders normally after revalidation", async () => {
+    await Deno.writeTextFile(
+      join(loreDir, "safe-render.md"),
+      "---\ntags: [safe_render]\npriority: 10\nenabled: true\n---\nWorld of {{ series_name }}",
+    );
+    const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
+    const result = await renderSystemPrompt("fantasy", undefined, {
+      templateOverride: `{{ message "user" }}{{ lore_safe_render }}{{ /message }}`,
+    });
+    assertEquals(result.error, null);
+    assertEquals(result.messages, [{ role: "user", content: "World of fantasy" }]);
+    await Deno.remove(join(loreDir, "safe-render.md"));
+  });
+
+  await t.step(
+    "whitelist parity: legitimate lore constructs pass validateTemplate and are not downgraded",
+    () => {
+      // Regression corpus — every construct legitimate lore may use MUST pass
+      // the whitelist so render-time enforcement never downgrades safe lore.
+      const corpus = [
+        "{{ series_name }}",
+        "{{ lore_character }}",
+        "{{ lore_character |> upper }}",
+        "{{ lore_character |> upper |> trim }}",
+        "{{ for x of items }}{{ x }}{{ /for }}",
+        "{{ if enabled }}on{{ else }}off{{ /if }}",
+        `{{ message "user" }}hi{{ /message }}`,
+        "{{ message role }}hi{{ /message }}",
+        "{{# a comment #}}",
+      ];
+      for (const body of corpus) {
+        assertEquals(
+          validateTemplate(body),
+          [],
+          `corpus construct should pass whitelist: ${body}`,
+        );
+      }
+    },
+  );
+
+  await t.step("pipe-filter chain in lore renders normally (not downgraded)", async () => {
+    await Deno.writeTextFile(
+      join(loreDir, "piped.md"),
+      "---\ntags: [piped]\npriority: 10\nenabled: true\n---\n{{ series_name |> toUpperCase }}",
+    );
+    const { renderSystemPrompt } = createTemplateEngine(mockLorePluginManager);
+    const result = await renderSystemPrompt("fantasy", undefined, {
+      templateOverride: `{{ message "user" }}{{ lore_piped }}{{ /message }}`,
+    });
+    assertEquals(result.error, null);
+    assertExists(result.messages[0]);
+    assertEquals(result.messages[0]!.content, "FANTASY");
+    await Deno.remove(join(loreDir, "piped.md"));
+  });
 });

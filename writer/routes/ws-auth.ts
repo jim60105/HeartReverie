@@ -19,6 +19,37 @@ export const IDLE_TIMEOUT_MS = 60_000;
 export const MAX_MESSAGE_LENGTH = 100_000;
 
 /**
+ * Maximum byte length of a message payload accepted on an *unauthenticated*
+ * connection, enforced before `JSON.parse`. Sized to the `auth` envelope with
+ * wide headroom (a real auth message is well under 1 KiB). Hono's `bodyLimit`
+ * middleware does not apply to WebSocket payloads, so this is the guard that
+ * prevents an unauthenticated peer from forcing a large transient allocation.
+ */
+export const PRE_AUTH_PAYLOAD_CAP_BYTES = 4096;
+
+/**
+ * Default deadline (ms) by which a freshly upgraded connection MUST complete
+ * authentication or be closed with code 4002. Overridable via the
+ * `WS_AUTH_DEADLINE_MS` env var (primarily for tests). Pre-auth messages do
+ * NOT reset this deadline.
+ */
+export function getAuthDeadlineMs(): number {
+  const raw = Deno.env.get("WS_AUTH_DEADLINE_MS");
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 30_000;
+}
+
+/**
+ * Global cap on the number of concurrent live WebSocket connections.
+ * Overridable via the `MAX_WS_CONNECTIONS` env var (primarily for tests).
+ */
+export function getMaxWsConnections(): number {
+  const raw = Deno.env.get("MAX_WS_CONNECTIONS");
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 256;
+}
+
+/**
  * Verify a passphrase using timing-safe comparison (mirrors middleware.ts logic).
  * @param passphrase - Client-provided passphrase to verify
  * @returns true if the passphrase matches the configured PASSPHRASE

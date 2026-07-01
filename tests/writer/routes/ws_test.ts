@@ -18,6 +18,7 @@ import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
 import { HookDispatcher } from "../../../writer/lib/hooks.ts";
+import { getLiveWsConnectionCount } from "../../../writer/routes/ws.ts";
 import type { AppConfig, AppDeps, BuildPromptResult } from "../../../writer/types.ts";
 import type { PluginManager } from "../../../writer/lib/plugin-manager.ts";
 
@@ -74,6 +75,50 @@ async function authenticate(ws: WebSocket): Promise<void> {
   ws.send(JSON.stringify({ type: "auth", passphrase: "test-pass" }));
   const msg = await readMessage(ws);
   assertEquals(msg.type, "auth:ok");
+}
+
+/** Build a minimal app instance for WebSocket-focused tests. */
+function makeWsApp(tmpDir: string) {
+  const safePath = createSafePath(tmpDir);
+  return createApp({
+    config: {
+      READER_DIR: "/nonexistent-reader",
+      PLAYGROUND_DIR: tmpDir,
+      ROOT_DIR: "/nonexistent-root",
+      LLM_API_URL: "http://localhost:1/nonexistent",
+      LLM_MODEL: "test-model",
+      PROMPT_FILE: "",
+    } as unknown as AppConfig,
+    safePath,
+    pluginManager: {
+      getPlugins: () => [],
+      getParameters: () => [],
+      getPluginDir: () => null,
+      getBuiltinDir: () => "/nonexistent-plugins",
+      getPromptVariables: async () => ({ variables: {}, fragments: [] }),
+      getStripTagPatterns: () => null,
+    } as unknown as PluginManager,
+    hookDispatcher: new HookDispatcher(),
+    buildPromptFromStory: async () =>
+      ({
+        messages: [{ role: "user" as const, content: "test prompt" }],
+        ventoError: null,
+        chapterFiles: [],
+        chapters: [],
+        previousContext: [],
+        isFirstRound: true,
+      }) as unknown as BuildPromptResult,
+    buildContinuePromptFromStory: (async () => ({
+      messages: [],
+      ventoError: null,
+      targetChapterNumber: 0,
+      existingContent: "",
+      userMessageText: "",
+      assistantPrefill: "",
+    })) as unknown as import("../../../writer/types.ts").BuildContinuePromptFn,
+    templateEngine: null,
+    verifyPassphrase,
+  } as AppDeps);
 }
 
 Deno.test({
@@ -160,15 +205,53 @@ Deno.test({
         assertEquals(closeEvt.code, 4001);
       });
 
-      await t.step("auth: non-auth message before auth returns error", async () => {
-        const ws = await openWs(addr);
-        ws.send(JSON.stringify({ type: "subscribe", series: "s", story: "t" }));
-        const msg = await readMessage(ws);
-        assertEquals(msg.type, "error");
-        assertEquals(msg.detail, "Not authenticated");
-        ws.close();
-        await waitForClose(ws);
-      });
+      await t.step(
+        "auth: non-auth message before auth returns error and closes 4001",
+        async () => {
+          const ws = await openWs(addr);
+          ws.send(JSON.stringify({ type: "subscribe", series: "s", story: "t" }));
+          const msg = await readMessage(ws);
+          assertEquals(msg.type, "error");
+          assertEquals(msg.detail, "Not authenticated");
+          const closeEvt = await waitForClose(ws);
+          assertEquals(closeEvt.code, 4001);
+        },
+      );
+
+      await t.step(
+        "auth: oversized pre-auth payload closes 1009 without processing",
+        async () => {
+          const ws = await openWs(addr);
+          // Payload well over the 4096-byte pre-auth cap.
+          ws.send(JSON.stringify({ type: "auth", passphrase: "x".repeat(5000) }));
+          const closeEvt = await waitForClose(ws);
+          assertEquals(closeEvt.code, 1009);
+        },
+      );
+
+      await t.step(
+        "auth: large binary pre-auth frame closes 1003 (cannot bypass cap)",
+        async () => {
+          const ws = await openWs(addr);
+          // A multi-KiB binary frame would stringify to "[object ...]" (tiny)
+          // and bypass a string-length cap — the server must reject it as binary.
+          ws.send(new Uint8Array(6000));
+          const closeEvt = await waitForClose(ws);
+          assertEquals(closeEvt.code, 1003);
+        },
+      );
+
+      await t.step(
+        "auth: a realistic auth message is within the pre-auth cap",
+        async () => {
+          const ws = await openWs(addr);
+          ws.send(JSON.stringify({ type: "auth", passphrase: "test-pass" }));
+          const msg = await readMessage(ws);
+          assertEquals(msg.type, "auth:ok");
+          ws.close();
+          await waitForClose(ws);
+        },
+      );
 
       // ── 8.3: Subscribe ──
 
@@ -605,6 +688,131 @@ Deno.test({
         await waitForClose(ws);
       });
     } finally {
+      await server.shutdown();
+      await Deno.remove(tmpDir, { recursive: true }).catch(() => {});
+    }
+  },
+});
+
+Deno.test({
+  name: "ws auth-deadline (Finding 3)",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "ws-deadline-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("LLM_API_KEY", "test-key-for-validation");
+    // Short deadline so the test is fast; pre-auth messages must not extend it.
+    Deno.env.set("WS_AUTH_DEADLINE_MS", "600");
+
+    const app = makeWsApp(tmpDir);
+    const server = Deno.serve({ port: 0, onListen: () => {} }, app.fetch);
+    const addr = server.addr;
+
+    try {
+      const ws = await openWs(addr);
+      // The client authenticates never; sending periodic *valid-JSON, non-auth*
+      // frames does NOT reset the auth deadline. But a non-auth frame closes 4001
+      // immediately per the protocol rule, so to isolate the deadline we send
+      // nothing and just wait — the deadline must fire with 4002.
+      const closeEvt = await waitForClose(ws, 3000);
+      assertEquals(closeEvt.code, 4002);
+    } finally {
+      Deno.env.delete("WS_AUTH_DEADLINE_MS");
+      await server.shutdown();
+      await Deno.remove(tmpDir, { recursive: true }).catch(() => {});
+    }
+  },
+});
+
+Deno.test({
+  name: "ws concurrent-connection cap (Finding 3)",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "ws-cap-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("LLM_API_KEY", "test-key-for-validation");
+    Deno.env.set("MAX_WS_CONNECTIONS", "2");
+    // Generous auth deadline so it doesn't interfere with the cap assertions.
+    Deno.env.set("WS_AUTH_DEADLINE_MS", "10000");
+
+    const app = makeWsApp(tmpDir);
+    const server = Deno.serve({ port: 0, onListen: () => {} }, app.fetch);
+    const addr = server.addr;
+
+    try {
+      // Fill the cap (2 connections), authenticating each so they stay open.
+      const ws1 = await openWs(addr);
+      await authenticate(ws1);
+      const ws2 = await openWs(addr);
+      await authenticate(ws2);
+
+      // Third connection is over the cap → server closes it with 1013.
+      const ws3 = await openWs(addr);
+      const closeEvt3 = await waitForClose(ws3, 3000);
+      assertEquals(closeEvt3.code, 1013);
+
+      // Free a slot; a new connection now succeeds (counter recovered).
+      ws1.close();
+      await waitForClose(ws1);
+      // Small settle so onClose runs on the server before we reopen.
+      await new Promise((r) => setTimeout(r, 100));
+
+      const ws4 = await openWs(addr);
+      await authenticate(ws4);
+      ws4.close();
+      await waitForClose(ws4);
+      ws2.close();
+      await waitForClose(ws2);
+
+      // After all sockets close, the live count returns to 0 (no leak).
+      await new Promise((r) => setTimeout(r, 150));
+      assertEquals(getLiveWsConnectionCount(), 0);
+    } finally {
+      Deno.env.delete("MAX_WS_CONNECTIONS");
+      Deno.env.delete("WS_AUTH_DEADLINE_MS");
+      await server.shutdown();
+      await Deno.remove(tmpDir, { recursive: true }).catch(() => {});
+    }
+  },
+});
+
+Deno.test({
+  name: "ws live-count released on abnormal pre-auth closes (Finding 3)",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const tmpDir = await Deno.makeTempDir({ prefix: "ws-leak-" });
+    Deno.env.set("PASSPHRASE", "test-pass");
+    Deno.env.set("LLM_API_KEY", "test-key-for-validation");
+    Deno.env.set("WS_AUTH_DEADLINE_MS", "10000");
+
+    const app = makeWsApp(tmpDir);
+    const server = Deno.serve({ port: 0, onListen: () => {} }, app.fetch);
+    const addr = server.addr;
+
+    try {
+      // Failed auth → 4001
+      const wsBad = await openWs(addr);
+      wsBad.send(JSON.stringify({ type: "auth", passphrase: "wrong" }));
+      await waitForClose(wsBad);
+
+      // Oversized pre-auth → 1009
+      const wsBig = await openWs(addr);
+      wsBig.send(JSON.stringify({ type: "auth", passphrase: "x".repeat(5000) }));
+      await waitForClose(wsBig);
+
+      // Binary pre-auth → 1003
+      const wsBin = await openWs(addr);
+      wsBin.send(new Uint8Array(6000));
+      await waitForClose(wsBin);
+
+      // Each admitted then released exactly once — count back to 0.
+      await new Promise((r) => setTimeout(r, 150));
+      assertEquals(getLiveWsConnectionCount(), 0);
+    } finally {
+      Deno.env.delete("WS_AUTH_DEADLINE_MS");
       await server.shutdown();
       await Deno.remove(tmpDir, { recursive: true }).catch(() => {});
     }
