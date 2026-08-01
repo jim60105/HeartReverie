@@ -170,6 +170,22 @@ Deno.test({
       }
     });
 
+    await t.step("max effort forwards reasoning { enabled: true, effort: 'max' }", async () => {
+      const tmpDir = await Deno.makeTempDir({ prefix: "chat-reason-7-" });
+      try {
+        await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+        const cap = captureUpstreamFetch();
+        try {
+          await runOnce(tmpDir, buildConfig(tmpDir, { reasoningEffort: "max" }));
+        } finally {
+          cap.restore();
+        }
+        assertEquals(cap.captured.body!.reasoning, { enabled: true, effort: "max" });
+      } finally {
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
+
     await t.step("env-disabled yields { enabled: false } with no effort", async () => {
       const tmpDir = await Deno.makeTempDir({ prefix: "chat-reason-2-" });
       try {

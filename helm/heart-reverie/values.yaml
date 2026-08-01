@@ -58,7 +58,7 @@ env:
   # LLM_TOP_A: "1"
   # LLM_MAX_COMPLETION_TOKENS: "4096"
   # LLM_REASONING_ENABLED: "true"
-  # LLM_REASONING_EFFORT: "xhigh"
+  # LLM_REASONING_EFFORT: "xhigh"  # Accepted values: none, minimal, low, medium, high, xhigh, max
   # LLM_REASONING_OMIT: "false"
 
   # ── Plugin / playground / paths ──────────────────────────────────

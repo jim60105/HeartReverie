@@ -118,7 +118,7 @@ export function validateStoryLlmConfig(input: unknown): StoryLlmConfigOverrides 
         !(REASONING_EFFORTS as readonly string[]).includes(v)
       ) {
         throw new StoryConfigValidationError(
-          "Field 'reasoningEffort' must be one of: none, minimal, low, medium, high, xhigh",
+          `Field 'reasoningEffort' must be one of: ${REASONING_EFFORTS.join(", ")}`,
         );
       }
       out.reasoningEffort = v;

@@ -24,6 +24,7 @@ export const REASONING_EFFORTS = [
   "medium",
   "high",
   "xhigh",
+  "max",
 ] as const;
 
 /** Reasoning effort tier accepted by OpenRouter / OpenAI-compatible reasoning models. */

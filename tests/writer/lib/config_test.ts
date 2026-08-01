@@ -130,7 +130,7 @@ Deno.test("LLM_REASONING_EFFORT defaults to xhigh when unset", async () => {
 });
 
 Deno.test("LLM_REASONING_EFFORT accepts every valid value (case-sensitive)", async () => {
-  for (const v of ["none", "minimal", "low", "medium", "high", "xhigh"]) {
+  for (const v of ["none", "minimal", "low", "medium", "high", "xhigh", "max"]) {
     const r = await evalReasoningEnv({ LLM_REASONING_EFFORT: v });
     assertEquals(r.effort, v);
   }

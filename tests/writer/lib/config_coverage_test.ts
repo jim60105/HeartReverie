@@ -297,7 +297,7 @@ Deno.test("config.ts – effortEnv: warn-and-fallback on invalid token", async (
 });
 
 Deno.test("config.ts – effortEnv: each valid value parsed verbatim", async () => {
-  for (const v of ["none", "minimal", "low", "medium", "high", "xhigh"]) {
+  for (const v of ["none", "minimal", "low", "medium", "high", "xhigh", "max"]) {
     const { values } = await evalAll({ LLM_REASONING_EFFORT: v });
     assertEquals(values.LLM_REASONING_EFFORT, v);
   }

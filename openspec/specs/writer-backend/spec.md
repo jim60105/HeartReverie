@@ -200,7 +200,7 @@ The `llmDefaults` object SHALL be built from the following environment variables
 
 The server SHALL also read a separate, non-merged env var `LLM_REASONING_OMIT` (default `false`, parsed as a boolean per the rules below). When `LLM_REASONING_OMIT` resolves to `true`, the server SHALL omit the entire `reasoning` block from the upstream chat/completions request body, regardless of the merged `reasoningEnabled` / `reasoningEffort` values. This env var SHALL NOT be exposed in `_config.json`; it is a deployment-level switch only.
 
-`LLM_REASONING_ENABLED` and `LLM_REASONING_OMIT` SHALL be parsed by a shared boolean parser with the rule: `"true" | "1" | "yes" | "on"` (case-insensitive, trimmed) → `true`; `"false" | "0" | "no" | "off"` (case-insensitive, trimmed) → `false`; the empty string or unset → the documented default; **any other non-empty string** SHALL fall back to the default AND the server SHALL emit a warning to the operational log naming the variable and the unrecognized value. `LLM_REASONING_EFFORT` SHALL be validated against the exact set `{"none", "minimal", "low", "medium", "high", "xhigh"}` (case-sensitive); any other value SHALL fall back to the default `"xhigh"` and the server SHALL emit a warning log on startup.
+`LLM_REASONING_ENABLED` and `LLM_REASONING_OMIT` SHALL be parsed by a shared boolean parser with the rule: `"true" | "1" | "yes" | "on"` (case-insensitive, trimmed) → `true`; `"false" | "0" | "no" | "off"` (case-insensitive, trimmed) → `false`; the empty string or unset → the documented default; **any other non-empty string** SHALL fall back to the default AND the server SHALL emit a warning to the operational log naming the variable and the unrecognized value. `LLM_REASONING_EFFORT` SHALL be validated against the exact set `{"none", "minimal", "low", "medium", "high", "xhigh", "max"}` (case-sensitive); any other value SHALL fall back to the default `"xhigh"` and the server SHALL emit a warning log on startup.
 
 `storyOverrides` SHALL be the validated partial subset of those same fields read from `playground/<series>/<story>/_config.json` (absent file ⇒ empty overrides). Only the whitelisted keys `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort`, `maxCompletionTokens` SHALL be honoured; unknown keys SHALL be ignored. Values whose type does not match the whitelist SHALL cause the request to fail with an RFC 9457 Problem Details error. For `maxCompletionTokens` specifically the validator SHALL accept `null` as a valid value carrying the explicit meaning "no application-level limit"; non-null values SHALL still be required to be a positive finite safe integer.
 
@@ -335,7 +335,7 @@ The operational debug log entry and the LLM interaction log entry produced for e
 
 #### Scenario: Invalid LLM_REASONING_EFFORT falls back to default
 
-- **WHEN** `LLM_REASONING_EFFORT` is set to a value outside `{ "none", "minimal", "low", "medium", "high", "xhigh" }`
+- **WHEN** `LLM_REASONING_EFFORT` is set to a value outside `{ "none", "minimal", "low", "medium", "high", "xhigh", "max" }`
 - **THEN** the env-derived `reasoningEffort` default SHALL fall back to `"xhigh"` and a warning SHALL be emitted to the operational log
 
 #### Scenario: LLM_REASONING_OMIT suppresses the reasoning block

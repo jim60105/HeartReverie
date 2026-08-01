@@ -25,7 +25,7 @@
 | `LLM_TOP_A` | `1` | Top-A 取樣 |
 | `LLM_MAX_COMPLETION_TOKENS` | 未設定 | 每次回應的 token 上限；留空表示不設應用層上限 |
 | `LLM_REASONING_ENABLED` | `true` | 是否在請求中附帶 `reasoning` 區塊 |
-| `LLM_REASONING_EFFORT` | `xhigh` | `reasoning.effort` 等級 |
+| `LLM_REASONING_EFFORT` | `xhigh` | `reasoning.effort` 等級（`none` / `minimal` / `low` / `medium` / `high` / `xhigh` / `max`） |
 | `LLM_REASONING_OMIT` | `false` | 設為 `true` 時完全省略 `reasoning` 區塊 |
 
 ## 伺服器

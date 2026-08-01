@@ -147,14 +147,14 @@ describe("LlmSettingsPage", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("推理啟用 (reasoning_enabled)");
     expect(wrapper.text()).toContain("推理強度 (reasoning_effort)");
-    // The reasoningEffort row should contain a <select> with all six options.
+    // The reasoningEffort row should contain a <select> with all seven options.
     const selects = wrapper.findAll("select");
     const effortSelect = selects.find((s) =>
       s.findAll("option").some((o) => o.attributes("value") === "xhigh")
     );
     expect(effortSelect).toBeDefined();
     const optionValues = effortSelect!.findAll("option").map((o) => o.attributes("value"));
-    expect(optionValues).toEqual(["none", "minimal", "low", "medium", "high", "xhigh"]);
+    expect(optionValues).toEqual(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
     // The reasoningEnabled row should contain a value-control checkbox in addition to the toggle.
     expect(wrapper.findAll(".field-checkbox").length).toBe(1);
   });

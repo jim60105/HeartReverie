@@ -635,6 +635,7 @@ export const REASONING_EFFORTS = [
   "medium",
   "high",
   "xhigh",
+  "max",
 ] as const;
 
 export type ReasoningEffort = typeof REASONING_EFFORTS[number];

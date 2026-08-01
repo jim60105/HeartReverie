@@ -142,8 +142,8 @@ Deno.test("validateStoryLlmConfig", async (t) => {
     }
   });
 
-  await t.step("accepts each of the six reasoning effort values", () => {
-    for (const effort of ["none", "minimal", "low", "medium", "high", "xhigh"] as const) {
+  await t.step("accepts each of the seven reasoning effort values", () => {
+    for (const effort of ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const) {
       assertEquals(validateStoryLlmConfig({ reasoningEffort: effort }), {
         reasoningEffort: effort,
       });

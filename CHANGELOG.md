@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`max` reasoning effort level**: A new `"max"` tier is now accepted everywhere reasoning effort is configured (`LLM_REASONING_EFFORT` env var, per-story `_config.json`, and the `/settings/llm` frontend select), enabling the highest provider reasoning budget (e.g. `o3`-class extended-thinking modes) alongside the existing `none`/`minimal`/`low`/`medium`/`high`/`xhigh` values.
+
 ## [0.11.0] - 2026-06-29
 
 ### Added
