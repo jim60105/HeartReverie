@@ -1,10 +1,4 @@
-# openrouter-app-attribution Specification
-
-## Purpose
-
-Define how the HeartReverie server attributes itself to OpenRouter (and any other upstream LLM provider that honours the same headers) by attaching three hard-coded HTTP headers — `HTTP-Referer`, `X-OpenRouter-Title`, and `X-OpenRouter-Categories` — to every outbound chat completion request. The capability also pins these values to a single source-of-truth constant so that forks can re-attribute by editing one file rather than chasing multiple configuration surfaces.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Hard-coded attribution headers attached to LLM requests
 
@@ -55,12 +49,3 @@ The constant SHALL be defined as a frozen object (e.g., via `Object.freeze` or `
 
 - **WHEN** the server collects template variables for prompt rendering
 - **THEN** the variable namespace SHALL NOT include any `app_referer`, `app_title`, `app_categories`, or similarly named entries
-
-### Requirement: Attribution headers documented for forks
-
-`AGENTS.md` SHALL document that the three OpenRouter app-attribution headers are sent on every chat request and SHALL identify the source-code constant (its name and file path) where the values live. The documentation SHALL state that forks intending to attribute their usage separately from the canonical HeartReverie deployment MUST edit that constant in source.
-
-#### Scenario: AGENTS.md identifies the attribution constant
-
-- **WHEN** a contributor reads `AGENTS.md`
-- **THEN** the document SHALL contain a section (or paragraph) that names the constant (`LLM_APP_ATTRIBUTION_HEADERS`) and its file location (`writer/lib/chat-llm-fetch.ts`), lists the three headers and their default values, and instructs forks to edit the constant if they want different attribution

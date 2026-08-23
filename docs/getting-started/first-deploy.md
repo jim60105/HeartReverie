@@ -16,7 +16,7 @@
     podman pull ghcr.io/jim60105/heartreverie:latest
     ```
 
-2. **執行容器並設定 `PASSPHRASE`**：把 `LLM_API_KEY` 與 `PASSPHRASE` 放進 `.env`，掛載 `playground/` 作為持久化資料目錄，啟動容器。
+2. **執行容器並設定 `PASSPHRASE`**：把 `LLM_API_KEY`（選填，接無金鑰的本機/私有 provider 時可省略）與 `PASSPHRASE` 放進 `.env`，掛載 `playground/` 作為持久化資料目錄，啟動容器。
 
     ```bash
     cat > .env << 'EOF'

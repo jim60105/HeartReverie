@@ -5,7 +5,7 @@ HeartReverie 支援兩種啟動方式，分別是容器化部署與本地部署�
 ## 容器化部署
 
 ```bash
- # 建立 .env（或複製 .env.example）
+ # 建立 .env（或複製 .env.example）——LLM_API_KEY 選填，接無金鑰的本機/私有 provider 時可省略
 cat > .env << 'EOF'
 LLM_API_KEY=your-api-key-here
 PASSPHRASE=your-passphrase-here
@@ -31,7 +31,7 @@ podman build -t heartreverie:latest .
 本地部署需要 [Deno](https://deno.com/)。
 
 ```bash
- # 建立 .env（或複製 .env.example）
+ # 建立 .env（或複製 .env.example）——LLM_API_KEY 選填，接無金鑰的本機/私有 provider 時可省略
 cat > .env << 'EOF'
 LLM_API_KEY=your-api-key-here
 PASSPHRASE=your-passphrase-here

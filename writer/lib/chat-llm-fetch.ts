@@ -168,13 +168,17 @@ export async function performLlmFetch(args: {
   const { apiUrl, requestBody, signal, llmStartTime, model, reqLog, llmLog } = args;
   let apiResponse: Response;
   try {
+    const apiKey = Deno.env.get("LLM_API_KEY");
+    const headers: Record<string, string> = {
+      ...LLM_APP_ATTRIBUTION_HEADERS,
+      "Content-Type": "application/json",
+    };
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
     apiResponse = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        ...LLM_APP_ATTRIBUTION_HEADERS,
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("LLM_API_KEY")}`,
-      },
+      headers,
       body: JSON.stringify(requestBody),
       signal,
     });

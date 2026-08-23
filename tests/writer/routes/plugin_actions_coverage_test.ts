@@ -472,23 +472,100 @@ Deno.test({
       },
     );
 
-    await t.step("missing LLM_API_KEY returns 500", async () => {
-      const { app, cleanup } = await makeScenario();
-      const previous = Deno.env.get("LLM_API_KEY");
-      try {
-        Deno.env.delete("LLM_API_KEY");
-        const res = await callRoute(app, "tester", {
-          series: "s1",
-          name: "n1",
-          promptFile: "prompts/summary.md",
-          append: false,
-        });
-        assertEquals(res.status, 500);
-        const body = res.body as { detail: string };
-        assertTrue(body.detail.includes("LLM_API_KEY"));
-      } finally {
-        if (previous !== undefined) Deno.env.set("LLM_API_KEY", previous);
-        await cleanup();
+    await t.step("missing LLM_API_KEY: action proceeds without Authorization header", async () => {
+      // Sub-case A: key unset — the run-prompt action proceeds and the
+      // upstream request carries no Authorization header.
+      {
+        const { app, cleanup } = await makeScenario();
+        const previous = Deno.env.get("LLM_API_KEY");
+        const origFetch = globalThis.fetch;
+        let authSeen = false;
+        let sawFetch = false;
+        globalThis.fetch = async (
+          url: string | URL | Request,
+          opts?: RequestInit,
+        ) => {
+          if (typeof url === "string" && url.includes("chat/completions")) {
+            sawFetch = true;
+            authSeen = (opts?.headers as Record<string, string>)["Authorization"] !== undefined;
+            const sse = [
+              `data: ${JSON.stringify({ choices: [{ delta: { content: "ok" } }] })}\n\n`,
+              `data: [DONE]\n\n`,
+            ];
+            return new Response(
+              new ReadableStream({
+                start(controller) {
+                  const enc = new TextEncoder();
+                  for (const chunk of sse) controller.enqueue(enc.encode(chunk));
+                  controller.close();
+                },
+              }),
+              { status: 200 },
+            );
+          }
+          return origFetch(url, opts);
+        };
+        try {
+          Deno.env.delete("LLM_API_KEY");
+          const res = await callRoute(app, "tester", {
+            series: "s1",
+            name: "n1",
+            promptFile: "prompts/summary.md",
+            append: false,
+          });
+          assertEquals(res.status, 200);
+          assertTrue(sawFetch, "upstream fetch was not called");
+          assertTrue(!authSeen, "Authorization header must be omitted when LLM_API_KEY is unset");
+        } finally {
+          globalThis.fetch = origFetch;
+          if (previous !== undefined) Deno.env.set("LLM_API_KEY", previous);
+          await cleanup();
+        }
+      }
+
+      // Sub-case B: key set to empty string — identical to unset.
+      {
+        const { app, cleanup } = await makeScenario();
+        const origFetch = globalThis.fetch;
+        let authSeen = false;
+        globalThis.fetch = async (
+          url: string | URL | Request,
+          opts?: RequestInit,
+        ) => {
+          if (typeof url === "string" && url.includes("chat/completions")) {
+            authSeen = (opts?.headers as Record<string, string>)["Authorization"] !== undefined;
+            const sse = [
+              `data: ${JSON.stringify({ choices: [{ delta: { content: "ok" } }] })}\n\n`,
+              `data: [DONE]\n\n`,
+            ];
+            return new Response(
+              new ReadableStream({
+                start(controller) {
+                  const enc = new TextEncoder();
+                  for (const chunk of sse) controller.enqueue(enc.encode(chunk));
+                  controller.close();
+                },
+              }),
+              { status: 200 },
+            );
+          }
+          return origFetch(url, opts);
+        };
+        Deno.env.set("LLM_API_KEY", "");
+        try {
+          const res = await callRoute(app, "tester", {
+            series: "s1",
+            name: "n1",
+            promptFile: "prompts/summary.md",
+            append: false,
+          });
+          assertEquals(res.status, 200);
+          assertTrue(!authSeen, "Authorization header must be omitted when LLM_API_KEY is empty");
+        } finally {
+          globalThis.fetch = origFetch;
+          Deno.env.set("LLM_API_KEY", "test-key");
+          await cleanup();
+        }
       }
     });
 

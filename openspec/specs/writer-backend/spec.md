@@ -190,7 +190,7 @@ The server SHALL register lore CRUD routes as a core route module at `writer/rou
 
 ### Requirement: LLM API proxy
 
-The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JSON body with a `message` field. The server SHALL construct the prompt using the pipeline above, send it to the LLM API URL (configured via `LLM_API_URL` environment variable, defaulting to `https://openrouter.ai/api/v1/chat/completions`) using native `fetch` with `stream: true` in the request body, and write the assistant's response incrementally as the next numbered chapter file. The server SHALL use the `LLM_API_KEY` environment variable for authentication.
+The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JSON body with a `message` field. The server SHALL construct the prompt using the pipeline above, send it to the LLM API URL (configured via `LLM_API_URL` environment variable, defaulting to `https://openrouter.ai/api/v1/chat/completions`) using native `fetch` with `stream: true` in the request body, and write the assistant's response incrementally as the next numbered chapter file. When the `LLM_API_KEY` environment variable is set to a non-empty value, the server SHALL attach an `Authorization: Bearer <key>` header to the upstream request. When `LLM_API_KEY` is unset or empty, the `Authorization` header SHALL be omitted entirely so that keyless local or private LLM providers (e.g. Ollama, vLLM, LM Studio) work without a key, and the chat flow SHALL NOT fail with HTTP 500 for the missing key.
 
 The server SHALL resolve the effective LLM configuration for each chat request by merging an env-derived `llmDefaults` object with the target story's validated `_config.json` overrides using `Object.assign({}, llmDefaults, storyOverrides)`. Merging SHALL happen per request so that edits to a story's `_config.json` take effect on the next chat without a server restart.
 
@@ -213,7 +213,7 @@ Additionally, the upstream request body SHALL include a `reasoning` object on ev
 - When the merged `reasoningEnabled` is `false`: `reasoning: { enabled: false }` (the `effort` property SHALL be omitted).
 - When `LLM_REASONING_OMIT` is `true`: the `reasoning` key SHALL NOT appear in the request body at all.
 
-The upstream `fetch` call SHALL additionally attach three hard-coded OpenRouter app-attribution HTTP headers — `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie`, and `X-OpenRouter-Categories: roleplay,creative-writing` — alongside `Content-Type` and `Authorization`, on every chat request, regardless of the configured `LLM_API_URL`. The header values SHALL come from a single module-level frozen constant in `writer/lib/chat-shared.ts` and SHALL NOT be configurable at runtime (no env vars, no `_config.json` keys, no API surface). See the `openrouter-app-attribution` capability for the complete specification.
+The upstream `fetch` call SHALL additionally attach three hard-coded OpenRouter app-attribution HTTP headers — `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie`, and `X-OpenRouter-Categories: roleplay,creative-writing` — alongside `Content-Type` and (when `LLM_API_KEY` is set) the `Authorization` header, on every chat request, regardless of the configured `LLM_API_URL`. The header values SHALL come from a single module-level frozen constant in `writer/lib/chat-llm-fetch.ts` and SHALL NOT be configurable at runtime (no env vars, no `_config.json` keys, no API surface). See the `openrouter-app-attribution` capability for the complete specification.
 
 The upstream `fetch` call SHALL also accept an optional `signal: AbortSignal` parameter that is forwarded directly to `fetch()`. When the signal is aborted, both the initial fetch resolution and any in-flight SSE stream read SHALL be cancellable. The server SHALL discriminate aborts by inspecting `signal?.aborted === true` rather than by inspecting the thrown error's class or `name`, so that the dedicated abort branch (close chapter file → log abort → throw `ChatAbortError`) runs regardless of whether the abort reason is a `DOMException`, a custom `Error`, a `ChatAbortError`, or undefined. The HTTP route SHALL pass `c.req.raw.signal`; the WebSocket route SHALL pass a per-request `AbortController.signal`. See the `streaming-cancellation` capability for the complete cancellation contract.
 
@@ -265,7 +265,7 @@ The operational debug log entry and the LLM interaction log entry produced for e
 #### Scenario: Missing API key
 
 - **WHEN** the `LLM_API_KEY` environment variable is not set
-- **THEN** the server SHALL return HTTP 500 with a descriptive error message indicating the missing configuration
+- **THEN** the server SHALL proceed with the chat request without an `Authorization` header, and SHALL NOT return HTTP 500 for the missing key
 
 #### Scenario: Custom LLM API URL
 
@@ -429,7 +429,7 @@ The operational debug log entry and the LLM interaction log entry produced for e
 #### Scenario: Attribution headers attached on every chat request
 
 - **WHEN** the server dispatches any chat completion request to the upstream LLM
-- **THEN** the upstream `fetch` call SHALL carry exactly `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie`, and `X-OpenRouter-Categories: roleplay,creative-writing` in addition to `Content-Type` and `Authorization`
+- **THEN** the upstream `fetch` call SHALL carry exactly `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie`, and `X-OpenRouter-Categories: roleplay,creative-writing` in addition to `Content-Type` and (when `LLM_API_KEY` is set) the `Authorization` header
 
 #### Scenario: Attribution headers identical regardless of LLM_API_URL
 

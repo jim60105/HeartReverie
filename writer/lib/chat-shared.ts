@@ -75,15 +75,15 @@ const log = createLogger("llm");
 // Inline preflight helpers
 //
 // Not pure — these helpers log, hit the filesystem, mutate the in-memory
-// generation registry, and read environment variables. They each surface
+// generation registry, and read environment variables. Most surface
 // failures by throwing `ChatError` so callers don't need to repeat the
-// try/catch boilerplate.
+// try/catch boilerplate; the API-key check is non-fatal (a keyless
+// local provider is a valid configuration) and only logs at debug level.
 // ---------------------------------------------------------------------------
 
-function requireApiKey(reqLog: Logger): void {
+function noteApiKeyMissing(reqLog: Logger): void {
   if (!Deno.env.get("LLM_API_KEY")) {
-    reqLog.error("LLM_API_KEY not configured");
-    throw new ChatError("api-key", "LLM_API_KEY is not configured", 500);
+    reqLog.debug("LLM_API_KEY not set; proceeding without an Authorization header");
   }
 }
 
@@ -190,7 +190,7 @@ export async function executeChat(options: ChatOptions): Promise<ChatResult> {
   // (inside streamLlmAndPersist) observe the same UUID.
   const correlationId = crypto.randomUUID();
 
-  requireApiKey(reqLog);
+  noteApiKeyMissing(reqLog);
   const storyDir = ensureSafeStoryDir(safePath, series, name);
   const llmConfig = await resolveLlmConfigOrThrow(
     storyDir,
@@ -276,7 +276,7 @@ export async function executeContinue(options: ContinueOptions): Promise<Continu
   // prompt-assembly and pre-llm-fetch.
   const correlationId = crypto.randomUUID();
 
-  requireApiKey(reqLog);
+  noteApiKeyMissing(reqLog);
   const storyDir = ensureSafeStoryDir(safePath, series, name);
   const llmConfig = await resolveLlmConfigOrThrow(
     storyDir,

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assertMatch } from "@std/assert";
+import { assert, assertEquals, assertMatch } from "@std/assert";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
@@ -119,20 +119,79 @@ Deno.test({
         assertEquals(res.status, 400);
       });
 
-      await t.step("returns 500 when LLM_API_KEY not set", async () => {
+      await t.step("proceeds without LLM_API_KEY (no Authorization header)", async () => {
         const origKey = Deno.env.get("LLM_API_KEY");
-        Deno.env.delete("LLM_API_KEY");
+        const originalFetch = globalThis.fetch;
+        let capturedHeaders: Record<string, string> | undefined;
+        globalThis.fetch = async (url: string | URL | Request, opts?: RequestInit) => {
+          if (typeof url === "string" && url.includes("chat/completions")) {
+            capturedHeaders = { ...(opts?.headers as Record<string, string>) };
+            return new Response(
+              new ReadableStream({
+                start(controller) {
+                  const encoder = new TextEncoder();
+                  const sse = [
+                    'data: {"choices":[{"delta":{"role":"assistant","content":"Hi!"}}]}\n\n',
+                    "data: [DONE]\n\n",
+                  ];
+                  for (const chunk of sse) {
+                    controller.enqueue(encoder.encode(chunk));
+                  }
+                  controller.close();
+                },
+              }),
+              { status: 200 },
+            );
+          }
+          return originalFetch(url, opts);
+        };
+        try {
+          Deno.env.delete("LLM_API_KEY");
+          const res = await makeRequest(
+            app,
+            "POST",
+            "/api/stories/s1/n1/chat",
+            { message: "Hello" },
+          );
+          assertEquals(res.status, 200);
+          assert(capturedHeaders !== undefined, "upstream fetch was not called");
+          assert(
+            !("Authorization" in (capturedHeaders ?? {})),
+            "Authorization header must be omitted when LLM_API_KEY is unset",
+          );
 
-        const res = await makeRequest(
-          app,
-          "POST",
-          "/api/stories/s1/n1/chat",
-          { message: "Hello" },
-        );
-        assertEquals(res.status, 500);
-        assertMatch(res.body.detail, /LLM_API_KEY/);
+          Deno.env.set("LLM_API_KEY", "");
+          await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "Hello" });
+          assert(
+            !("Authorization" in (capturedHeaders ?? {})),
+            "Authorization header must be omitted when LLM_API_KEY is empty",
+          );
 
-        Deno.env.set("LLM_API_KEY", origKey!);
+          Deno.env.set("LLM_API_KEY", "test-key");
+          await makeRequest(app, "POST", "/api/stories/s1/n1/chat", { message: "Hello" });
+          assertEquals(capturedHeaders?.Authorization, "Bearer test-key");
+
+          const originalFetch2 = globalThis.fetch;
+          globalThis.fetch = async (url: string | URL | Request, opts?: RequestInit) => {
+            if (typeof url === "string" && url.includes("chat/completions")) {
+              capturedHeaders = { ...(opts?.headers as Record<string, string>) };
+              return new Response(JSON.stringify({ error: { message: "Invalid API key" } }), {
+                status: 401,
+              });
+            }
+            return originalFetch2(url, opts);
+          };
+          const errRes = await makeRequest(app, "POST", "/api/stories/s1/n1/chat", {
+            message: "Hello",
+          });
+          assertEquals(errRes.status, 401);
+          assert(errRes.body !== null);
+          assertMatch(String(errRes.body.detail), /Invalid API key/);
+        } finally {
+          globalThis.fetch = originalFetch;
+          if (origKey === undefined) Deno.env.delete("LLM_API_KEY");
+          else Deno.env.set("LLM_API_KEY", origKey);
+        }
       });
     } finally {
       Deno.env.delete("LLM_API_KEY");

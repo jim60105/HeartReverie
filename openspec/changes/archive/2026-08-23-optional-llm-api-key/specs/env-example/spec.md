@@ -1,9 +1,5 @@
-# Environment Example
+## MODIFIED Requirements
 
-## Purpose
-
-Documents all environment variables recognized by the application via a `.env.example` file at the repository root, enabling new contributors to quickly set up their local environment.
-## Requirements
 ### Requirement: Environment variable documentation file
 
 The project SHALL provide a `.env.example` file at the repository root that documents every environment variable recognized by the application. Each variable entry SHALL include a comment describing its purpose and, where applicable, its default value. The file SHALL NOT contain real secrets or credentials — only placeholder values. The file SHALL NOT document `HTTP_ONLY`, `CERT_FILE`, `KEY_FILE`, or `BACKGROUND_IMAGE` (these variables are no longer recognised by the application).
@@ -56,4 +52,3 @@ The project SHALL provide a `.env.example` file at the repository root that docu
 
 - **WHEN** a contributor inspects the `.env.example` file
 - **THEN** the `THEME_DIR` entry SHALL describe it as the directory containing TOML theme files served by the theme system, with the default value `./themes/` shown as a comment
-

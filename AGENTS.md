@@ -177,7 +177,7 @@ HeartReverie speaks plain HTTP only. For production, terminate TLS at an upstrea
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `LLM_API_KEY` | Yes | — | LLM provider API key (stored in `.env`) |
+| `LLM_API_KEY` | No | — | LLM provider API key (stored in `.env`); omit for keyless local/private providers (Ollama, vLLM, LM Studio) |
 | `PASSPHRASE` | Yes | — | API authentication passphrase (stored in `.env`) |
 | `PORT` | No | `8080` | Server listen port |
 | `LLM_MODEL` | No | `deepseek/deepseek-v4-pro` | LLM model identifier |
@@ -203,7 +203,7 @@ HeartReverie speaks plain HTTP only. For production, terminate TLS at an upstrea
 | `THEME_DIR` | No | `./themes/` | Theme directory path (TOML files); default `./themes/` |
 | `PROMPT_FILE` | No | `playground/_prompts/system.md` | Custom prompt template file path |
 
-The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `LLM_API_KEY` and `PASSPHRASE`.
+The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `PASSPHRASE`; set `LLM_API_KEY` only when your LLM provider requires one (cloud providers like OpenRouter do, keyless local providers like Ollama/vLLM/LM Studio do not).
 
 ### Theme System
 
@@ -372,9 +372,9 @@ Every upstream chat request carries three hard-coded OpenRouter [app-attribution
 - `X-OpenRouter-Title: HeartReverie` (plain ASCII; OpenRouter's rankings UI does not render non-Latin-1 / percent-encoded titles legibly, so the project name's CJK suffix is intentionally omitted from the wire value)
 - `X-OpenRouter-Categories: roleplay,creative-writing`
 
-The values live in a single frozen module-level constant `LLM_APP_ATTRIBUTION_HEADERS` near the top of `writer/lib/chat-shared.ts`. They are intentionally **not** configurable — no env vars, no `_config.json` keys, no API surface. The headers are sent on every chat request regardless of the configured `LLM_API_URL`; most non-OpenRouter providers ignore unknown headers, but strict or privacy-sensitive providers may log or reject them — those operators should fork and clear the constant.
+The values live in a single frozen module-level constant `LLM_APP_ATTRIBUTION_HEADERS` near the top of `writer/lib/chat-llm-fetch.ts`. They are intentionally **not** configurable — no env vars, no `_config.json` keys, no API surface. The headers are sent on every chat request regardless of the configured `LLM_API_URL`; most non-OpenRouter providers ignore unknown headers, but strict or privacy-sensitive providers may log or reject them — those operators should fork and clear the constant.
 
-**Forks**: if you fork HeartReverie and want to attribute your usage separately, edit `LLM_APP_ATTRIBUTION_HEADERS` in `writer/lib/chat-shared.ts` (set `HTTP-Referer` to your project URL, update or clear the title and categories). Forks may also replace the constant with `{}` if they intentionally want no attribution.
+**Forks**: if you fork HeartReverie and want to attribute your usage separately, edit `LLM_APP_ATTRIBUTION_HEADERS` in `writer/lib/chat-llm-fetch.ts` (set `HTTP-Referer` to your project URL, update or clear the title and categories). Forks may also replace the constant with `{}` if they intentionally want no attribution.
 
 ### Prompt Rendering Pipeline
 

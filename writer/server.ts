@@ -31,7 +31,11 @@ await initLogger();
 const log = createLogger("system");
 
 if (!Deno.env.get("LLM_API_KEY")) {
-  log.warn("LLM_API_KEY is not set — chat functionality will not work");
+  log.warn(
+    "LLM_API_KEY is not set — upstream requests go out without an Authorization header. " +
+      "Point LLM_API_URL at a keyless provider endpoint (Ollama/vLLM/LM Studio); " +
+      "cloud providers (e.g. OpenRouter) will reject unauthenticated requests (401/403).",
+  );
 }
 
 // ── Plugin system ───────────────────────────────────────────────

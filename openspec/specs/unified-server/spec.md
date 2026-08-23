@@ -62,7 +62,7 @@ The `scripts/serve.sh` script SHALL start the writer backend via `deno run` with
 
 ### Requirement: Configuration
 
-The server SHALL be configurable via environment variables. The `PORT` variable SHALL set the listening port (default `8080`). The `LLM_API_KEY` variable SHALL provide the API key for LLM authentication. The `LLM_MODEL` variable SHALL set the LLM model, defaulting to `deepseek/deepseek-v4-pro` if not specified. The `LLM_API_URL` variable SHALL set the chat completions endpoint URL, defaulting to `https://openrouter.ai/api/v1/chat/completions` if not specified. The `PASSPHRASE` variable SHALL set an optional shared passphrase for access control; when set, all API requests require this passphrase in the `X-Passphrase` header. The `LLM_TEMPERATURE`, `LLM_FREQUENCY_PENALTY`, `LLM_PRESENCE_PENALTY`, `LLM_TOP_K`, `LLM_TOP_P`, `LLM_REPETITION_PENALTY`, `LLM_MIN_P`, and `LLM_TOP_A` variables SHALL override the corresponding default generation parameters.
+The server SHALL be configurable via environment variables. The `PORT` variable SHALL set the listening port (default `8080`). The `LLM_API_KEY` variable SHALL be optional: when set to a non-empty value it provides the API key used in the upstream `Authorization` header for LLM authentication; when unset or empty, upstream requests are sent without that header so keyless local or private LLM providers (e.g. Ollama, vLLM, LM Studio) work. The `LLM_MODEL` variable SHALL set the LLM model, defaulting to `deepseek/deepseek-v4-pro` if not specified. The `LLM_API_URL` variable SHALL set the chat completions endpoint URL, defaulting to `https://openrouter.ai/api/v1/chat/completions` if not specified. The `PASSPHRASE` variable SHALL set an optional shared passphrase for access control; when set, all API requests require this passphrase in the `X-Passphrase` header. The `LLM_TEMPERATURE`, `LLM_FREQUENCY_PENALTY`, `LLM_PRESENCE_PENALTY`, `LLM_TOP_K`, `LLM_TOP_P`, `LLM_REPETITION_PENALTY`, `LLM_MIN_P`, and `LLM_TOP_A` variables SHALL override the corresponding default generation parameters.
 
 #### Scenario: Custom port configuration
 - **WHEN** the `PORT` environment variable is set
@@ -79,7 +79,7 @@ The server SHALL be configurable via environment variables. The `PORT` variable 
 
 #### Scenario: Missing API key warning
 - **WHEN** `LLM_API_KEY` is not set and the server starts
-- **THEN** the server SHALL log a warning that chat functionality will not work without the API key
+- **THEN** the server SHALL log a warning that the `Authorization` header is omitted for upstream requests, and that `LLM_API_URL` must point to a keyless provider endpoint (e.g. Ollama, vLLM, LM Studio); cloud providers (e.g. OpenRouter) reject unauthenticated requests with 401/403, which pass through to the client
 
 #### Scenario: PASSPHRASE configured
 - **WHEN** `PASSPHRASE` is set in the environment or `.env` file

@@ -6,8 +6,9 @@
 
 | 變數 | 說明 |
 |------|------|
-| `LLM_API_KEY` | LLM 提供者 API 金鑰 |
 | `PASSPHRASE` | 前端驗證用通關密語 |
+
+`LLM_API_KEY` 是選填：雲端 provider（如 OpenRouter）需要金鑰；接無金鑰的本機/私有 provider（Ollama、vLLM、LM Studio）時省略即可，請求將不帶 `Authorization` header。
 
 ## 路徑變數
 

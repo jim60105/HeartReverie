@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assertEquals, assertMatch } from "@std/assert";
+import { assert, assertEquals, assertMatch } from "@std/assert";
 import { join } from "@std/path";
 import { createApp } from "../../../writer/app.ts";
 import { createSafePath, verifyPassphrase } from "../../../writer/lib/middleware.ts";
@@ -311,25 +311,102 @@ Deno.test({
       });
 
       // ──────────────────────────────────────────────────────────
-      await t.step("500 when LLM_API_KEY is missing", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_route_continue_nokey_" });
-        try {
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          await Deno.writeTextFile(join(tmpDir, "s1", "n1", "001.md"), "x");
-
-          Deno.env.delete("LLM_API_KEY");
+      await t.step("proceeds without LLM_API_KEY (no Authorization header)", async () => {
+        // Key unset: the continue flow proceeds without an Authorization header.
+        {
+          const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_route_continue_nokey_unset_" });
           try {
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            await Deno.writeTextFile(join(tmpDir, "s1", "n1", "001.md"), "x");
             const app = createApp(
               makeDeps(tmpDir, () => Promise.resolve(makePromptResult("x", "x", "x"))),
             );
-            const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat/continue", {});
-            assertEquals(res.status, 500);
-            assertMatch(String(res.body!.detail), /LLM_API_KEY/);
+            let authSeen = false;
+            let sawFetch = false;
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = ((url: string | URL | Request, opts?: RequestInit) => {
+              if (typeof url === "string" && url.includes("chat/completions")) {
+                sawFetch = true;
+                authSeen = (opts?.headers as Record<string, string>)["Authorization"] !== undefined;
+                return Promise.resolve(
+                  new Response(
+                    new ReadableStream({
+                      start(c) {
+                        const enc = new TextEncoder();
+                        const chunks = [
+                          'data: {"choices":[{"delta":{"content":" y"}}]}\n\n',
+                          "data: [DONE]\n\n",
+                        ];
+                        for (const chunk of chunks) c.enqueue(enc.encode(chunk));
+                        c.close();
+                      },
+                    }),
+                    { status: 200 },
+                  ),
+                );
+              }
+              return originalFetch(url as string, opts);
+            }) as typeof fetch;
+            Deno.env.delete("LLM_API_KEY");
+            try {
+              const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat/continue", {});
+              assertEquals(res.status, 200);
+              assert(sawFetch, "upstream fetch was not called");
+              assert(!authSeen, "Authorization header must be omitted when LLM_API_KEY is unset");
+            } finally {
+              globalThis.fetch = originalFetch;
+              Deno.env.set("LLM_API_KEY", "test-key");
+            }
           } finally {
-            Deno.env.set("LLM_API_KEY", "test-key");
+            await Deno.remove(tmpDir, { recursive: true });
           }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
+        }
+
+        // Key empty: identical behaviour to unset.
+        {
+          const tmpDir = await Deno.makeTempDir({ prefix: "hr_test_route_continue_nokey_empty_" });
+          try {
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            await Deno.writeTextFile(join(tmpDir, "s1", "n1", "001.md"), "x");
+            const app = createApp(
+              makeDeps(tmpDir, () => Promise.resolve(makePromptResult("x", "x", "x"))),
+            );
+            let authSeen = false;
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = ((url: string | URL | Request, opts?: RequestInit) => {
+              if (typeof url === "string" && url.includes("chat/completions")) {
+                authSeen = (opts?.headers as Record<string, string>)["Authorization"] !== undefined;
+                return Promise.resolve(
+                  new Response(
+                    new ReadableStream({
+                      start(c) {
+                        const enc = new TextEncoder();
+                        const chunks = [
+                          'data: {"choices":[{"delta":{"content":" y"}}]}\n\n',
+                          "data: [DONE]\n\n",
+                        ];
+                        for (const chunk of chunks) c.enqueue(enc.encode(chunk));
+                        c.close();
+                      },
+                    }),
+                    { status: 200 },
+                  ),
+                );
+              }
+              return originalFetch(url as string, opts);
+            }) as typeof fetch;
+            Deno.env.set("LLM_API_KEY", "");
+            try {
+              const res = await makeRequest(app, "POST", "/api/stories/s1/n1/chat/continue", {});
+              assertEquals(res.status, 200);
+              assert(!authSeen, "Authorization header must be omitted when LLM_API_KEY is empty");
+            } finally {
+              globalThis.fetch = originalFetch;
+              Deno.env.set("LLM_API_KEY", "test-key");
+            }
+          } finally {
+            await Deno.remove(tmpDir, { recursive: true });
+          }
         }
       });
     } finally {

@@ -22,11 +22,13 @@ helm install hr ./helm/heart-reverie \
   --set env.PASSPHRASE=open-sesame
 ```
 
+`env.LLM_API_KEY` 可省略：接無金鑰的本機/私有 LLM provider（Ollama、vLLM、LM Studio）時不帶金鑰即可（chart 會丟棄空值）。
+
 預設會建立：
 
 - Deployment（單一 Pod，執行 `ghcr.io/jim60105/heartreverie:latest`）
 - Service（ClusterIP，port 8080）
-- Secret（包含 `LLM_API_KEY`、`PASSPHRASE`、自動注入的 `PORT`）
+- Secret（包含設定的 `LLM_API_KEY`（若有）、`PASSPHRASE`、自動注入的 `PORT`）
 - PersistentVolumeClaim（10 GiB，存放 `playground/` 故事資料）
 
 ## 為何只允許單一 Pod

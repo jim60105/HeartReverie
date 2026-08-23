@@ -25,7 +25,6 @@
  *     I/O failures to a 500 problem
  *  4. LLM config resolution — `StoryConfigValidationError` → 422, other
  *     failures → 500
- *  5. API key presence — missing `LLM_API_KEY` → 500
  *
  * Failure outcomes are returned as a closed `PluginActionOutcome` so the
  * caller can forward them directly. Success carries the {@link
@@ -287,22 +286,6 @@ export async function runPreflight(
           "Internal Server Error",
           500,
           "Failed to read story configuration",
-        ),
-        status: 500,
-      },
-    };
-  }
-
-  if (!Deno.env.get("LLM_API_KEY")) {
-    return {
-      ok: false,
-      outcome: {
-        ok: false,
-        aborted: false,
-        problem: problemJson(
-          "Internal Server Error",
-          500,
-          "LLM_API_KEY is not configured",
         ),
         status: 500,
       },

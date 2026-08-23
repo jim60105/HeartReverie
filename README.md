@@ -30,6 +30,8 @@ HeartReverie 浮心夜夢 是一套 AI 互動小說引擎，把「讀小說」�
 
 ```bash
 cat > .env << 'EOF'
+# LLM_API_KEY is optional — omit it when LLM_API_URL points at a keyless
+# local/private provider (Ollama, vLLM, LM Studio).
 LLM_API_KEY=your-api-key-here
 PASSPHRASE=your-passphrase-here
 EOF
@@ -83,6 +85,8 @@ helm install hr ./helm/heart-reverie \
   --set env.LLM_API_KEY=sk-... \
   --set env.PASSPHRASE=open-sesame
 ```
+
+`env.LLM_API_KEY` 可省略：接無金鑰的本機/私有 LLM provider（Ollama、vLLM、LM Studio）時不帶金鑰即可。
 
 完整安裝指南、Ingress 範例（Traefik／nginx）、TLS／持續性／提示詞覆寫等進階情境請見 [Helm 部署文件](https://jim60105.github.io/HeartReverie/#/self-host/helm)。
 

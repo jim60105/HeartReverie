@@ -1,18 +1,18 @@
 # 設定字典
 
-[HeartReverie 浮心夜夢][project] 透過環境變數設定。必填的只有 `LLM_API_KEY` 與 `PASSPHRASE`，其餘變數皆有合理預設值。設定的最常見做法是把變數寫進 `.env`，再以 `--env-file .env`、Helm value 或容器編排工具傳入。
+[HeartReverie 浮心夜夢][project] 透過環境變數設定。必填的只有 `PASSPHRASE`，其餘變數皆有合理預設值。設定的最常見做法是把變數寫進 `.env`，再以 `--env-file .env`、Helm value 或容器編排工具傳入。
 
 ## 必填
 
 | 變數 | 說明 |
 |------|------|
-| `LLM_API_KEY` | LLM 提供者 API 金鑰 |
 | `PASSPHRASE` | 前端驗證用通關密語 |
 
 ## LLM 連線
 
 | 變數 | 預設值 | 說明 |
 |------|--------|------|
+| `LLM_API_KEY` | — | LLM 提供者 API 金鑰；選填——接無金鑰的本機/私有 provider（Ollama、vLLM、LM Studio）時可省略，請求將不帶 `Authorization` header |
 | `LLM_MODEL` | `deepseek/deepseek-v4-pro` | LLM 模型 |
 | `LLM_API_URL` | `https://openrouter.ai/api/v1/chat/completions` | LLM 聊天完成端點 |
 | `LLM_TEMPERATURE` | `0.1` | 取樣溫度 |

@@ -17,6 +17,8 @@ helm install hr ./helm/heart-reverie \
   --set env.PASSPHRASE=open-sesame
 ```
 
+`env.LLM_API_KEY` is **optional**: omit it when `LLM_API_URL` points at a keyless local/private provider (Ollama, vLLM, LM Studio) — the chart drops empty secret values, so the Deployment simply runs without the key and upstream requests go out without an `Authorization` header.
+
 The default install creates a Deployment + Service + Secret + 10 GiB PVC and serves plain HTTP on port 8080. Terminate TLS at an upstream proxy or ingress controller — HeartReverie no longer ships any in-application TLS support.
 
 To enable an Ingress, copy one of the example values files and edit the host:
@@ -90,7 +92,7 @@ Three ways to supply `LLM_API_KEY` and `PASSPHRASE`, in order of preference:
 | `nodeSelector` / `tolerations` / `affinity` | `{}` / `[]` / `{}` | Standard pod scheduling |
 | `podAnnotations` / `podLabels` | `{}` / `{}` | Extra pod metadata |
 | `extraEnv` / `extraVolumes` / `extraVolumeMounts` | `[]` / `[]` / `[]` | Append-only passthrough |
-| `env` | `{ LLM_API_KEY: "", PASSPHRASE: "" }` | Flat map rendered into the chart-managed Secret. Add new keys with `--set env.NAME=value`. Booleans (`false`) and numbers (`0`) are preserved as strings; empty values are dropped. |
+| `env` | `{ LLM_API_KEY: "", PASSPHRASE: "" }` | Flat map rendered into the chart-managed Secret. Add new keys with `--set env.NAME=value`. Booleans (`false`) and numbers (`0`) are preserved as strings; empty values are dropped. `LLM_API_KEY` itself is optional — omit it for keyless local/private providers (Ollama, vLLM, LM Studio). |
 
 The full annotated `env:` map (every key documented in `AGENTS.md`) lives at the top of `values.yaml` — `helm show values ./helm/heart-reverie` prints it.
 
