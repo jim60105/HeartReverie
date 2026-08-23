@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-23
+
 ### Added
 
 - **`max` reasoning effort level**: A new `"max"` tier is now accepted everywhere reasoning effort is configured (`LLM_REASONING_EFFORT` env var, per-story `_config.json`, and the `/settings/llm` frontend select), enabling the highest provider reasoning budget (e.g. `o3`-class extended-thinking modes) alongside the existing `none`/`minimal`/`low`/`medium`/`high`/`xhigh` values.
+- **Optional `LLM_API_KEY`**: `LLM_API_KEY` is no longer required — keyless local/private providers (Ollama, vLLM, LM Studio) now work without a key. The upstream `Authorization: Bearer <key>` header is only attached when a key is configured (the literal `Bearer undefined` header is gone), and the chat/continue flows proceed with a debug-level note instead of a fatal missing-key error.
+
+### Changed
+
+- **Playground gitignore consolidation**: The entire `playground/` directory is now ignored from the root `.gitignore`, and the redundant `playground/.gitignore` file was removed.
+
+### Security
+
+- **Lore SSTI hardening**: The `validateTemplate()` whitelist is now enforced on the lore write path (`PUT /api/lore/...`), returning HTTP 422 listing the offending expressions instead of writing unsafe passage bodies to disk; every lore passage body containing `{{` is revalidated at render time, and failing bodies are used raw (never executed) with a warning log.
+- **WebSocket pre-auth DoS hardening**: Non-string (binary) pre-auth frames are rejected outright (close 1003) before size measurement; a pre-auth payload byte cap is enforced before `JSON.parse` (close 1009); the socket is closed (4001) after a non-auth first message; an auth-deadline timer (close 4002) was added, and a global concurrent-connection cap (close 1013) with two-state per-connection accounting prevents count leaks or double-release.
 
 ## [0.11.0] - 2026-06-29
 
@@ -307,7 +319,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/jim60105/HeartReverie/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/jim60105/HeartReverie/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/jim60105/HeartReverie/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/jim60105/HeartReverie/compare/v0.8.0...v0.9.0
