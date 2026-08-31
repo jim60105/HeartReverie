@@ -24,7 +24,12 @@ async function evalScript(
   script: string,
 ): Promise<{ stdout: string; stderr: string }> {
   const cmd = new Deno.Command(Deno.execPath(), {
-    args: ["eval", "--", script],
+    // `deno eval -- <code>` regressed in Deno 2.9.6: positionals after `--`
+    // are silently dropped, so the script never runs and stdout is empty.
+    // Pass the code as the plain positional; every script in this file is a
+    // template literal beginning with a newline, so it cannot be parsed as a
+    // flag.
+    args: ["eval", script],
     cwd: resolve(import.meta.dirname!, "../../.."),
     env: { ...env, NO_COLOR: "1" },
     stdout: "piped",
