@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-09-01
+
+### Fixed
+
+- **Backend test suite works on Deno 2.9.6+.** Deno 2.9.6 changed how arguments after `--` are parsed, making `deno eval -- <code>` silently stop executing the code; this broke the 20 subprocess-based config tests on CI. The tests now pass the code in the documented plain positional form and run green on Deno 2.9.0 through 2.9.6 and later.
+- **Reading-progress test time bomb removed.** The scroll-restore test fixtures hard-coded a `lastReadAt` timestamp older than the plugin's 90-day retention window, so the frontend suite failed deterministically in every run after 2026-08-20. Fixtures now generate a fresh timestamp at run time; plugin behaviour is unchanged.
+
 ## [0.12.0] - 2026-08-23
 
 ### Added
@@ -319,7 +326,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/jim60105/HeartReverie/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/jim60105/HeartReverie/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/jim60105/HeartReverie/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/jim60105/HeartReverie/compare/v0.9.0...v0.10.0
