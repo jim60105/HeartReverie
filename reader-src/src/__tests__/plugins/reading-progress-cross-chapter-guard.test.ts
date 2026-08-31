@@ -44,6 +44,16 @@ interface SavedProgress {
   selectionAnchor?: unknown;
 }
 
+/**
+ * Fresh ISO timestamp for saved-progress fixtures. restoreScroll() applies the
+ * retainDays expiry check (default 90 days) against `lastReadAt`, so an
+ * absolute date literal turns this file into a time bomb that starts failing
+ * exactly 90 days after that date.
+ */
+function recentDate(): string {
+  return new Date().toISOString();
+}
+
 /** Stub fetch so GET /api/plugins/reading-progress/progress/... returns the
  * supplied response (or queued sequence of responses). Returns the spy. */
 function stubFetchProgress(
@@ -170,7 +180,7 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
 
   it("first fresh chapter:dom:ready after story:switch with mismatch shows the dialog", async () => {
     stubFetchProgress([
-      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
+      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: recentDate(), revision: 7 },
     ]);
     const hooks = await bootFileMode();
     dispatchStorySwitch(hooks);
@@ -185,8 +195,8 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
 
   it("subsequent in-app fresh chapter:dom:ready in the same story-load session suppresses the dialog", async () => {
     stubFetchProgress([
-      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
-      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
+      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: recentDate(), revision: 7 },
+      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: recentDate(), revision: 7 },
     ]);
     const hooks = await bootFileMode();
     dispatchStorySwitch(hooks);
@@ -215,8 +225,8 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
 
   it("guard resets on a subsequent story:switch", async () => {
     stubFetchProgress([
-      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
-      { chapterIndex: 4, scrollRatio: 0.2, lastReadAt: "2026-05-22T00:00:00Z", revision: 3 },
+      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: recentDate(), revision: 7 },
+      { chapterIndex: 4, scrollRatio: 0.2, lastReadAt: recentDate(), revision: 3 },
     ]);
     const hooks = await bootFileMode();
     dispatchStorySwitch(hooks);
@@ -241,7 +251,7 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
   it("failed GET on first mount still consumes guard (no late-firing prompt)", async () => {
     stubFetchProgress([
       null,
-      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
+      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: recentDate(), revision: 7 },
     ]);
     const hooks = await bootFileMode();
     dispatchStorySwitch(hooks);
@@ -285,13 +295,13 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
     resolve2({
       chapterIndex: 5,
       scrollRatio: 0.1,
-      lastReadAt: "2026-05-22T00:00:00Z",
+      lastReadAt: recentDate(),
       revision: 7,
     });
     resolve1({
       chapterIndex: 5,
       scrollRatio: 0.1,
-      lastReadAt: "2026-05-22T00:00:00Z",
+      lastReadAt: recentDate(),
       revision: 7,
     });
     await flushAsync();
@@ -307,8 +317,8 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
   it("same-chapter restore path still runs even when guard is consumed", async () => {
     // First mount: same chapter as saved → restore should happen.
     stubFetchProgress([
-      { chapterIndex: 2, scrollRatio: 0.5, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
-      { chapterIndex: 3, scrollRatio: 0.4, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
+      { chapterIndex: 2, scrollRatio: 0.5, lastReadAt: recentDate(), revision: 7 },
+      { chapterIndex: 3, scrollRatio: 0.4, lastReadAt: recentDate(), revision: 7 },
     ]);
 
     Object.defineProperty(document.documentElement, "scrollHeight", {
@@ -365,7 +375,7 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
     const p1 = new Promise<SavedProgress>((r) => (resolve1 = r));
     stubFetchProgress([
       p1,
-      { chapterIndex: 3, scrollRatio: 0.4, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
+      { chapterIndex: 3, scrollRatio: 0.4, lastReadAt: recentDate(), revision: 7 },
     ]);
 
     const hooks = await bootFileMode();
@@ -386,7 +396,7 @@ describe("reading-progress (file-mode) — cross-chapter prompt guard", () => {
     resolve1({
       chapterIndex: 7,
       scrollRatio: 0.1,
-      lastReadAt: "2026-05-22T00:00:00Z",
+      lastReadAt: recentDate(),
       revision: 7,
     });
     await flushAsync();
@@ -456,18 +466,18 @@ describe("reading-progress (file-mode) — checkRemoteConflict strict-ahead dire
 
   it("remote behind local: NO dialog, NO navigation", async () => {
     await bootAndPoll(
-      { chapterIndex: 2, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 9 },
+      { chapterIndex: 2, scrollRatio: 0.1, lastReadAt: recentDate(), revision: 9 },
       3,
-      { chapterIndex: 3, scrollRatio: 0.4, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
+      { chapterIndex: 3, scrollRatio: 0.4, lastReadAt: recentDate(), revision: 7 },
     );
     expect(document.querySelectorAll(".reading-progress-conflict-dialog").length).toBe(0);
   });
 
   it("remote ahead of local: dialog fires (preserves existing multi-device sync)", async () => {
     await bootAndPoll(
-      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 9 },
+      { chapterIndex: 5, scrollRatio: 0.1, lastReadAt: recentDate(), revision: 9 },
       2,
-      { chapterIndex: 2, scrollRatio: 0.1, lastReadAt: "2026-05-22T00:00:00Z", revision: 7 },
+      { chapterIndex: 2, scrollRatio: 0.1, lastReadAt: recentDate(), revision: 7 },
     );
     expect(document.querySelectorAll(".reading-progress-conflict-dialog").length).toBe(1);
   });
