@@ -183,17 +183,17 @@ HeartReverie speaks plain HTTP only. For production, terminate TLS at an upstrea
 | `LLM_MODEL` | No | `deepseek/deepseek-v4-pro` | LLM model identifier |
 | `LLM_API_BASE_URL` | No | `https://openrouter.ai/api/v1` | OpenAI-SDK-style API base URL. The engine appends the transport path (`/responses` or `/chat/completions`); values that are not absolute http(s) URLs, contain a query/fragment, or already name an endpoint fail startup. |
 | `LLM_API_MODE` | No | `auto` | Upstream wire protocol: `auto`, `responses`, `chat-completions`. `auto` tries `/responses` first and falls back to `/chat/completions` when the upstream answers 404/405/501 (cached per base URL + model); `continue-last-chapter` always uses Chat Completions under `auto`. Unknown values fall back to `auto` with a warning. |
-| `LLM_TEMPERATURE` | No | `0.1` | Sampling temperature |
-| `LLM_FREQUENCY_PENALTY` | No | `0.13` | Frequency penalty |
-| `LLM_PRESENCE_PENALTY` | No | `0.52` | Presence penalty |
-| `LLM_TOP_K` | No | `10` | Top-K sampling |
-| `LLM_TOP_P` | No | `0` | Top-P (nucleus) sampling |
-| `LLM_REPETITION_PENALTY` | No | `1.2` | Repetition penalty |
+| `LLM_TEMPERATURE` | No | `0.7` | Sampling temperature |
+| `LLM_FREQUENCY_PENALTY` | No | `0` | Frequency penalty |
+| `LLM_PRESENCE_PENALTY` | No | `1.5` | Presence penalty |
+| `LLM_TOP_K` | No | `20` | Top-K sampling |
+| `LLM_TOP_P` | No | `0.8` | Top-P (nucleus) sampling |
+| `LLM_REPETITION_PENALTY` | No | `1` | Repetition penalty |
 | `LLM_MIN_P` | No | `0` | Min-P sampling |
 | `LLM_TOP_A` | No | `1` | Top-A sampling |
 | `LLM_MAX_COMPLETION_TOKENS` | No | _unset_ | Optional maximum total completion tokens (reasoning + content). When set, must be a positive safe integer and is sent as `max_completion_tokens` to the upstream LLM. When unset, empty, or invalid, the engine omits `max_completion_tokens` from the upstream request body — the provider's own default applies. |
 | `LLM_REASONING_ENABLED` | No | `true` | When true, request reasoning from the upstream LLM. Parsed as boolean. |
-| `LLM_REASONING_EFFORT` | No | `xhigh` | Reasoning effort level: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. |
+| `LLM_REASONING_EFFORT` | No | `medium` | Reasoning effort level: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `LLM_REASONING_OMIT` | No | `false` | When true, omit the `reasoning` block from upstream requests entirely (escape hatch for strict OpenAI-compatible providers that reject unknown fields). |
 | `PLUGIN_DIR` | No | — | External plugin directory (absolute path) |
 | `LOG_LEVEL` | No | `info` | Log level: debug, info, warn, error |

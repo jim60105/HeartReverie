@@ -40,9 +40,9 @@ The project SHALL provide a `.env.example` file at the repository root that docu
 - **AND** the file SHALL contain a present, commented-out example line of the exact form `# LLM_MAX_COMPLETION_TOKENS=` (or `# LLM_MAX_COMPLETION_TOKENS=8192` shown as a sample cap), so the variable is discoverable yet copying `.env.example` to `.env` without edits results in the "no limit" behaviour
 - **AND** the entry SHALL NOT show `4096` (or any other number) as "the default value" — any numeric value mentioned in the comment SHALL be presented as an example of a possible cap, not as the default
 
-#### Scenario: LLM_REASONING_EFFORT default reflects xhigh
+#### Scenario: LLM_REASONING_EFFORT default reflects medium
 - **WHEN** a contributor inspects the `.env.example` file
-- **THEN** the `LLM_REASONING_EFFORT` entry SHALL document the default value as `xhigh` and SHALL list the accepted values `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`
+- **THEN** the `LLM_REASONING_EFFORT` entry SHALL document the default value as `medium` and SHALL list the accepted values `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`
 
 #### Scenario: PORT default reflects 8080
 

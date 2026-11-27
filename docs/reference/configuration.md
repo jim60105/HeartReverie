@@ -16,17 +16,17 @@
 | `LLM_MODEL` | `deepseek/deepseek-v4-pro` | LLM 模型 |
 | `LLM_API_BASE_URL` | `https://openrouter.ai/api/v1` | 上游 API 基底 URL（OpenAI SDK 風格，不含 `/chat/completions` 或 `/responses`；引擎會自行接上 transport 路徑） |
 | `LLM_API_MODE` | `auto` | 傳輸協定：`auto` / `responses` / `chat-completions`。`auto` 先試 Responses，遇到 404/405/501 回退 Chat Completions（以 base URL + model 為單位快取）；`continue-last-chapter` 固定走 Chat Completions |
-| `LLM_TEMPERATURE` | `0.1` | 取樣溫度 |
-| `LLM_FREQUENCY_PENALTY` | `0.13` | 頻率懲罰 |
-| `LLM_PRESENCE_PENALTY` | `0.52` | 存在懲罰 |
-| `LLM_TOP_K` | `10` | Top-K 取樣 |
-| `LLM_TOP_P` | `0` | Top-P（nucleus）取樣 |
-| `LLM_REPETITION_PENALTY` | `1.2` | 重複懲罰 |
+| `LLM_TEMPERATURE` | `0.7` | 取樣溫度 |
+| `LLM_FREQUENCY_PENALTY` | `0` | 頻率懲罰 |
+| `LLM_PRESENCE_PENALTY` | `1.5` | 存在懲罰 |
+| `LLM_TOP_K` | `20` | Top-K 取樣 |
+| `LLM_TOP_P` | `0.8` | Top-P（nucleus）取樣 |
+| `LLM_REPETITION_PENALTY` | `1` | 重複懲罰 |
 | `LLM_MIN_P` | `0` | Min-P 取樣 |
 | `LLM_TOP_A` | `1` | Top-A 取樣 |
 | `LLM_MAX_COMPLETION_TOKENS` | 未設定 | 每次回應的 token 上限；留空表示不設應用層上限 |
 | `LLM_REASONING_ENABLED` | `true` | 是否在請求中附帶 `reasoning` 區塊 |
-| `LLM_REASONING_EFFORT` | `xhigh` | `reasoning.effort` 等級（`none` / `minimal` / `low` / `medium` / `high` / `xhigh` / `max`） |
+| `LLM_REASONING_EFFORT` | `medium` | `reasoning.effort` 等級（`none` / `minimal` / `low` / `medium` / `high` / `xhigh` / `max`） |
 | `LLM_REASONING_OMIT` | `false` | 設為 `true` 時完全省略 `reasoning` 區塊 |
 
 `LLM_API_URL` 已移除；啟動時若仍設定（非空），伺服器會記錄錯誤並以非零狀態結束。`LLM_API_BASE_URL` 必須是絕對的 http(s) URL，且不得包含 query string、fragment 或端點路徑。

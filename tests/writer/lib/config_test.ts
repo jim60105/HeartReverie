@@ -129,9 +129,9 @@ Deno.test("LLM_REASONING_OMIT defaults to false and parses booleans", async () =
   assertEquals((await evalReasoningEnv({ LLM_REASONING_OMIT: "0" })).omit, false);
 });
 
-Deno.test("LLM_REASONING_EFFORT defaults to xhigh when unset", async () => {
+Deno.test("LLM_REASONING_EFFORT defaults to medium when unset", async () => {
   const r = await evalReasoningEnv({});
-  assertEquals(r.effort, "xhigh");
+  assertEquals(r.effort, "medium");
 });
 
 Deno.test("LLM_REASONING_EFFORT accepts every valid value (case-sensitive)", async () => {
@@ -143,7 +143,7 @@ Deno.test("LLM_REASONING_EFFORT accepts every valid value (case-sensitive)", asy
 
 Deno.test("LLM_REASONING_EFFORT warns and falls back on invalid value", async () => {
   const r = await evalReasoningEnv({ LLM_REASONING_EFFORT: "extreme" });
-  assertEquals(r.effort, "xhigh");
+  assertEquals(r.effort, "medium");
   assert(
     r.stderr.includes("LLM_REASONING_EFFORT") && r.stderr.toLowerCase().includes("warn"),
     `Expected warn log mentioning the variable; got stderr: ${r.stderr}`,
@@ -152,7 +152,7 @@ Deno.test("LLM_REASONING_EFFORT warns and falls back on invalid value", async ()
 
 Deno.test("LLM_REASONING_EFFORT rejects mixed-case (case-sensitive)", async () => {
   const r = await evalReasoningEnv({ LLM_REASONING_EFFORT: "HIGH" });
-  assertEquals(r.effort, "xhigh");
+  assertEquals(r.effort, "medium");
 });
 
 async function evalMaxTokens(

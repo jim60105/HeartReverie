@@ -215,16 +215,16 @@ export function reportLlmConfigErrors(errors: readonly string[], log: Logger): b
 
 const LLM_API_MODE: LlmApiMode = apiModeEnv("LLM_API_MODE", "auto");
 
-const LLM_TEMPERATURE: number = numEnv("LLM_TEMPERATURE", 0.1);
-const LLM_FREQUENCY_PENALTY: number = numEnv("LLM_FREQUENCY_PENALTY", 0.13);
-const LLM_PRESENCE_PENALTY: number = numEnv("LLM_PRESENCE_PENALTY", 0.52);
-const LLM_TOP_K: number = numEnv("LLM_TOP_K", 10);
-const LLM_TOP_P: number = numEnv("LLM_TOP_P", 0);
-const LLM_REPETITION_PENALTY: number = numEnv("LLM_REPETITION_PENALTY", 1.2);
+const LLM_TEMPERATURE: number = numEnv("LLM_TEMPERATURE", 0.7);
+const LLM_FREQUENCY_PENALTY: number = numEnv("LLM_FREQUENCY_PENALTY", 0);
+const LLM_PRESENCE_PENALTY: number = numEnv("LLM_PRESENCE_PENALTY", 1.5);
+const LLM_TOP_K: number = numEnv("LLM_TOP_K", 20);
+const LLM_TOP_P: number = numEnv("LLM_TOP_P", 0.8);
+const LLM_REPETITION_PENALTY: number = numEnv("LLM_REPETITION_PENALTY", 1);
 const LLM_MIN_P: number = numEnv("LLM_MIN_P", 0);
 const LLM_TOP_A: number = numEnv("LLM_TOP_A", 1);
 const LLM_REASONING_ENABLED: boolean = boolEnv("LLM_REASONING_ENABLED", true);
-const LLM_REASONING_EFFORT: ReasoningEffort = effortEnv("LLM_REASONING_EFFORT", "xhigh");
+const LLM_REASONING_EFFORT: ReasoningEffort = effortEnv("LLM_REASONING_EFFORT", "medium");
 const LLM_REASONING_OMIT: boolean = boolEnv("LLM_REASONING_OMIT", false);
 const LLM_MAX_COMPLETION_TOKENS: number | null = posIntOrNullEnv("LLM_MAX_COMPLETION_TOKENS");
 const THEME_DIR: string = (() => {

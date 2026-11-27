@@ -99,7 +99,7 @@ The server SHALL be configurable via environment variables. The `PORT` variable 
 
 #### Scenario: LLM sampling parameter defaults
 - **WHEN** no `LLM_*` sampling parameter env vars are set
-- **THEN** the server SHALL use the built-in defaults: temperature=0.1, frequency_penalty=0.13, presence_penalty=0.52, top_k=10, top_p=0, repetition_penalty=1.2, min_p=0, top_a=1
+- **THEN** the server SHALL use the built-in defaults: temperature=0.7, frequency_penalty=0, presence_penalty=1.5, top_k=20, top_p=0.8, repetition_penalty=1, min_p=0, top_a=1
 
 #### Scenario: HTTP_ONLY / CERT_FILE / KEY_FILE are no longer recognised
 

@@ -126,16 +126,16 @@ Deno.test("config.ts – defaults when no env vars set", async () => {
   assertEquals(values.LLM_API_MODE, "auto");
   assertEquals(values.LLM_CONFIG_ERRORS, []);
   assertEquals(values.LLM_MODEL, "deepseek/deepseek-v4-pro");
-  assertEquals(values.LLM_TEMPERATURE, 0.1);
-  assertEquals(values.LLM_FREQUENCY_PENALTY, 0.13);
-  assertEquals(values.LLM_PRESENCE_PENALTY, 0.52);
-  assertEquals(values.LLM_TOP_K, 10);
-  assertEquals(values.LLM_TOP_P, 0);
-  assertEquals(values.LLM_REPETITION_PENALTY, 1.2);
+  assertEquals(values.LLM_TEMPERATURE, 0.7);
+  assertEquals(values.LLM_FREQUENCY_PENALTY, 0);
+  assertEquals(values.LLM_PRESENCE_PENALTY, 1.5);
+  assertEquals(values.LLM_TOP_K, 20);
+  assertEquals(values.LLM_TOP_P, 0.8);
+  assertEquals(values.LLM_REPETITION_PENALTY, 1);
   assertEquals(values.LLM_MIN_P, 0);
   assertEquals(values.LLM_TOP_A, 1);
   assertEquals(values.LLM_REASONING_ENABLED, true);
-  assertEquals(values.LLM_REASONING_EFFORT, "xhigh");
+  assertEquals(values.LLM_REASONING_EFFORT, "medium");
   assertEquals(values.LLM_REASONING_OMIT, false);
   assertEquals(values.LLM_MAX_COMPLETION_TOKENS, null);
   assertEquals(values.THEME_DIR, "./themes/");
@@ -182,8 +182,8 @@ Deno.test("config.ts – numEnv falls back when value is non-numeric / non-finit
     LLM_TEMPERATURE: "not-a-number",
     LLM_TOP_P: "Infinity", // parseFloat → Infinity → !isFinite → fallback
   });
-  assertEquals(values.LLM_TEMPERATURE, 0.1);
-  assertEquals(values.LLM_TOP_P, 0);
+  assertEquals(values.LLM_TEMPERATURE, 0.7);
+  assertEquals(values.LLM_TOP_P, 0.8);
 });
 
 Deno.test("config.ts – numEnv accepts negative finite numbers verbatim", async () => {
@@ -292,7 +292,7 @@ Deno.test("config.ts – boolEnv covers every TRUE / FALSE / unknown / empty bra
 Deno.test("config.ts – effortEnv: empty string falls back without warn", async () => {
   // Line 107: raw === "" returns fallback without logging.
   const { values, stderr } = await evalAll({ LLM_REASONING_EFFORT: "" });
-  assertEquals(values.LLM_REASONING_EFFORT, "xhigh");
+  assertEquals(values.LLM_REASONING_EFFORT, "medium");
   assert(
     !stderr.includes("LLM_REASONING_EFFORT"),
     `expected no warn, got: ${stderr}`,
@@ -301,7 +301,7 @@ Deno.test("config.ts – effortEnv: empty string falls back without warn", async
 
 Deno.test("config.ts – effortEnv: warn-and-fallback on invalid token", async () => {
   const { values, stderr } = await evalAll({ LLM_REASONING_EFFORT: "EXTREME" });
-  assertEquals(values.LLM_REASONING_EFFORT, "xhigh");
+  assertEquals(values.LLM_REASONING_EFFORT, "medium");
   assert(stderr.includes("LLM_REASONING_EFFORT"));
 });
 
