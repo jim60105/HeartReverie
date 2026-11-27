@@ -17,7 +17,7 @@ helm install hr ./helm/heart-reverie \
   --set env.PASSPHRASE=open-sesame
 ```
 
-`env.LLM_API_KEY` is **optional**: omit it when `LLM_API_URL` points at a keyless local/private provider (Ollama, vLLM, LM Studio) — the chart drops empty secret values, so the Deployment simply runs without the key and upstream requests go out without an `Authorization` header.
+`env.LLM_API_KEY` is **optional**: omit it when `LLM_API_BASE_URL` points at a keyless local/private provider (Ollama, vLLM, LM Studio) — the chart drops empty secret values, so the Deployment simply runs without the key and upstream requests go out without an `Authorization` header.
 
 The default install creates a Deployment + Service + Secret + 10 GiB PVC and serves plain HTTP on port 8080. Terminate TLS at an upstream proxy or ingress controller — HeartReverie no longer ships any in-application TLS support.
 

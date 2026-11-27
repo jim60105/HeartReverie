@@ -181,7 +181,8 @@ HeartReverie speaks plain HTTP only. For production, terminate TLS at an upstrea
 | `PASSPHRASE` | Yes | — | API authentication passphrase (stored in `.env`) |
 | `PORT` | No | `8080` | Server listen port |
 | `LLM_MODEL` | No | `deepseek/deepseek-v4-pro` | LLM model identifier |
-| `LLM_API_URL` | No | `https://openrouter.ai/api/v1/chat/completions` | LLM chat completions endpoint |
+| `LLM_API_BASE_URL` | No | `https://openrouter.ai/api/v1` | OpenAI-SDK-style API base URL. The engine appends the transport path (`/responses` or `/chat/completions`); values that are not absolute http(s) URLs, contain a query/fragment, or already name an endpoint fail startup. |
+| `LLM_API_MODE` | No | `auto` | Upstream wire protocol: `auto`, `responses`, `chat-completions`. `auto` tries `/responses` first and falls back to `/chat/completions` when the upstream answers 404/405/501 (cached per base URL + model); `continue-last-chapter` always uses Chat Completions under `auto`. Unknown values fall back to `auto` with a warning. |
 | `LLM_TEMPERATURE` | No | `0.1` | Sampling temperature |
 | `LLM_FREQUENCY_PENALTY` | No | `0.13` | Frequency penalty |
 | `LLM_PRESENCE_PENALTY` | No | `0.52` | Presence penalty |
@@ -202,6 +203,8 @@ HeartReverie speaks plain HTTP only. For production, terminate TLS at an upstrea
 | `READER_DIR` | No | `./reader-dist` | Frontend static files root |
 | `THEME_DIR` | No | `./themes/` | Theme directory path (TOML files); default `./themes/` |
 | `PROMPT_FILE` | No | `playground/_prompts/system.md` | Custom prompt template file path |
+
+`LLM_API_URL` was removed: if it is still set at startup (non-empty), the server logs an error and exits non-zero before listening. There is no compatibility fallback.
 
 The `.env` file is gitignored. Copy `.env.example` to `.env` and fill in `PASSPHRASE`; set `LLM_API_KEY` only when your LLM provider requires one (cloud providers like OpenRouter do, keyless local providers like Ollama/vLLM/LM Studio do not).
 
@@ -372,7 +375,7 @@ Every upstream chat request carries three hard-coded OpenRouter [app-attribution
 - `X-OpenRouter-Title: HeartReverie` (plain ASCII; OpenRouter's rankings UI does not render non-Latin-1 / percent-encoded titles legibly, so the project name's CJK suffix is intentionally omitted from the wire value)
 - `X-OpenRouter-Categories: roleplay,creative-writing`
 
-The values live in a single frozen module-level constant `LLM_APP_ATTRIBUTION_HEADERS` near the top of `writer/lib/chat-llm-fetch.ts`. They are intentionally **not** configurable — no env vars, no `_config.json` keys, no API surface. The headers are sent on every chat request regardless of the configured `LLM_API_URL`; most non-OpenRouter providers ignore unknown headers, but strict or privacy-sensitive providers may log or reject them — those operators should fork and clear the constant.
+The values live in a single frozen module-level constant `LLM_APP_ATTRIBUTION_HEADERS` near the top of `writer/lib/chat-llm-fetch.ts`. They are intentionally **not** configurable — no env vars, no `_config.json` keys, no API surface. The headers are sent on every upstream request (both transports) regardless of the configured `LLM_API_BASE_URL`; most non-OpenRouter providers ignore unknown headers, but strict or privacy-sensitive providers may log or reject them — those operators should fork and clear the constant.
 
 **Forks**: if you fork HeartReverie and want to attribute your usage separately, edit `LLM_APP_ATTRIBUTION_HEADERS` in `writer/lib/chat-llm-fetch.ts` (set `HTTP-Referer` to your project URL, update or clear the title and categories). Forks may also replace the constant with `{}` if they intentionally want no attribution.
 
