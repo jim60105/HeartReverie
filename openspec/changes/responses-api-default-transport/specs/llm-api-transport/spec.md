@@ -26,29 +26,57 @@ The server SHALL read the deployment-level env var `LLM_API_MODE` with accepted 
 - **WHEN** a client calls `GET /api/llm-defaults`
 - **THEN** the response body SHALL NOT contain an `LLM_API_MODE` or `apiMode` key
 
-### Requirement: Endpoint derivation from LLM_API_URL
+### Requirement: API base URL configuration
 
-The server SHALL derive both transport URLs from `LLM_API_URL`. If the URL path ends with `/chat/completions`, the Responses URL SHALL replace that suffix with `/responses`. If it ends with `/responses`, the Chat Completions URL SHALL replace it with `/chat/completions`. Query string and host SHALL be preserved. Otherwise no derivation exists and both transports SHALL use the URL verbatim.
+The server SHALL read `LLM_API_BASE_URL`, an OpenAI-SDK-style base URL defaulting to `https://openrouter.ai/api/v1`. It SHALL build each transport URL by removing trailing `/` characters and appending `/responses` or `/chat/completions`. Startup SHALL fail with an error naming the variable when the value is not an absolute `http`/`https` URL, contains `?` or `#`, or its path ends with `/responses` or `/chat/completions`.
 
-#### Scenario: Default OpenRouter URL derives a Responses URL
-- **WHEN** `LLM_API_URL` is `https://openrouter.ai/api/v1/chat/completions`
+#### Scenario: Default base URL
+- **WHEN** `LLM_API_BASE_URL` is unset or empty
 - **THEN** the Responses URL SHALL be `https://openrouter.ai/api/v1/responses` and the Chat Completions URL SHALL be `https://openrouter.ai/api/v1/chat/completions`
 
-#### Scenario: Responses URL derives a Chat Completions URL
-- **WHEN** `LLM_API_URL` is `http://127.0.0.1:11434/v1/responses?x=1`
-- **THEN** the Chat Completions URL SHALL be `http://127.0.0.1:11434/v1/chat/completions?x=1`
+#### Scenario: Trailing slash is normalised
+- **WHEN** `LLM_API_BASE_URL` is `http://127.0.0.1:11434/v1/`
+- **THEN** the Responses URL SHALL be `http://127.0.0.1:11434/v1/responses` and the Chat Completions URL SHALL be `http://127.0.0.1:11434/v1/chat/completions`
 
-#### Scenario: Unrecognised path has no derivation
-- **WHEN** `LLM_API_URL` is `http://localhost:1/nonexistent`
-- **THEN** both transport URLs SHALL equal `http://localhost:1/nonexistent` and derivation SHALL be reported as unavailable
+#### Scenario: Full endpoint value is rejected
+- **WHEN** `LLM_API_BASE_URL` is `https://openrouter.ai/api/v1/chat/completions`
+- **THEN** startup SHALL fail with an error naming `LLM_API_BASE_URL` and stating that the value must not include `/chat/completions` or `/responses`, and the server SHALL NOT listen
+
+#### Scenario: Query string is rejected
+- **WHEN** `LLM_API_BASE_URL` is `https://example.test/v1?api-version=1`
+- **THEN** startup SHALL fail with an error naming `LLM_API_BASE_URL`
+
+#### Scenario: Credentials are not echoed
+- **WHEN** `LLM_API_BASE_URL` is `https://user:secret@example.test/v1/chat/completions?key=abc`
+- **THEN** startup SHALL fail and the logged error SHALL NOT contain `secret`, `user:` or `key=abc`
+
+#### Scenario: Non-URL is rejected
+- **WHEN** `LLM_API_BASE_URL` is `openrouter.ai/api/v1`
+- **THEN** startup SHALL fail with an error naming `LLM_API_BASE_URL`
+
+### Requirement: Removed LLM_API_URL is rejected
+
+When the environment variable `LLM_API_URL` is set to a value that is non-empty after trimming, startup SHALL fail with an error that says the variable was replaced by `LLM_API_BASE_URL` and shows the expected base-URL form. The value SHALL NOT be read, converted or used as a fallback.
+
+#### Scenario: Legacy variable stops startup
+- **WHEN** `LLM_API_URL` is `https://openrouter.ai/api/v1/chat/completions` and `LLM_API_BASE_URL` is unset
+- **THEN** startup SHALL fail with an error mentioning both `LLM_API_URL` and `LLM_API_BASE_URL`, and no upstream request SHALL be sent
+
+#### Scenario: Legacy variable rejected even alongside the new one
+- **WHEN** `LLM_API_URL` is non-empty and `LLM_API_BASE_URL` is a valid base URL
+- **THEN** startup SHALL fail with the same error
+
+#### Scenario: Empty legacy variable is ignored
+- **WHEN** `LLM_API_URL` is set to the empty string or only whitespace
+- **THEN** startup SHALL NOT fail because of it
 
 ### Requirement: Transport attempt plan
 
-For each generation the server SHALL plan an ordered transport list. `chat-completions` mode SHALL use only Chat Completions, and `responses` mode SHALL use only Responses. `auto` mode SHALL try Responses then Chat Completions. It SHALL use only Chat Completions when derivation is unavailable, when a fallback is cached for the (Responses URL, model) pair, or for `continue-last-chapter` generations (trailing-assistant prefill).
+For each generation the server SHALL plan an ordered transport list. `chat-completions` mode SHALL use only Chat Completions, and `responses` mode SHALL use only Responses. `auto` mode SHALL try Responses then Chat Completions. It SHALL use only Chat Completions when a fallback is cached for the (Responses URL, model) pair or for `continue-last-chapter` generations (trailing-assistant prefill).
 
-#### Scenario: Auto with derivation tries Responses first
-- **GIVEN** mode `auto`, the default `LLM_API_URL`, and an empty fallback cache
-- **WHEN** a chat generation starts
+#### Scenario: Auto tries Responses first
+- **GIVEN** mode `auto`, the default `LLM_API_BASE_URL`, and an empty fallback cache
+- **WHEN** a `write-new-chapter` generation starts
 - **THEN** the first upstream `fetch` SHALL target `https://openrouter.ai/api/v1/responses`
 
 #### Scenario: Forced chat-completions never calls Responses
@@ -57,14 +85,9 @@ For each generation the server SHALL plan an ordered transport list. `chat-compl
 - **THEN** exactly one upstream `fetch` SHALL occur and it SHALL target the Chat Completions URL
 
 #### Scenario: Auto continue-last-chapter uses Chat Completions
-- **GIVEN** mode `auto`, the default `LLM_API_URL`, and an empty fallback cache
+- **GIVEN** mode `auto`, the default `LLM_API_BASE_URL`, and an empty fallback cache
 - **WHEN** a `continue-last-chapter` generation runs
 - **THEN** its only upstream `fetch` SHALL target `https://openrouter.ai/api/v1/chat/completions` with a `messages` body
-
-#### Scenario: Auto without derivation uses Chat Completions
-- **GIVEN** mode `auto` and `LLM_API_URL` `http://localhost:1/nonexistent`
-- **WHEN** a chat generation runs
-- **THEN** the only upstream `fetch` SHALL use the Chat Completions request body
 
 ### Requirement: Auto-mode fallback on unsupported Responses endpoint
 

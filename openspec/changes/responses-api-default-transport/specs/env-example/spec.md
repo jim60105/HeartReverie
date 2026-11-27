@@ -4,11 +4,11 @@
 
 ### Requirement: Environment variable documentation file
 
-The project SHALL provide a `.env.example` file at the repository root that documents every environment variable recognized by the application. Each variable entry SHALL include a comment describing its purpose and, where applicable, its default value. The file SHALL NOT contain real secrets or credentials — only placeholder values. The file SHALL NOT document `HTTP_ONLY`, `CERT_FILE`, `KEY_FILE`, or `BACKGROUND_IMAGE` (these variables are no longer recognised by the application).
+The project SHALL provide a `.env.example` file at the repository root that documents every environment variable recognized by the application. Each variable entry SHALL include a comment describing its purpose and, where applicable, its default value. The file SHALL NOT contain real secrets or credentials — only placeholder values. The file SHALL NOT document `HTTP_ONLY`, `CERT_FILE`, `KEY_FILE`, `BACKGROUND_IMAGE`, or an `LLM_API_URL=` entry for the removed `LLM_API_URL` (these variables are no longer recognised by the application).
 
 #### Scenario: New contributor setup
 - **WHEN** a contributor clones the repository and copies `.env.example` to `.env`
-- **THEN** the file SHALL contain entries for all recognized variables: `LLM_API_KEY`, `LLM_MODEL`, `LLM_API_URL`, `LLM_API_MODE`, `LLM_TEMPERATURE`, `LLM_FREQUENCY_PENALTY`, `LLM_PRESENCE_PENALTY`, `LLM_TOP_K`, `LLM_TOP_P`, `LLM_REPETITION_PENALTY`, `LLM_MIN_P`, `LLM_TOP_A`, `LLM_MAX_COMPLETION_TOKENS`, `LLM_REASONING_ENABLED`, `LLM_REASONING_EFFORT`, `LLM_REASONING_OMIT`, `PORT`, `PASSPHRASE`, `PLAYGROUND_DIR`, `READER_DIR`, `PLUGIN_DIR`, `PROMPT_FILE`, `THEME_DIR`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`
+- **THEN** the file SHALL contain entries for all recognized variables: `LLM_API_KEY`, `LLM_MODEL`, `LLM_API_BASE_URL`, `LLM_API_MODE`, `LLM_TEMPERATURE`, `LLM_FREQUENCY_PENALTY`, `LLM_PRESENCE_PENALTY`, `LLM_TOP_K`, `LLM_TOP_P`, `LLM_REPETITION_PENALTY`, `LLM_MIN_P`, `LLM_TOP_A`, `LLM_MAX_COMPLETION_TOKENS`, `LLM_REASONING_ENABLED`, `LLM_REASONING_EFFORT`, `LLM_REASONING_OMIT`, `PORT`, `PASSPHRASE`, `PLAYGROUND_DIR`, `READER_DIR`, `PLUGIN_DIR`, `PROMPT_FILE`, `THEME_DIR`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`
 
 #### Scenario: Placeholder values for secrets
 - **WHEN** the `.env.example` file contains entries for secret variables (e.g., `LLM_API_KEY`, `PASSPHRASE`)
@@ -48,7 +48,7 @@ The project SHALL provide a `.env.example` file at the repository root that docu
 #### Scenario: HTTP_ONLY / CERT_FILE / KEY_FILE / BACKGROUND_IMAGE are absent
 
 - **WHEN** a contributor inspects the `.env.example` file
-- **THEN** the file SHALL NOT contain entries for `HTTP_ONLY`, `CERT_FILE`, `KEY_FILE`, or `BACKGROUND_IMAGE` (these variables are no longer recognised by the application)
+- **THEN** the file SHALL NOT contain entries for `HTTP_ONLY`, `CERT_FILE`, `KEY_FILE`, `BACKGROUND_IMAGE`, or an `LLM_API_URL=` entry for the removed `LLM_API_URL` (these variables are no longer recognised by the application)
 
 #### Scenario: THEME_DIR documented
 
