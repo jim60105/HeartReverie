@@ -21,7 +21,8 @@ import { STORY_LLM_CONFIG_KEYS } from "../lib/story-config.ts";
  * Register `GET /api/llm-defaults` — returns the resolved server-side default
  * for every per-story-overridable LLM key. The payload is a flat camelCase
  * object that mirrors the whitelist schema of `StoryLlmConfigOverrides`. It
- * intentionally excludes `LLM_API_URL`, `LLM_API_KEY`, and `LLM_REASONING_OMIT`.
+ * intentionally excludes `LLM_API_BASE_URL`, `LLM_API_MODE`, `LLM_API_KEY`,
+ * and `LLM_REASONING_OMIT`.
  *
  * The response is `Cache-Control: no-store` so an env change after a process
  * restart is reflected the next time the settings page is loaded.

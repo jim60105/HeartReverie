@@ -31,6 +31,18 @@ export const REASONING_EFFORTS = [
 export type ReasoningEffort = typeof REASONING_EFFORTS[number];
 
 /**
+ * Upstream wire protocol selector. `auto` tries the Responses API first and
+ * falls back to Chat Completions for upstreams that lack it.
+ */
+export const LLM_API_MODES = ["auto", "responses", "chat-completions"] as const;
+
+/** Deployment-level transport mode (`LLM_API_MODE`). */
+export type LlmApiMode = typeof LLM_API_MODES[number];
+
+/** A single concrete wire protocol; `auto` is resolved into one of these. */
+export type LlmTransport = Exclude<LlmApiMode, "auto">;
+
+/**
  * Resolved per-request LLM configuration (camelCase). Matches the upstream
  * chat/completions sampler knobs; `*_penalty` fields are mapped to snake_case
  * exactly once when building the upstream fetch body.
@@ -97,6 +109,12 @@ export interface LLMStreamChunk {
        * Treat as the next slice of human-readable scratchpad text.
        */
       reasoning?: string;
+      /**
+       * DeepSeek / vLLM style reasoning text. Second in the extraction
+       * priority order, after {@link reasoning} and before
+       * {@link reasoning_details}.
+       */
+      reasoning_content?: string;
       /**
        * Structured reasoning items. Each entry MAY carry a string `text` field
        * (extract those) plus opaque provider metadata such as `signature` or

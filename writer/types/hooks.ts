@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import type { ChatMessage } from "./story.ts";
-import type { TokenUsageRecord } from "./llm.ts";
+import type { LlmTransport, TokenUsageRecord } from "./llm.ts";
 
 /** Backend stages eligible for parallel dispatch declarations in manifest hooks[]. */
 export type BackendParallelStage =
@@ -38,19 +38,31 @@ export type HookStage =
  *
  * Dispatched by `streamLlmAndPersist()` in `writer/lib/chat-shared.ts`
  * exactly once per upstream LLM request, immediately before the
- * `fetch(config.LLM_API_URL, ...)` call. Observation-only: mutating any
- * field SHALL NOT change the bytes posted upstream — the engine builds the
- * outgoing request body from local variables, not from this context.
+ * first transport attempt's `fetch(...)` call. Observation-only: mutating
+ * any field SHALL NOT change the bytes posted upstream — the engine builds
+ * the outgoing request body from local variables, not from this context.
+ * The hook is not re-dispatched on retry or transport fallback.
  */
 export interface PreLlmFetchPayload {
   /** Per-request correlation ID minted at the entry of `executeChat()` / `executeContinue()`. */
   readonly correlationId: string;
-  /** Final messages array that will be serialised into `requestBody.messages`. */
+  /**
+   * Final messages array that will be serialised into `requestBody.messages`
+   * (Chat Completions) or `requestBody.input` (Responses).
+   */
   readonly messages: ReadonlyArray<ChatMessage>;
   /** Resolved upstream model name (`llmConfig.model`). */
   readonly model: string;
-  /** Structured view of upstream sampler/control knobs (mirror of `requestBody` minus `messages`). */
+  /**
+   * Structured view of upstream sampler/control knobs: the first attempt's
+   * `requestBody` minus `messages` (Chat Completions) or `input` (Responses).
+   */
   readonly requestMetadata: Readonly<Record<string, unknown>>;
+  /**
+   * Transport of the first planned attempt; determines the shape of
+   * `requestMetadata` (Responses body vs Chat Completions body).
+   */
+  readonly transport: LlmTransport;
   /** Absolute path to the story directory. */
   readonly storyDir: string;
   /** Series name under `playground/`. */
@@ -124,10 +136,11 @@ export interface PostResponsePayload {
    */
   readonly appendedTag?: string | null;
   /**
-   * Resolved upstream LLM API URL used for this request (the same URL
-   * the engine `fetch()`-ed — sourced from `config.LLM_API_URL`). Plugins
-   * may key per-endpoint pricing (e.g. `models[endpoint][model]`) on
-   * this value without re-deriving it from environment state.
+   * Full upstream LLM API URL that served this request (the same URL the
+   * engine `fetch()`-ed: `<LLM_API_BASE_URL>/responses` or
+   * `<LLM_API_BASE_URL>/chat/completions`). Plugins may key per-endpoint
+   * pricing (e.g. `models[endpoint][model]`) on this value without
+   * re-deriving it from environment state.
    */
   readonly endpoint: string;
   /**

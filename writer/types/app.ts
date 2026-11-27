@@ -16,7 +16,7 @@
 import type { Context, Next } from "@hono/hono";
 import type { PluginManager } from "../lib/plugin-manager.ts";
 import type { HookDispatcher } from "../lib/hooks.ts";
-import type { ReasoningEffort } from "./llm.ts";
+import type { LlmApiMode, ReasoningEffort } from "./llm.ts";
 import type { BuildContinuePromptFn, BuildPromptFn, TemplateEngine } from "./story.ts";
 
 /** Application configuration resolved from environment variables and defaults. */
@@ -26,7 +26,13 @@ export interface AppConfig {
   readonly READER_DIR: string;
   readonly PLUGINS_DIR: string;
   readonly PORT: number;
-  readonly LLM_API_URL: string;
+  /**
+   * OpenAI-SDK-style API base URL (no `/responses` or `/chat/completions`
+   * suffix). The engine appends the transport path itself.
+   */
+  readonly LLM_API_BASE_URL: string;
+  /** Upstream wire protocol selector: `auto`, `responses` or `chat-completions`. */
+  readonly LLM_API_MODE: LlmApiMode;
   readonly LLM_MODEL: string;
   readonly LLM_TEMPERATURE: number;
   readonly LLM_FREQUENCY_PENALTY: number;

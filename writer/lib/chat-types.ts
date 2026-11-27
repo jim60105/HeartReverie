@@ -112,6 +112,22 @@ export class ChatError extends Error {
 }
 
 /**
+ * Signals that the Responses endpoint answered with a status that means
+ * "this upstream does not implement the Responses API" (404, 405, 501), so
+ * the transport plan may retry the same generation over Chat Completions.
+ *
+ * Never a {@link ChatError}: route handlers can never receive it, because the
+ * transport loop either continues to the next attempt or the status set was
+ * not requested and the status surfaced as a normal `ChatError`.
+ */
+export class LlmTransportUnsupportedError extends Error {
+  constructor(readonly status: number) {
+    super(`Responses API unsupported (HTTP ${status})`);
+    this.name = "LlmTransportUnsupportedError";
+  }
+}
+
+/**
  * Discriminated union describing how `streamLlmAndPersist` should persist
  * the LLM stream output:
  *

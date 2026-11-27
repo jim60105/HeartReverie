@@ -28,21 +28,30 @@
  * entrypoints can read top-to-bottom as thin preflight + delegate calls.
  */
 
-import type { TokenUsageRecord } from "../types.ts";
+import type { LlmTransport, TokenUsageRecord } from "../types.ts";
 import { createLlmLogger, createLogger } from "./logger.ts";
 import { buildRecord } from "./usage.ts";
 import {
   ChatAbortError,
   ChatError,
+  LlmTransportUnsupportedError,
   type StreamLlmArgs,
   type StreamLlmResult,
 } from "./chat-types.ts";
 import {
   buildLlmRequestBody,
+  buildResponsesRequestBody,
   dispatchPreLlmFetchHook,
   logLlmRequest,
   performLlmFetch,
 } from "./chat-llm-fetch.ts";
+import {
+  buildLlmEndpoints,
+  planLlmTransports,
+  recordChatCompletionsFallback,
+  RESPONSES_UNSUPPORTED_STATUSES,
+  transportUrl,
+} from "./llm-transport.ts";
 import {
   type ChapterTarget,
   finalizeStreamMode,
@@ -108,11 +117,20 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     reasoningOmit: config.LLM_REASONING_OMIT,
   });
 
-  const requestBody = buildLlmRequestBody(llmConfig, messages, config.LLM_REASONING_OMIT);
+  // ── Plan the transport attempts and build the first attempt's body ──
+  const endpoints = buildLlmEndpoints(config.LLM_API_BASE_URL);
+  const plan = planLlmTransports(config.LLM_API_MODE, endpoints, llmConfig.model, writeMode.kind);
+  const firstTransport = plan[0]!;
+  const buildBody = (transport: LlmTransport): Record<string, unknown> =>
+    transport === "responses"
+      ? buildResponsesRequestBody(llmConfig, messages, config.LLM_REASONING_OMIT)
+      : buildLlmRequestBody(llmConfig, messages, config.LLM_REASONING_OMIT);
+  const firstBody = buildBody(firstTransport);
 
-  // Dispatch the `pre-llm-fetch` observation hook AFTER `requestBody` is
-  // fully constructed and BEFORE `fetch(config.LLM_API_URL, ...)` so handlers
-  // see the exact serialisation we are about to send.
+  // Dispatch the `pre-llm-fetch` observation hook AFTER the first attempt's
+  // body is fully constructed and BEFORE its `fetch(...)` so handlers see the
+  // exact serialisation we are about to send. Exactly once per generation:
+  // the hook is not re-dispatched on transport fallback.
   await dispatchPreLlmFetchHook(
     hookDispatcher,
     {
@@ -122,21 +140,55 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       series,
       name,
       writeMode: { kind: writeMode.kind },
+      transport: firstTransport,
     },
     messages,
-    requestBody,
+    firstBody,
   );
 
+  // ── Attempt the planned transports in order ──
+  // `llmStartTime` is taken once, so reported latency includes a fallback
+  // round-trip. No chapter file is opened until an attempt succeeds.
   const llmStartTime = performance.now();
-  const apiResponse = await performLlmFetch({
-    apiUrl: config.LLM_API_URL,
-    requestBody,
-    signal,
-    llmStartTime,
-    model: llmConfig.model,
-    reqLog,
-    llmLog,
-  });
+  let served: {
+    apiResponse: Response & { body: ReadableStream<Uint8Array> };
+    transport: LlmTransport;
+    url: string;
+  } | null = null;
+  for (let i = 0; i < plan.length; i++) {
+    const transport = plan[i]!;
+    const isLast = i === plan.length - 1;
+    const url = transportUrl(transport, endpoints);
+    try {
+      const apiResponse = await performLlmFetch({
+        apiUrl: url,
+        requestBody: i === 0 ? firstBody : buildBody(transport),
+        signal,
+        llmStartTime,
+        model: llmConfig.model,
+        reqLog,
+        llmLog,
+        fallbackStatuses: transport === "responses" && !isLast
+          ? RESPONSES_UNSUPPORTED_STATUSES
+          : undefined,
+      });
+      if (i > 0) recordChatCompletionsFallback(endpoints, llmConfig.model);
+      served = { apiResponse, transport, url };
+      break;
+    } catch (err: unknown) {
+      if (err instanceof LlmTransportUnsupportedError && !isLast) {
+        // An abort that lands between attempts still wins over the fallback.
+        if (signal?.aborted === true) {
+          const latencyMs = Math.round(performance.now() - llmStartTime);
+          llmLog.info("LLM error", { type: "error", errorCode: "aborted", latencyMs });
+          throw new ChatAbortError("Generation aborted by client");
+        }
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (!served) throw new Error("unreachable: transport plan exhausted");
 
   // ── Mode-specific persistence setup ──
   const encoder = new TextEncoder();
@@ -153,10 +205,11 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
   // ── Consume the SSE stream (takes ownership of `file`) ──
   const { aiContent, sawModelContent, aborted, reasoningLength, tokenUsage } =
     await consumeLlmStream({
-      apiResponse,
+      apiResponse: served.apiResponse,
       file,
       encoder,
       writeMode,
+      transport: served.transport,
       target,
       storyCtx,
       signal,
@@ -177,6 +230,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
       latencyMs,
       chapter: targetNum,
       tokens: tokenUsage,
+      transport: served.transport,
       aborted: true,
       partialLength: aiContent.length,
       reasoningLength,
@@ -205,6 +259,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     contentLength: fullContent.length,
     chapter: targetNum,
     mode: writeMode.kind,
+    transport: served.transport,
   });
   reqLog.debug("LLM response content", { content: fullContent });
   llmLog.info("LLM response", {
@@ -213,6 +268,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     latencyMs,
     chapter: targetNum,
     tokens: tokenUsage,
+    transport: served.transport,
     reasoningLength,
   });
 
@@ -238,7 +294,7 @@ export async function streamLlmAndPersist(args: StreamLlmArgs): Promise<StreamLl
     aiContent,
     fullContent,
     usage,
-    endpoint: config.LLM_API_URL,
+    endpoint: served.url,
     storyCtx,
     hookDispatcher,
     reqFileLog,

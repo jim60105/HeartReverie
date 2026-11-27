@@ -14,9 +14,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { join, resolve } from "@std/path";
-import type { LlmConfig, ReasoningEffort } from "../types.ts";
-import { REASONING_EFFORTS } from "../types.ts";
+import type { LlmApiMode, LlmConfig, ReasoningEffort } from "../types.ts";
+import { LLM_API_MODES, REASONING_EFFORTS } from "../types.ts";
 import { createLogger } from "./logger.ts";
+import type { Logger } from "./logger.ts";
 
 const log = createLogger("system");
 
@@ -25,8 +26,14 @@ const PLAYGROUND_DIR: string = Deno.env.get("PLAYGROUND_DIR") || join(ROOT_DIR, 
 const READER_DIR: string = Deno.env.get("READER_DIR") || join(ROOT_DIR, "reader-dist");
 const PLUGINS_DIR: string = join(ROOT_DIR, "plugins");
 const PORT: number = parseInt(Deno.env.get("PORT") || "8080", 10);
-const LLM_API_URL: string = Deno.env.get("LLM_API_URL") ||
-  "https://openrouter.ai/api/v1/chat/completions";
+/** OpenAI-SDK-style base URL used when `LLM_API_BASE_URL` is unset or empty. */
+const DEFAULT_LLM_API_BASE_URL = "https://openrouter.ai/api/v1";
+const LLM_API_BASE_URL: string = (Deno.env.get("LLM_API_BASE_URL") ?? "").trim() ||
+  DEFAULT_LLM_API_BASE_URL;
+const LLM_CONFIG_ERRORS: readonly string[] = collectLlmEndpointErrors(
+  Deno.env.get("LLM_API_URL"),
+  LLM_API_BASE_URL,
+);
 const LLM_MODEL: string = Deno.env.get("LLM_MODEL") || "deepseek/deepseek-v4-pro";
 
 /** Parse a numeric env var with a fallback default. */
@@ -117,6 +124,91 @@ function effortEnv(key: string, fallback: ReasoningEffort): ReasoningEffort {
   return fallback;
 }
 
+/**
+ * Parse an {@link LlmApiMode} env var validated against {@link LLM_API_MODES}
+ * (exact, case-sensitive, trimmed). An unset or empty value returns `fallback`
+ * silently; any other unrecognized value falls back with a warn log naming the
+ * variable and value.
+ */
+function apiModeEnv(key: string, fallback: LlmApiMode): LlmApiMode {
+  const raw = Deno.env.get(key);
+  if (raw === undefined) return fallback;
+  const trimmed = raw.trim();
+  if (trimmed === "") return fallback;
+  if ((LLM_API_MODES as readonly string[]).includes(trimmed)) {
+    return trimmed as LlmApiMode;
+  }
+  log.warn("Unrecognized LLM_API_MODE value; falling back to default", {
+    variable: key,
+    value: raw,
+  });
+  return fallback;
+}
+
+/**
+ * Validate an OpenAI-SDK-style LLM base URL. Returns an error message, or
+ * `null` when `value` is a valid base URL.
+ *
+ * Rejected shapes: anything `new URL()` cannot parse, non-http(s) protocols,
+ * query strings and fragments, and values whose path already names one of the
+ * transport endpoints (`/responses`, `/chat/completions`). Echoes are redacted
+ * to `protocol//host/pathname`, so credentials embedded in a rejected URL are
+ * never logged.
+ */
+export function validateLlmApiBaseUrl(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return "LLM_API_BASE_URL must be an absolute http(s) URL";
+  }
+  const redacted = `${url.protocol}//${url.host}${url.pathname}`;
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return `LLM_API_BASE_URL must be an absolute http(s) URL (got "${redacted}")`;
+  }
+  if (value.includes("?") || value.includes("#")) {
+    return `LLM_API_BASE_URL must not contain a query string or fragment (got "${redacted}")`;
+  }
+  const path = url.pathname.replace(/\/+$/, "");
+  if (path.endsWith("/chat/completions") || path.endsWith("/responses")) {
+    return `LLM_API_BASE_URL must be a base URL without /chat/completions or /responses ` +
+      `(got "${redacted}"); for example https://openrouter.ai/api/v1`;
+  }
+  return null;
+}
+
+/**
+ * Collect startup errors for the LLM endpoint env vars. The removed legacy
+ * `LLM_API_URL` error comes first, then at most one base-URL error.
+ */
+export function collectLlmEndpointErrors(
+  legacyUrl: string | undefined,
+  baseUrl: string,
+): readonly string[] {
+  const errors: string[] = [];
+  if (legacyUrl?.trim()) {
+    errors.push(
+      "LLM_API_URL is no longer supported; set LLM_API_BASE_URL to the API base URL instead " +
+        "(for example LLM_API_BASE_URL=https://openrouter.ai/api/v1, without /chat/completions " +
+        "or /responses)",
+    );
+  }
+  const baseError = validateLlmApiBaseUrl(baseUrl);
+  if (baseError !== null) errors.push(baseError);
+  return errors;
+}
+
+/**
+ * Log every collected LLM endpoint error via `log.error`.
+ * Returns true when there was at least one error.
+ */
+export function reportLlmConfigErrors(errors: readonly string[], log: Logger): boolean {
+  for (const error of errors) log.error(error);
+  return errors.length > 0;
+}
+
+const LLM_API_MODE: LlmApiMode = apiModeEnv("LLM_API_MODE", "auto");
+
 const LLM_TEMPERATURE: number = numEnv("LLM_TEMPERATURE", 0.1);
 const LLM_FREQUENCY_PENALTY: number = numEnv("LLM_FREQUENCY_PENALTY", 0.13);
 const LLM_PRESENCE_PENALTY: number = numEnv("LLM_PRESENCE_PENALTY", 0.52);
@@ -165,7 +257,10 @@ const PROMPT_FILE: string = (() => {
 })();
 
 export {
-  LLM_API_URL,
+  DEFAULT_LLM_API_BASE_URL,
+  LLM_API_BASE_URL,
+  LLM_API_MODE,
+  LLM_CONFIG_ERRORS,
   LLM_FREQUENCY_PENALTY,
   LLM_LOG_FILE,
   LLM_MAX_COMPLETION_TOKENS,

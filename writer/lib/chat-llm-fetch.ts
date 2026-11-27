@@ -18,7 +18,12 @@ import type { ChatMessage, LlmConfig, PreLlmFetchPayload } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";
-import { ChatAbortError, ChatError, type WriteMode } from "./chat-types.ts";
+import {
+  ChatAbortError,
+  ChatError,
+  LlmTransportUnsupportedError,
+  type WriteMode,
+} from "./chat-types.ts";
 
 const log = createLogger("llm");
 
@@ -99,9 +104,54 @@ export function buildLlmRequestBody(
 }
 
 /**
+ * Build the upstream Responses API request body from the resolved `llmConfig`
+ * and `messages`. Pure transformation — no I/O.
+ *
+ * The sampler subset is exactly the set the OpenRouter `/responses` schema
+ * accepts (`temperature`, `top_p`, `top_k`, `frequency_penalty`,
+ * `presence_penalty`). `repetition_penalty`, `min_p` and `top_a` are
+ * Chat-Completions-only knobs: sending them here risks a 400 that does not
+ * trigger the transport fallback, so operators who need them set
+ * `LLM_API_MODE=chat-completions`.
+ *
+ * `input` reuses the Chat Completions message array: Responses accepts
+ * `{ role, content: string }` easy-input messages. `store: false` is required
+ * because OpenRouter rejects `store: true`. `omitReasoning` mirrors
+ * `config.LLM_REASONING_OMIT`; `{ effort: "none" }` is the cross-provider way
+ * to disable reasoning (OpenAI rejects OpenRouter's `{ enabled: false }`).
+ */
+export function buildResponsesRequestBody(
+  llmConfig: LlmConfig,
+  messages: ChatMessage[],
+  omitReasoning: boolean,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: llmConfig.model,
+    input: messages,
+    stream: true,
+    store: false,
+    temperature: llmConfig.temperature,
+    top_p: llmConfig.topP,
+    top_k: llmConfig.topK,
+    frequency_penalty: llmConfig.frequencyPenalty,
+    presence_penalty: llmConfig.presencePenalty,
+  };
+  if (llmConfig.maxCompletionTokens !== null) {
+    body.max_output_tokens = llmConfig.maxCompletionTokens;
+  }
+  if (!omitReasoning) {
+    body.reasoning = llmConfig.reasoningEnabled
+      ? { effort: llmConfig.reasoningEffort, summary: "auto" }
+      : { effort: "none" };
+  }
+  return body;
+}
+
+/**
  * Dispatch the `pre-llm-fetch` observation hook. Derives `requestMetadata`
- * (the request body minus `messages`) internally so the hook payload
- * contract stays owned by this helper, not the caller.
+ * (the first attempt's request body minus `messages` for Chat Completions or
+ * `input` for Responses) internally so the hook payload contract stays owned
+ * by this helper, not the caller.
  *
  * `messages` and `requestMetadata` are deep-cloned and deep-frozen, then
  * attached as non-writable enumerable properties so handlers cannot
@@ -118,7 +168,7 @@ export async function dispatchPreLlmFetchHook(
   messages: ChatMessage[],
   requestBody: Record<string, unknown>,
 ): Promise<void> {
-  const { messages: _omitMessages, ...requestMetadata } = requestBody;
+  const { messages: _omitMessages, input: _omitInput, ...requestMetadata } = requestBody;
   const payload: Record<string, unknown> = { ...baseFields };
   Object.defineProperty(payload, "messages", {
     value: deepFreeze(structuredClone(messages)),
@@ -164,8 +214,17 @@ export async function performLlmFetch(args: {
   model: string;
   reqLog: Logger;
   llmLog: Logger;
+  /**
+   * Statuses that mean "this endpoint does not exist / is not implemented" for
+   * the attempted transport. When the response carries one of them, the body
+   * is discarded unread and {@link LlmTransportUnsupportedError} is thrown so
+   * the caller can retry over the next planned transport. Every other failure
+   * stays a terminal `ChatError` / `ChatAbortError`.
+   */
+  fallbackStatuses?: ReadonlySet<number>;
 }): Promise<Response & { body: ReadableStream<Uint8Array> }> {
-  const { apiUrl, requestBody, signal, llmStartTime, model, reqLog, llmLog } = args;
+  const { apiUrl, requestBody, signal, llmStartTime, model, reqLog, llmLog, fallbackStatuses } =
+    args;
   let apiResponse: Response;
   try {
     const apiKey = Deno.env.get("LLM_API_KEY");
@@ -192,6 +251,22 @@ export async function performLlmFetch(args: {
     reqLog.error("LLM fetch failed", { latencyMs, error: errMsg });
     llmLog.info("LLM error", { type: "error", errorCode: "network", latencyMs, error: errMsg });
     throw new ChatError("llm-api", "AI service request failed", 502);
+  }
+
+  if (!apiResponse.ok && fallbackStatuses?.has(apiResponse.status)) {
+    // Discard the unsupported-endpoint body without reading it: this is not a
+    // terminal failure, so it must not produce an "LLM error" entry.
+    await apiResponse.body?.cancel().catch(() => {});
+    const latencyMs = Math.round(performance.now() - llmStartTime);
+    if (signal?.aborted === true) {
+      llmLog.info("LLM error", { type: "error", errorCode: "aborted", latencyMs });
+      throw new ChatAbortError("Generation aborted by client");
+    }
+    reqLog.warn("LLM Responses API unsupported; falling back to Chat Completions", {
+      status: apiResponse.status,
+      url: apiUrl,
+    });
+    throw new LlmTransportUnsupportedError(apiResponse.status);
   }
 
   if (!apiResponse.ok) {

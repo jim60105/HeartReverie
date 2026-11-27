@@ -14,12 +14,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { errorMessage } from "./errors.ts";
-import type { LLMStreamChunk } from "../types.ts";
+import type { LlmTransport } from "../types.ts";
 import type { HookDispatcher } from "./hooks.ts";
 import { createLogger } from "./logger.ts";
 import type { Logger } from "./logger.ts";
 import { ChatError, type WriteMode } from "./chat-types.ts";
 import type { ChapterTarget, StoryContext } from "./chat-chapter-io.ts";
+import { parseChatCompletionsFrame, parseResponsesFrame } from "./llm-stream-frames.ts";
 
 const log = createLogger("llm");
 
@@ -42,7 +43,8 @@ export type StreamConsumeResult = {
 };
 
 /**
- * Consume the upstream SSE stream, persist content deltas according to
+ * Consume the upstream Chat Completions or Responses SSE stream (selected by
+ * `transport`), persist content deltas according to
  * `writeMode`, and surface reasoning frames as `<think>` blocks for
  * chapter-writing modes only.
  *
@@ -69,6 +71,8 @@ export async function consumeLlmStream(args: {
   file: Deno.FsFile | null;
   encoder: TextEncoder;
   writeMode: WriteMode;
+  /** Wire protocol of the response body; selects the stream frame parser. */
+  transport: LlmTransport;
   target: ChapterTarget;
   storyCtx: StoryContext;
   signal: AbortSignal | undefined;
@@ -84,6 +88,7 @@ export async function consumeLlmStream(args: {
       apiResponse,
       encoder,
       writeMode,
+      transport,
       target,
       storyCtx,
       signal,
@@ -101,6 +106,7 @@ export async function consumeLlmStream(args: {
     let aborted = false;
     let inThinkBlock = false;
     let reasoningLength = 0;
+    let reasoningKindLock: "text" | "summary" | null = null;
     let tokenUsage: StreamConsumeResult["tokenUsage"] = {
       prompt: null,
       completion: null,
@@ -108,20 +114,14 @@ export async function consumeLlmStream(args: {
       cost: null,
     };
 
-    const extractReasoningText = (delta: unknown): string => {
-      if (!delta || typeof delta !== "object") return "";
-      const direct = (delta as { reasoning?: unknown }).reasoning;
-      if (typeof direct === "string" && direct.length > 0) return direct;
-      const details = (delta as { reasoning_details?: unknown }).reasoning_details;
-      if (!Array.isArray(details)) return "";
-      let out = "";
-      for (const item of details) {
-        if (item && typeof item === "object") {
-          const t = (item as { text?: unknown }).text;
-          if (typeof t === "string" && t.length > 0) out += t;
-        }
-      }
-      return out;
+    // SSE allows the space after `data:` to be omitted, and `data:` with no
+    // payload is a keepalive; accept both without disturbing the payload.
+    const handleSseLine = async (line: string): Promise<void> => {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) return;
+      const payload = trimmed.slice(5).trimStart();
+      if (payload.length === 0) return;
+      await handlePayload(payload);
     };
 
     const writeFile = (bytes: string): Promise<number> => {
@@ -175,34 +175,36 @@ export async function consumeLlmStream(args: {
         return;
       }
       if (typeof raw !== "object" || raw === null) return;
-      const parsed = raw as LLMStreamChunk;
 
-      const errObj = parsed.error;
-      const hasErrorField = typeof errObj === "object" && errObj !== null;
-      const finishedWithError = parsed.choices?.[0]?.finish_reason === "error";
-      if (hasErrorField || finishedWithError) {
-        const messageRaw = errObj?.message;
-        const codeRaw = errObj?.code;
-        const message = (typeof messageRaw === "string" && messageRaw.length > 0)
-          ? messageRaw
-          : (codeRaw !== undefined ? String(codeRaw) : "Mid-stream provider error");
+      const frame = transport === "responses"
+        ? parseResponsesFrame(raw)
+        : parseChatCompletionsFrame(raw);
+
+      if (frame.error !== null) {
         const latencyMs = Math.round(performance.now() - llmStartTime);
         llmLog.info("LLM error", {
           type: "error",
           errorCode: "stream-error",
           latencyMs,
-          error: message,
+          error: frame.error,
           partialLength: aiContent.length,
           reasoningLength,
         });
-        throw new ChatError("llm-stream", message, 502);
+        throw new ChatError("llm-stream", frame.error, 502);
       }
 
-      const choice = parsed.choices?.[0];
-      const delta = choice?.delta;
+      const contentDelta = frame.content;
 
       // Reasoning bytes — only frame as `<think>` for chapter-writing modes.
-      const reasoningText = extractReasoningText(delta);
+      // Only the first reasoning kind seen in a stream is used, so a provider
+      // that emits both raw reasoning and a summary never duplicates it.
+      if (frame.reasoningKind !== null && reasoningKindLock === null) {
+        reasoningKindLock = frame.reasoningKind;
+      }
+      const reasoningText =
+        frame.reasoningKind !== null && frame.reasoningKind === reasoningKindLock
+          ? frame.reasoning
+          : "";
       const isChapterWritingMode = writeMode.kind === "write-new-chapter" ||
         writeMode.kind === "continue-last-chapter";
       if (reasoningText.length > 0 && isChapterWritingMode) {
@@ -216,7 +218,6 @@ export async function consumeLlmStream(args: {
         notifyDelta(reasoningText);
       }
 
-      const contentDelta = delta?.content;
       if (contentDelta) {
         if (inThinkBlock && isChapterWritingMode) {
           await writeFile("\n</think>\n\n");
@@ -226,17 +227,8 @@ export async function consumeLlmStream(args: {
         sawModelContent = true;
         await persistChunk(contentDelta);
       }
-      if (parsed.usage) {
-        const costRaw = (parsed.usage as Record<string, unknown>).cost;
-        const cost = typeof costRaw === "number" && isFinite(costRaw) && costRaw >= 0
-          ? costRaw
-          : null;
-        tokenUsage = {
-          prompt: parsed.usage.prompt_tokens ?? null,
-          completion: parsed.usage.completion_tokens ?? null,
-          total: parsed.usage.total_tokens ?? null,
-          cost,
-        };
+      if (frame.usage !== null) {
+        tokenUsage = frame.usage;
       }
     };
 
@@ -263,18 +255,11 @@ export async function consumeLlmStream(args: {
         buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
-          await handlePayload(trimmed.slice(6));
+          await handleSseLine(line);
         }
       }
 
-      if (buffer.trim()) {
-        const trimmed = buffer.trim();
-        if (trimmed.startsWith("data: ")) {
-          await handlePayload(trimmed.slice(6));
-        }
-      }
+      await handleSseLine(buffer);
     } catch (err: unknown) {
       if (err instanceof ChatError) {
         throw err;

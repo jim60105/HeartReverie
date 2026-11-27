@@ -26,15 +26,18 @@
  * - `types/plugin.ts`  — Plugin manifest, register/route context, dynamic vars
  * - `types/ws.ts`      — WebSocket protocol (client + server message unions)
  *
- * The only non-type runtime export is `REASONING_EFFORTS` from `llm.ts`.
+ * The only non-type runtime exports are `REASONING_EFFORTS` and
+ * `LLM_API_MODES` from `llm.ts`.
  */
 
-export { REASONING_EFFORTS } from "./types/llm.ts";
+export { LLM_API_MODES, REASONING_EFFORTS } from "./types/llm.ts";
 
 export type {
+  LlmApiMode,
   LlmConfig,
   LlmDefaultsResponse,
   LLMStreamChunk,
+  LlmTransport,
   ReasoningEffort,
   StoryLlmConfigOverrides,
   TokenUsageRecord,
