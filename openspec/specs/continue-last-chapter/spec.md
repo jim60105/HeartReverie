@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change continue-last-chapter. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Continue endpoint resumes generation in place
 
 The server SHALL expose two equivalent ways to resume LLM generation on the latest existing chapter without creating a new chapter file: an HTTP route `POST /api/stories/:series/:name/chat/continue` (no request body fields are required) and a WebSocket message `{ type: "chat:continue", id: string, series: string, story: string }`. Both SHALL execute through a single library function `executeContinue()` in `writer/lib/chat-shared.ts` that reuses the existing prompt-building, streaming, abort, mid-stream-error, and token-usage code paths.
@@ -59,7 +61,7 @@ The Vento system prompt template (`system.md`) SHALL NOT be modified for this re
 
 If the rendered prompt happens to already end with an assistant message (e.g. a future template variant), `executeContinue()` SHALL still append the chapter-n prefill as a separate trailing assistant message. The upstream provider SHALL receive two consecutive assistant messages with no intervening user message; this is documented OpenAI-compatible behaviour and most providers concatenate consecutive same-role messages internally.
 
-The provider-dependence of trailing-assistant prefill is a known limitation: OpenRouter (the project's default `LLM_API_URL`) and Anthropic-via-OpenRouter passthrough document the behaviour and treat it reliably; strict OpenAI (`api.openai.com/v1/chat/completions`) does not officially document prefill via trailing assistant message and may insert a leading newline or behave inconsistently with some models. Operators swapping `LLM_API_URL` to a strict provider accept this limitation; this capability SHALL NOT add a `prefill: true` / `continue_final_message: true` request flag because no supported provider requires one.
+The provider-dependence of trailing-assistant prefill is a known limitation: OpenRouter (the project's default `LLM_API_BASE_URL`) and Anthropic-via-OpenRouter passthrough document the behaviour and treat it reliably; strict OpenAI (`api.openai.com/v1/chat/completions`) does not officially document prefill via trailing assistant message and may insert a leading newline or behave inconsistently with some models. Operators swapping `LLM_API_BASE_URL` to a strict provider accept this limitation; this capability SHALL NOT add a `prefill: true` / `continue_final_message: true` request flag because no supported provider requires one.
 
 #### Scenario: Trailing assistant prefill present only when non-empty
 

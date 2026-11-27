@@ -3,7 +3,9 @@
 ## Purpose
 
 Deno application using Hono framework with TypeScript that serves the reader frontend, exposes REST API endpoints for story management, and proxies chat requests to an LLM API with a faithful prompt construction pipeline.
+
 ## Requirements
+
 ### Requirement: Server initialization
 
 The writer backend SHALL be a Deno application using Hono framework with TypeScript ESM modules. Route handlers SHALL be organized into separate module files under `writer/routes/`. Middleware functions SHALL be extracted into `writer/lib/middleware.ts`. Configuration SHALL be centralized in `writer/lib/config.ts`. Error response construction SHALL use a shared `problemJson()` helper from `writer/lib/errors.ts`. The server SHALL also register the lore CRUD routes from `writer/routes/lore.ts` alongside other core routes during initialization. The server SHALL listen on plain HTTP with no in-application TLS support; operators are expected to terminate TLS at an upstream reverse proxy or ingress controller.
@@ -190,7 +192,7 @@ The server SHALL register lore CRUD routes as a core route module at `writer/rou
 
 ### Requirement: LLM API proxy
 
-The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JSON body with a `message` field. The server SHALL construct the prompt using the pipeline above, send it to the LLM API URL (configured via `LLM_API_URL` environment variable, defaulting to `https://openrouter.ai/api/v1/chat/completions`) using native `fetch` with `stream: true` in the request body, and write the assistant's response incrementally as the next numbered chapter file. When the `LLM_API_KEY` environment variable is set to a non-empty value, the server SHALL attach an `Authorization: Bearer <key>` header to the upstream request. When `LLM_API_KEY` is unset or empty, the `Authorization` header SHALL be omitted entirely so that keyless local or private LLM providers (e.g. Ollama, vLLM, LM Studio) work without a key, and the chat flow SHALL NOT fail with HTTP 500 for the missing key.
+The server SHALL expose `POST /api/stories/:series/:name/chat` that accepts a JSON body with a `message` field. The server SHALL construct the prompt using the pipeline above, send it to the upstream endpoint selected per the `llm-api-transport` capability (`<LLM_API_BASE_URL>/responses` by default with fallback to `<LLM_API_BASE_URL>/chat/completions`, where the `LLM_API_BASE_URL` environment variable defaults to `https://openrouter.ai/api/v1`) using native `fetch` with `stream: true` in the request body, and write the assistant's response incrementally as the next numbered chapter file. When the `LLM_API_KEY` environment variable is set to a non-empty value, the server SHALL attach an `Authorization: Bearer <key>` header to the upstream request. When `LLM_API_KEY` is unset or empty, the `Authorization` header SHALL be omitted entirely so that keyless local or private LLM providers (e.g. Ollama, vLLM, LM Studio) work without a key, and the chat flow SHALL NOT fail with HTTP 500 for the missing key.
 
 The server SHALL resolve the effective LLM configuration for each chat request by merging an env-derived `llmDefaults` object with the target story's validated `_config.json` overrides using `Object.assign({}, llmDefaults, storyOverrides)`. Merging SHALL happen per request so that edits to a story's `_config.json` take effect on the next chat without a server restart.
 
@@ -213,7 +215,7 @@ Additionally, the upstream request body SHALL include a `reasoning` object on ev
 - When the merged `reasoningEnabled` is `false`: `reasoning: { enabled: false }` (the `effort` property SHALL be omitted).
 - When `LLM_REASONING_OMIT` is `true`: the `reasoning` key SHALL NOT appear in the request body at all.
 
-The upstream `fetch` call SHALL additionally attach three hard-coded OpenRouter app-attribution HTTP headers — `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie`, and `X-OpenRouter-Categories: roleplay,creative-writing` — alongside `Content-Type` and (when `LLM_API_KEY` is set) the `Authorization` header, on every chat request, regardless of the configured `LLM_API_URL`. The header values SHALL come from a single module-level frozen constant in `writer/lib/chat-llm-fetch.ts` and SHALL NOT be configurable at runtime (no env vars, no `_config.json` keys, no API surface). See the `openrouter-app-attribution` capability for the complete specification.
+The upstream `fetch` call SHALL additionally attach three hard-coded OpenRouter app-attribution HTTP headers — `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie`, and `X-OpenRouter-Categories: roleplay,creative-writing` — alongside `Content-Type` and (when `LLM_API_KEY` is set) the `Authorization` header, on every chat request, regardless of the configured `LLM_API_BASE_URL`. The header values SHALL come from a single module-level frozen constant in `writer/lib/chat-llm-fetch.ts` and SHALL NOT be configurable at runtime (no env vars, no `_config.json` keys, no API surface). See the `openrouter-app-attribution` capability for the complete specification.
 
 The upstream `fetch` call SHALL also accept an optional `signal: AbortSignal` parameter that is forwarded directly to `fetch()`. When the signal is aborted, both the initial fetch resolution and any in-flight SSE stream read SHALL be cancellable. The server SHALL discriminate aborts by inspecting `signal?.aborted === true` rather than by inspecting the thrown error's class or `name`, so that the dedicated abort branch (close chapter file → log abort → throw `ChatAbortError`) runs regardless of whether the abort reason is a `DOMException`, a custom `Error`, a `ChatAbortError`, or undefined. The HTTP route SHALL pass `c.req.raw.signal`; the WebSocket route SHALL pass a per-request `AbortController.signal`. See the `streaming-cancellation` capability for the complete cancellation contract.
 
@@ -225,9 +227,9 @@ The server SHALL stream the response using SSE and write content deltas to the c
 
 Before streaming the AI response, the server SHALL write the user's chat message to the chapter file wrapped in `<user_message>` and `</user_message>` tags, followed by a blank line. The user message block SHALL appear at the beginning of the chapter file, before any AI-generated content. The `<user_message>` block SHALL also be included in the full content returned in the HTTP response.
 
-The server SHALL parse the SSE response by reading `data:` lines from the response body stream. Each line with a JSON payload SHALL have `choices[0].delta.content` extracted and appended to the chapter file immediately. The `data: [DONE]` sentinel SHALL signal end of stream. The server SHALL open the chapter file before streaming begins and write each content delta as it arrives, allowing the frontend auto-reload polling to display partial content during generation. After the stream completes, the server SHALL return the complete chapter content in the HTTP response.
+When the Responses transport serves the request, the SSE payloads SHALL be parsed per the `llm-api-transport` capability; the remainder of this paragraph and the next describe the Chat Completions transport. The server SHALL parse the SSE response by reading `data:` lines from the response body stream. Each line with a JSON payload SHALL have `choices[0].delta.content` extracted and appended to the chapter file immediately. The `data: [DONE]` sentinel SHALL signal end of stream. The server SHALL open the chapter file before streaming begins and write each content delta as it arrives, allowing the frontend auto-reload polling to display partial content during generation. After the stream completes, the server SHALL return the complete chapter content in the HTTP response.
 
-In addition to `delta.content`, the SSE parser SHALL inspect each parsed chunk for upstream reasoning text via `choices[0].delta.reasoning` (preferred) and `choices[0].delta.reasoning_details[].text` (fallback), and SHALL stream that reasoning text into the chapter file framed by `<think>` and `</think>` tags placed between the `<user_message>` block and the model content. Reasoning text SHALL NOT be appended to the `aiContent` accumulator returned in the HTTP response body's `content` field, and SHALL NOT be passed through the `response-stream` plugin hook. The chapter file on disk SHALL therefore contain a superset of the response envelope's `content` field for any turn that emitted reasoning. See the `reasoning-think-block` capability for the complete state-machine and field-extraction contract.
+In addition to `delta.content`, the SSE parser SHALL inspect each parsed chunk for upstream reasoning text via `choices[0].delta.reasoning` (preferred), `choices[0].delta.reasoning_content` (second), and `choices[0].delta.reasoning_details[].text` (fallback), and SHALL stream that reasoning text into the chapter file framed by `<think>` and `</think>` tags placed between the `<user_message>` block and the model content. Reasoning text SHALL NOT be appended to the `aiContent` accumulator returned in the HTTP response body's `content` field, and SHALL NOT be passed through the `response-stream` plugin hook. The chapter file on disk SHALL therefore contain a superset of the response envelope's `content` field for any turn that emitted reasoning. See the `reasoning-think-block` capability for the complete state-machine and field-extraction contract.
 
 The operational debug log entry and the LLM interaction log entry produced for each chat request SHALL include the resolved values of `reasoningEnabled`, `reasoningEffort`, and `maxCompletionTokens` alongside the existing sampler parameters. The `maxCompletionTokens` value SHALL be either a positive safe integer or the JSON literal `null` (matching the merged `LlmConfig` field type). The LLM interaction log entry SHALL additionally carry an optional `reasoningLength` field whose value is the total character count of reasoning text streamed during the turn (success, abort, and mid-stream-error log entries alike), per the `reasoning-think-block` capability.
 
@@ -269,8 +271,8 @@ The operational debug log entry and the LLM interaction log entry produced for e
 
 #### Scenario: Custom LLM API URL
 
-- **WHEN** `LLM_API_URL` is set to a non-default value (e.g., a self-hosted vLLM endpoint)
-- **THEN** the server SHALL send chat completion requests to that URL instead of the OpenRouter default
+- **WHEN** `LLM_API_BASE_URL` is set to a non-default value (e.g., `http://vllm.internal:8000/v1`)
+- **THEN** the server SHALL send every upstream request to that base URL plus the transport path (`/responses` or `/chat/completions`) instead of the OpenRouter default
 
 #### Scenario: Custom env sampling parameters apply as defaults
 
@@ -422,7 +424,7 @@ The operational debug log entry and the LLM interaction log entry produced for e
 
 #### Scenario: Upstream provider rejection surfaces the response body
 
-- **GIVEN** a custom `LLM_API_URL` whose backend rejects the `reasoning` field with HTTP 400 and a JSON body `{"error":"unknown field: reasoning"}`
+- **GIVEN** a custom `LLM_API_BASE_URL` whose backend rejects the `reasoning` field with HTTP 400 and a JSON body `{"error":"unknown field: reasoning"}`
 - **WHEN** a chat request is dispatched
 - **THEN** the server SHALL respond to the client with an RFC 9457 Problem Details body whose `detail` field includes (a truncated form of) the upstream response body, AND SHALL log the same upstream body at error level
 
@@ -433,7 +435,7 @@ The operational debug log entry and the LLM interaction log entry produced for e
 
 #### Scenario: Attribution headers identical regardless of LLM_API_URL
 
-- **GIVEN** `LLM_API_URL` is set to a non-OpenRouter endpoint
+- **GIVEN** `LLM_API_BASE_URL` is set to a non-OpenRouter endpoint
 - **WHEN** a chat request is dispatched
 - **THEN** the upstream `fetch` call SHALL still carry the three hard-coded attribution headers with the documented values
 
@@ -839,7 +841,7 @@ The backend SHALL register `GET /api/stories/:series/:name/usage` via a new `reg
 
 The server SHALL register an authenticated `GET /api/llm-defaults` route that returns the env-derived `llmDefaults` filtered to exactly the keys allowed in the per-story `_config.json` whitelist. The route SHALL be registered under the same `X-Passphrase`-checking middleware as the per-story config routes; an unauthenticated request SHALL be rejected with HTTP 401 and a Problem Details body, exactly mirroring the existing per-story config route's auth behaviour.
 
-The response body SHALL be a JSON object whose top-level keys are exactly the per-story `_config.json` whitelist: `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort` (and `maxCompletionTokens` once that field is added to the whitelist by the `update-llm-defaults-and-completion-tokens` change). Every key SHALL be present and well-typed: `model` SHALL be a non-empty string, `reasoningEnabled` SHALL be a boolean, `reasoningEffort` SHALL be one of the literal `REASONING_EFFORTS` values, every other listed key SHALL be a finite number (positive safe integer for `maxCompletionTokens` once added). The response SHALL NOT include any other key — in particular the route handler SHALL NOT serialize the entire `LlmConfig` object, and SHALL NOT leak `LLM_API_URL`, `LLM_API_KEY`, `PASSPHRASE`, `BACKGROUND_IMAGE`, `PROMPT_FILE`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`, or any other non-whitelist field.
+The response body SHALL be a JSON object whose top-level keys are exactly the per-story `_config.json` whitelist: `model`, `temperature`, `frequencyPenalty`, `presencePenalty`, `topK`, `topP`, `repetitionPenalty`, `minP`, `topA`, `reasoningEnabled`, `reasoningEffort` (and `maxCompletionTokens` once that field is added to the whitelist by the `update-llm-defaults-and-completion-tokens` change). Every key SHALL be present and well-typed: `model` SHALL be a non-empty string, `reasoningEnabled` SHALL be a boolean, `reasoningEffort` SHALL be one of the literal `REASONING_EFFORTS` values, every other listed key SHALL be a finite number (positive safe integer for `maxCompletionTokens` once added). The response SHALL NOT include any other key — in particular the route handler SHALL NOT serialize the entire `LlmConfig` object, and SHALL NOT leak `LLM_API_BASE_URL`, `LLM_API_KEY`, `PASSPHRASE`, `BACKGROUND_IMAGE`, `PROMPT_FILE`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`, or any other non-whitelist field.
 
 The endpoint SHALL NOT depend on any URL parameters and SHALL NOT consult any per-story config — it returns the env defaults only, identical for every authenticated client.
 
@@ -857,7 +859,7 @@ The endpoint SHALL NOT depend on any URL parameters and SHALL NOT consult any pe
 #### Scenario: Response excludes secrets and non-LLM config
 
 - **WHEN** an authenticated client receives a `GET /api/llm-defaults` response
-- **THEN** the response body SHALL NOT contain any of: `apiKey`, `apiUrl`, `LLM_API_KEY`, `LLM_API_URL`, `PASSPHRASE`, `BACKGROUND_IMAGE`, `PROMPT_FILE`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`, `PORT`, `PLAYGROUND_DIR`, `READER_DIR`, `PLUGIN_DIR`, AND SHALL NOT contain any key not listed in the per-story `_config.json` whitelist
+- **THEN** the response body SHALL NOT contain any of: `apiKey`, `apiUrl`, `LLM_API_KEY`, `LLM_API_BASE_URL`, `LLM_API_MODE`, `PASSPHRASE`, `BACKGROUND_IMAGE`, `PROMPT_FILE`, `LOG_LEVEL`, `LOG_FILE`, `LLM_LOG_FILE`, `PORT`, `PLAYGROUND_DIR`, `READER_DIR`, `PLUGIN_DIR`, AND SHALL NOT contain any key not listed in the per-story `_config.json` whitelist
 
 #### Scenario: Response keys lock-step with the per-story whitelist
 
@@ -933,7 +935,6 @@ The continue route SHALL NOT pass a `template` field to `executeContinue()`. The
 - **GIVEN** the per-passphrase rate limiter is configured and the current passphrase has exceeded its window quota for chat operations
 - **WHEN** the client sends `POST /chat/continue`
 - **THEN** the rate limiter middleware SHALL respond HTTP 429 BEFORE `executeContinue()` is invoked, identical to its behaviour on `POST /chat`
-
 
 ### Requirement: Theme route registration
 

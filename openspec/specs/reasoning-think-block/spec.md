@@ -11,8 +11,11 @@ Defines how upstream LLM reasoning text deltas are extracted from SSE chunks and
 The chat execution function (`executeChat()` in `writer/lib/chat-shared.ts`) SHALL inspect each parsed SSE chunk for reasoning text from the upstream LLM and SHALL stream it into the chapter file framed by `<think>` and `</think>` tags. Reasoning text SHALL be extracted from the parsed delta object using the following priority order, per chunk:
 
 1. If `parsed.choices[0].delta.reasoning` is a string with length > 0, that string is the chunk's reasoning text.
-2. Otherwise, if `parsed.choices[0].delta.reasoning_details` is an array, the chunk's reasoning text is the in-order concatenation of every element's `text` property where `typeof element.text === "string" && element.text.length > 0`. Elements without a string `text` (e.g. items containing only `signature` or `format` fields) SHALL be skipped without error.
-3. Otherwise, the chunk has no reasoning text.
+2. Otherwise, if `parsed.choices[0].delta.reasoning_content` is a string with length > 0, that string is the chunk's reasoning text.
+3. Otherwise, if `parsed.choices[0].delta.reasoning_details` is an array, the chunk's reasoning text is the in-order concatenation of every element's `text` property where `typeof element.text === "string" && element.text.length > 0`. Elements without a string `text` (e.g. items containing only `signature` or `format` fields) SHALL be skipped without error.
+4. Otherwise, the chunk has no reasoning text.
+
+This priority order applies to the Chat Completions transport. On the Responses transport, reasoning text comes from the reasoning events defined by the `llm-api-transport` capability and SHALL use the same `<think>` framing.
 
 The chapter file format SHALL be:
 
@@ -47,6 +50,11 @@ The leading `<user_message>...</user_message>\n\n` block is produced by the exis
 - **GIVEN** an upstream LLM that emits only `delta.content` chunks (no `delta.reasoning`, no `delta.reasoning_details`)
 - **WHEN** `executeChat()` processes the stream
 - **THEN** the chapter file SHALL contain no `<think>` opening tag, no `</think>` closing tag, and SHALL be byte-identical to the pre-change chapter file format for that prompt/response pair
+
+#### Scenario: Reasoning text via reasoning_content
+- **GIVEN** the upstream LLM streams `data: {"choices":[{"delta":{"reasoning_content":"Thinking."}}]}` followed by `data: {"choices":[{"delta":{"content":"Answer."}}]}` and `[DONE]` over Chat Completions
+- **WHEN** `executeChat()` processes the stream and `delta.reasoning` is absent
+- **THEN** the chapter file SHALL contain `<think>\nThinking.\n</think>\n\nAnswer.` after the user-message block
 
 ### Requirement: `<think>` state machine handles open/close transitions
 

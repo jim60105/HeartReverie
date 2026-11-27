@@ -3,7 +3,9 @@
 ## Purpose
 
 Per-story LLM parameter overrides stored alongside story content as `playground/<series>/<story>/_config.json`. Each request merges validated story-level overrides over env-derived defaults so individual stories can tune model and sampling parameters without restarting the server or affecting other stories. A REST API and a Settings UI expose read/write access to these overrides.
+
 ## Requirements
+
 ### Requirement: Per-story LLM config file format and location
 
 Each story SHALL be allowed to declare per-story LLM parameter overrides in a file at `playground/<series>/<story>/_config.json`. The file SHALL be a JSON object whose keys are a subset of the allowed LLM parameter names. The file's presence SHALL be optional; its absence SHALL be semantically equivalent to an empty object. The leading underscore SHALL mark the file as system-reserved so that existing story/series listing logic in `writer/lib/story.ts` continues to exclude it from user-visible chapter and story listings.
@@ -119,22 +121,22 @@ For `maxCompletionTokens` specifically, the merge SHALL diverge from the default
 #### Scenario: maxCompletionTokens override resolves at each request
 - **GIVEN** env default `maxCompletionTokens=null` and a story with `_config.json` containing `{ "maxCompletionTokens": 8192 }`
 - **WHEN** a chat request targets that story
-- **THEN** the upstream request body SHALL contain `max_completion_tokens: 8192`
+- **THEN** a Chat Completions request body SHALL contain `max_completion_tokens: 8192` and a Responses request body SHALL contain `max_output_tokens: 8192`
 
 #### Scenario: Missing maxCompletionTokens falls through to env default
 - **GIVEN** env default `maxCompletionTokens=4096` (from `LLM_MAX_COMPLETION_TOKENS=4096`) and a story with `_config.json` that does NOT include the `maxCompletionTokens` key at all
 - **WHEN** a chat request targets that story
-- **THEN** the upstream request body SHALL contain `max_completion_tokens: 4096`
+- **THEN** a Chat Completions request body SHALL contain `max_completion_tokens: 4096` and a Responses request body SHALL contain `max_output_tokens: 4096`
 
 #### Scenario: Explicit null maxCompletionTokens overrides a non-null env default
 - **GIVEN** env default `maxCompletionTokens=4096` (from `LLM_MAX_COMPLETION_TOKENS=4096`) and a story with `_config.json` containing `{ "maxCompletionTokens": null }`
 - **WHEN** a chat request targets that story
-- **THEN** the merged `maxCompletionTokens` SHALL be `null` (the explicit per-story `null` overrides the env default rather than falling through), AND the upstream chat/completions request body SHALL NOT contain a `max_completion_tokens` key at all
+- **THEN** the merged `maxCompletionTokens` SHALL be `null` (the explicit per-story `null` overrides the env default rather than falling through), AND the upstream chat/completions request body SHALL NOT contain a `max_completion_tokens` key at all, and a Responses request body SHALL NOT contain a `max_output_tokens` key
 
 #### Scenario: Both null collapses to no upstream key
 - **GIVEN** env default `maxCompletionTokens=null` (from `LLM_MAX_COMPLETION_TOKENS` unset) and a story with `_config.json` containing `{ "maxCompletionTokens": null }`
 - **WHEN** a chat request targets that story
-- **THEN** the merged `maxCompletionTokens` SHALL be `null` AND the upstream request body SHALL NOT contain a `max_completion_tokens` key
+- **THEN** the merged `maxCompletionTokens` SHALL be `null` AND a Chat Completions request body SHALL NOT contain a `max_completion_tokens` key and a Responses request body SHALL NOT contain a `max_output_tokens` key
 
 ### Requirement: Authenticated REST API for per-story config
 
@@ -272,4 +274,3 @@ When the `GET /api/llm-defaults` fetch fails (network error, 401, malformed body
 
 - **WHEN** the page receives a `GET /api/llm-defaults` response
 - **THEN** the response body SHALL NOT contain `apiKey`, `apiUrl`, or any other non-whitelist key — the page treats unknown keys as a developer error and SHALL ignore them silently
-
