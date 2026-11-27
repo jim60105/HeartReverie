@@ -102,7 +102,7 @@ hooks.register("insert-transform", (context) => {
 | `upstreamCostUsd?` | `number \| null` | 上游 LLM 自回報的 billed cost（USD）；僅當 SSE final chunk 帶 `usage.cost` 才會出現 |
 
 - 引擎**永遠不會**從本地價格表合成 `upstreamCostUsd`；缺值時欄位為 `null` 或省略。`NaN`、`Infinity`、負數、字串等非法值一律視為缺值。
-- `executeChat()` 在 request body 內**無條件**送出 `usage: { include: true }`（OpenRouter 的 opt-in；其他 OpenAI 相容後端會忽略）。
+- 走 Chat Completions 時，`executeChat()` 會在 request body 內**無條件**送出 `usage: { include: true }`（OpenRouter 的 opt-in；其他 OpenAI 相容後端會忽略）；Responses API 請求則固定帶 `store: false`，不送 `usage` opt-in。因此上游自回報的 billed cost 只在 Chat Completions 傳輸（或 Responses 終端事件自行附帶 `usage.cost` 時）才會出現。
 - 寫入 `_usage.json` 時 `upstreamCostUsd` 會 round-trip 保留。
 
 ### `pre-llm-fetch`（觀察用，預設 serial；可選 `parallel:true + readOnly:true`）

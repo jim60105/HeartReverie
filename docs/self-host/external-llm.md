@@ -18,10 +18,20 @@
 `LLM_API_MODE=auto`（預設）會先以 Responses API（`<LLM_API_BASE_URL>/responses`）送出請求；若上游以 `404`、`405` 或 `501` 回應，代表該服務未實作 Responses API，引擎會在同一輪生成改用 Chat Completions（`<LLM_API_BASE_URL>/chat/completions`）重試一次。回退成功後，同一組 base URL + model 的後續請求會直接走 Chat Completions，直到行程重啟。
 
 - `LLM_API_MODE=responses`：只走 Responses API；`404`/`405`/`501` 直接失敗，不再回退。
-- `LLM_API_MODE=chat-completions`：只走 Chat Completions，`auto` 的回退探測完全不發生。若你需要 `repetition_penalty`、`min_p`、`top_a` 這些 OpenRouter 專屬取樣參數，或上游對 Responses 請求回 400，請明確設定此值。
+- `LLM_API_MODE=chat-completions`：只走 Chat Completions，`auto` 的回退探測完全不發生。若你需要 `repetition_penalty`、`min_p`、`top_a` 這些 OpenRouter 專屬取樣參數，或上游對 Responses 請求回 `400`/`422`（而不是 `404`/`405`/`501`），請明確設定此值。
 - `continue-last-chapter`（續寫）在 `auto` 下固定走 Chat Completions，因為它依賴尾端 assistant prefill 行為。
 
 `LLM_API_URL`（舊的完整端點變數）已移除：啟動時若仍設定，伺服器會記錄錯誤並以非零狀態結束，不會開始監聽。`LLM_API_BASE_URL` 也必須是絕對的 http(s) URL，且不得包含 query string 或 fragment。
+
+從舊版升級時，把完整端點換成基底 URL：
+
+```diff
+-# LLM_API_URL=https://openrouter.ai/api/v1/chat/completions
++LLM_API_BASE_URL=https://openrouter.ai/api/v1
++# 可選：LLM_API_MODE=auto（預設）| responses | chat-completions
+```
+
+`LLM_API_BASE_URL` 不得內嵌帳密（`https://user:pass@…` 會在啟動時被拒絕，請改用 `LLM_API_KEY`），也不得帶 query string 或 fragment。
 
 ## 範例：無金鑰的本機 provider（Ollama / vLLM / LM Studio）
 

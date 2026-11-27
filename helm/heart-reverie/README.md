@@ -19,6 +19,13 @@ helm install hr ./helm/heart-reverie \
 
 `env.LLM_API_KEY` is **optional**: omit it when `LLM_API_BASE_URL` points at a keyless local/private provider (Ollama, vLLM, LM Studio) — the chart drops empty secret values, so the Deployment simply runs without the key and upstream requests go out without an `Authorization` header.
 
+> **Upgrading from `LLM_API_URL`?** The engine rejects that variable at startup.
+> Delete it from your `env` map (or from an externally managed Secret) and set
+> `env.LLM_API_BASE_URL` to the API base instead, e.g.
+> `--set env.LLM_API_BASE_URL=https://openrouter.ai/api/v1`. Optionally pin the
+> wire protocol with `env.LLM_API_MODE` (`auto`, `responses`, or
+> `chat-completions`).
+
 The default install creates a Deployment + Service + Secret + 10 GiB PVC and serves plain HTTP on port 8080. Terminate TLS at an upstream proxy or ingress controller — HeartReverie no longer ships any in-application TLS support.
 
 To enable an Ingress, copy one of the example values files and edit the host:
