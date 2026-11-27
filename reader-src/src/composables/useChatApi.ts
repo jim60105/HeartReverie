@@ -64,7 +64,14 @@ interface WsRequestSpec<TDone, TResult> {
   setCurrentId: (v: string | null) => void;
   /** Envelope to send once subscriptions are wired. */
   envelope: WsClientMessage;
-  /** Request timeout in ms (default 300000). */
+  /**
+   * Envelope sent when the timeout fires so the server cancels the in-flight
+   * generation and releases its per-story lock. Without it the server keeps
+   * generating after the UI gave up, and the next request fails with a 409
+   * "concurrent" error until the orphaned generation finishes.
+   */
+  abortOnTimeout?: WsClientMessage;
+  /** Request timeout in ms (default 900000). */
   timeoutMs?: number;
 }
 
@@ -105,6 +112,19 @@ function wsRequest<TDone, TResult>(
       cleanup();
       run();
     };
+    // Set once the request timer fires; the server's `aborted` reply is then
+    // reported as a timeout (rather than a user abort) while still letting us
+    // wait for the server to release the generation lock.
+    let timedOut = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const resolveTimeout = (): void => {
+      try {
+        resolve(spec.onTimeout());
+      } catch (err) {
+        reject(err);
+      }
+    };
 
     const unsubDelta = subscribe(spec.deltaType, (msg) => {
       if (!matches(msg) || settled) return;
@@ -126,13 +146,15 @@ function wsRequest<TDone, TResult>(
     });
     const unsubAborted = subscribe(spec.abortedType, (msg) => {
       if (!matches(msg)) return;
-      finish(() => {
-        try {
-          resolve(spec.onAborted());
-        } catch (err) {
-          reject(err);
-        }
-      });
+      finish(
+        timedOut ? resolveTimeout : () => {
+          try {
+            resolve(spec.onAborted());
+          } catch (err) {
+            reject(err);
+          }
+        },
+      );
     });
     // Single disconnect guard for the in-flight request.
     const stopWatch = watch(isConnected, (connected) => {
@@ -147,14 +169,18 @@ function wsRequest<TDone, TResult>(
     });
 
     const timeout = setTimeout(() => {
-      finish(() => {
-        try {
-          resolve(spec.onTimeout());
-        } catch (err) {
-          reject(err);
-        }
-      });
-    }, spec.timeoutMs ?? 300_000);
+      timedOut = true;
+      if (spec.abortOnTimeout && isConnected.value) {
+        // Cancel the server-side generation and hold the promise open until
+        // the terminal `aborted` envelope arrives: the server clears its
+        // per-story lock in that path, so the UI cannot offer a retry that
+        // races into a 409. The grace timer bounds the wait on a hung server.
+        send(spec.abortOnTimeout);
+        graceTimer = setTimeout(() => finish(resolveTimeout), 5_000);
+        return;
+      }
+      finish(resolveTimeout);
+    }, spec.timeoutMs ?? 900_000);
 
     // Runs on EVERY terminal path (done, error, aborted, disconnect,
     // timeout) via `finish()`. Resetting streaming/loading state here — not in
@@ -162,6 +188,7 @@ function wsRequest<TDone, TResult>(
     // spinning.
     function cleanup(): void {
       clearTimeout(timeout);
+      clearTimeout(graceTimer);
       stopWatch();
       unsubDelta();
       unsubDone();
@@ -244,6 +271,7 @@ async function sendMessage(
       doneType: "chat:done",
       errorType: "chat:error",
       abortedType: "chat:aborted",
+      abortOnTimeout: { type: "chat:abort", id },
       setCurrentId: (v) => (currentRequestId = v),
       // Terminal-state reset (streamingContent/isLoading) is centralized in
       // wsRequest's cleanup(); callbacks only set flow-specific state.
@@ -355,6 +383,7 @@ async function resendMessage(
       doneType: "chat:done",
       errorType: "chat:error",
       abortedType: "chat:aborted",
+      abortOnTimeout: { type: "chat:abort", id },
       setCurrentId: (v) => (currentRequestId = v),
       // Terminal-state reset is centralized in wsRequest's cleanup().
       onDelta: (msg) => {
@@ -470,6 +499,7 @@ async function continueLastChapter(
       doneType: "chat:done",
       errorType: "chat:error",
       abortedType: "chat:aborted",
+      abortOnTimeout: { type: "chat:abort", id },
       setCurrentId: (v) => (currentRequestId = v),
       // Terminal-state reset is centralized in wsRequest's cleanup().
       onDelta: (msg) => {
@@ -588,6 +618,7 @@ async function runPluginPrompt(
       doneType: "plugin-action:done",
       errorType: "plugin-action:error",
       abortedType: "plugin-action:aborted",
+      abortOnTimeout: { type: "plugin-action:abort", correlationId },
       setCurrentId: (v) => (currentPluginActionId = v),
       // Terminal-state reset is centralized in wsRequest's cleanup(); the
       // terminal callbacks here throw to preserve reject-on-error semantics.

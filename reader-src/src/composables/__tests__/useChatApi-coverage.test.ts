@@ -74,16 +74,36 @@ describe("useChatApi additional coverage", () => {
     return useChatApi();
   }
 
-  it("sendMessage WebSocket timeout resolves false with timeout message", async () => {
+  it("sendMessage WebSocket timeout aborts the server generation and resolves after chat:aborted", async () => {
+    wsConnected.value = true;
+    wsAuthenticated.value = true;
+
+    const api = await getApi();
+    const pending = api.sendMessage("s", "t", "m");
+    const sent = wsSend.mock.calls[0]![0] as { id: string };
+
+    await vi.advanceTimersByTimeAsync(900_000);
+    expect(wsSend).toHaveBeenCalledWith({ type: "chat:abort", id: sent.id });
+
+    wsHandlers["chat:aborted"]?.({ id: sent.id });
+    expect(await pending).toBe(false);
+    expect(api.errorMessage.value).toBe("請求逾時");
+  });
+
+  it("sendMessage WebSocket timeout gives up after the abort grace period", async () => {
     wsConnected.value = true;
     wsAuthenticated.value = true;
 
     const api = await getApi();
     const pending = api.sendMessage("s", "t", "m");
 
-    await vi.advanceTimersByTimeAsync(300_000);
+    await vi.advanceTimersByTimeAsync(900_000);
+    expect(api.isLoading.value).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(5_000);
     expect(await pending).toBe(false);
     expect(api.errorMessage.value).toBe("請求逾時");
+    expect(api.isLoading.value).toBe(false);
   });
 
   it("resendMessage WebSocket handles delta + done and pushes usage", async () => {
