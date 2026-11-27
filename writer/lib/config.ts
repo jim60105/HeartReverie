@@ -150,10 +150,12 @@ function apiModeEnv(key: string, fallback: LlmApiMode): LlmApiMode {
  * `null` when `value` is a valid base URL.
  *
  * Rejected shapes: anything `new URL()` cannot parse, non-http(s) protocols,
- * query strings and fragments, and values whose path already names one of the
- * transport endpoints (`/responses`, `/chat/completions`). Echoes are redacted
- * to `protocol//host/pathname`, so credentials embedded in a rejected URL are
- * never logged.
+ * credentials embedded as userinfo (Deno's `fetch` would turn them into an
+ * implicit Basic `Authorization` header), query strings and fragments, and
+ * values whose path already names one of the transport endpoints
+ * (`/responses`, `/chat/completions`). Echoes are redacted to
+ * `protocol//host/pathname`, so credentials embedded in a rejected URL are
+ * never logged; unparseable or non-http(s) input is never echoed at all.
  */
 export function validateLlmApiBaseUrl(value: string): string | null {
   let url: URL;
@@ -164,7 +166,11 @@ export function validateLlmApiBaseUrl(value: string): string | null {
   }
   const redacted = `${url.protocol}//${url.host}${url.pathname}`;
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    return `LLM_API_BASE_URL must be an absolute http(s) URL (got "${redacted}")`;
+    return "LLM_API_BASE_URL must be an absolute http(s) URL";
+  }
+  if (url.username !== "" || url.password !== "") {
+    return `LLM_API_BASE_URL must not contain credentials (got "${redacted}"); ` +
+      `pass the key via LLM_API_KEY`;
   }
   if (value.includes("?") || value.includes("#")) {
     return `LLM_API_BASE_URL must not contain a query string or fragment (got "${redacted}")`;

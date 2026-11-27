@@ -523,16 +523,27 @@ Deno.test("validateLlmApiBaseUrl – bare delimiters and credential redaction", 
   assert(credentials !== null);
   assertEquals(
     credentials,
-    'LLM_API_BASE_URL must not contain a query string or fragment (got "https://example.test/v1/chat/completions")',
+    'LLM_API_BASE_URL must not contain credentials (got "https://example.test/v1/chat/completions"); ' +
+      `pass the key via LLM_API_KEY`,
+  );
+  assertEquals(
+    validateLlmApiBaseUrl("https://user:secret@example.test/v1"),
+    'LLM_API_BASE_URL must not contain credentials (got "https://example.test/v1"); ' +
+      `pass the key via LLM_API_KEY`,
   );
   for (const secret of ["secret", "user:", "key=abc"]) {
     assert(!credentials.includes(secret), `error message leaked ${secret}`);
   }
 
-  // Protocol is checked before the query/fragment rule; unparseable input is never echoed.
+  // Protocol is checked before everything else; unparseable and opaque input is
+  // never echoed, so a credential-like userinfo cannot leak through this branch.
   assertEquals(
     validateLlmApiBaseUrl("ftp://example.test/v1?x=1"),
-    'LLM_API_BASE_URL must be an absolute http(s) URL (got "ftp://example.test/v1")',
+    "LLM_API_BASE_URL must be an absolute http(s) URL",
+  );
+  assertEquals(
+    validateLlmApiBaseUrl("mailto:secret@example.test"),
+    "LLM_API_BASE_URL must be an absolute http(s) URL",
   );
   assertEquals(
     validateLlmApiBaseUrl("openrouter.ai/api/v1"),

@@ -264,7 +264,9 @@ export async function performLlmFetch(args: {
     }
     reqLog.warn("LLM Responses API unsupported; falling back to Chat Completions", {
       status: apiResponse.status,
-      url: apiUrl,
+      // Belt and braces: startup validation rejects userinfo, but never let a
+      // credential reach the log if one slips through another path.
+      url: apiUrl.replace(/\/\/[^/]*@/, "//"),
     });
     throw new LlmTransportUnsupportedError(apiResponse.status);
   }

@@ -167,9 +167,11 @@ Deno.test({
           resetLlmTransportCache();
           const tmpDir = await makeStoryDir(`transport-fallback-${status}-`);
           const hd = new HookDispatcher();
+          let hookCalls = 0;
           let observedTransport: string | undefined;
           let observedMetadata: Record<string, unknown> | undefined;
           hd.register("pre-llm-fetch", (ctx) => {
+            hookCalls += 1;
             observedTransport = ctx.transport as string;
             observedMetadata = ctx.requestMetadata as Record<string, unknown>;
             return Promise.resolve();
@@ -215,11 +217,17 @@ Deno.test({
             assert(!("input" in stub.requests[1]!.body));
             assert("messages" in stub.requests[1]!.body);
 
-            // The hook fired once, on the first attempt only.
+            // The hook fired exactly once, on the first attempt only, and saw
+            // the first attempt's body minus `input`.
+            assertEquals(hookCalls, 1);
             assertEquals(observedTransport, "responses");
             assert(observedMetadata !== undefined);
             assert(!("input" in observedMetadata));
             assert(!("messages" in observedMetadata));
+            const expectedMetadata: Record<string, unknown> = { ...stub.requests[0]!.body };
+            delete expectedMetadata.input;
+            assertEquals(observedMetadata, expectedMetadata);
+            assertEquals(stub.requests[0]!.body.store, false);
 
             assertEquals(result.content, "hello");
             const onDisk = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
@@ -505,6 +513,46 @@ Deno.test({
         await Deno.remove(tmpDir, { recursive: true });
       }
     });
+
+    await t.step(
+      "mode=responses: a summary marker arriving first locks out text reasoning",
+      async () => {
+        resetLlmTransportCache();
+        const tmpDir = await makeStoryDir("transport-summary-marker-first-");
+        const stub = stubUrlMap({
+          [RESPONSES_URL]: () =>
+            sseResponse(responsesChunks([
+              // summary_index > 0 with no preceding summary text: the marker is
+              // itself the first non-null reasoning kind, so it wins the lock.
+              { type: "response.reasoning_summary_part.added", summary_index: 1 },
+              { type: "response.reasoning_text.delta", delta: "raw-reasoning" },
+              { type: "response.output_text.delta", delta: "answer" },
+            ])),
+        });
+        try {
+          const result = await executeChat({
+            series: "s1",
+            name: "n1",
+            message: "Hi",
+            config: buildConfig(tmpDir, { mode: "responses" }),
+            safePath: createSafePath(tmpDir),
+            hookDispatcher: new HookDispatcher(),
+            buildPromptFromStory: buildPromptStub(),
+          });
+          assertEquals(result.content, "answer");
+          const onDisk = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
+          assert(
+            !onDisk.includes("raw-reasoning"),
+            `text reasoning must be skipped once the summary channel is locked: ${onDisk}`,
+          );
+          assert(onDisk.endsWith("answer"), `content must survive: ${onDisk}`);
+        } finally {
+          stub.restore();
+          resetLlmTransportCache();
+          await Deno.remove(tmpDir, { recursive: true });
+        }
+      },
+    );
 
     await t.step("mode=chat-completions: never requests /responses", async () => {
       resetLlmTransportCache();
