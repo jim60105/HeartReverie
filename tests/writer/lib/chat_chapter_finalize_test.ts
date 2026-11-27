@@ -55,7 +55,9 @@ function buildConfig(tmpDir: string): AppConfig {
     READER_DIR: "/x",
     PLUGINS_DIR: "/x",
     PORT: 0,
-    LLM_API_URL: ENDPOINT,
+    // Base URL of ENDPOINT: the engine appends `/chat/completions` itself.
+    LLM_API_BASE_URL: ENDPOINT.replace(/\/chat\/completions$/, ""),
+    LLM_API_MODE: "chat-completions",
     LLM_MODEL: "default-model",
     LLM_TEMPERATURE: 0.1,
     LLM_FREQUENCY_PENALTY: 0.13,

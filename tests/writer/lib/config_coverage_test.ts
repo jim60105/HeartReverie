@@ -13,8 +13,10 @@
 // You should have received a copy of the GNU AFFERO GENERAL PUBLIC LICENSE
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { join, resolve } from "@std/path";
+import { reportLlmConfigErrors, validateLlmApiBaseUrl } from "../../../writer/lib/config.ts";
+import type { Logger } from "../../../writer/lib/logger.ts";
 
 // config.ts evaluates all module-level constants once at import time. To exercise
 // every parsing branch we spawn a fresh `deno run` subprocess per scenario and
@@ -83,7 +85,9 @@ async function evalAll(env: Record<string, string>): Promise<{
       READER_DIR: c.READER_DIR,
       PLUGINS_DIR: c.PLUGINS_DIR,
       PORT: c.PORT,
-      LLM_API_URL: c.LLM_API_URL,
+      LLM_API_BASE_URL: c.LLM_API_BASE_URL,
+      LLM_API_MODE: c.LLM_API_MODE,
+      LLM_CONFIG_ERRORS: c.LLM_CONFIG_ERRORS,
       LLM_MODEL: c.LLM_MODEL,
       LLM_TEMPERATURE: c.LLM_TEMPERATURE,
       LLM_FREQUENCY_PENALTY: c.LLM_FREQUENCY_PENALTY,
@@ -110,12 +114,17 @@ async function evalAll(env: Record<string, string>): Promise<{
 }
 
 Deno.test("config.ts – defaults when no env vars set", async () => {
-  const { values } = await evalAll({});
+  // `runConfigSubprocess` merges the parent shell env, so pin the endpoint
+  // vars to "" to keep this scenario independent of the developer's shell.
+  const { values } = await evalAll({
+    LLM_API_URL: "",
+    LLM_API_BASE_URL: "",
+    LLM_API_MODE: "",
+  });
   assertEquals(values.PORT, 8080);
-  assertEquals(
-    values.LLM_API_URL,
-    "https://openrouter.ai/api/v1/chat/completions",
-  );
+  assertEquals(values.LLM_API_BASE_URL, "https://openrouter.ai/api/v1");
+  assertEquals(values.LLM_API_MODE, "auto");
+  assertEquals(values.LLM_CONFIG_ERRORS, []);
   assertEquals(values.LLM_MODEL, "deepseek/deepseek-v4-pro");
   assertEquals(values.LLM_TEMPERATURE, 0.1);
   assertEquals(values.LLM_FREQUENCY_PENALTY, 0.13);
@@ -381,4 +390,171 @@ Deno.test("config.ts – llmDefaults aggregates every sampling override", async 
   assertEquals(d.reasoningEnabled, false);
   assertEquals(d.reasoningEffort, "low");
   assertEquals(d.maxCompletionTokens, 2048);
+});
+
+// ── LLM endpoint configuration (llm-api-transport capability) ──
+
+Deno.test("config.ts – LLM_API_MODE parses every accepted value", async () => {
+  for (const mode of ["auto", "responses", "chat-completions"]) {
+    const { values } = await evalAll({ LLM_API_MODE: mode });
+    assertEquals(values.LLM_API_MODE, mode);
+  }
+  const { values } = await evalAll({ LLM_API_MODE: " chat-completions " });
+  assertEquals(values.LLM_API_MODE, "chat-completions");
+});
+
+Deno.test("config.ts – LLM_API_MODE unset or empty defaults to auto silently", async () => {
+  const silentCases: ReadonlyArray<Record<string, string>> = [
+    {},
+    { LLM_API_MODE: "" },
+    { LLM_API_MODE: "   " },
+  ];
+  for (const env of silentCases) {
+    const { values, stderr } = await evalAll(env);
+    assertEquals(values.LLM_API_MODE, "auto");
+    assert(
+      !stderr.includes("LLM_API_MODE"),
+      `expected no warn for ${JSON.stringify(env)}, got: ${stderr}`,
+    );
+  }
+});
+
+Deno.test("config.ts – unrecognized LLM_API_MODE falls back to auto with a warning", async () => {
+  const { values, stderr } = await evalAll({ LLM_API_MODE: "Responses" });
+  assertEquals(values.LLM_API_MODE, "auto");
+  assert(stderr.includes("LLM_API_MODE"));
+  assert(stderr.includes("Responses"));
+});
+
+Deno.test("config.ts – valid base URLs produce no configuration errors", async () => {
+  for (
+    const base of [
+      "https://openrouter.ai/api/v1",
+      "http://127.0.0.1:11434/v1/",
+      "http://127.0.0.1:11434/v1//",
+    ]
+  ) {
+    const { values, stderr } = await evalAll({ LLM_API_URL: "", LLM_API_BASE_URL: base });
+    assertEquals(values.LLM_API_BASE_URL, base);
+    assertEquals(values.LLM_CONFIG_ERRORS, []);
+    assert(!stderr.includes("LLM_API_BASE_URL"), `unexpected error for ${base}: ${stderr}`);
+  }
+});
+
+Deno.test("config.ts – full endpoint values are rejected", async () => {
+  for (
+    const base of [
+      "https://openrouter.ai/api/v1/chat/completions",
+      "https://openrouter.ai/api/v1/responses",
+      "https://openrouter.ai/api/v1/chat/completions/",
+    ]
+  ) {
+    const { values } = await evalAll({ LLM_API_URL: "", LLM_API_BASE_URL: base });
+    const errors = values.LLM_CONFIG_ERRORS as string[];
+    assertEquals(errors.length, 1, base);
+    assertStringIncludes(
+      errors[0]!,
+      "must be a base URL without /chat/completions or /responses",
+    );
+    assertStringIncludes(errors[0]!, "https://openrouter.ai/api/v1");
+  }
+});
+
+Deno.test("config.ts – query strings, fragments, non-URLs and bad protocols are rejected", async () => {
+  const cases: ReadonlyArray<readonly [string, string]> = [
+    ["https://example.test/v1?api-version=1", "must not contain a query string or fragment"],
+    ["https://example.test/v1#frag", "must not contain a query string or fragment"],
+    ["openrouter.ai/api/v1", "must be an absolute http(s) URL"],
+    ["ftp://example.test/v1", "must be an absolute http(s) URL"],
+  ];
+  for (const [base, expected] of cases) {
+    const { values } = await evalAll({ LLM_API_URL: "", LLM_API_BASE_URL: base });
+    const errors = values.LLM_CONFIG_ERRORS as string[];
+    assertEquals(errors.length, 1, base);
+    assertStringIncludes(errors[0]!, expected);
+    assert(errors[0]!.includes("LLM_API_BASE_URL"), base);
+  }
+});
+
+Deno.test("config.ts – legacy LLM_API_URL is rejected, even alongside a valid base URL", async () => {
+  const { values } = await evalAll({
+    LLM_API_URL: "https://openrouter.ai/api/v1/chat/completions",
+    LLM_API_BASE_URL: "https://example.test/v1",
+  });
+  const errors = values.LLM_CONFIG_ERRORS as string[];
+  assertEquals(errors.length, 1);
+  assertStringIncludes(errors[0]!, "LLM_API_URL is no longer supported");
+  assertStringIncludes(errors[0]!, "LLM_API_BASE_URL");
+
+  // Legacy error first, then exactly one base-URL error.
+  const { values: both } = await evalAll({
+    LLM_API_URL: "https://openrouter.ai/api/v1/chat/completions",
+    LLM_API_BASE_URL: "https://example.test/v1/responses",
+  });
+  const bothErrors = both.LLM_CONFIG_ERRORS as string[];
+  assertEquals(bothErrors.length, 2);
+  assertStringIncludes(bothErrors[0]!, "LLM_API_URL is no longer supported");
+  assertStringIncludes(bothErrors[1]!, "must be a base URL without");
+});
+
+Deno.test("config.ts – empty or whitespace-only LLM_API_URL is ignored", async () => {
+  for (const legacy of ["", "   "]) {
+    const { values } = await evalAll({
+      LLM_API_URL: legacy,
+      LLM_API_BASE_URL: "https://example.test/v1",
+    });
+    assertEquals(values.LLM_CONFIG_ERRORS, []);
+  }
+});
+
+Deno.test("validateLlmApiBaseUrl – bare delimiters and credential redaction", () => {
+  assertEquals(
+    validateLlmApiBaseUrl("https://example.test/v1?"),
+    'LLM_API_BASE_URL must not contain a query string or fragment (got "https://example.test/v1")',
+  );
+  assertEquals(
+    validateLlmApiBaseUrl("https://example.test/v1#"),
+    'LLM_API_BASE_URL must not contain a query string or fragment (got "https://example.test/v1")',
+  );
+
+  const credentials = validateLlmApiBaseUrl(
+    "https://user:secret@example.test/v1/chat/completions?key=abc",
+  );
+  assert(credentials !== null);
+  assertEquals(
+    credentials,
+    'LLM_API_BASE_URL must not contain a query string or fragment (got "https://example.test/v1/chat/completions")',
+  );
+  for (const secret of ["secret", "user:", "key=abc"]) {
+    assert(!credentials.includes(secret), `error message leaked ${secret}`);
+  }
+
+  // Protocol is checked before the query/fragment rule; unparseable input is never echoed.
+  assertEquals(
+    validateLlmApiBaseUrl("ftp://example.test/v1?x=1"),
+    'LLM_API_BASE_URL must be an absolute http(s) URL (got "ftp://example.test/v1")',
+  );
+  assertEquals(
+    validateLlmApiBaseUrl("openrouter.ai/api/v1"),
+    "LLM_API_BASE_URL must be an absolute http(s) URL",
+  );
+  assertEquals(validateLlmApiBaseUrl("https://openrouter.ai/api/v1"), null);
+});
+
+Deno.test("reportLlmConfigErrors – logs one error per entry and reports presence", () => {
+  const messages: string[] = [];
+  const fake = {
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: (message: string) => {
+      messages.push(message);
+    },
+  } as unknown as Logger;
+
+  assertEquals(reportLlmConfigErrors([], fake), false);
+  assertEquals(messages, []);
+
+  assertEquals(reportLlmConfigErrors(["first", "second"], fake), true);
+  assertEquals(messages, ["first", "second"]);
 });

@@ -46,7 +46,8 @@ function createTestApp(): Hono {
       PLAYGROUND_DIR: "/nonexistent-playground",
       ROOT_DIR: "/nonexistent-root",
       THEME_DIR: "./themes/",
-      LLM_API_URL: "https://example.test/chat/completions",
+      LLM_API_BASE_URL: "https://example.test",
+      LLM_API_MODE: "chat-completions",
       LLM_MODEL: llmDefaults.model,
       LLM_TEMPERATURE: llmDefaults.temperature,
       LLM_FREQUENCY_PENALTY: llmDefaults.frequencyPenalty,
@@ -130,7 +131,9 @@ Deno.test({
       // No extra keys
       assertEquals(Object.keys(body).sort(), [...STORY_LLM_CONFIG_KEYS].sort());
       // No secrets
-      assert(!("LLM_API_URL" in body));
+      assert(!("LLM_API_BASE_URL" in body));
+      assert(!("LLM_API_MODE" in body));
+      assert(!("apiMode" in body));
       assert(!("LLM_API_KEY" in body));
       assert(!("LLM_REASONING_OMIT" in body));
       assert(!("reasoningOmit" in body));
@@ -155,7 +158,8 @@ Deno.test({
           PLAYGROUND_DIR: "/nonexistent-playground",
           ROOT_DIR: "/nonexistent-root",
           THEME_DIR: "./themes/",
-          LLM_API_URL: "https://example.test/chat/completions",
+          LLM_API_BASE_URL: "https://example.test",
+          LLM_API_MODE: "chat-completions",
           LLM_MODEL: nullDefaults.model,
           LLM_TEMPERATURE: nullDefaults.temperature,
           LLM_FREQUENCY_PENALTY: nullDefaults.frequencyPenalty,

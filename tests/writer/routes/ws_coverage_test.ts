@@ -212,7 +212,8 @@ Deno.test({
       READER_DIR: "/nonexistent-reader",
       PLAYGROUND_DIR: playgroundDir,
       ROOT_DIR: tmpDir,
-      LLM_API_URL: "https://openrouter.example/api/v1/chat/completions",
+      LLM_API_BASE_URL: "https://openrouter.example/api/v1",
+      LLM_API_MODE: "chat-completions",
       LLM_MODEL: "test-model",
       LLM_REASONING_OMIT: true,
       llmDefaults: {
