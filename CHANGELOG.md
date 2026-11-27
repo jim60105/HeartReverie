@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-28
+
+### Added
+
+- **Upstream wire-protocol selector (`LLM_API_MODE`).** HeartReverie can now talk to providers over either the OpenAI Responses API or Chat Completions. `auto` (the default) tries Responses first and, when the provider answers 404, 405, or 501, retries the same generation over Chat Completions; the fallback is remembered per base URL and model until the process restarts. Set `responses` or `chat-completions` to pin a single protocol. Continuous writing (`continue-last-chapter`) always uses Chat Completions because it relies on the assistant prefill.
+- **Accurate transport reporting for plugin authors.** The `pre-llm-fetch` hook payload now includes `transport` (the protocol attempted first) and exposes Responses payloads under `input` instead of `messages`; `post-response.endpoint` reports the endpoint that actually served the request, i.e. the Chat Completions URL after a fallback.
+
+### Changed
+
+- **BREAKING: `LLM_API_URL` is removed and replaced by `LLM_API_BASE_URL`.** The configured value is now the OpenAI-SDK-style API root (`https://openrouter.ai/api/v1`) and the engine appends `/responses` or `/chat/completions` itself. Setting the old variable to a non-empty value stops startup with an explicit error before the server listens. To upgrade, replace `LLM_API_URL=https://openrouter.ai/api/v1/chat/completions` with `LLM_API_BASE_URL=https://openrouter.ai/api/v1`; Helm users must rename the key from `env.LLM_API_URL` to `env.LLM_API_BASE_URL` (including in externally managed Secrets). Base URLs must be absolute `http(s)` values without a query string, fragment, or endpoint path.
+- **Sampler coverage may require pinning.** If your provider depends on OpenRouter-only sampler knobs (`repetition_penalty`, `min_p`, `top_a`) or rejects Responses requests with 400/422 instead of 404/405/501, set `LLM_API_MODE=chat-completions` to skip the Responses attempt entirely.
+- **Upstream billed cost only on Chat Completions.** Requests sent over the Responses API carry `store: false` and no `usage` opt-in, so the provider-reported cost in `/api/stories/:series/:name/usage` appears only for Chat Completions calls (or when a Responses terminal event supplies its own `usage.cost`).
+
+### Fixed
+
+- **Base URLs containing credentials are rejected at startup.** A value such as `https://user:pass@host/v1` would have been turned into an implicit Basic `Authorization` header by the HTTP client, bypassing the Bearer-only key contract; startup now fails with a credential-redacted message, and opaque or non-HTTP input is no longer echoed back.
+
 ## [0.12.1] - 2026-09-01
 
 ### Fixed
@@ -326,7 +343,8 @@ Initial public release of **HeartReverie 浮心夜夢** — an AI-driven interac
 
 ---
 
-[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/jim60105/HeartReverie/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/jim60105/HeartReverie/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/jim60105/HeartReverie/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/jim60105/HeartReverie/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/jim60105/HeartReverie/compare/v0.10.0...v0.11.0
