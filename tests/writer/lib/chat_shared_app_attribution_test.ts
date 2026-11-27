@@ -41,7 +41,8 @@ function buildConfig(tmpDir: string): AppConfig {
     READER_DIR: "/x",
     PLUGINS_DIR: "/x",
     PORT: 0,
-    LLM_API_URL: "https://example.test/chat/completions",
+    LLM_API_BASE_URL: "https://example.test",
+    LLM_API_MODE: "chat-completions",
     LLM_MODEL: "default-model",
     LLM_TEMPERATURE: 0.1,
     LLM_FREQUENCY_PENALTY: 0.13,
@@ -152,7 +153,7 @@ Deno.test({
       });
 
       await t.step(
-        "attribution headers attached even when LLM_API_URL is non-OpenRouter",
+        "attribution headers attached even when LLM_API_BASE_URL is non-OpenRouter",
         async () => {
           const tmpDir = await Deno.makeTempDir({ prefix: "chat-attribution-2-" });
           try {
@@ -162,7 +163,7 @@ Deno.test({
             // captureUpstreamFetch matcher recognizes.
             const cfgWithCustomUrl = {
               ...config,
-              LLM_API_URL: "https://self-hosted.example/v1/chat/completions",
+              LLM_API_BASE_URL: "https://self-hosted.example/v1",
             } as AppConfig;
             const cap = captureUpstreamFetch();
             try {

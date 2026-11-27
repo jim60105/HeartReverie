@@ -35,7 +35,7 @@ HookDispatcher 提供以下生命週期階段，plugin 可在任意階段註冊�
 | `source` | `"chat" \| "continue" \| "plugin-action"` | 觸發來源（見下表） |
 | `pluginName?` | `string` | 當 `source === "plugin-action"` 才存在 |
 | `appendedTag?` | `string` | 僅 append 分支會設定；replace 分支**不會**有此欄位 |
-| `endpoint` | `string` | 實際呼叫的上游 LLM URL（`config.LLM_API_URL`），plugin 可用作每 endpoint 計價的 key |
+| `endpoint` | `string` | 實際服務該次請求的上游 LLM URL（`<LLM_API_BASE_URL>/responses` 或 `<LLM_API_BASE_URL>/chat/completions`；發生回退時為 Chat Completions），plugin 可用作每 endpoint 計價的 key |
 | `usage` | `TokenUsageRecord \| null` | 上游 token 使用量；上游未回報時為 `null`（明確區分「不可用」與「未回報」） |
 
 WriteMode 與 `source` 的對應：
@@ -102,12 +102,12 @@ hooks.register("insert-transform", (context) => {
 | `upstreamCostUsd?` | `number \| null` | 上游 LLM 自回報的 billed cost（USD）；僅當 SSE final chunk 帶 `usage.cost` 才會出現 |
 
 - 引擎**永遠不會**從本地價格表合成 `upstreamCostUsd`；缺值時欄位為 `null` 或省略。`NaN`、`Infinity`、負數、字串等非法值一律視為缺值。
-- `executeChat()` 在 request body 內**無條件**送出 `usage: { include: true }`（OpenRouter 的 opt-in；其他 OpenAI 相容後端會忽略）。
+- 走 Chat Completions 時，`executeChat()` 會在 request body 內**無條件**送出 `usage: { include: true }`（OpenRouter 的 opt-in；其他 OpenAI 相容後端會忽略）；Responses API 請求則固定帶 `store: false`，不送 `usage` opt-in。因此上游自回報的 billed cost 只在 Chat Completions 傳輸（或 Responses 終端事件自行附帶 `usage.cost` 時）才會出現。
 - 寫入 `_usage.json` 時 `upstreamCostUsd` 會 round-trip 保留。
 
 ### `pre-llm-fetch`（觀察用，預設 serial；可選 `parallel:true + readOnly:true`）
 
-`pre-llm-fetch` 由 `streamLlmAndPersist()` 在 `fetch(config.LLM_API_URL, ...)` **之前、`requestBody` 完全建構之後** 分派一次，提供 plugin 觀察即將送出的請求內容（messages、model、sampler 參數、writeMode 種類等）。
+`pre-llm-fetch` 由 `streamLlmAndPersist()` 在第一次傳輸嘗試的 `fetch(...)` **之前、`requestBody` 完全建構之後** 分派一次，提供 plugin 觀察即將送出的請求內容（messages 或 Responses 的 `input`、model、sampler 參數、writeMode 種類、`transport` 等）。`auto` 回退到 Chat Completions 時**不會**重複分派；payload 的 `transport` 指出第一次嘗試的協定（`responses` 或 `chat-completions`），`requestMetadata` 則是該次 body 移除 `messages`（Chat Completions）或 `input`（Responses）後的內容。
 
 - **此階段為觀察用（observation-only）**：handler 不可影響實際送出的 HTTP 請求。dispatcher 會以 `deepFreeze(structuredClone(...))` **深層複製並深度凍結** `messages` 與 `requestMetadata`，因此即使 plugin 嘗試巢狀寫入（`ctx.messages[0].content = "..."`、`ctx.requestMetadata.temperature = 9.9`）都會在 strict mode 下拋出 `TypeError`，並被既有 per-handler `try/catch` 吸收，不會影響上游 `fetch()`。
 - **僅 `messages` 與 `requestMetadata` 被凍結**：外層的 `model`、`writeMode`、`correlationId`、`storyDir`、`series`、`name` 等欄位**未**凍結，是 dispatch 當時的快照值；plugin 應視為唯讀，dispatcher **不**保證 peer-isolation。

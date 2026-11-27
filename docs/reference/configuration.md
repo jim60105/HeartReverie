@@ -14,7 +14,8 @@
 |------|--------|------|
 | `LLM_API_KEY` | — | LLM 提供者 API 金鑰；選填——接無金鑰的本機/私有 provider（Ollama、vLLM、LM Studio）時可省略，請求將不帶 `Authorization` header |
 | `LLM_MODEL` | `deepseek/deepseek-v4-pro` | LLM 模型 |
-| `LLM_API_URL` | `https://openrouter.ai/api/v1/chat/completions` | LLM 聊天完成端點 |
+| `LLM_API_BASE_URL` | `https://openrouter.ai/api/v1` | 上游 API 基底 URL（OpenAI SDK 風格，不含 `/chat/completions` 或 `/responses`；引擎會自行接上 transport 路徑） |
+| `LLM_API_MODE` | `auto` | 傳輸協定：`auto` / `responses` / `chat-completions`。`auto` 先試 Responses，遇到 404/405/501 回退 Chat Completions（以 base URL + model 為單位快取）；`continue-last-chapter` 固定走 Chat Completions |
 | `LLM_TEMPERATURE` | `0.1` | 取樣溫度 |
 | `LLM_FREQUENCY_PENALTY` | `0.13` | 頻率懲罰 |
 | `LLM_PRESENCE_PENALTY` | `0.52` | 存在懲罰 |
@@ -27,6 +28,8 @@
 | `LLM_REASONING_ENABLED` | `true` | 是否在請求中附帶 `reasoning` 區塊 |
 | `LLM_REASONING_EFFORT` | `xhigh` | `reasoning.effort` 等級（`none` / `minimal` / `low` / `medium` / `high` / `xhigh` / `max`） |
 | `LLM_REASONING_OMIT` | `false` | 設為 `true` 時完全省略 `reasoning` 區塊 |
+
+`LLM_API_URL` 已移除；啟動時若仍設定（非空），伺服器會記錄錯誤並以非零狀態結束。`LLM_API_BASE_URL` 必須是絕對的 http(s) URL，且不得包含 query string、fragment 或端點路徑。
 
 ## 伺服器
 

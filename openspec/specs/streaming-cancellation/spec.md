@@ -13,7 +13,7 @@ The chat execution function (`executeChat()` in `writer/lib/chat-shared.ts`) SHA
 #### Scenario: Signal forwarded to upstream fetch
 
 - **WHEN** `executeChat()` is invoked with an `AbortSignal` that is later aborted
-- **THEN** the upstream `fetch()` to `LLM_API_URL` SHALL receive the same signal in its `init` parameter, causing the connection to abort when the signal fires
+- **THEN** every upstream transport attempt's `fetch()` SHALL receive the same signal in its `init` parameter, causing the connection to abort when the signal fires
 
 #### Scenario: HTTP client disconnect aborts upstream
 

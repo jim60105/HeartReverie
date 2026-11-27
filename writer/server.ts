@@ -30,10 +30,18 @@ import { createApp, initPluginRoutes, registerSpaFallback } from "./app.ts";
 await initLogger();
 const log = createLogger("system");
 
+// ── Fail fast on an invalid LLM endpoint configuration ──────────
+// Runs before the API-key warning and before any plugin or server setup, so
+// the process never listens with a misconfigured endpoint.
+if (config.reportLlmConfigErrors(config.LLM_CONFIG_ERRORS, log)) {
+  await closeLogger();
+  Deno.exit(1);
+}
+
 if (!Deno.env.get("LLM_API_KEY")) {
   log.warn(
     "LLM_API_KEY is not set — upstream requests go out without an Authorization header. " +
-      "Point LLM_API_URL at a keyless provider endpoint (Ollama/vLLM/LM Studio); " +
+      "Point LLM_API_BASE_URL at a keyless provider (Ollama/vLLM/LM Studio); " +
       "cloud providers (e.g. OpenRouter) will reject unauthenticated requests (401/403).",
   );
 }

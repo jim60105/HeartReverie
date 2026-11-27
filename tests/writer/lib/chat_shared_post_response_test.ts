@@ -55,7 +55,8 @@ function buildConfig(tmpDir: string): AppConfig {
     READER_DIR: "/x",
     PLUGINS_DIR: "/x",
     PORT: 0,
-    LLM_API_URL: ENDPOINT,
+    LLM_API_BASE_URL: "https://example.test/v1",
+    LLM_API_MODE: "chat-completions",
     LLM_MODEL: "default-model",
     LLM_TEMPERATURE: 0.1,
     LLM_FREQUENCY_PENALTY: 0.13,
@@ -462,123 +463,130 @@ Deno.test({
       });
 
       // ───────────────────────────────────────────────────────────
-      await t.step("4.7 endpoint equals config.LLM_API_URL across all four branches", async () => {
-        const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-endpoint-" });
-        try {
-          // write-new-chapter
-          await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
-          {
-            const hd = new HookDispatcher();
-            const cap = captureNextPostResponse(hd);
-            const restore = stubFetch(fullUsageChunks());
-            try {
-              await executeChat({
-                series: "s1",
-                name: "n1",
-                message: "Hi",
-                config: buildConfig(tmpDir),
-                safePath: createSafePath(tmpDir),
-                hookDispatcher: hd,
-                buildPromptFromStory: buildPromptStub(),
-              });
-            } finally {
-              restore();
+      await t.step(
+        "4.7 endpoint equals config.LLM_API_BASE_URL across all four branches",
+        async () => {
+          const tmpDir = await Deno.makeTempDir({ prefix: "post-resp-endpoint-" });
+          try {
+            // write-new-chapter
+            await Deno.mkdir(join(tmpDir, "s1", "n1"), { recursive: true });
+            {
+              const hd = new HookDispatcher();
+              const cap = captureNextPostResponse(hd);
+              const restore = stubFetch(fullUsageChunks());
+              try {
+                await executeChat({
+                  series: "s1",
+                  name: "n1",
+                  message: "Hi",
+                  config: buildConfig(tmpDir),
+                  safePath: createSafePath(tmpDir),
+                  hookDispatcher: hd,
+                  buildPromptFromStory: buildPromptStub(),
+                });
+              } finally {
+                restore();
+              }
+              assertEquals(cap.current!.endpoint, ENDPOINT);
+              assert(Object.isFrozen(cap.current), "write-new-chapter payload must be frozen");
             }
-            assertEquals(cap.current!.endpoint, ENDPOINT);
-            assert(Object.isFrozen(cap.current), "write-new-chapter payload must be frozen");
-          }
-          // append-to-existing-chapter
-          const dir = join(tmpDir, "s1", "n1");
-          {
-            const hd = new HookDispatcher();
-            const cap = captureNextPostResponse(hd);
-            const config = buildConfig(tmpDir);
-            const restore = stubFetch(fullUsageChunks());
-            try {
-              await streamLlmAndPersist({
-                messages: [{ role: "user", content: "p" }],
-                llmConfig: config.llmDefaults,
-                series: "s1",
-                name: "n1",
-                storyDir: dir,
-                rootDir: config.ROOT_DIR,
-                writeMode: { kind: "append-to-existing-chapter", appendTag: "T", pluginName: "p" },
-                hookDispatcher: hd,
-                config,
-                correlationId: "c-app",
-              });
-            } finally {
-              restore();
+            // append-to-existing-chapter
+            const dir = join(tmpDir, "s1", "n1");
+            {
+              const hd = new HookDispatcher();
+              const cap = captureNextPostResponse(hd);
+              const config = buildConfig(tmpDir);
+              const restore = stubFetch(fullUsageChunks());
+              try {
+                await streamLlmAndPersist({
+                  messages: [{ role: "user", content: "p" }],
+                  llmConfig: config.llmDefaults,
+                  series: "s1",
+                  name: "n1",
+                  storyDir: dir,
+                  rootDir: config.ROOT_DIR,
+                  writeMode: {
+                    kind: "append-to-existing-chapter",
+                    appendTag: "T",
+                    pluginName: "p",
+                  },
+                  hookDispatcher: hd,
+                  config,
+                  correlationId: "c-app",
+                });
+              } finally {
+                restore();
+              }
+              assertEquals(cap.current!.endpoint, ENDPOINT);
+              assert(
+                Object.isFrozen(cap.current),
+                "append-to-existing-chapter payload must be frozen",
+              );
             }
-            assertEquals(cap.current!.endpoint, ENDPOINT);
-            assert(
-              Object.isFrozen(cap.current),
-              "append-to-existing-chapter payload must be frozen",
-            );
-          }
-          // continue-last-chapter
-          {
-            const hd = new HookDispatcher();
-            const cap = captureNextPostResponse(hd);
-            const config = buildConfig(tmpDir);
-            const existing = await Deno.readTextFile(join(dir, "001.md"));
-            const restore = stubFetch(fullUsageChunks());
-            try {
-              await streamLlmAndPersist({
-                messages: [{ role: "user", content: "p" }],
-                llmConfig: config.llmDefaults,
-                series: "s1",
-                name: "n1",
-                storyDir: dir,
-                rootDir: config.ROOT_DIR,
-                writeMode: {
-                  kind: "continue-last-chapter",
-                  targetChapterNumber: 1,
-                  existingContent: existing,
-                },
-                hookDispatcher: hd,
-                config,
-                correlationId: "c-con",
-              });
-            } finally {
-              restore();
+            // continue-last-chapter
+            {
+              const hd = new HookDispatcher();
+              const cap = captureNextPostResponse(hd);
+              const config = buildConfig(tmpDir);
+              const existing = await Deno.readTextFile(join(dir, "001.md"));
+              const restore = stubFetch(fullUsageChunks());
+              try {
+                await streamLlmAndPersist({
+                  messages: [{ role: "user", content: "p" }],
+                  llmConfig: config.llmDefaults,
+                  series: "s1",
+                  name: "n1",
+                  storyDir: dir,
+                  rootDir: config.ROOT_DIR,
+                  writeMode: {
+                    kind: "continue-last-chapter",
+                    targetChapterNumber: 1,
+                    existingContent: existing,
+                  },
+                  hookDispatcher: hd,
+                  config,
+                  correlationId: "c-con",
+                });
+              } finally {
+                restore();
+              }
+              assertEquals(cap.current!.endpoint, ENDPOINT);
+              assert(Object.isFrozen(cap.current), "continue-last-chapter payload must be frozen");
             }
-            assertEquals(cap.current!.endpoint, ENDPOINT);
-            assert(Object.isFrozen(cap.current), "continue-last-chapter payload must be frozen");
-          }
-          // replace-last-chapter
-          {
-            const hd = new HookDispatcher();
-            const cap = captureNextPostResponse(hd);
-            const config = buildConfig(tmpDir);
-            const restore = stubFetch(fullUsageChunks());
-            try {
-              await streamLlmAndPersist({
-                messages: [{ role: "user", content: "p" }],
-                llmConfig: config.llmDefaults,
-                series: "s1",
-                name: "n1",
-                storyDir: dir,
-                rootDir: config.ROOT_DIR,
-                writeMode: {
-                  kind: "replace-last-chapter",
-                  pluginName: "polish",
-                  preservedPrefix: "",
-                },
-                hookDispatcher: hd,
-                config,
-                correlationId: "c-rep",
-              });
-            } finally {
-              restore();
+            // replace-last-chapter
+            {
+              const hd = new HookDispatcher();
+              const cap = captureNextPostResponse(hd);
+              const config = buildConfig(tmpDir);
+              const restore = stubFetch(fullUsageChunks());
+              try {
+                await streamLlmAndPersist({
+                  messages: [{ role: "user", content: "p" }],
+                  llmConfig: config.llmDefaults,
+                  series: "s1",
+                  name: "n1",
+                  storyDir: dir,
+                  rootDir: config.ROOT_DIR,
+                  writeMode: {
+                    kind: "replace-last-chapter",
+                    pluginName: "polish",
+                    preservedPrefix: "",
+                  },
+                  hookDispatcher: hd,
+                  config,
+                  correlationId: "c-rep",
+                });
+              } finally {
+                restore();
+              }
+              assertEquals(cap.current!.endpoint, ENDPOINT);
+              assert(Object.isFrozen(cap.current), "replace-last-chapter payload must be frozen");
             }
-            assertEquals(cap.current!.endpoint, ENDPOINT);
-            assert(Object.isFrozen(cap.current), "replace-last-chapter payload must be frozen");
+          } finally {
+            await Deno.remove(tmpDir, { recursive: true });
           }
-        } finally {
-          await Deno.remove(tmpDir, { recursive: true });
-        }
-      });
+        },
+      );
     } finally {
       if (previousKey !== undefined) Deno.env.set("LLM_API_KEY", previousKey);
       else Deno.env.delete("LLM_API_KEY");

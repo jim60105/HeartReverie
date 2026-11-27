@@ -16,18 +16,18 @@ The constant SHALL contain exactly the following three entries, with these exact
 - `X-OpenRouter-Title: HeartReverie` (plain ASCII; OpenRouter's rankings UI does not render non-Latin-1 / percent-encoded titles legibly, so the project name's CJK suffix is intentionally omitted from the wire value)
 - `X-OpenRouter-Categories: roleplay,creative-writing`
 
-All three headers SHALL be present on every upstream chat `fetch()` call, alongside `Content-Type` and — when `LLM_API_KEY` is set — the `Authorization` header. The headers SHALL be sent regardless of the configured `LLM_API_URL`; the server SHALL NOT inspect the URL to decide whether to attach them. When `LLM_API_KEY` is unset or empty the `Authorization` header is omitted, but the three attribution headers are still attached.
+All three headers SHALL be present on every upstream chat `fetch()` call, alongside `Content-Type` and — when `LLM_API_KEY` is set — the `Authorization` header. The headers SHALL be sent regardless of the configured `LLM_API_BASE_URL` and of the transport (Responses or Chat Completions); the server SHALL NOT inspect the URL to decide whether to attach them. When `LLM_API_KEY` is unset or empty the `Authorization` header is omitted, but the three attribution headers are still attached.
 
 The constant SHALL be defined as a frozen object (e.g., via `Object.freeze` or `as const` + `Readonly<Record<string, string>>`) so accidental runtime mutation is not possible.
 
 #### Scenario: Default chat request carries all three attribution headers
 
-- **WHEN** the server dispatches a chat completion request to the configured `LLM_API_URL`
+- **WHEN** the server dispatches a chat completion request to the configured `LLM_API_BASE_URL`
 - **THEN** the upstream `fetch` request SHALL include `HTTP-Referer: https://github.com/jim60105/HeartReverie`, `X-OpenRouter-Title: HeartReverie`, and `X-OpenRouter-Categories: roleplay,creative-writing`
 
 #### Scenario: Headers attached even when LLM_API_URL is non-OpenRouter
 
-- **WHEN** `LLM_API_URL` is set to a non-OpenRouter endpoint (for example, a self-hosted vLLM URL) and a chat completion request is dispatched
+- **WHEN** `LLM_API_BASE_URL` is set to a non-OpenRouter endpoint (for example, a self-hosted vLLM URL) and a chat completion request is dispatched
 - **THEN** the upstream `fetch` request SHALL still include all three attribution headers with their hard-coded values (the server SHALL NOT inspect the URL)
 
 #### Scenario: Headers attached when LLM_API_KEY is unset

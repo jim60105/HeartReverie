@@ -30,7 +30,7 @@ HeartReverie 浮心夜夢 是一套 AI 互動小說引擎，把「讀小說」�
 
 ```bash
 cat > .env << 'EOF'
-# LLM_API_KEY is optional — omit it when LLM_API_URL points at a keyless
+# LLM_API_KEY is optional — omit it when LLM_API_BASE_URL points at a keyless
 # local/private provider (Ollama, vLLM, LM Studio).
 LLM_API_KEY=your-api-key-here
 PASSPHRASE=your-passphrase-here

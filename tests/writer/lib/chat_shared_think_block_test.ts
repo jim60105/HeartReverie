@@ -28,7 +28,8 @@ function buildConfig(tmpDir: string): AppConfig {
     READER_DIR: "/x",
     PLUGINS_DIR: "/x",
     PORT: 0,
-    LLM_API_URL: "https://example.test/chat/completions",
+    LLM_API_BASE_URL: "https://example.test",
+    LLM_API_MODE: "chat-completions",
     LLM_MODEL: "test-model",
     LLM_TEMPERATURE: 0.1,
     LLM_FREQUENCY_PENALTY: 0.13,
@@ -200,6 +201,31 @@ Deno.test({
         }
       },
     );
+
+    await t.step("6.1.3b reasoning_content becomes a single reasoning block", async () => {
+      const tmpDir = await Deno.makeTempDir({ prefix: "tb-reasoning-content-" });
+      try {
+        const result = await runChat(tmpDir, {
+          chunks: [
+            'data: {"choices":[{"delta":{"reasoning_content":"Field-based "}}]}\n\n',
+            'data: {"choices":[{"delta":{"reasoning_content":"scratchpad."}}]}\n\n',
+            'data: {"choices":[{"delta":{"content":"Answer"}}]}\n\n',
+            "data: [DONE]\n\n",
+          ],
+        });
+        const onDisk = await Deno.readTextFile(join(tmpDir, "s1", "n1", "001.md"));
+        assertEquals(
+          onDisk.split("Field-based").length - 1,
+          1,
+          `reasoning_content used once: ${onDisk}`,
+        );
+        assertEquals(onDisk.indexOf("Field-based") < onDisk.indexOf("Answer"), true);
+        assertEquals(onDisk.endsWith("Answer"), true);
+        assertEquals(result.content, "Answer");
+      } finally {
+        await Deno.remove(tmpDir, { recursive: true });
+      }
+    });
 
     await t.step(
       "6.1.5 single SSE chunk with both reasoning and content: reasoning → close → content",
